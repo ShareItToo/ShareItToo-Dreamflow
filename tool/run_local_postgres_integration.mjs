@@ -21,6 +21,9 @@ export const integrationDatabaseUser = 'sit_runner';
 // Each group runs against the same isolated database, so groups stay
 // sequential while suites inside a group may use Node's normal test runner.
 export const integrationTestGroups = Object.freeze({
+  stagingWebFixture: Object.freeze([
+    'backend/test/staging_web_fixture_postgres.integration.test.js',
+  ]),
   profileAvatar: Object.freeze([
     'backend/test/profile_avatar_postgres.integration.test.js',
   ]),
@@ -49,7 +52,9 @@ export function integrationTestPlan({
   focusedIdentity = false,
   focusedPrivateListing = false,
   focusedProfileAvatar = false,
+  focusedWebFixture = false,
 } = {}) {
+  if (focusedWebFixture) return [integrationTestGroups.stagingWebFixture];
   if (focusedPrivateListing) {
     return [Object.freeze([
       'backend/test/private_pilot_listing_activation.integration.test.js',
@@ -71,6 +76,7 @@ export function integrationTestPlan({
   }
   return [
     integrationTestGroups.foundation,
+    integrationTestGroups.stagingWebFixture,
     integrationTestGroups.stagingGoogleRegistration,
     integrationTestGroups.listingAi,
     integrationTestGroups.identity,
@@ -264,12 +270,14 @@ export async function runLocalPostgresIntegration({
   const focusedProfileAvatar = environment.SIT_POSTGRES_FOCUSED_PROFILE_AVATAR === '1';
   const focusedGoogleRegistration = environment.SIT_POSTGRES_FOCUSED_GOOGLE === '1';
   const focusedLegacySchema = environment.SIT_POSTGRES_FOCUSED_LEGACY === '1';
+  const focusedWebFixture = environment.SIT_POSTGRES_FOCUSED_WEB_FIXTURE === '1';
   const integrationGroups = integrationTestPlan({
     focusedGoogleRegistration,
     focusedLegacySchema,
     focusedIdentity,
     focusedPrivateListing,
     focusedProfileAvatar,
+    focusedWebFixture,
   });
 
   const onSignal = (signal) => {

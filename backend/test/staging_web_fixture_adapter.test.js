@@ -3,7 +3,7 @@ import test from 'node:test';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fixtureDigest, fixtureEnvironmentDigest, fixtureNotice, fixtureTarget,
-  validateFixtureManifest } from '../ops/staging_web_fixture_preflight.mjs';
+  validateFixtureManifest, isolatedFixtureRehearsal } from '../ops/staging_web_fixture_preflight.mjs';
 import { adapterSources, runFixtureAdapter, validateAdapterInputs, parseAdapterArguments,
   readAdapterSource } from '../ops/staging_web_fixture_adapter.mjs';
 
@@ -137,6 +137,67 @@ function fixture() {
   };
   return f.bind();
 }
+
+function localRehearsal() {
+  const f = fixture(); f.rehearsal = isolatedFixtureRehearsal;
+  f.manifest.preflight.database = { host: '127.0.0.1', name: 'sit_integration', user: 'sit_runner' };
+  f.environment.DATABASE_URL = 'postgresql://sit_runner@127.0.0.1:15432/sit_integration';
+  f.environment.NODE_ENV = 'test';
+  f.manifest.preflight.environmentDigest = fixtureEnvironmentDigest(f.environment);
+  return f.bind();
+}
+test('isolated rehearsal accepts only explicit local test identity; default binding is unchanged', () => {
+  const f = localRehearsal(); validateAdapterInputs(f);
+  assert.throws(() => validateAdapterInputs({ ...f, rehearsal: undefined }), /fixture_database_invalid/u);
+  for (const rehearsal of [true, 'isolated-fixture-pg16-rehearsal', {}, Symbol('isolated-fixture-pg16-rehearsal')]) {
+    assert.throws(() => validateAdapterInputs({ ...f, rehearsal }), /fixture_rehearsal_binding_invalid/u);
+  }
+  for (const value of [undefined, '', 'test']) {
+    const accepted = localRehearsal();
+    if (value === undefined) delete accepted.environment.NODE_ENV; else accepted.environment.NODE_ENV = value;
+    accepted.manifest.preflight.environmentDigest = fixtureEnvironmentDigest(accepted.environment);
+    validateAdapterInputs(accepted.bind());
+  }
+});
+for (const [key, value] of [
+  ['DEPLOYMENT_ENVIRONMENT', 'staging'], ['DEPLOYMENT_ENVIRONMENT', 'production'], ['NODE_ENV', 'production'],
+  ['DATABASE_URL', 'postgresql://sit_runner@localhost:15432/sit_integration'],
+  ['DATABASE_URL', 'postgresql://sit_runner@0.0.0.0:15432/sit_integration'],
+  ['DATABASE_URL', 'postgresql://sit_runner@127.0.0.2:15432/sit_integration'],
+  ['DATABASE_URL', 'postgresql://sit_runner@127.0.0.1/sit_integration'],
+  ['DATABASE_URL', 'postgresql://sit_runner@127.0.0.1:15432/other'],
+  ['DATABASE_URL', 'postgresql://other@127.0.0.1:15432/sit_integration'],
+  ['DATABASE_URL', 'postgresql://sit_runner:synthetic@127.0.0.1:15432/sit_integration'],
+  ['DATABASE_URL', 'postgresql://sit_runner@127.0.0.1:15432/sit_integration?host=elsewhere'],
+  ['DATABASE_URL', 'postgresql://sit_runner@127.0.0.1:15432/sit_integration#ignored'],
+  ['PAYMENT_TRANSPORT', 'stripe'], ['STRIPE_LIVEMODE', 'true'],
+  ['SIT_STAGING_SYNTHETIC_CATALOG_ENABLED', 'true'], ['SIT_STAGING_GOOGLE_REGISTRATION_ENABLED', 'true'],
+  ['MAIL_TRANSPORT', 'smtp'], ['PUSH_TRANSPORT', 'firebase'],
+]) test(`rehearsal does not admit unsafe environment: ${key}=${value}`, () => {
+  const f = localRehearsal(); f.environment[key] = value;
+  f.manifest.preflight.environmentDigest = fixtureEnvironmentDigest(f.environment);
+  const expected = key === 'DEPLOYMENT_ENVIRONMENT' && value === 'production'
+    ? /^Error: staging access gate configuration is forbidden in production$/u
+    : /fixture_(rehearsal_binding_invalid|database_invalid|effect_boundary_unsafe|runtime_drift|access_scope_drift)/u;
+  assert.throws(() => validateAdapterInputs(f.bind()), expected);
+});
+for (const key of ['host', 'name', 'user']) test(`rehearsal rejects non-exact manifest database ${key}`, () => {
+  const f = localRehearsal(); f.manifest.preflight.database[key] = 'other';
+  assert.throws(() => validateAdapterInputs(f.bind()), /fixture_database_invalid/u);
+});
+test('neither CLI can obtain or pass rehearsal capability from arguments/environment/manifest', () => {
+  for (const file of ['staging_web_fixture_preflight.mjs', 'staging_web_fixture_adapter.mjs']) {
+    const sourceText = readFileSync(new URL(`../ops/${file}`, import.meta.url), 'utf8');
+    const main = sourceText.slice(sourceText.indexOf('async function main()'));
+    assert.doesNotMatch(main, /rehearsal|isolatedFixtureRehearsal|\.\.\.manifest|\.\.\.process\.env/u);
+    assert.match(main, /validate(FixtureManifest|AdapterInputs)\(/u);
+    if (file.includes('_adapter.')) {
+      assert.deepEqual(Object.keys(parseAdapterArguments(['/private/fixture.json', 'a'.repeat(64)])),
+        ['file', 'fileHash', 'execute', 'confirmSource', 'confirmRun']);
+      assert.match(main, /source: readAdapterSource\(\)/u);
+    }
+  }
+});
 
 test('default preflight repeats canonical read-only preflight on one session and produces no writes', async () => {
   const f = fixture(); const initial = copy(f.state);

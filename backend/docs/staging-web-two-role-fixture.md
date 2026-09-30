@@ -251,17 +251,31 @@ private media/provenance/runtime/schema inputs and protected Green witnesses.
 ## Verification / next gate
 
 ```sh
-node --test backend/test/staging_web_fixture_preflight.test.js
+node --test backend/test/staging_web_fixture_preflight.test.js backend/test/staging_web_fixture_adapter.test.js backend/test/local_postgres_integration_runner.test.js
+SIT_POSTGRES_FOCUSED_WEB_FIXTURE=1 node tool/run_local_postgres_integration.mjs
 cd backend
 pnpm test
 ```
 
 Focused tests cover read-only positive preparation, environment/principal/
 photo/availability drift, excluded prestate, dependencies, every query failure,
-rollback failure and mutation rejection. No real PG, login, image replacement
-or live cleanup pass is claimed. Next is the isolated PostgreSQL/trigger rehearsal
-and exact-source/runtime review of this adapter; media/credential provisioning
-remains separate. No live field or flag change follows from source-only tests.
+rollback failure and mutation rejection. The existing isolated PG16 runner now
+includes the fixture rehearsal by default and via the focused command above:
+all 98 real migrations/checksums, catalog and append-only triggers, FK dependency
+inventory, two-client advisory contention, activation/cleanup replay, revocation,
+durable hidden checkpoint and a real SQL failure/rollback. It stops and removes
+its complete ephemeral cluster on success or failure; retained audit history is
+never deleted individually. Only loopback traffic to that owned cluster occurs.
+
+The programmatic-only `isolatedFixtureRehearsal` Symbol binds exactly
+`127.0.0.1` / `sit_integration` / `sit_runner`, an explicit port, no URL password,
+query or fragment, `DEPLOYMENT_ENVIRONMENT=test` and `NODE_ENV=test` or absent/empty.
+Neither CLI accepts or passes this capability from argv, environment or JSON;
+normal Ops database, source, schema, photo and safety gates are unchanged. The
+test hashes current source bytes without claiming a dirty checkout is deployable.
+Synthetic bytes in this rehearsal are not image/scan authenticity or login proof.
+Next is exact-source/runtime review; media/credential provisioning remains
+separate. No live cleanup, field or runtime flag change follows from this test.
 
 This is a Web-only source successor, not an Android artifact approval. The old
 Android handoff's immutable app-source pin remains unchanged. Consumer closure

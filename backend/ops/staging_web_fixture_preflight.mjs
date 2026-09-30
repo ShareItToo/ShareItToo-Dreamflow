@@ -13,6 +13,9 @@ const digestPattern = /^[a-f0-9]{64}$/u;
 const identifier = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,119}$/u;
 export const fixtureTarget = 'https://staging.shareittoo.com/api/v1';
 export const fixtureNotice = 'Synthetische Katalogfixture – kein reales Angebot, kein Vertrag, keine Zahlung';
+// Capability passed only by the isolated PG16 rehearsal. JSON/env/argv cannot
+// reproduce this identity; both CLIs deliberately omit it.
+export const isolatedFixtureRehearsal = Symbol('isolated-fixture-pg16-rehearsal');
 function fail(code) { throw Object.assign(new Error(code), { code }); }
 function requireThat(value, code) { if (!value) fail(code); }
 function canonical(value) {
@@ -74,7 +77,8 @@ export function readPrivateFixtureInput(file, { maxBytes = 65536 } = {}) {
     expectedMode: 0o600, minBytes: 1, maxBytes });
 }
 
-export function validateFixtureManifest(manifest, now = new Date()) {
+export function validateFixtureManifest(manifest, now = new Date(), rehearsal) {
+  requireThat(rehearsal === undefined || rehearsal === isolatedFixtureRehearsal, 'fixture_rehearsal_binding_invalid');
   requireThat(manifest?.kind === 'sit-staging-web-two-role-preflight'
     && manifest.schemaVersion === 1 && manifest.target === fixtureTarget
     && /^web-fixture-[a-z0-9-]{8,48}$/u.test(manifest.runId ?? ''), 'fixture_manifest_invalid');
@@ -84,7 +88,10 @@ export function validateFixtureManifest(manifest, now = new Date()) {
   requireThat(/^[a-f0-9]{40}$/u.test(manifest.runtimeCommit ?? '')
     && digestPattern.test(manifest.environmentDigest ?? '')
     && digestPattern.test(manifest.snapshotDigest ?? ''), 'fixture_binding_invalid');
-  requireThat(manifest.database?.host === 'sit-green-postgres-20260918011528-wp254'
+  requireThat(rehearsal === isolatedFixtureRehearsal
+    ? manifest.database?.host === '127.0.0.1' && manifest.database.name === 'sit_integration'
+      && manifest.database.user === 'sit_runner'
+    : manifest.database?.host === 'sit-green-postgres-20260918011528-wp254'
     && manifest.database.name === 'shareittoo_green'
     && manifest.database.user === 'shareittoo_green', 'fixture_database_invalid');
   requireThat(Array.isArray(manifest.roles) && manifest.roles.length === 2
@@ -124,7 +131,7 @@ export function validateFixtureManifest(manifest, now = new Date()) {
   return manifest;
 }
 
-export function validateFixtureEnvironment(manifest, environment) {
+export function validateFixtureEnvironment(manifest, environment, rehearsal) {
   const gate = readStagingAccessConfiguration(environment);
   requireThat(['test', 'staging'].includes(environment.DEPLOYMENT_ENVIRONMENT)
     && environment.APP_COMMIT === manifest.runtimeCommit
@@ -145,6 +152,12 @@ export function validateFixtureEnvironment(manifest, environment) {
     && ['disabled', 'memory'].includes(environment.PUSH_TRANSPORT), 'fixture_effect_boundary_unsafe');
   let database;
   try { database = new URL(environment.DATABASE_URL); } catch { fail('fixture_database_invalid'); }
+  requireThat(rehearsal === undefined || (rehearsal === isolatedFixtureRehearsal
+    && environment.DEPLOYMENT_ENVIRONMENT === 'test' && [undefined, '', 'test'].includes(environment.NODE_ENV)
+    && database.hostname === '127.0.0.1' && database.pathname === '/sit_integration'
+    && database.username === 'sit_runner' && !database.password && !database.search && !database.hash
+    && /^[1-9][0-9]{0,4}$/u.test(database.port) && Number(database.port) <= 65535),
+  'fixture_rehearsal_binding_invalid');
   requireThat(['postgres:', 'postgresql:'].includes(database.protocol)
     && database.hostname === manifest.database.host && database.pathname === `/${manifest.database.name}`
     && decodeURIComponent(database.username) === manifest.database.user,
@@ -216,11 +229,11 @@ export function validateFixtureSnapshot(manifest, snapshot) {
     === manifest.availabilityDigest, 'fixture_availability_drift');
 }
 
-export async function preflightWebFixture({ manifest, environment, client, photoBytes, execute = false, now }) {
+export async function preflightWebFixture({ manifest, environment, client, photoBytes, execute = false, now, rehearsal }) {
   // Activation belongs to the separately confirmed adapter, never this preflight.
   requireThat(execute === false, 'fixture_mutation_adapter_not_approved');
-  validateFixtureManifest(manifest, now);
-  validateFixtureEnvironment(manifest, environment);
+  validateFixtureManifest(manifest, now, rehearsal);
+  validateFixtureEnvironment(manifest, environment, rehearsal);
   requireThat(Buffer.isBuffer(photoBytes) && photoBytes.length > 3 && photoBytes.length <= 8388608
     && photoBytes[0] === 0xff && photoBytes[1] === 0xd8 && photoBytes[2] === 0xff
     && bytesDigest(photoBytes) === manifest.photo.sha256, 'fixture_photo_bytes_invalid');

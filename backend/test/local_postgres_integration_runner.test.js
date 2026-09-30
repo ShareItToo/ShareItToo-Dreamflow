@@ -18,6 +18,7 @@ import {
   parsePostgresMajor,
   requiredPostgresMajor,
   runLocalPostgresIntegration,
+  integrationTestPlan,
 } from '../../tool/run_local_postgres_integration.mjs';
 
 const fakeProgram = `#!/bin/sh
@@ -104,6 +105,7 @@ test('runs readiness, isolated database and integration before guaranteed cleanu
       'backend/test/postgres_foundation.integration.test.js',
       'backend/test/foreign_key_integrity.integration.test.js',
     ],
+    ['backend/test/staging_web_fixture_postgres.integration.test.js'],
     ['backend/test/staging_google_registration.integration.test.js'],
     [
       'backend/test/listing_ai_lifetime_budget_migration.integration.test.js',
@@ -171,6 +173,21 @@ test('accepts quiet integration output mode and rejects non-boolean modes', asyn
     runLocalPostgresIntegration({ inheritTestOutput: 'quiet' }),
     /postgres_test_output_mode_invalid/u,
   );
+});
+
+test('focused web fixture mode is the real PG suite and retains failure cleanup', async (t) => {
+  assert.deepEqual(integrationTestPlan({ focusedWebFixture: true }), [
+    ['backend/test/staging_web_fixture_postgres.integration.test.js'],
+  ]);
+  const fixture = await fakeFixture(t);
+  await assert.rejects(runLocalPostgresIntegration({ repositoryRoot: fixture.root,
+    postgresBinDir: fixture.bin, nodeBin: path.join(fixture.bin, 'node'),
+    environment: { ...fixture.environment, SIT_POSTGRES_FOCUSED_WEB_FIXTURE: '1', SIT_FAKE_NODE_EXIT: '23' },
+    temporaryBase: fixture.temporaryBase }), /node failed with exit 23/u);
+  const log = await readFile(fixture.commandLog, 'utf8');
+  assert.match(log, /--test backend\/test\/staging_web_fixture_postgres.integration.test.js/u);
+  assert.match(log, /pg_ctl\|.* -m fast stop\|/u);
+  assert.deepEqual(await readdir(fixture.temporaryBase), []);
 });
 
 test('cleans the cluster and stops PostgreSQL when the integration fails', async (t) => {

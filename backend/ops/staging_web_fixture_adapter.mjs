@@ -31,7 +31,7 @@ export function readAdapterSource() {
 }
 
 export function validateAdapterInputs({ manifest, manifestHash, source, environment, execute = false,
-  confirmSource, confirmRun, photoBytes, storedPhotoBytes, now = new Date() }) {
+  confirmSource, confirmRun, photoBytes, storedPhotoBytes, now = new Date(), rehearsal }) {
   check(manifest?.kind === 'sit-staging-web-fixture-adapter' && manifest.schemaVersion === 1
     && ['activate', 'cleanup'].includes(manifest.operation), 'fixture_adapter_manifest_invalid');
   check(sha(Buffer.from(JSON.stringify(manifest))) === manifestHash, 'fixture_adapter_manifest_binding');
@@ -39,8 +39,8 @@ export function validateAdapterInputs({ manifest, manifestHash, source, environm
     && fixtureDigest(manifest.sourceHashes) === fixtureDigest(source.hashes)
     && source.schemaCount === 98 && manifest.schemaCount === 98
     && manifest.ledgerDigest === source.ledgerDigest, 'fixture_adapter_source_drift');
-  validateFixtureManifest(manifest.preflight, now);
-  validateFixtureEnvironment(manifest.preflight, environment);
+  validateFixtureManifest(manifest.preflight, now, rehearsal);
+  validateFixtureEnvironment(manifest.preflight, environment, rehearsal);
   check(!environment.SIT_WEB_FIXTURE_EXECUTE && !environment.SIT_WEB_FIXTURE_CONFIRM,
     'fixture_adapter_env_execute_forbidden');
   check(execute === false || (execute === true && confirmSource === manifest.sourceCommit
@@ -226,7 +226,7 @@ async function verifyRevocation(client, m) {
 
 export async function runFixtureAdapter(input) {
   validateAdapterInputs(input);
-  const { manifest, manifestHash, client, environment, execute = false, photoBytes, now } = input;
+  const { manifest, manifestHash, client, environment, execute = false, photoBytes, now, rehearsal } = input;
   const m = manifest.preflight; const scope = scopeDigest(m);
   const key = `sit-web-fixture:${m.listingId}`;
   const locked = (await client.query('SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS locked', [key])).rows[0]?.locked;
@@ -255,7 +255,7 @@ export async function runFixtureAdapter(input) {
       check(events.length === 0, 'fixture_adapter_run_collision');
       noDependencies(counts);
       // Repeat the existing read-only preflight on this same, locked session.
-      await preflightWebFixture({ manifest: m, environment, client, photoBytes, now });
+      await preflightWebFixture({ manifest: m, environment, client, photoBytes, now, rehearsal });
     } else {
       check(activation?.manifestDigest === manifest.activationDigest, 'fixture_adapter_activation_binding_required');
       check(fixtureDigest(snapshot) === m.snapshotDigest, 'fixture_snapshot_drift');
