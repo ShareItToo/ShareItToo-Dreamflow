@@ -1,6 +1,6 @@
-# Current Work Package: Staging Web Pilot delivery — ACTIVE
+# Current Goal: SIT Mission / Blue Ocean — ACTIVE
 
-## Parent objective addendum — SIT Mission / Blue Ocean — 2026-09-30
+## Authoritative objective — SIT Mission / Blue Ocean — 2026-09-30
 
 The top-level objective is now the authoritative
 [SIT Mission Masterplan](product/SIT_MISSION_MASTERPLAN_2026-09-30.md).
@@ -13,7 +13,29 @@ The older capsules below remain historical evidence, not a replacement goal.
 Proceed within bounded authorized packages without involving Walid except for
 an unavoidable physical action. Gemini is reserved for narrow, named critical
 gates using current sources; it is not a routine execution prerequisite.
-This addendum grants no new live, provider, payment, Production or Play authority.
+This objective record grants no new live, provider, payment, Production or Play authority.
+
+## Active prerequisite: Phase 0 Web/CORS and safe synthetic catalog QA
+
+The dedicated two-role synthetic catalog scope is now seeded and bound to the
+canonical Green Staging environment. Its guarded database preparation and
+independent readback passed while the synthetic catalog flag remained `false`:
+the public catalog returned zero entries, the fixture was not visible, payment
+remained memory-only, Stripe live mode stayed off, registration stayed closed,
+and no booking, request, provider identity, push device, active session or active
+refresh token existed. The protected readback is
+`/docker/shareittoo/evidence/web-fixture-adapter-fbe99fb6-20260930T204226Z/post-verify.json`,
+SHA-256
+`109e29f5e0f13db97b0423cc6e00dbc1501f8a8daed85209d76f1565071acc32`.
+
+Source successor `467c6f93fe800fd093f338fd6aedbb16b837f368` corrects the runner's
+read-only replay truth with an exact activate/cleanup and read-only/execute
+status matrix. This is source verification, not a new live activation. Remaining
+Phase 0 work stays separately gated: protected two-role login proof, the exact
+catalog-flag transition, authenticated browser acceptance and the outstanding
+Web/CORS release evidence. Phase 0 completion then advances automatically to
+**P2 — dauerhafter unverbindlicher Missionsbedarf**; it never closes the Mission
+goal itself.
 
 ## Staging Web auth/CORS package — source review complete, live gate open
 
