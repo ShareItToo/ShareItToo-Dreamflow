@@ -47,6 +47,11 @@ Add `corsBinding` with exactly these SHA-256/full-ID fields:
 The exported fingerprint hashes the captured ID/name/image/config/env/host
 configuration/mounts/network identities and running state. Compute in memory;
 never write raw `docker inspect`, env content or credentials into evidence.
+Only the observed unordered Docker `Mounts` collection is sorted as complete
+records (all fields and duplicates retained). Other arrays, including env,
+security options, DNS and network aliases, remain order-sensitive. Regenerate
+all three container fingerprints from fresh readbacks with this exact helper;
+do not reuse manifests produced by the earlier order-sensitive mount hashing.
 Public fingerprint values are not evidence that stale inventory is current.
 
 ## Intended default invocation (not executed by this package)

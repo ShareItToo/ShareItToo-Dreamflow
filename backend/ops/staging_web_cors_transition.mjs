@@ -37,12 +37,26 @@ function canonical(value) {
   return value;
 }
 
+function canonicalMounts(value) {
+  if (!Array.isArray(value)) return value;
+  // Docker inspect may reorder Mounts. Retain every field and duplicate; only
+  // this observed unordered collection is sorted, never env/security/DNS lists.
+  const key = (mount) => JSON.stringify([
+    mount?.Type, mount?.Source, mount?.Destination, mount?.RW, mount?.Mode, mount,
+  ]);
+  return value.map(canonical).sort((left, right) => {
+    const a = key(left);
+    const b = key(right);
+    return a < b ? -1 : a > b ? 1 : 0;
+  });
+}
+
 // Readback-only fingerprints: no raw inspect/env backup is ever serialized.
 export function corsContainerFingerprint(record) {
   return digest(JSON.stringify(canonical({
     Id: record?.Id, Name: record?.Name, Image: record?.Image,
     Running: record?.State?.Running, Config: record?.Config,
-    HostConfig: record?.HostConfig, Mounts: record?.Mounts,
+    HostConfig: record?.HostConfig, Mounts: canonicalMounts(record?.Mounts),
     Networks: record?.NetworkSettings?.Networks, Ports: record?.NetworkSettings?.Ports,
   })));
 }
