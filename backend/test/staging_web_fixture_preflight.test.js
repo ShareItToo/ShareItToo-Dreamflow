@@ -15,6 +15,7 @@ function fixture() {
     syntheticMarker: 'synthetic-fixture-test' }));
   const snapshot = {
     users: roles.map((r) => ({ id: r.userId, role: 'user', account_status: 'active',
+      email: `${r.role}@example.invalid`, phone_e164: null,
       deactivated_at: null, email_verified_at: now, private_use_confirmed_at: now,
       private_marketplace_review_status: 'clear', profile: { syntheticOnly: true,
         syntheticMarker: r.syntheticMarker } })),
@@ -159,6 +160,9 @@ for (const [name, edit] of Object.entries({
   bookingDependency: (f) => { f.snapshot.bookings.push({ id: 'bound' }); },
   requestDependency: (f) => { f.snapshot.requests.push({ id: 'bound' }); },
   providerIdentity: (f) => { f.snapshot.identities.push({ id: 'bound' }); },
+  routableEmail: (f) => { f.snapshot.users[0].email = 'fixture@example.com'; },
+  misleadingEmailSuffix: (f) => { f.snapshot.users[0].email = 'fixture@example.invalid.attacker.invalid'; },
+  phone: (f) => { f.snapshot.users[1].phone_e164 = '+490000000000'; },
   activeSession: (f) => { f.snapshot.sessions.push({ revoked_at: null }); },
   malformedSession: (f) => { f.snapshot.sessions.push({}); },
   pushDevice: (f) => { f.snapshot.push.push({ id: 'bound' }); },

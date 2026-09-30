@@ -26,6 +26,10 @@ function canonical(value) {
 export function fixtureDigest(value) {
   return createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
 }
+export function hasSyntheticFixtureContact(user) {
+  return typeof user?.email === 'string' && user.email === user.email.trim().toLowerCase()
+    && /^[^@\s]+@example\.invalid$/u.test(user.email) && user.phone_e164 === null;
+}
 const bytesDigest = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
 // Versioned, explicit input inventory; never bind volatile shell/process metadata.
@@ -92,16 +96,26 @@ export function validateFixtureManifest(manifest, now = new Date()) {
     && /^[A-Za-z0-9][A-Za-z0-9_.-]{0,159}$/u.test(manifest.uploadName ?? '')
     && manifest.region === 'heilbronn', 'fixture_scope_invalid');
   const photo = manifest.photo;
-  let sourceUrl;
-  try { sourceUrl = new URL(photo?.sourceUrl); } catch { fail('fixture_photo_provenance_required'); }
-  requireThat(photo?.classification === 'authentic_non_ai'
-    && photo.mimeType === 'image/jpeg' && digestPattern.test(photo.sha256 ?? '')
-    && typeof photo.license === 'string' && photo.license.trim().length > 0
-    && typeof photo.creator === 'string' && photo.creator.trim().length > 0
-    && sourceUrl.protocol === 'https:' && !sourceUrl.username && !sourceUrl.password
-    && Number.isFinite(Date.parse(photo.capturedAt))
-    && Date.parse(photo.capturedAt) <= +now, 'fixture_photo_provenance_required');
-  // An authentic historical stock photo is NOT current ownership/condition proof.
+  const common = ['classification', 'mimeType', 'sha256', 'currentProductEvidence', 'file'];
+  const authentic = photo?.classification === 'authentic_non_ai';
+  const synthetic = photo?.classification === 'synthetic_ai_illustration';
+  const fields = authentic ? ['sourceUrl', 'creator', 'license', 'capturedAt']
+    : ['syntheticAi', 'generatedAt', 'toolIdentity', 'promptHash', 'usageLicenseStatement', 'sourceUrl'];
+  const text = (value) => typeof value === 'string' && value.trim().length > 0 && value.length <= 2000;
+  const past = (value) => Number.isFinite(Date.parse(value)) && Date.parse(value) <= +now;
+  requireThat((authentic || synthetic) && photo.mimeType === 'image/jpeg' && digestPattern.test(photo.sha256 ?? '')
+    && Object.keys(photo).every((key) => [...common, ...fields].includes(key))
+    && (authentic ? text(photo.creator) && text(photo.license) && past(photo.capturedAt)
+      : photo.syntheticAi === true && past(photo.generatedAt) && text(photo.toolIdentity)
+        && digestPattern.test(photo.promptHash ?? '') && text(photo.usageLicenseStatement)),
+  'fixture_photo_provenance_required');
+  if (authentic || Object.hasOwn(photo, 'sourceUrl')) {
+    let sourceUrl;
+    try { sourceUrl = new URL(photo.sourceUrl); } catch { fail('fixture_photo_provenance_required'); }
+    requireThat(sourceUrl.protocol === 'https:' && !sourceUrl.username && !sourceUrl.password,
+      'fixture_photo_provenance_required');
+  }
+  // Fixture illustrations, including explicitly synthetic AI, are never product proof.
   requireThat(manifest.fixtureClass === 'synthetic_noncontractual_catalog_only'
     && manifest.notice === fixtureNotice && manifest.realOffer === false
     && manifest.ownerDeclaration === false && manifest.bookingAllowed === false
@@ -112,7 +126,7 @@ export function validateFixtureManifest(manifest, now = new Date()) {
 
 export function validateFixtureEnvironment(manifest, environment) {
   const gate = readStagingAccessConfiguration(environment);
-  requireThat(environment.DEPLOYMENT_ENVIRONMENT === 'test'
+  requireThat(['test', 'staging'].includes(environment.DEPLOYMENT_ENVIRONMENT)
     && environment.APP_COMMIT === manifest.runtimeCommit
     && fixtureEnvironmentDigest(environment) === manifest.environmentDigest, 'fixture_runtime_drift');
   requireThat(gate.enabled && gate.valid && gate.publicListingConfigurationValid
@@ -137,11 +151,14 @@ export function validateFixtureEnvironment(manifest, environment) {
   'fixture_database_invalid');
 }
 
-// Rows stay in memory, never in stdout/evidence. Every query runs in READ ONLY.
-export async function readFixtureSnapshot(client, manifest) {
+// Rows stay in memory. Standalone reads are READ ONLY; the adapter can repeat
+// the same reads inside its already locked transaction before conditional writes.
+export async function readFixtureSnapshot(client, manifest, { withinTransaction = false } = {}) {
   const users = manifest.roles.map((r) => r.userId);
   const queries = {
-    users: ['SELECT * FROM users WHERE id = ANY($1::text[]) ORDER BY id', [users]],
+    users: [`SELECT id, email, phone_e164, role, account_status, deactivated_at,
+      email_verified_at, private_use_confirmed_at, private_marketplace_review_status,
+      profile, created_at, updated_at FROM users WHERE id = ANY($1::text[]) ORDER BY id`, [users]],
     listing: ['SELECT * FROM listings WHERE id = $1', [manifest.listingId]],
     upload: ['SELECT * FROM uploads WHERE storage_name = $1', [manifest.uploadName]],
     rules: ['SELECT * FROM listing_availability_rules WHERE listing_id = $1 ORDER BY id', [manifest.listingId]],
@@ -152,7 +169,7 @@ export async function readFixtureSnapshot(client, manifest) {
     identities: ['SELECT id FROM auth_identities WHERE user_id = ANY($1::text[]) ORDER BY id', [users]],
     push: ['SELECT id FROM push_devices WHERE user_id = ANY($1::text[]) ORDER BY id', [users]],
   };
-  await client.query('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
+  if (!withinTransaction) await client.query('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
   try {
     await client.query("SET LOCAL statement_timeout = '5s'");
     const identity = (await client.query('SELECT current_database() AS name, current_user AS username')).rows[0];
@@ -163,7 +180,7 @@ export async function readFixtureSnapshot(client, manifest) {
       snapshot[key] = (await client.query(sql, parameters)).rows;
     }
     return snapshot;
-  } finally { await client.query('ROLLBACK'); }
+  } finally { if (!withinTransaction) await client.query('ROLLBACK'); }
 }
 
 export function validateFixtureSnapshot(manifest, snapshot) {
@@ -173,6 +190,7 @@ export function validateFixtureSnapshot(manifest, snapshot) {
   for (const role of manifest.roles) {
     const user = snapshot.users.find((row) => row.id === role.userId);
     requireThat(user?.profile?.syntheticOnly === true
+      && hasSyntheticFixtureContact(user)
       && user.profile.syntheticMarker === role.syntheticMarker
       && user.role === 'user' && user.account_status === 'active' && user.deactivated_at === null
       && user.email_verified_at && user.private_use_confirmed_at
@@ -199,7 +217,7 @@ export function validateFixtureSnapshot(manifest, snapshot) {
 }
 
 export async function preflightWebFixture({ manifest, environment, client, photoBytes, execute = false, now }) {
-  // Existing public catalog/booking routes have no enforceable synthetic-only class.
+  // Activation belongs to the separately confirmed adapter, never this preflight.
   requireThat(execute === false, 'fixture_mutation_adapter_not_approved');
   validateFixtureManifest(manifest, now);
   validateFixtureEnvironment(manifest, environment);

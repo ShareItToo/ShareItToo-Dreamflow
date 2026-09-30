@@ -2,8 +2,9 @@
 
 Original preflight source: `a16822038a4da747adb94713ec6f3b1e887adc89`.
 Default-off catalog successor base: `c0fcb9b34227dfb8bf21e4ce6f40acb9629c62bd`.
-The Ops contract remains a **read-only preflight**, not a provisioner, live correction,
-catalog activation, authenticated browser acceptance or cleanup executor.
+The original Ops preflight remains read-only. The separately confirmed adapter
+below prepares fixture rows and performs semantic cleanup, not a runtime
+deployment, credential provisioner or authenticated browser acceptance.
 No live application, category filter, access gate or provider flag is changed.
 
 ## Why execution is blocked
@@ -28,8 +29,8 @@ rejection, without revealing fixture classification.
 No new unauthenticated relation queries or extra authentication passes exist.
 
 Activation requires a fresh proof of zero existing booking/group/cart/message/
-payment/evidence dependencies. This package neither activates the class nor
-provides the future manifest-bound activation/credential/cleanup executor.
+payment/evidence dependencies. The adapter prepares DB state only; runtime flag
+activation and credential provisioning remain separate, unopened gates.
 
 The existing `/v1/listings` route in `src/app.js` requires a private listing
 declaration and an allowed region before returning an active listing. Its
@@ -78,19 +79,27 @@ Manifest contract is implemented in `validateFixtureManifest`:
 - exact scoped environment and complete snapshot SHA-256 digests; never log raw snapshots;
 - exactly two different, already allowlisted synthetic `owner`/`renter` user
   identifiers and matching existing synthetic markers, ordered by role;
+- both roles must have normalized lowercase `@example.invalid` email and
+  `phone_e164=null`; provider identities and push devices remain forbidden.
+  Password hashes may exist but are neither selected, logged nor changed;
 - exactly the already guest-bound listing and upload, region `heilbronn`;
 - `fixtureClass=synthetic_noncontractual_catalog_only`, `realOffer=false`,
   `ownerDeclaration=false`, `bookingAllowed=false`, `paymentAllowed=false`;
 - notice exactly: “Synthetische Katalogfixture – kein reales Angebot, kein
   Vertrag, keine Zahlung”;
-- photo file, SHA-256, JPEG MIME, HTTPS source URL, creator, license, capture
-  date, `classification=authentic_non_ai`, `currentProductEvidence=false`;
+- photo file, SHA-256, JPEG MIME, `currentProductEvidence=false`, and exactly
+  one provenance variant: `authentic_non_ai` requires HTTPS `sourceUrl`,
+  `creator`, `license`, `capturedAt`; `synthetic_ai_illustration` instead requires
+  `syntheticAi:true`, `generatedAt`, versioned `toolIdentity`, `promptHash`
+  (not a raw prompt), `usageLicenseStatement`, and an optional actual HTTPS
+  `sourceUrl`. Mixed/unknown fields and missing provenance fail closed;
 - exact availability rules/blocks digest. This binds observed availability; it
   does not attest that a real item is available or change any calendar.
 
 `fixtureDigest` canonicalizes object keys and PostgreSQL Date values. Snapshot
-arrays retain query order. `readFixtureSnapshot` gathers the two complete user
-rows, exact listing/upload, availability, bookings/requests, sessions,
+arrays retain query order. `readFixtureSnapshot` gathers explicit user identity/
+eligibility/profile fields (never password material), exact listing/upload,
+availability, bookings/requests, sessions,
 provider identities and push-device dependencies in one REPEATABLE READ,
 READ ONLY transaction with a five-second statement timeout, ending ROLLBACK.
 Positive preparation requires no bookings/requests/provider identities/push
@@ -123,6 +132,10 @@ calculate its SHA-256; neither image nor attribution evidence is downloaded or
 stored here. The JPEG signature/hash check is not independent proof of
 authenticity, copyright permission, current condition or ownership.
 
+An explicitly synthetic/AI-generated illustration may also be used for this
+noncontractual fixture, with the discriminated provenance fields above, exact
+SHA, scan and owner binding. Neither image class is current ownership/condition
+evidence. Real listings still require authentic current product photographs.
 The historical photo may illustrate a visibly synthetic, nonbookable fixture
 only. It is not a current photo of the owner's real offered object. The existing
 guest listing category is `cat3/Sonstiges`; using a drill picture does not
@@ -130,7 +143,7 @@ authorize silently changing that listing's category or product facts. A real
 pilot listing still needs a current authentic photo of the actual item and
 truthful owner/publication/region/availability declarations.
 
-## Authorized cleanup contract for a future, separately reviewed adapter
+## Authorized semantic cleanup contract
 
 Cleanup means **semantic safety restoration**, never byte-for-byte database
 restoration. It must compare-and-set only exact run-owned state:
@@ -158,6 +171,83 @@ also ineligible. Reuse their private-file and lifecycle primitives, not their
 whole flows. `tool/clean_staging_store_feed.mjs` protects active bookings and
 pauses synthetic listings, but is not complete credential/upload cleanup.
 
+## Source-only DB adapter — separate from runtime activation
+
+`backend/ops/staging_web_fixture_adapter.mjs` uses a NEW owner-only external
+manifest (`kind=sit-staging-web-fixture-adapter`, schema 1). Its `preflight`
+member is the canonical preflight manifest. Bind `operation=activate|cleanup`,
+exact clean `sourceCommit`, all `adapterSources` file hashes, schema count 98,
+ordered migration name/checksum `ledgerDigest`, and the exact `uploadDirectory`
+from `UPLOAD_DIR` (default `/data/uploads`). Both private manifest/photo files
+must be 0600 in a 0700 owner directory outside Git. Existing stored media must
+be owned by the runtime UID, non-symlink/non-writable-by-others, identical to the
+private photo, and bound by the scanned upload row. The adapter never installs
+or replaces a photo, changes category, supplies missing owner eligibility, or
+creates credentials. Those missing prerequisites fail closed.
+
+Default invocation is read-only; do not execute this preparation command on live
+systems without the separate source/runtime gate:
+
+```sh
+node backend/ops/staging_web_fixture_adapter.mjs /absolute/private/adapter.json <exact-file-sha256>
+```
+
+The only mutation form appends `--execute <exact-source-commit> <exact-run-id>`.
+Both confirmations and the manifest are required. Environment execution switches
+are forbidden. Source must be clean; test/staging, memory payment, Stripe=false,
+registration=false/empty and synthetic catalog flag absent/false are mandatory.
+Cleanup therefore requires the separately verified runtime flag-off transition
+first. It does not pretend to switch Green or alter an env file itself.
+
+One DB connection owns an advisory lock for the exact listing. Preparation
+repeats the canonical READ ONLY preflight on it, then repeats snapshot/schema/
+dependency checks under SERIALIZABLE and root row locks. Active sessions and
+refresh tokens are rejected both initially and before writes/replay handoff.
+Dependency discovery covers the schema's direct foreign keys to both principals,
+the listing and upload; only exact known fixture/session/audit/availability roots
+are exempt, with separate foreign-listing/upload checks. Normal FK enforcement
+is never disabled. A two-second lock and five-second statement timeout are
+failures, never retried or relaxed.
+
+The single conditional listing update advances `catalog_revision` (preserving
+the existing catalog-write trigger), sets visibly synthetic text and truthful
+Heilbronn/Germany display fields, binds the sole photo and run marker, and writes
+the before-image/hashes to append-only `audit_log` in the same transaction.
+Private declaration, authoritative region code, category, monetary fields,
+availability, upload and user profile remain unchanged. An independent committed
+snapshot/audit readback precedes success. Output is sanitized and explicitly
+`runtimeActivated:false`; its handoff always says `activationAllowed:false` and
+requires a separately reviewed exact-source Green/flag activation.
+The sanitized result includes `manifestDigest` and `activationDigest` explicitly,
+without raw principals, file paths, input bodies or secrets. Preserve the latter
+for the cleanup manifest; cleanup echoes the same original activation digest.
+
+Cleanup requires a NEW fresh manifest: keep the exact same `runId`, two roles,
+listing/upload/photo/availability scope, but freshly capture `createdAt`, runtime,
+environment and current `snapshotDigest`. `activationDigest` is the SHA-256 of
+`JSON.stringify` of the original activation manifest (separate from its exact
+file-byte CLI hash). It must match the retained activation audit. Never rewrite
+the activation input or merely substitute its old snapshot as current truth.
+Cleanup additionally binds `activation.afterHash`/hidden hash, reconstructs the
+original before-image hash, and rejects foreign edits, scope drift or stale input.
+
+Cleanup first commits a paused/inactive listing plus session/refresh revocation
+and a `hidden` audit checkpoint. Then it rechecks dependencies and restores only
+the owned display/payload before-image while keeping the listing inactive and
+paused. New booking/group/cart/message/payment/evidence dependencies stop this
+second phase; the hidden checkpoint remains. No dependent record is deleted,
+old session or credential restored, audit removed, or timestamp rolled backward.
+This adapter issues no temporary credential and does not rotate existing ones;
+a future credential issuer must supply its own invalidation contract. Replay
+requires exact current state/audit and revoked sessions/tokens. Ambiguous COMMIT,
+rollback/unlock/readback failure is never PASS and never automatically retried.
+
+Tests use a stateful injected DB model with real row changes, both commits,
+activation/cleanup/replay and every forward-query fault. They are not a real
+PostgreSQL/trigger/concurrency or live-runtime acceptance. Before execution:
+separate review, clean committed source, isolated PostgreSQL rehearsal, fresh
+private media/provenance/runtime/schema inputs and protected Green witnesses.
+
 ## Verification / next gate
 
 ```sh
@@ -169,9 +259,9 @@ pnpm test
 Focused tests cover read-only positive preparation, environment/principal/
 photo/availability drift, excluded prestate, dependencies, every query failure,
 rollback failure and mutation rejection. No real PG, login, image replacement
-or live cleanup pass is claimed. Next is the separately reviewed activation/
-credential/semantic-cleanup adapter with complete dependency and media-provenance
-binding. No live field or flag change follows from source-only boundary tests.
+or live cleanup pass is claimed. Next is the isolated PostgreSQL/trigger rehearsal
+and exact-source/runtime review of this adapter; media/credential provisioning
+remains separate. No live field or flag change follows from source-only tests.
 
 This is a Web-only source successor, not an Android artifact approval. The old
 Android handoff's immutable app-source pin remains unchanged. Consumer closure
