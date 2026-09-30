@@ -201,9 +201,9 @@ function restoreFixture(options, running = true) {
 test('Green target accepts only the exact verified resource identities', () => {
   assert.deepEqual(assertGreenTargetManifest(targetManifest), targetManifest);
   assert.equal(targetManifest.schemaVersion, 4);
-  assert.equal(targetManifest.prePromotionImage, 'ghcr.io/shareittoo/shareittoo-api:5d3b42613da73451e9d9169a7b99ca1aba0c4227');
-  assert.equal(targetManifest.prePromotionImageDigest, 'sha256:4c4ed030e23563c99caf9781e5fa1ace41d4d72987570dc318e260b217ba3d90');
-  assert.equal(targetManifest.sealedApiContainer, 'shareittoo-staging-api-alt-sealed-green-5d3b4261');
+  assert.equal(targetManifest.prePromotionImage, 'ghcr.io/shareittoo/shareittoo-api:8a90ec61fbe2a0c67265191809ddf332dd26a6b4');
+  assert.equal(targetManifest.prePromotionImageDigest, 'sha256:672f98fe2f49002ea8222a88118d82a46fedadbab9ed1ffdb41cc026c1eafc5e');
+  assert.equal(targetManifest.sealedApiContainer, 'shareittoo-staging-api-alt-sealed-green-8a90ec61');
   assert.deepEqual(targetManifest.retainedSealed.map((descriptor) => descriptor.name), [
     'shareittoo-staging-api-alt-sealed-green-bc86f831',
     'shareittoo-staging-api-alt-sealed-green',
@@ -218,6 +218,8 @@ test('Green target accepts only the exact verified resource identities', () => {
     'shareittoo-staging-api-google-auth-rollback-fe00faaeb46a',
     'shareittoo-staging-api-google-registration-rollback-5d3b42613da7',
     'shareittoo-staging-api-google-registration-finalization-rollback-5d3b42613da7',
+    'shareittoo-staging-api-alt-sealed-green-5d3b4261',
+    'shareittoo-staging-api-web-cors-rollback-aa1a4ef1e065',
   ]);
   const retainedReadbacks = greenTarget.retainedSealed.map((descriptor) => ({
     Name: `/${descriptor.name}`,
@@ -1187,20 +1189,20 @@ test('final readback binds topology and required post-enrollment cohort', () => 
   assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Mounts: record.Mounts.map((mount) => mount.Destination === '/run/secrets/mfa-encryption-key' ? { ...mount, Type: 'volume', Name: 'foreign-secret-volume', Source: undefined } : mount) }, plan, expectedNetworkIds }), /green_final_mount_inventory_mismatch/u);
 });
 
-test('live post-enrollment manifest binds all thirteen seals and the exact approved digests without raw IDs', () => {
+test('live post-CORS manifest binds all fifteen seals and the exact approved digests without raw IDs', () => {
   const manifest = {
     ...targetManifest,
     authProfile: {
       kind: 'google-post-enrollment', schemaVersion: 1,
-      sourceImageDigest: 'sha256:4c4ed030e23563c99caf9781e5fa1ace41d4d72987570dc318e260b217ba3d90',
+      sourceImageDigest: 'sha256:672f98fe2f49002ea8222a88118d82a46fedadbab9ed1ffdb41cc026c1eafc5e',
       allowedUserIdsDigest: 'dea1a23d836f0c5966a889ac2bf8098ade2392e7a74e7d2819391dbc1ea7e2fd',
       allowedUserIdsCount: 4,
       googleUserIdDigest: '8009329bd0eec86d923640e8d878ae2bf9117948a64d0f82f9460b03fef44a16',
     },
   };
   manifest.targetDigest = normalizedGreenTargetDigest(manifest);
-  assert.equal(manifest.targetDigest, '6e756c5734a47fd25d53185376aa1fbddc8212607011ffa35c0f04322e802fa4');
-  assert.equal(assertGreenTargetManifest(manifest).retainedSealed.length, 13);
+  assert.equal(manifest.targetDigest, '84925296b2b9a5c03fb6829221f19854baefb09b575336cb2f1c553fcdfff083');
+  assert.equal(assertGreenTargetManifest(manifest).retainedSealed.length, 15);
   const readme = readFileSync(new URL('../ops/README.md', import.meta.url), 'utf8');
   for (const value of [manifest.targetDigest, manifest.authProfile.sourceImageDigest,
     manifest.authProfile.allowedUserIdsDigest, manifest.authProfile.googleUserIdDigest]) assert.ok(readme.includes(value));
@@ -1208,6 +1210,43 @@ test('live post-enrollment manifest binds all thirteen seals and the exact appro
   delete legacy.authProfile;
   legacy.targetDigest = normalizedGreenTargetDigest(legacy);
   assert.throws(() => assertGreenTargetManifest(legacy), /green_target_manifest_shape_invalid/u);
+});
+
+test('post-CORS successor rejects stale predecessor, omitted seals and changed retained identities', () => {
+  const stale = { ...targetManifest,
+    prePromotionImage: 'ghcr.io/shareittoo/shareittoo-api:5d3b42613da73451e9d9169a7b99ca1aba0c4227',
+    prePromotionImageDigest: 'sha256:4c4ed030e23563c99caf9781e5fa1ace41d4d72987570dc318e260b217ba3d90',
+    sealedApiContainer: 'shareittoo-staging-api-alt-sealed-green-5d3b4261',
+    retainedSealed: targetManifest.retainedSealed.slice(0, 13) };
+  stale.targetDigest = normalizedGreenTargetDigest(stale);
+  assert.throws(() => assertGreenTargetManifest(stale), /green_retained_sealed_descriptor_shape_invalid/u);
+  for (const index of [13, 14]) {
+    const expected = targetManifest.retainedSealed[index];
+    assert.equal(expected.running, false); assert.equal(expected.greenLabel, 'true');
+    assert.equal(expected.runId, '20260918011528-wp254');
+    for (const change of [{ image: 'ghcr.io/shareittoo/shareittoo-api:wrong' },
+      { imageDigest: `sha256:${'0'.repeat(64)}` }, { running: true }, { runId: 'foreign' }]) {
+      const mutated = { ...targetManifest, retainedSealed: targetManifest.retainedSealed.map((row, i) =>
+        i === index ? { ...row, ...change } : row) };
+      mutated.targetDigest = normalizedGreenTargetDigest(mutated);
+      assert.throws(() => assertGreenTargetManifest(mutated));
+    }
+  }
+  const oldImageOnly = { ...targetManifest, prePromotionImage: stale.prePromotionImage,
+    prePromotionImageDigest: stale.prePromotionImageDigest };
+  oldImageOnly.targetDigest = normalizedGreenTargetDigest(oldImageOnly);
+  assert.throws(() => assertGreenTargetManifest(oldImageOnly), /green_target_identity_mismatch/u);
+});
+
+test('prepared runtime 1ebc remains separate from the successor Ops commit', () => {
+  const runtime = '1ebc6eaf695e0cd9365680cdecd711b3edbb5586';
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit: runtime,
+    runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  assert.equal(plan.runtime.runtimeCommit, runtime);
+  assert.equal(plan.opsCommit, opsCommit);
+  assert.notEqual(plan.opsCommit, plan.runtime.runtimeCommit);
+  const readme = readFileSync(new URL('../ops/README.md', import.meta.url), 'utf8');
+  assert.ok(readme.includes(runtime));
 });
 
 test('post-enrollment target profile is required, digest-bound and rejects stale source binding', () => {

@@ -28,10 +28,10 @@ export function assertGreenWebCorsEnvironment(values) {
 export const greenTarget = Object.freeze({
   composeProject: 'sit-green',
   apiContainer: 'shareittoo-staging-api',
-  // The next promotion seals the exact active 5d3 post-enrollment runtime. Every existing
+  // The next promotion seals the exact active 8a90 post-CORS runtime. Every existing
   // stopped Green seal remains an immutable read-only witness and is never a
   // mutation target of this runner.
-  sealedApiContainer: 'shareittoo-staging-api-alt-sealed-green-5d3b4261',
+  sealedApiContainer: 'shareittoo-staging-api-alt-sealed-green-8a90ec61',
   retainedSealed: Object.freeze([
     Object.freeze({
       name: 'shareittoo-staging-api-alt-sealed-green-bc86f831',
@@ -125,6 +125,22 @@ export const greenTarget = Object.freeze({
       runId: '20260918011528-wp254',
       running: false,
     })),
+    Object.freeze({
+      name: 'shareittoo-staging-api-alt-sealed-green-5d3b4261',
+      image: 'ghcr.io/shareittoo/shareittoo-api:5d3b42613da73451e9d9169a7b99ca1aba0c4227@sha256:4c4ed030e23563c99caf9781e5fa1ace41d4d72987570dc318e260b217ba3d90',
+      imageDigest: 'sha256:4c4ed030e23563c99caf9781e5fa1ace41d4d72987570dc318e260b217ba3d90',
+      greenLabel: 'true',
+      runId: '20260918011528-wp254',
+      running: false,
+    }),
+    Object.freeze({
+      name: 'shareittoo-staging-api-web-cors-rollback-aa1a4ef1e065',
+      image: 'ghcr.io/shareittoo/shareittoo-api:8a90ec61fbe2a0c67265191809ddf332dd26a6b4@sha256:672f98fe2f49002ea8222a88118d82a46fedadbab9ed1ffdb41cc026c1eafc5e',
+      imageDigest: 'sha256:672f98fe2f49002ea8222a88118d82a46fedadbab9ed1ffdb41cc026c1eafc5e',
+      greenLabel: 'true',
+      runId: '20260918011528-wp254',
+      running: false,
+    }),
   ]),
   databaseContainer: 'sit-green-postgres-20260918011528-wp254',
   databaseVolume: 'sit-green-volume-20260918011528-wp254',
@@ -136,8 +152,8 @@ export const greenTarget = Object.freeze({
   runId: '20260918011528-wp254',
   sourceSchema: 98,
   currentSchema: 98,
-  prePromotionImage: 'ghcr.io/shareittoo/shareittoo-api:5d3b42613da73451e9d9169a7b99ca1aba0c4227',
-  prePromotionImageDigest: 'sha256:4c4ed030e23563c99caf9781e5fa1ace41d4d72987570dc318e260b217ba3d90',
+  prePromotionImage: 'ghcr.io/shareittoo/shareittoo-api:8a90ec61fbe2a0c67265191809ddf332dd26a6b4',
+  prePromotionImageDigest: 'sha256:672f98fe2f49002ea8222a88118d82a46fedadbab9ed1ffdb41cc026c1eafc5e',
   sourceLedgerDigest: '796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196',
   currentLedgerDigest: '796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196',
   currentMigration: '098_booking_checkout_declaration_constraints.up.sql',

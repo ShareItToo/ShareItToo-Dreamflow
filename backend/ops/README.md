@@ -128,12 +128,13 @@ legacy `shareittoo_staging` is never used by this lane.
 The source readback is exactly schema `98` with the manifest-bound ledger
 digest `796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196`.
 The pre-promotion image is exactly
-`ghcr.io/shareittoo/shareittoo-api:5d3b42613da73451e9d9169a7b99ca1aba0c4227`
+`ghcr.io/shareittoo/shareittoo-api:8a90ec61fbe2a0c67265191809ddf332dd26a6b4`
 with digest
-`sha256:4c4ed030e23563c99caf9781e5fa1ace41d4d72987570dc318e260b217ba3d90`.
+`sha256:672f98fe2f49002ea8222a88118d82a46fedadbab9ed1ffdb41cc026c1eafc5e`.
 The new seal is
-`shareittoo-staging-api-alt-sealed-green-5d3b4261`. All 13 existing seals
-(the previous nine, the 3c40 seal and the three Google activation/registration/finalization seals)
+`shareittoo-staging-api-alt-sealed-green-8a90ec61`. All 15 existing seals
+(the previous thirteen, `shareittoo-staging-api-alt-sealed-green-5d3b4261`
+and `shareittoo-staging-api-web-cors-rollback-aa1a4ef1e065`)
 remain separately read-only validated, stopped containers
 with the exact Green label, run ID and immutable image digest; none is ever
 renamed, removed, restarted or network-targeted.
@@ -208,12 +209,12 @@ when cleanup or target/config preservation is uncertain.
 Preparation is local/read-only until the separately authorized operational
 gate is supplied; the target and config manifests stay outside Git:
 
-The 2026-09-29 post-enrollment VPS readback binds the live 5d3 image, schema 98,
-and 13 stopped Green seals, including the retained bc86 witness. The protected
+The 2026-09-30 post-CORS VPS readback binds the live 8a90 image, schema 98,
+and 15 stopped Green seals, including the retained bc86 witness. The protected
 target manifest must use schemaVersion `4`; schema `3`/provider-off promotion
 is rejected for this current target. Its required `authProfile` has kind
 `google-post-enrollment`, schemaVersion `1`, sourceImageDigest
-`sha256:4c4ed030e23563c99caf9781e5fa1ace41d4d72987570dc318e260b217ba3d90`,
+`sha256:672f98fe2f49002ea8222a88118d82a46fedadbab9ed1ffdb41cc026c1eafc5e`,
 allowedUserIdsDigest
 `dea1a23d836f0c5966a889ac2bf8098ade2392e7a74e7d2819391dbc1ea7e2fd`,
 allowedUserIdsCount `4`, and googleUserIdDigest
@@ -221,10 +222,18 @@ allowedUserIdsCount `4`, and googleUserIdDigest
 The exact ordered access list must remain unchanged through candidate, final
 runtime and rollback; Firebase Auth stays enabled and registration stays closed.
 The separate finalized enrollment readback is `1|1|1`; never place raw user or
-provider identities in this contract. These live profile values, the new 5d3
-seal name and all 13 retained descriptors produce the normalized target digest
-`6e756c5734a47fd25d53185376aa1fbddc8212607011ffa35c0f04322e802fa4`.
+provider identities in this contract. These live profile values, the new 8a90
+seal name and all 15 retained descriptors produce the normalized target digest
+`84925296b2b9a5c03fb6829221f19854baefb09b575336cb2f1c553fcdfff083`.
 Do not run the promotion against a stale manifest.
+
+This Ops-only target refresh prepares runtime source
+`1ebc6eaf695e0cd9365680cdecd711b3edbb5586`; its accepted immutable API image
+digest still has to be supplied after publication/readback. Keep
+`GREEN_STAGING_OPS_COMMIT` bound to the separately reviewed successor Ops commit,
+not to that runtime SHA. Fresh owner-only target/config manifests and inventory
+remain required. This update does not activate the synthetic catalog flag,
+provision another role, publish an image or authorize a live promotion.
 
 ```sh
 GREEN_STAGING_TARGET_MANIFEST=/docker/shareittoo/ops/green-target.json \
