@@ -62,7 +62,11 @@ test('local/debug crash consent cannot be reported as active collection', () => 
   );
   assert.match(runtime, /crashDiagnosticsCollectionAllowed\(/u);
   assert.match(runtime, /setCrashDiagnosticsCleanupPending\(\s*false/u);
-  const initialize = slice(runtime, 'static Future<bool> _initialize()', 'static void recordFlutterFatalError');
+  const initialize = slice(runtime, 'static Future<bool> _initialize(', 'static void recordFlutterFatalError');
+  assert.match(initialize, /^static Future<bool> _initialize\(\s*\{Future<void> Function\(\)\? prepareWebAuth\}\) async/u);
+  const web = slice(initialize, 'if (kIsWeb)', 'await _initializeNativeActionLinks();');
+  assert.match(web, /return false;/u);
+  assert.doesNotMatch(web, /FirebaseMessaging|FirebaseCrashlytics|_initialized\s*=\s*true|_pushEnabled\s*=\s*true|_crashDiagnosticsEnabled\s*=\s*true/u);
   assert.match(initialize, /crashDiagnosticsCollectionAllowed\(/u);
   assert.match(initialize, /setCrashDiagnosticsEnabled\(false\)/u);
 });
