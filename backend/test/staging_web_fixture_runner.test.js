@@ -10,7 +10,8 @@ import { adapterSources } from '../ops/staging_web_fixture_adapter.mjs';
 import { fixtureDigest, fixtureEnvironmentDigest, fixtureNotice, fixtureTarget } from '../ops/staging_web_fixture_preflight.mjs';
 import { fixtureRunnerFingerprint, fixtureRunnerTree, verifyFixtureRunnerSourceFiles, validateFixtureRunnerBinding,
   validateFixtureRunnerInventory, buildFixtureRunnerLaunch, runFixtureContainer,
-  assertFixtureRunnerReadableSources, prepareFixtureRunnerInput, buildFixtureRunnerBinding } from '../ops/staging_web_fixture_runner.mjs';
+  assertFixtureRunnerReadableSources, prepareFixtureRunnerInput, buildFixtureRunnerBinding,
+  prepareBootstrapRunnerInput, writeBootstrapRunnerInput } from '../ops/staging_web_fixture_runner.mjs';
 const hash = (value) => createHash('sha256').update(value).digest('hex');
 const networkName = 'sit-green-network-20260918011528-wp254';
 const dbName = 'sit-green-postgres-20260918011528-wp254';
@@ -90,13 +91,15 @@ function fixture() {
         Config: { Image: api.Config.Image, User: '100:101', Env: api.Config.Env, Labels: { 'com.shareittoo.fixture-runner': value('--label').split('=')[1] }, Entrypoint: ['node'], Cmd: command.slice(-3) },
         HostConfig: { ReadonlyRootfs: true, Privileged: false, NetworkMode: binding.networkId, PortBindings: {}, CapDrop: ['ALL'], CapAdd: null, SecurityOpt: ['no-new-privileges'], Devices: [], LogConfig: { Type: 'none' } },
         NetworkSettings: { Networks: { [networkName]: { NetworkID: '' } } },
-        Mounts: mounts.map((m) => ({ Type: m.type, Source: m.type === 'bind' ? m.src : undefined, Name: m.type === 'volume' ? m.src : undefined, Destination: m.dst, RW: false })) };
+        Mounts: mounts.map((m) => ({ Type: m.type, Source: m.type === 'bind' ? m.src : undefined, Name: m.type === 'volume' ? m.src : undefined, Destination: m.dst, RW: !Object.hasOwn(m, 'readonly') })) };
       if (f.alterRunner) f.alterRunner(f.runner);
       if (f.loseCreate) throw Error('lost-create-response');
       return f.runner.Id;
     }
     if (command[0] === 'start') {
       if (f.failStart) throw Error('child-failed');
+      if (f.bootstrap) return JSON.stringify({ status: f.args.execute ? 'dedicated-seed-prepared-runtime-blocked' : 'preflight-passed-no-mutation',
+        runtimeActivated: false, ...f.resultOverride });
       if (f.draftPhoto) return JSON.stringify({ status: 'draft-generated-read-only', runtimeActivated: false,
         sourceCommit: source.commit, manifestDigest: hash(JSON.stringify(f.manifest)), draft: f.manifest, ...f.resultOverride });
       return JSON.stringify({ status: args.execute ? 'database-prepared-runtime-still-blocked' : 'preflight-passed-no-mutation', runtimeActivated: false,
@@ -118,6 +121,104 @@ function fixture() {
     readEnv: () => envBytes, readInput: (path) => path === binding.adapterFile ? bytes : photoBytes });
   return f;
 }
+
+async function bootstrapFixture() {
+  const f = fixture(); const { photo, bytes } = await programmaticPlaceholder();
+  f.files = await prepareBootstrapRunnerInput({ source: f.source, inventory: f, photo, photoBytes: bytes, inputDirectory: f.binding.inputDirectory });
+  f.bootstrap = true; f.manifest = JSON.parse(f.files['adapter.json']);
+  f.passwords = ['owner.password', 'renter.password'].map((name) => f.files[name].toString());
+  f.binding = buildFixtureRunnerBinding({ ...f, inputDirectory: f.binding.inputDirectory, adapterBytes: f.files['adapter.json'], passwords: f.passwords });
+  Object.assign(f.args, { file: f.binding.adapterFile, fileHash: f.binding.adapterFileSha256 });
+  f.run = () => runFixtureContainer({ ...f, runtimeTreeDigest: '8'.repeat(64), assertSourceReadable: () => {},
+    readPasswords: () => f.passwords, inputNames: () => Object.keys(f.files), readEnv: () => f.envBytes,
+    readInput: (path) => f.files[path.split('/').at(-1)] });
+  return f;
+}
+
+test('bootstrap preparation creates new distinct cryptographic secrets only in dedicated protected inputs', async () => {
+  const f = await bootstrapFixture(); assert.notEqual(f.passwords[0], f.passwords[1]);
+  assert.ok(f.passwords.every((p) => /^Sit9-[A-Za-z0-9_-]{54}$/u.test(p)));
+  const evidence = JSON.parse(f.files['credentials.json']);
+  assert.deepEqual(evidence.accounts.map((a) => a.password), f.passwords);
+  assert.ok(evidence.accounts.every((a) => a.email === `${a.id}@example.invalid`));
+  const privateText = f.files['adapter.json'].toString() + f.files['credentials.json'].toString();
+  for (const old of f.environment.SIT_STAGING_ALLOWED_USER_IDS.split(',')) assert.ok(!privateText.includes(old));
+  const refreshed = await prepareBootstrapRunnerInput({ source: f.source, inventory: f, photo: f.manifest.preflight.photo,
+    photoBytes: f.files['photo.webp'], inputDirectory: f.binding.inputDirectory + '-fresh',
+    previous: { manifest: f.manifest, passwords: f.passwords }, operation: 'cleanup' });
+  const manifest = JSON.parse(refreshed['adapter.json']);
+  assert.equal(manifest.operation, 'cleanup'); assert.equal(manifest.preflight.runId, f.manifest.preflight.runId);
+  assert.deepEqual(manifest.preflight.roles, f.manifest.preflight.roles);
+  assert.deepEqual(refreshed['owner.password'], f.files['owner.password']);
+  await assert.rejects(prepareBootstrapRunnerInput({ source: { ...f.source, commit: 'f'.repeat(40) }, inventory: f,
+    photo: f.manifest.preflight.photo, photoBytes: f.files['photo.webp'], inputDirectory: f.binding.inputDirectory + '-fresh',
+    previous: { manifest: f.manifest, passwords: f.passwords }, operation: 'cleanup' }), /refresh_scope/u);
+});
+
+test('exclusive input writer requests 0700/100:101 and every file 0600/100:101; all failure phases stop', async () => {
+  const f = await bootstrapFixture();
+  for (let failAt = 0; failAt <= 14; failAt++) {
+    let step = 0; let made = false; const values = new Map();
+    const tick = () => { if (++step === failAt) throw Error('injected'); };
+    const io = { assertParent: () => tick(), mkdir: (path, options) => { tick(); assert.equal(options.mode, 0o700); if (made) throw Error('exists'); made = true; },
+      chown: (path, uid, gid) => { tick(); assert.equal(uid, 100); assert.equal(gid, 101); },
+      write: (path, bytes, options) => { tick(); assert.deepEqual(options, { mode: 0o600, uid: 100, gid: 101 }); assert.ok(!values.has(path)); values.set(path, Buffer.from(bytes)); },
+      read: (path) => { tick(); return values.get(path); }, names: () => { tick(); return Object.keys(f.files); } };
+    if (failAt) assert.throws(() => writeBootstrapRunnerInput(f.binding.inputDirectory, f.files, io), /injected/u);
+    else { writeBootstrapRunnerInput(f.binding.inputDirectory, f.files, io); assert.equal(values.size, 5);
+      assert.throws(() => writeBootstrapRunnerInput(f.binding.inputDirectory, f.files, io), /exists/u); }
+  }
+});
+
+test('bootstrap preflight has RO uploads and DB; confirmed execute has exactly one RW mount and sanitized output', async () => {
+  for (const execute of [false, true]) {
+    const f = await bootstrapFixture();
+    if (execute) Object.assign(f.args, { execute, confirmSource: f.source.commit, confirmRun: f.manifest.preflight.runId });
+    const result = await f.run(); assert.deepEqual(Object.keys(result).sort(), ['cleanup', 'runtimeActivated', 'status']);
+    assert.equal(result.cleanup, 'verified'); assert.equal(result.runtimeActivated, false); assert.equal(f.runner, null);
+    const create = f.calls.find((call) => call[0] === 'create'); const code = create.at(-1);
+    const mounts = create.flatMap((value, i) => value === '--mount' ? [create[i + 1]] : []);
+    assert.equal(mounts.filter((m) => !m.endsWith(',readonly')).length, execute ? 1 : 0);
+    if (execute) assert.ok(mounts.find((m) => !m.endsWith(',readonly')).endsWith('dst=/data/uploads'));
+    assert.match(code, /options: input.args.execute === true \? undefined : '-c default_transaction_read_only=on'/u);
+    assert.match(code, /seed.runFixtureBootstrap/u); assert.doesNotMatch(code, /rehearsal:/u);
+    assert.equal(spawnSync(process.execPath, ['--input-type=module', '--check'], { input: code, encoding: 'utf8' }).status, 0);
+    for (const secret of f.passwords) assert.ok(!JSON.stringify(create).includes(secret) && !JSON.stringify(result).includes(secret));
+    assert.equal(create[create.indexOf('--log-driver') + 1], 'none');
+  }
+});
+
+for (const [name, change] of Object.entries({
+  missingConfirm: (f) => { f.args.execute = true; },
+  wrongSource: (f) => { Object.assign(f.args, { execute: true, confirmSource: 'f'.repeat(40), confirmRun: f.manifest.preflight.runId }); },
+  wrongRun: (f) => { Object.assign(f.args, { execute: true, confirmSource: f.source.commit, confirmRun: 'web-fixture-other' }); },
+  duplicatePassword: (f) => { f.passwords[1] = f.passwords[0]; },
+  credentialEvidence: (f) => { f.files['credentials.json'] = Buffer.from('{}'); },
+  extraInput: (f) => { f.files['extra.password'] = Buffer.from('unknown'); },
+  rwDefault: (f) => { f.alterRunner = (r) => { r.Mounts.find((m) => m.Destination === '/data/uploads').RW = true; }; },
+  rwSource: (f) => { f.alterRunner = (r) => { r.Mounts[0].RW = true; }; },
+  logs: (f) => { f.alterRunner = (r) => { r.HostConfig.LogConfig.Type = 'json-file'; }; },
+  outputSecret: (f) => { f.resultOverride = { password: f.passwords[0] }; },
+})) test(`bootstrap runner rejects ${name} without success or retained runner`, async () => {
+  const f = await bootstrapFixture(); change(f); await assert.rejects(f.run()); assert.equal(f.runner, null);
+});
+
+for (const mode of ['loseCreate', 'failStart', 'failCleanup']) test(`bootstrap ${mode} never retries or deletes the named Green volume`, async () => {
+  const f = await bootstrapFixture(); f[mode] = true; await assert.rejects(f.run());
+  assert.ok(f.calls.filter((c) => c[0] === 'create').length <= 1);
+  assert.ok(f.calls.filter((c) => c[0] === 'start').length <= 1);
+  assert.ok(!f.calls.some((c) => c[0] === 'volume' || c[0] === 'exec'));
+  if (mode !== 'failCleanup') assert.equal(f.runner, null);
+});
+
+test('bootstrap replay remains sanitized and child failure never triggers file compensation', async () => {
+  const f = await bootstrapFixture(); f.resultOverride = { status: 'dedicated-seed-already-prepared-runtime-blocked' };
+  assert.equal((await f.run()).status, f.resultOverride.status);
+  f.failStart = true; await assert.rejects(f.run());
+  assert.ok(f.calls.every((c) => ['image', 'create', 'start', 'rm', 'ps'].includes(c[0])));
+  const text = readFileSync(new URL('../ops/staging_web_fixture_runner.mjs', import.meta.url), 'utf8');
+  assert.doesNotMatch(text.slice(text.indexOf('async function main()')), /process\.stdout\.write\([^\n]*(passwords|files|credentials)/u);
+});
 
 test('default container contract is read-only, exact immutable image/Green only, no providers or host ports', async () => {
   const f = fixture(); const result = await f.run();

@@ -128,10 +128,11 @@ table or a new production schema.
 
 ## Photo input: illustration is not product evidence
 
-### Dedicated bootstrap domain — source-only core, host-runner gate still open
+### Dedicated bootstrap — protected host runner, live gate still open
 
 `backend/ops/staging_web_fixture_bootstrap.mjs` is a programmatic domain core,
-**not a deployable CLI or authorization to connect to Green**. It creates only
+**not a standalone CLI or authorization to connect to Green**. The existing
+`staging_web_fixture_runner.mjs` provides its protected host boundary. It creates only
 the two fixed-purpose `synthetic_web_catalog_{owner,renter}_v1@example.invalid`
 principals, `synthetic_web_catalog_listing_v1`, and the dedicated
 `synthetic_web_catalog_placeholder_v1.webp` upload. Existing synthetic-marked
@@ -180,15 +181,60 @@ Only after separately reviewed runtime/gate changes may the existing fresh
 draft + adapter preflight consume that exact fixture. DB seed success is not
 catalog visibility, account login verification or runtime activation.
 
-Remaining operational gate: a reviewed host runner must bind immutable image/
-APP_COMMIT, clean source, Green DB/internal network/uploads/env, UID/GID and
-protected inputs, with read-only root, cap-drop/no-new-privileges, no ports and
-logging disabled; only the exact uploads volume may become RW under execute.
-It must exclusively create owner-only credential evidence outside Git and never
-print it. This core does not yet supply that host command. Do not run it manually
-against live DB or bypass this gate. Local proofs use isolated PG16 plus all 98
-migrations and temporary files only, including used-cleanup rehearsal via
-`SIT_FIXTURE_BOOTSTRAP_REHEARSAL_CASE=used` with the existing PG harness.
+The host runner binds immutable image/APP_COMMIT, clean Ops source (separate
+from runtime revision), all mounted source hashes and the 98-file ledger, actual
+API/DB fingerprints, internal Green network, uploads and protected env bytes.
+Preparation is read-only Docker inventory only. It generates two independent
+cryptographic passwords and a fresh run ID, never accepts old account inputs.
+The five exclusive files are `adapter.json`, `photo.webp`, `owner.password`,
+`renter.password`, `credentials.json`: each `0600` UID100:GID101 inside a new
+`0700` UID100:GID101 directory, beneath a root-owned `0700` evidence parent.
+`credentials.json` is the retrievable private login evidence; never print, copy
+to Git/chat, or include it in ordinary evidence. Partial preparation fails with
+protected files retained; never overwrite or automatically retry that directory.
+
+After separately authorized preparation, use the exact clean Ops checkout and
+private Node >=22. All paths below are private absolute paths, with new unused
+destinations beneath `/docker/shareittoo/evidence/`; the descriptor and WebP
+must already be verified protected inputs, with their exact SHA-256 values.
+
+```sh
+node backend/ops/staging_web_fixture_runner.mjs --prepare-bootstrap "$PHOTO_DESCRIPTOR" "$DESCRIPTOR_SHA256" "$PHOTO_FILE" "$PHOTO_SHA256" "$NEW_INPUT_DIRECTORY"
+node backend/ops/staging_web_fixture_runner.mjs --prepare-binding "$NEW_INPUT_DIRECTORY" "$NEW_BINDING_FILE"
+node backend/ops/staging_web_fixture_runner.mjs "$NEW_BINDING_FILE" "$EXACT_BINDING_SHA256"
+```
+
+Read the new root-owned `0600` binding hash privately. Both manifest and binding
+expire after one hour. Default container execution has DB transactions read-only
+and uploads RO, UID100:101, root RO, all capabilities dropped, no-new-privileges,
+no ports, only the internal network, and logging disabled. Actual stopped-container
+inspection precedes start. Every source/input mount stays RO. After independent
+preflight acceptance and explicit authorization, the only RW mount is uploads:
+
+```sh
+node backend/ops/staging_web_fixture_runner.mjs "$NEW_BINDING_FILE" "$EXACT_BINDING_SHA256" --execute "$EXACT_OPS_SHA" "$EXACT_BOOTSTRAP_RUN_ID"
+```
+
+To refresh a stale manifest or prepare cleanup, preserve the original private
+input directory and create a new one with the same source/run/passwords/scope:
+
+```sh
+node backend/ops/staging_web_fixture_runner.mjs --refresh-bootstrap "$ORIGINAL_INPUT_DIRECTORY" cleanup "$FRESH_INPUT_DIRECTORY"
+```
+
+Use `seed` instead of `cleanup` for a reviewed seed replay. Then build a fresh
+binding and repeat default preflight before separately confirmed execution.
+No automatic retry follows child, create, cleanup or unknown-COMMIT failures.
+Host cleanup removes only the owned runner container; it never compensates DB
+or media state. Preserve private inputs/receipts and reconcile via exact replay.
+Output is sanitized status only, never IDs, emails, passwords/hashes or raw env.
+
+Remaining live gate: independently prove actual UID100:101 source/input imports,
+mount inspection and `--log-driver none` with `start --attach` result delivery in
+the exact image before authorized execution. Local runner tests are deterministic
+rehearsals, not that live Docker proof. Domain proofs use isolated PG16 plus all
+98 migrations and temporary files, including used-cleanup rehearsal via
+`SIT_FIXTURE_BOOTSTRAP_REHEARSAL_CASE=used`. Never manually bypass the runner.
 
 The supplied research identifies Wikimedia Commons
 [Cordless electric (screw) drill.jpg](https://commons.wikimedia.org/wiki/File:Cordless_electric_(screw)_drill.jpg),
