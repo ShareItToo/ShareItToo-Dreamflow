@@ -261,7 +261,12 @@ Green API ID, and recreates the same
 image, mounts, security/resource settings and two networks. Success requires
 live/ready/version, exact four-value config readback, registration still closed,
 catalog flag still false, schema/ledger and unchanged seed evidence. Sanitized
-success evidence contains counts and digests only.
+success evidence contains counts and digests only. The full captured API
+fingerprint is rechecked immediately before mutation. Later stop/rename/create
+identity checks compare the exact container IDs and images, a canonical exact
+environment key/value set, normalized config/host/mount drift, and the exact
+fresh-preflight NetworkIDs; mutable Docker aliases, IP fields, name and running
+state are accepted only where that lifecycle phase necessarily changes them.
 
 Every forward error uses an identity-checked rollback: restore the env only if
 it is still either the executor's exact after-image or exact old bytes; remove

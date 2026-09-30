@@ -125,9 +125,13 @@ function startupPayload() {
       PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false', SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '0' } });
 }
 
-function fakeExecutor(fx, { failPhase, lateEvidenceCollision = false } = {}) {
+function fakeExecutor(fx, {
+  failPhase, lateEvidenceCollision = false, reorderReplacementEnv = false, mutateNetworkMetadata = false,
+  mutateBeforeFingerprint = false,
+} = {}) {
   const containers = new Map([[fx.manifest.apiContainer, structuredClone(fx.api)]]);
   const calls = [];
+  let networkMutation = 0;
   const imageRecord = { Id: fx.api.Image, RepoTags: [fx.manifest.image], Config: { User: 'shareittoo',
     Labels: { 'org.opencontainers.image.revision': runtimeCommit } }, RepoDigests: [`${fx.manifest.image}@${imageDigest}`] };
   const fixed = new Map([
@@ -139,6 +143,15 @@ function fakeExecutor(fx, { failPhase, lateEvidenceCollision = false } = {}) {
   ]);
   const byReference = (value) => containers.get(value) ?? [...containers.values()].find((record) => record.Id === value) ?? fixed.get(value);
   const json = (value) => ({ stdout: JSON.stringify(value), code: 0 });
+  const mutateNetworks = (record) => {
+    if (!mutateNetworkMetadata) return;
+    networkMutation += 1;
+    for (const [name, value] of Object.entries(record.NetworkSettings?.Networks ?? {})) {
+      value.Aliases = [`dynamic-${networkMutation}-${name}`];
+      value.IPAddress = `172.31.${networkMutation}.9`;
+      value.EndpointID = networkMutation.toString(16).padStart(64, '0');
+    }
+  };
   const configReadback = () => {
     const allowed = fx.handoff.proposed.SIT_STAGING_ALLOWED_USER_IDS;
     const expected = { allowedCount: allowed.split(',').length, allowedDigest: hash(allowed), listingCount: 1,
@@ -153,6 +166,7 @@ function fakeExecutor(fx, { failPhase, lateEvidenceCollision = false } = {}) {
       const record = byReference(args.at(-1));
       if (!record && options.allowFailure) return { stdout: '', stderr: 'No such container', code: 1 };
       if (!record) throw Error('missing_inspect');
+      if (mutateBeforeFingerprint && options.phase === 'fixture_env_pre_mutation_api_readback') mutateNetworks(record);
       const result = json(record);
       if (lateEvidenceCollision && options.phase === 'fixture_env_rollback_seal_readback') {
         await writeFile(fx.evidenceFile, 'external-owner\n', { mode: 0o600 });
@@ -178,9 +192,12 @@ function fakeExecutor(fx, { failPhase, lateEvidenceCollision = false } = {}) {
       if (String(script).includes('syntheticCatalogEnabled')) return json(configReadback());
       throw Error(`unexpected_api_exec:${script}`);
     }
-    if (args[0] === 'stop') { byReference(args[1]).State.Running = false; return { stdout: '', code: 0 }; }
+    if (args[0] === 'stop') {
+      const record = byReference(args[1]); record.State.Running = false; mutateNetworks(record); return { stdout: '', code: 0 };
+    }
     if (args[0] === 'rename') {
       const record = byReference(args[1]); containers.delete(record.Name.slice(1)); record.Name = `/${args[2]}`; containers.set(args[2], record);
+      mutateNetworks(record);
       return { stdout: '', code: 0 };
     }
     if (args[0] === 'create') {
@@ -190,7 +207,8 @@ function fakeExecutor(fx, { failPhase, lateEvidenceCollision = false } = {}) {
       const record = structuredClone(fx.api);
       record.Id = 'b'.repeat(64); record.Name = `/${name}`; record.State.Running = false; record.Config.Image = args[networkIndex + 2];
       record.Config.Hostname = 'b'.repeat(12);
-      record.Config.Env = (await readFile(envFile, 'utf8')).split(/\r?\n/u).filter((line) => line && !line.startsWith('#'));
+      const entries = (await readFile(envFile, 'utf8')).split(/\r?\n/u).filter((line) => line && !line.startsWith('#'));
+      record.Config.Env = reorderReplacementEnv ? entries.reverse() : entries;
       record.HostConfig.NetworkMode = args[networkIndex + 1];
       record.NetworkSettings = { Ports: {}, Networks: { [fx.manifest.network]: { NetworkID: primaryNetworkId } } };
       containers.set(name, record); return { stdout: `${record.Id}\n`, code: 0 };
@@ -199,7 +217,9 @@ function fakeExecutor(fx, { failPhase, lateEvidenceCollision = false } = {}) {
       const record = byReference(args[3]); record.NetworkSettings.Networks[fx.manifest.providerNetwork] = { NetworkID: providerNetworkId };
       return { stdout: '', code: 0 };
     }
-    if (args[0] === 'start') { byReference(args[1]).State.Running = true; return { stdout: '', code: 0 }; }
+    if (args[0] === 'start') {
+      const record = byReference(args[1]); record.State.Running = true; mutateNetworks(record); return { stdout: '', code: 0 };
+    }
     if (args[0] === 'rm') { const record = byReference(args.at(-1)); containers.delete(record.Name.slice(1)); return { stdout: '', code: 0 }; }
     throw Error(`unexpected_command:${args.join(' ')}`);
   };
@@ -276,9 +296,22 @@ test('fixture env default preflight is read-only and binds private seed evidence
   assert.doesNotMatch(JSON.stringify(result), /old-owner|old-renter|private-run/u);
 });
 
-test('fixture env execution prepends dedicated roles, preserves old order and retains exact 0600 backup', async (t) => {
+test('execution rechecks the full prepared API fingerprint immediately before mutation', async (t) => {
   const fx = await fixture(); t.after(() => rm(fx.root, { recursive: true, force: true }));
-  const fake = fakeExecutor(fx);
+  const fake = fakeExecutor(fx, { mutateNetworkMetadata: true, mutateBeforeFingerprint: true });
+  await assert.rejects(runStagingWebFixtureEnvTransition({ manifest: fx.manifest, bootstrapManifestBytes: fx.bootstrapBytes,
+    sourceCommit: opsCommit, evidenceFile: fx.evidenceFile, execute: true, confirmSource: opsCommit, confirmRun: fx.runId,
+    command: fake.command, commandEnv: { STAGING_WEB_FIXTURE_ENV_EXECUTE: '1',
+      STAGING_WEB_FIXTURE_ENV_CONFIRM_SOURCE: opsCommit, STAGING_WEB_FIXTURE_ENV_CONFIRM_RUN: fx.runId } }),
+  (error) => error.code === 'fixture_env_pre_mutation_fingerprint_invalid' && error.rollback?.restored === true);
+  assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+  await assert.rejects(readFile(fx.backupFile), { code: 'ENOENT' });
+  await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+});
+
+test('fixture env execution accepts reordered exact env and mutable network metadata without weakening the four-value contract', async (t) => {
+  const fx = await fixture(); t.after(() => rm(fx.root, { recursive: true, force: true }));
+  const fake = fakeExecutor(fx, { reorderReplacementEnv: true, mutateNetworkMetadata: true });
   const result = await runStagingWebFixtureEnvTransition({ manifest: fx.manifest, bootstrapManifestBytes: fx.bootstrapBytes,
     sourceCommit: opsCommit, evidenceFile: fx.evidenceFile, execute: true, confirmSource: opsCommit, confirmRun: fx.runId,
     command: fake.command, commandEnv: { STAGING_WEB_FIXTURE_ENV_EXECUTE: '1',
@@ -295,11 +328,15 @@ test('fixture env execution prepends dedicated roles, preserves old order and re
   assert.doesNotMatch(evidence, /old-owner|old-renter|DATABASE_URL|private-run/u);
   assert.doesNotMatch(`${JSON.stringify(result)}${evidence}`,
     /synthetic_web_catalog_owner_v1|synthetic_web_catalog_renter_v1|synthetic_web_catalog_listing_v1|synthetic_web_catalog_placeholder_v1\.webp/u);
-  assert.equal(fake.containers.get(result.sealedName).State.Running, false);
+  const sealed = fake.containers.get(result.sealedName);
+  assert.equal(sealed.State.Running, false);
+  assert.notEqual(corsContainerFingerprint(sealed), corsContainerFingerprint(fx.api));
+  assert.equal(sealed.NetworkSettings.Networks[fx.manifest.network].NetworkID, primaryNetworkId);
+  assert.equal(sealed.NetworkSettings.Networks[fx.manifest.providerNetwork].NetworkID, providerNetworkId);
   assert.equal(fake.containers.get(fx.manifest.apiContainer).Id, 'b'.repeat(64));
 });
 
-test('each stateful replacement fault restores the exact old env and immutable original API', async (t) => {
+test('each stateful replacement fault restores exact old state despite reordered env and mutable network metadata', async (t) => {
   const phases = [
     'fixture_env_stop_current_api',
     'fixture_env_seal_current_api',
@@ -314,7 +351,7 @@ test('each stateful replacement fault restores the exact old env and immutable o
   for (const phase of phases) await t.test(phase, async () => {
     const fx = await fixture();
     try {
-      const fake = fakeExecutor(fx, { failPhase: phase });
+      const fake = fakeExecutor(fx, { failPhase: phase, reorderReplacementEnv: true, mutateNetworkMetadata: true });
       await assert.rejects(runStagingWebFixtureEnvTransition({ manifest: fx.manifest, bootstrapManifestBytes: fx.bootstrapBytes,
         sourceCommit: opsCommit, evidenceFile: fx.evidenceFile, execute: true, confirmSource: opsCommit, confirmRun: fx.runId,
         command: fake.command, commandEnv: { STAGING_WEB_FIXTURE_ENV_EXECUTE: '1',

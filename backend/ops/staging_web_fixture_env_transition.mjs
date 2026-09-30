@@ -386,7 +386,8 @@ export async function prepareFixtureEnvRuntimeManifest({
       || !commitPattern.test(runtimeRevision ?? '') || tags.length !== 1 || digests.length !== 1 || api.Image !== image.Id) {
     fail('fixture_env_prepare_inventory_invalid');
   }
-  assertNoHostPorts(api); assertNetworks(api, { network: networkName, providerNetwork });
+  const networkIds = Object.freeze({ [networkName]: network.Id, [providerNetwork]: provider.Id });
+  assertNoHostPorts(api); assertNetworks(api, { network: networkName, providerNetwork }, { networkIds });
   const apiValues = envMap(api.Config?.Env);
   const envValues = parseEnvContent(envContent);
   for (const [name, value] of Object.entries(envValues)) if (apiValues[name] !== value) fail('fixture_env_prepare_file_runtime_drift');
@@ -439,37 +440,53 @@ function assertNoHostPorts(record, code = 'fixture_env_host_port_forbidden') {
       || Object.values(record?.NetworkSettings?.Ports ?? {}).flat().some(Boolean)) fail(code);
 }
 
-function assertNetworks(record, manifest, { providerAttached = true } = {}) {
+function assertNetworks(record, manifest, { providerAttached = true, networkIds } = {}) {
   const expected = providerAttached ? [manifest.network, manifest.providerNetwork] : [manifest.network];
-  if (JSON.stringify(Object.keys(record?.NetworkSettings?.Networks ?? {}).sort()) !== JSON.stringify(expected.sort())) {
+  const networks = record?.NetworkSettings?.Networks ?? {};
+  if (JSON.stringify(Object.keys(networks).sort()) !== JSON.stringify([...expected].sort())) {
     fail('fixture_env_network_inventory_invalid');
+  }
+  for (const name of expected) {
+    const actualId = networks[name]?.NetworkID;
+    if (!digestPattern.test(actualId ?? '')
+        || networkIds && (!digestPattern.test(networkIds[name] ?? '') || actualId !== networkIds[name])) {
+      fail('fixture_env_network_inventory_invalid');
+    }
   }
 }
 
-function assertOriginalRecord(record, manifest, original, { stopped = null, name = manifest.apiContainer } = {}) {
-  const normalized = structuredClone(record);
-  normalized.Name = original.Name;
-  normalized.State = { ...normalized.State, Running: original.State.Running };
-  if (record?.Id !== original.Id || record?.Name !== `/${name}`
-      || stopped !== null && record?.State?.Running !== !stopped
-      || corsContainerFingerprint(normalized) !== corsContainerFingerprint(original)) fail('fixture_env_original_identity_invalid');
-  assertNoHostPorts(record); assertNetworks(record, manifest);
+function exactEnvironment(left, right) {
+  return JSON.stringify(canonical(envMap(left))) === JSON.stringify(canonical(envMap(right)));
 }
 
-function assertReplacementRecord(record, manifest, original, proposal, { requireRunning = true, providerAttached = true } = {}) {
+function assertOriginalRecord(record, manifest, original, networkIds, { stopped = null, name = manifest.apiContainer } = {}) {
+  if (record?.Id !== original.Id || record?.Name !== `/${name}`
+      || stopped !== null && record?.State?.Running !== !stopped
+      || record?.Image !== original.Image || !exactEnvironment(record?.Config?.Env, original?.Config?.Env)) {
+    fail('fixture_env_original_identity_invalid');
+  }
+  const comparable = structuredClone(record);
+  comparable.Config.Env = [...original.Config.Env];
+  if (registrationConfigDrift(original, comparable).fields.length) fail('fixture_env_original_identity_invalid');
+  assertNoHostPorts(record); assertNetworks(record, manifest, { networkIds });
+}
+
+function assertReplacementRecord(record, manifest, original, proposal, networkIds,
+  { requireRunning = true, providerAttached = true } = {}) {
   if (!digestPattern.test(record?.Id ?? '') || record.Id === original.Id
       || requireRunning !== null && record?.State?.Running !== requireRunning
       || record?.Config?.Image !== `${manifest.image}@${manifest.imageDigest}`
       || record?.Image !== original.Image) fail('fixture_env_replacement_identity_invalid');
   assertNoHostPorts(record);
   if (providerAttached === null) {
-    try { assertNetworks(record, manifest, { providerAttached: false }); }
-    catch { assertNetworks(record, manifest, { providerAttached: true }); }
-  } else assertNetworks(record, manifest, { providerAttached });
+    try { assertNetworks(record, manifest, { providerAttached: false, networkIds }); }
+    catch { assertNetworks(record, manifest, { providerAttached: true, networkIds }); }
+  } else assertNetworks(record, manifest, { providerAttached, networkIds });
   const before = envMap(original.Config.Env);
-  const after = envMap(record.Config.Env);
   const expected = { ...before, ...proposal.values };
-  if (JSON.stringify(after) !== JSON.stringify(expected)) fail('fixture_env_replacement_environment_invalid');
+  if (!exactEnvironment(record.Config.Env, Object.entries(expected).map(([name, value]) => `${name}=${value}`))) {
+    fail('fixture_env_replacement_environment_invalid');
+  }
   const comparable = structuredClone(record);
   comparable.Config.Image = original.Config.Image;
   comparable.Config.Env = [...original.Config.Env];
@@ -504,7 +521,8 @@ async function collectPreflight({ manifest, bootstrap, sourceCommit, evidenceFil
       || image.Config?.Labels?.['org.opencontainers.image.revision'] !== manifest.runtimeRevision
       || image.Config?.User !== 'shareittoo'
       || !(image.RepoDigests ?? []).some((entry) => entry.endsWith(`@${manifest.imageDigest}`))) fail('fixture_env_runtime_inventory_invalid');
-  assertNoHostPorts(api); assertNetworks(api, manifest);
+  const networkIds = Object.freeze({ [manifest.network]: network.Id, [manifest.providerNetwork]: providerNetwork.Id });
+  assertNoHostPorts(api); assertNetworks(api, manifest, { networkIds });
   const apiValues = envMap(api.Config.Env);
   for (const [name, value] of Object.entries(env.values)) if (apiValues[name] !== value) fail('fixture_env_file_runtime_drift');
   for (const [name, value] of Object.entries(manifest.safetyEnv)) if (apiValues[name] !== value) fail('fixture_env_safety_environment_invalid');
@@ -538,7 +556,7 @@ async function collectPreflight({ manifest, bootstrap, sourceCommit, evidenceFil
       || api.NetworkSettings?.Networks?.[manifest.network]?.NetworkID !== network.Id
       || api.NetworkSettings?.Networks?.[manifest.providerNetwork]?.NetworkID !== providerNetwork.Id) fail('fixture_env_primary_network_invalid');
   buildReplacementCreateArgs({ manifest, envFile: manifest.envFile, currentApi: api, networkName: primaryNetworkMode });
-  return Object.freeze({ env, api, proposal, sealedName, primaryNetworkMode,
+  return Object.freeze({ env, api, proposal, sealedName, primaryNetworkMode, networkIds,
     phases: Object.freeze(['fixture_env_current_api_inspect', 'fixture_env_current_database_inspect',
       'fixture_env_current_database_volume_inspect', 'fixture_env_current_network_inspect',
       'fixture_env_current_provider_network_inspect', 'fixture_env_current_uploads_volume_inspect',
@@ -574,7 +592,8 @@ async function rollbackFixtureEnv({ manifest, preflight, appliedEnv, command, co
   let current = await inspectOptional(command, manifest.apiContainer, 'fixture_env_rollback_current_inspect', commandEnv);
   if (current === undefined) { results.push({ phase: 'fixture_env_rollback_current_inspect', ok: false, code: 'fixture_env_rollback_current_unknown' }); safe = false; }
   if (safe && current && current.Id !== preflight.api.Id) {
-    try { assertReplacementRecord(current, manifest, preflight.api, preflight.proposal, { requireRunning: null, providerAttached: null }); }
+    try { assertReplacementRecord(current, manifest, preflight.api, preflight.proposal, preflight.networkIds,
+      { requireRunning: null, providerAttached: null }); }
     catch { safe = false; results.push({ phase: 'fixture_env_rollback_replacement_identity', ok: false, code: 'fixture_env_rollback_replacement_ambiguous' }); }
     if (safe && replacementId && current.Id !== replacementId) { safe = false; results.push({ phase: 'fixture_env_rollback_replacement_identity', ok: false, code: 'fixture_env_rollback_replacement_id_drift' }); }
     if (safe) {
@@ -588,7 +607,8 @@ async function rollbackFixtureEnv({ manifest, preflight, appliedEnv, command, co
     try {
       const currentName = original.Name?.replace(/^\//u, '');
       if (![manifest.apiContainer, preflight.sealedName].includes(currentName)) fail('fixture_env_rollback_original_name_invalid');
-      assertOriginalRecord(original, manifest, preflight.api, { stopped: original.State?.Running === false, name: currentName });
+      assertOriginalRecord(original, manifest, preflight.api, preflight.networkIds,
+        { stopped: original.State?.Running === false, name: currentName });
       if (currentName === preflight.sealedName) {
         const renamed = await safeDocker(command, ['rename', original.Id, manifest.apiContainer], 'fixture_env_rollback_original_rename', commandEnv);
         results.push(renamed); safe &&= renamed.ok;
@@ -599,7 +619,7 @@ async function rollbackFixtureEnv({ manifest, preflight, appliedEnv, command, co
       }
       if (safe) {
         const restored = await commandJson(command, ['inspect', '--format', '{{json .}}', original.Id], 'fixture_env_rollback_original_readback', commandEnv, 'fixture_env_rollback_original_readback_invalid');
-        assertOriginalRecord(restored, manifest, preflight.api, { stopped: false });
+        assertOriginalRecord(restored, manifest, preflight.api, preflight.networkIds, { stopped: false });
         const startup = await runBoundedStartupProbe(command, original.Id, commandEnv, 'fixture_env_rollback_runtime_readback');
         if (startup.version?.commit !== manifest.runtimeRevision || startup.version?.environment !== 'test') fail('fixture_env_rollback_runtime_readback_invalid');
         results.push({ phase: 'fixture_env_rollback_runtime_readback', ok: true });
@@ -640,7 +660,10 @@ export async function runStagingWebFixtureEnvTransition({
     let envMutationOwned = false;
     try {
       const before = await commandJson(command, ['inspect', '--format', '{{json .}}', preflight.api.Id], 'fixture_env_pre_mutation_api_readback', commandEnv, 'fixture_env_pre_mutation_api_readback_invalid');
-      assertOriginalRecord(before, target, preflight.api, { stopped: false });
+      if (corsContainerFingerprint(before) !== target.fixtureBinding.apiFingerprint) {
+        fail('fixture_env_pre_mutation_fingerprint_invalid');
+      }
+      assertOriginalRecord(before, target, preflight.api, preflight.networkIds, { stopped: false });
       const seedBefore = await command('docker', ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', target.databaseUser, '-d', target.databaseName, '-Atc', fixtureSeedReadbackSql], { phase: 'fixture_env_pre_mutation_seed_readback', env: commandEnv });
       assertFixtureSeedReadback(seedBefore.stdout, target.fixtureBinding);
       await writePrivateFile(target.fixtureBinding.backupFile, Buffer.from(preflight.env.content), 'fixture_env_backup_write');
@@ -650,13 +673,14 @@ export async function runStagingWebFixtureEnvTransition({
       catch (error) {
         const stopped = await inspectOptional(command, preflight.api.Id, 'fixture_env_stop_response_readback', commandEnv);
         if (!stopped) throw error;
-        assertOriginalRecord(stopped, target, preflight.api, { stopped: true });
+        assertOriginalRecord(stopped, target, preflight.api, preflight.networkIds, { stopped: true });
       }
       try { await command('docker', ['rename', preflight.api.Id, preflight.sealedName], { phase: 'fixture_env_seal_current_api', env: commandEnv }); }
       catch (error) {
         const sealed = await inspectOptional(command, preflight.api.Id, 'fixture_env_rename_response_readback', commandEnv);
         if (!sealed || sealed.Name !== `/${preflight.sealedName}`) throw error;
-        assertOriginalRecord(sealed, target, preflight.api, { stopped: true, name: preflight.sealedName });
+        assertOriginalRecord(sealed, target, preflight.api, preflight.networkIds,
+          { stopped: true, name: preflight.sealedName });
       }
       const createArgs = [...buildReplacementCreateArgs({ manifest: target, envFile: target.envFile, currentApi: preflight.api, networkName: preflight.primaryNetworkMode })];
       const imageIndex = createArgs.lastIndexOf(target.image);
@@ -669,7 +693,8 @@ export async function runStagingWebFixtureEnvTransition({
       } catch (error) {
         const observed = await inspectOptional(command, target.apiContainer, 'fixture_env_create_response_readback', commandEnv);
         if (observed) {
-          assertReplacementRecord(observed, target, preflight.api, preflight.proposal, { requireRunning: false, providerAttached: false });
+          assertReplacementRecord(observed, target, preflight.api, preflight.proposal, preflight.networkIds,
+            { requireRunning: false, providerAttached: false });
           replacementId = observed.Id;
         }
         throw error;
@@ -677,7 +702,7 @@ export async function runStagingWebFixtureEnvTransition({
       await command('docker', ['network', 'connect', target.providerNetwork, replacementId], { phase: 'fixture_env_attach_provider_network', env: commandEnv });
       await command('docker', ['start', replacementId], { phase: 'fixture_env_start_replacement_api', env: commandEnv });
       const replacement = await commandJson(command, ['inspect', '--format', '{{json .}}', replacementId], 'fixture_env_replacement_readback', commandEnv, 'fixture_env_replacement_readback_invalid');
-      assertReplacementRecord(replacement, target, preflight.api, preflight.proposal);
+      assertReplacementRecord(replacement, target, preflight.api, preflight.proposal, preflight.networkIds);
       const startup = await runBoundedStartupProbe(command, replacementId, commandEnv, 'fixture_env_replacement_runtime_probe');
       if (startup.version?.commit !== target.runtimeRevision || startup.version?.environment !== 'test'
           || startup.flags?.PAYMENT_TRANSPORT !== 'memory' || startup.flags?.STRIPE_LIVEMODE !== 'false') fail('fixture_env_replacement_runtime_probe_invalid');
@@ -691,7 +716,8 @@ export async function runStagingWebFixtureEnvTransition({
       assertFixtureSeedReadback(seedAfter.stdout, target.fixtureBinding);
       if ((await readEnv(target)).content !== appliedEnv) fail('fixture_env_final_file_readback_invalid');
       const seal = await commandJson(command, ['inspect', '--format', '{{json .}}', preflight.api.Id], 'fixture_env_rollback_seal_readback', commandEnv, 'fixture_env_rollback_seal_readback_invalid');
-      assertOriginalRecord(seal, target, preflight.api, { stopped: true, name: preflight.sealedName });
+      assertOriginalRecord(seal, target, preflight.api, preflight.networkIds,
+        { stopped: true, name: preflight.sealedName });
       const result = Object.freeze({ status: 'staging-web-fixture-env-handoff-applied-catalog-disabled',
         opsCommit: sourceCommit, runtimeRevision: target.runtimeRevision, imageDigest: target.imageDigest,
         bootstrapManifestSha256: target.fixtureBinding.bootstrapManifestSha256,
