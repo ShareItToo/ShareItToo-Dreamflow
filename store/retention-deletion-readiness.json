@@ -125,7 +125,7 @@
     },
     {
       "path": "backend/src/support_privacy_rights_domain.js",
-      "sha256": "ac0ba9f300be732ed97247a7d054abb4f0d67377b0480e43c3bd1ad1d02941dd"
+      "sha256": "00ba93f3d05a94ae0fc66454a8621acd8fe863f1e9599f0fbe5a6325b4bbc247"
     },
     {
       "path": "backend/src/support_privacy_rights_workflow.js",
