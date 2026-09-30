@@ -48,7 +48,7 @@
     },
     {
       "path": "lib/main.dart",
-      "sha256": "e4afb8db46b057971503b3779d3e6e538e901bf74e03fb58b03887be5f0af6eb"
+      "sha256": "742decf959322614dcc7adf05aa2102cebcaf43ea604cdcbd8e67c4f69b6a1c9"
     },
     {
       "path": "lib/screens/privacy_info_screen.dart",
@@ -732,7 +732,7 @@
     },
     {
       "path": "lib/services/firebase_runtime.dart",
-      "sha256": "43bd7f258dae0d0299d9b5116547d180e8481a20fa174f1060a435d94b108984"
+      "sha256": "f9d7c4cd29512d0e22dbe867260341537f3dff564e8fad6fe629d24bdbf230d5"
     },
     {
       "path": "lib/services/firebase_service_preferences.dart",
@@ -924,11 +924,11 @@
     },
     {
       "path": "lib/services/auth_service.dart",
-      "sha256": "e58b65bba6ab609e8262a0aed314f2c32da620b2e5e05a24eef1a5d8cff6d91a"
+      "sha256": "e2d8cb65e3d0fee369694165733c74e3b86fbf53b4b2091665488d1866a37922"
     },
     {
       "path": "lib/services/web_google_auth.dart",
-      "sha256": "43a39693660a2475cbd9061bd5e8b2f966fd8b11ec3f28fc0f3af84d24f7fa22"
+      "sha256": "8b0117bd73268817e404eac265485a57549942145a3d12e16ea800bc167a40ea"
     },
     {
       "path": "lib/screens/notification_settings_screen.dart",

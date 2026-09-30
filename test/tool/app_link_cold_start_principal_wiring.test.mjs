@@ -9,7 +9,7 @@ const links = await readFile(
 );
 
 test('cold notification ownership starts after Firebase retention and session settling', () => {
-  const firebase = main.indexOf('await FirebaseRuntime.initialize();');
+  const firebase = main.search(/await FirebaseRuntime\.initialize\(\s*prepareWebAuth: AuthService\.prepareWebGoogleAuthMemoryPersistence,\s*\);/u);
   const settle = main.indexOf('await settleInitialAppLinkPrincipal();');
   const runApp = main.indexOf('runApp(\n    MyApp(');
 

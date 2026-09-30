@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import 'remote_auth_attempt_transaction.dart';
@@ -118,6 +117,7 @@ Future<String> acquireWebGoogleToken({
   required Future<WebGoogleIdentity> Function() popup,
   required String? Function() currentFirebaseUid,
   required void Function(String uid) acquired,
+  required String? Function(Object error) providerErrorCode,
 }) async {
   requireCurrent();
   if (!available) throw const WebGoogleAuthFailure('web_config_unavailable');
@@ -138,7 +138,12 @@ Future<String> acquireWebGoogleToken({
       throw const WebGoogleAuthFailure('missing_firebase_id_token');
     }
     return token;
-  } on FirebaseAuthException catch (error) {
+  } on RemoteAuthAttemptSuperseded {
+    rethrow;
+  } on WebGoogleAuthFailure {
+    rethrow;
+  } catch (error) {
+    final code = providerErrorCode(error);
     const cancelled = {
       'popup-closed-by-user',
       'cancelled-popup-request',
@@ -148,14 +153,8 @@ Future<String> acquireWebGoogleToken({
     // SDK messages/customData can contain identity/token details: never retain
     // them in the typed result or user-visible logs.
     throw WebGoogleAuthFailure(
-      cancelled.contains(error.code) ? 'popup_cancelled' : 'popup_unavailable',
-      cancelled: cancelled.contains(error.code),
+      cancelled.contains(code) ? 'popup_cancelled' : 'popup_unavailable',
+      cancelled: cancelled.contains(code),
     );
-  } on RemoteAuthAttemptSuperseded {
-    rethrow;
-  } on WebGoogleAuthFailure {
-    rethrow;
-  } catch (_) {
-    throw const WebGoogleAuthFailure('popup_unavailable');
   }
 }

@@ -160,10 +160,18 @@ class AuthService {
     );
   }
 
+  /// Provider-owned startup callback; Web auth never persists Firebase users.
+  static Future<void> prepareWebGoogleAuthMemoryPersistence() async {
+    if (!kIsWeb || FirebaseRuntimeConfig.currentOptions == null) {
+      throw StateError('web_google_auth_configuration_unavailable');
+    }
+    await _providerSdkMutationQueue.run(
+      () => FirebaseAuth.instance.setPersistence(Persistence.NONE),
+    );
+  }
+
   /// Returns whether [provider] was explicitly enabled for this candidate.
-  ///
-  /// The UI uses this release gate to keep unavailable providers disabled;
-  /// token acquisition enforces the same gate again before any SDK call.
+  /// The UI and token acquisition enforce this gate before any SDK call.
   static bool socialProviderEnabled(AuthSocialProvider provider) {
     if (kIsWeb) {
       return provider == AuthSocialProvider.google &&
@@ -1515,6 +1523,8 @@ class AuthService {
           },
           currentFirebaseUid: () => FirebaseAuth.instance.currentUser?.uid,
           acquired: (uid) => acquisition.firebaseUid = uid,
+          providerErrorCode: (error) =>
+              error is FirebaseAuthException ? error.code : null,
         );
       } on WebGoogleAuthFailure catch (error) {
         if (error.cancelled) throw const _SocialSignInCancelled();

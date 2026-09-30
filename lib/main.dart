@@ -39,7 +39,9 @@ Future<void> main() async {
   } catch (_) {
     debugPrint('[PrivacyExportCache] startup cleanup failed');
   }
-  await FirebaseRuntime.initialize();
+  await FirebaseRuntime.initialize(
+    prepareWebAuth: AuthService.prepareWebGoogleAuthMemoryPersistence,
+  );
   // Firebase retains a cold notification intent while an existing backend
   // session refresh settles. App-link principal/epoch capture starts only
   // afterwards, so a same-account token refresh cannot discard the route and

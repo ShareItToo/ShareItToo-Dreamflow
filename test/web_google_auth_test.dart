@@ -1,7 +1,11 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lendify/services/remote_auth_attempt_transaction.dart';
 import 'package:lendify/services/web_google_auth.dart';
+
+class SyntheticProviderError implements Exception {
+  final String code;
+  const SyntheticProviderError(this.code);
+}
 
 WebGooglePublicConfig config(
     {Map<String, String> changes = const {}, bool approve = true}) {
@@ -176,6 +180,8 @@ void main() {
                 readFreshIdToken: () async => 'synthetic-firebase-token'),
         currentFirebaseUid: currentUid ?? () => 'synthetic-a',
         acquired: acquired ?? (_) {},
+        providerErrorCode: (error) =>
+            error is SyntheticProviderError ? error.code : null,
       );
 
   test('disabled Google never invokes popup', () async {
@@ -189,6 +195,15 @@ void main() {
             }),
         throwsA(isA<WebGoogleAuthFailure>()));
     expect(called, isFalse);
+  });
+  test('untyped provider-looking error cannot forge popup cancellation',
+      () async {
+    await expectLater(
+      token(popup: () async => throw StateError('popup-closed-by-user')),
+      throwsA(isA<WebGoogleAuthFailure>()
+          .having((error) => error.cancelled, 'cancelled', isFalse)
+          .having((error) => error.code, 'code', 'popup_unavailable')),
+    );
   });
   for (final code in [
     'popup-closed-by-user',
@@ -208,9 +223,8 @@ void main() {
           const RemoteAuthAttemptTransaction<String, String, String>().run(
             preflightCurrent: () => true,
             actionCurrent: () => true,
-            acquire: () => token(
-                popup: () async => throw FirebaseAuthException(
-                    code: code, message: 'private fixture detail')),
+            acquire: () =>
+                token(popup: () async => throw SyntheticProviderError(code)),
             invokeRemote: (_) async {
               remoteCalled = true;
               return 'unexpected';

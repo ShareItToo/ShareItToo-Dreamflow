@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:firebase_app_installations/firebase_app_installations.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -399,8 +398,8 @@ class FirebaseRuntime {
     _authenticatedPushSessionActive = active;
   }
 
-  static Future<bool> initialize() {
-    return _initialization ??= _initialize();
+  static Future<bool> initialize({Future<void> Function()? prepareWebAuth}) {
+    return _initialization ??= _initialize(prepareWebAuth: prepareWebAuth);
   }
 
   static Future<void> ensureFirebaseApp() async {
@@ -422,15 +421,16 @@ class FirebaseRuntime {
     await Firebase.initializeApp(options: options);
   }
 
-  static Future<bool> _initialize() async {
+  static Future<bool> _initialize(
+      {Future<void> Function()? prepareWebAuth}) async {
     if (kIsWeb) {
       _webGoogleInitialized = false;
-      _webGoogleInitialized = await prepareWebGoogleAuth(
-        options: FirebaseRuntimeConfig.currentOptions,
-        initializeBoundApp: ensureFirebaseApp,
-        useMemoryPersistence: () =>
-            FirebaseAuth.instance.setPersistence(Persistence.NONE),
-      );
+      _webGoogleInitialized = prepareWebAuth != null &&
+          await prepareWebGoogleAuth(
+            options: FirebaseRuntimeConfig.currentOptions,
+            initializeBoundApp: ensureFirebaseApp,
+            useMemoryPersistence: prepareWebAuth,
+          );
       // Auth-only Web initialization never enables native push/Crashlytics.
       // This return value remains device-service readiness, not auth readiness.
       return false;

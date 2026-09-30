@@ -15,11 +15,18 @@ test('Web Google uses popup before native SDK path and preserves backend/princip
 });
 test('Web initialization is auth-only, memory-persistent and cannot enable native device services', () => {
   const runtime = read('lib/services/firebase_runtime.dart');
-  const branch = runtime.slice(runtime.indexOf('static Future<bool> _initialize()'), runtime.indexOf('await _initializeNativeActionLinks();'));
-  for (const token of ['if (kIsWeb)', 'prepareWebGoogleAuth(', 'Persistence.NONE', 'return false;']) assert.ok(branch.includes(token), token);
+  const branch = runtime.slice(runtime.indexOf('static Future<bool> _initialize('), runtime.indexOf('await _initializeNativeActionLinks();'));
+  for (const token of ['if (kIsWeb)', 'prepareWebAuth != null', 'prepareWebGoogleAuth(', 'useMemoryPersistence: prepareWebAuth', 'return false;']) assert.ok(branch.includes(token), token);
   assert.doesNotMatch(branch, /FirebaseMessaging|FirebaseCrashlytics|FirebaseInstallations/);
   assert.match(runtime, /web_firebase_app_binding_mismatch/);
   for (const name of ['_retryPendingInstallationCleanup', '_retryPendingPushLocalCleanup', '_retryPendingCrashCleanup']) assert.ok(runtime.includes(`static Future<bool> ${name}() async {\n    if (kIsWeb) return false;`));
+  const auth = read('lib/services/auth_service.dart');
+  const preparation = auth.slice(auth.indexOf('static Future<void> prepareWebGoogleAuthMemoryPersistence('), auth.indexOf('static bool socialProviderEnabled('));
+  assert.match(preparation, /!kIsWeb \|\| FirebaseRuntimeConfig.currentOptions == null/u);
+  assert.match(preparation, /_providerSdkMutationQueue.run\([\s\S]*FirebaseAuth.instance.setPersistence\(Persistence.NONE\)/u);
+  assert.match(read('lib/main.dart'), /await FirebaseRuntime.initialize\(\s*prepareWebAuth: AuthService.prepareWebGoogleAuthMemoryPersistence,\s*\)/u);
+  assert.match(auth, /providerErrorCode: \(error\) =>\s*error is FirebaseAuthException \? error.code : null/u);
+  assert.doesNotMatch(read('lib/services/web_google_auth.dart'), /firebase_auth|FirebaseAuthException/u);
 });
 test('registration consent and login continuation reuse existing authoritative routing', () => {
   const login = read('lib/screens/login_screen.dart');
