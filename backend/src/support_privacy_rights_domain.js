@@ -119,7 +119,7 @@ export function privacyRightsResponseDeadline(receivedAt, months = 1) {
   const targetYear = Math.floor(targetMonthIndex / 12);
   const targetMonth = (targetMonthIndex % 12) + 1;
   const lastTargetDay = new Date(Date.UTC(targetYear, targetMonth, 0)).getUTCDate();
-  return zonedLocalToUtc({
+  const calendarDeadline = zonedLocalToUtc({
     year: targetYear,
     month: targetMonth,
     day: Math.min(day, lastTargetDay),
@@ -128,6 +128,18 @@ export function privacyRightsResponseDeadline(receivedAt, months = 1) {
     second: 59,
     millisecond: 999,
   });
+  if (months !== 1) return calendarDeadline;
+
+  // The matching Berlin date can span just over 32 exact days when a request
+  // arrives during the first hour of 1 October and daylight saving time ends
+  // before 1 November. Keep the conservative due date on that same Berlin
+  // calendar day while respecting the persisted first-response safety bound.
+  const maximumFirstResponseDeadline = new Date(
+    received.getTime() + (32 * 24 * 60 * 60 * 1000),
+  );
+  return calendarDeadline <= maximumFirstResponseDeadline
+    ? calendarDeadline
+    : maximumFirstResponseDeadline;
 }
 
 export function normalizeSupportPrivacyRightsRequest(raw, {

@@ -74,6 +74,54 @@ test('conservative calendar-month deadline ends on the matching Berlin date acro
   );
 });
 
+test('one-month privacy deadline stays within the persisted 32-day bound across autumn DST', () => {
+  const cases = [
+    {
+      received: '2026-09-30T21:59:59.999Z',
+      expected: '2026-10-30T22:59:59.999Z',
+      berlinDate: '2026-10-30',
+    },
+    {
+      received: '2026-09-30T22:00:00.000Z',
+      expected: '2026-11-01T22:00:00.000Z',
+      berlinDate: '2026-11-01',
+    },
+    {
+      received: '2026-09-30T22:28:00.000Z',
+      expected: '2026-11-01T22:28:00.000Z',
+      berlinDate: '2026-11-01',
+    },
+    {
+      received: '2026-09-30T22:59:59.999Z',
+      expected: '2026-11-01T22:59:59.999Z',
+      berlinDate: '2026-11-01',
+    },
+    {
+      received: '2026-09-30T23:00:00.000Z',
+      expected: '2026-11-01T22:59:59.999Z',
+      berlinDate: '2026-11-01',
+    },
+  ];
+  const berlinDate = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Berlin',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  for (const fixture of cases) {
+    const received = new Date(fixture.received);
+    const deadline = privacyRightsResponseDeadline(received, 1);
+    assert.equal(deadline.toISOString(), fixture.expected);
+    assert.equal(berlinDate.format(deadline), fixture.berlinDate);
+    assert.ok(deadline.getTime() - received.getTime() <= 32 * 24 * 60 * 60 * 1000);
+  }
+
+  assert.equal(
+    privacyRightsResponseDeadline('2026-08-22T10:15:00.000Z', 3).toISOString(),
+    '2026-11-22T22:59:59.999Z',
+  );
+});
+
 test('identity and extension inputs are optimistic-lock bound and narrowly shaped', () => {
   assert.deepEqual(
     normalizePrivacyIdentityVerification({ expectedVersion: 2 }),
