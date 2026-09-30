@@ -365,6 +365,54 @@ authorize silently changing that listing's category or product facts. A real
 pilot listing still needs a current authentic photo of the actual item and
 truthful owner/publication/region/availability declarations.
 
+### Protected two-role login proof — source contract only
+
+`backend/ops/staging_web_fixture_login_verifier.mjs` is the separate verifier
+for the already seeded dedicated owner/renter credentials. This source package
+does not run it against Green. Preparation and execution require root with Node
+22 or newer from the exact clean reviewed checkout. The input directory is the
+existing runner-owned `0700` UID100:GID101 directory containing exact `0600`
+`adapter.json` and `credentials.json`; never copy, chown, print or pass the
+credential contents on the command line. Use new root-owned `0700` output
+directories and unused root-owned `0600` binding/evidence targets:
+
+```sh
+node backend/ops/staging_web_fixture_login_verifier.mjs --prepare \
+  "$PRIVATE_BOOTSTRAP_INPUT_DIRECTORY" "$NEW_LOGIN_PROOF_BINDING" "$NEW_LOGIN_PROOF_EVIDENCE"
+node backend/ops/staging_web_fixture_login_verifier.mjs \
+  "$NEW_LOGIN_PROOF_BINDING" "$EXACT_LOGIN_PROOF_BINDING_SHA256"
+```
+
+Prepare binds the exact clean Ops source, immutable API/DB/network fingerprints,
+protected env and private-input hashes, runtime image, schema-98 ledger, fixture
+roles/run and a new one-hour proof marker. The second command is the default
+read-only preflight: its database transactions are explicitly read only and it
+makes no auth request. Both modes use one inspected UID100:101, root-read-only,
+capability-free, no-log, no-port container on only the internal Green network.
+
+Only after the default result and a separate live authorization may the exact
+same binding be executed once, with both source and private run confirmations:
+
+```sh
+node backend/ops/staging_web_fixture_login_verifier.mjs \
+  "$NEW_LOGIN_PROOF_BINDING" "$EXACT_LOGIN_PROOF_BINDING_SHA256" \
+  --execute "$EXACT_OPS_SHA" "$EXACT_BOOTSTRAP_RUN_ID"
+```
+
+Execution calls only `/v1/auth/login`, `/v1/auth/me` and `/v1/auth/logout`,
+sequentially owner then renter. A run-specific neutral user-agent marks only
+the sessions created by this proof. Whether an API response succeeds, fails or
+is lost, reconciliation can revoke only rows for the exact two IDs, exact
+marker and exact captured session IDs; foreign/duplicate marker state is an
+error and is never broadly deleted. Success requires both access tokens to be
+rejected after logout, zero active sessions and refresh tokens, unchanged
+identity/effect digests, retained login/session audit counts, registration and
+catalog still closed, memory payment, Stripe false and every external provider
+boundary still off. Evidence is exclusive root-owned `0600` and contains only
+status, counts, booleans and digests—never email, password or token material.
+There is no automatic retry; preserve a failure and prepare a new binding only
+after exact readback and review.
+
 ## Authorized semantic cleanup contract
 
 Cleanup means **semantic safety restoration**, never byte-for-byte database
