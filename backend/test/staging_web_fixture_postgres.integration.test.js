@@ -111,29 +111,34 @@ test('PG16 fixture adapter uses real schema, transactions, triggers and two clie
       assert.equal(ledger.length, 98);
       assert.deepEqual((await client.query('SELECT name,checksum FROM schema_migrations ORDER BY name')).rows, ledger);
 
-      await t.test('fresh draft selects two safe roles from four accounts and leaves real PG unchanged', async () => {
+      await t.test('fresh draft selects ordered pair from four eligible accounts, leaving extras outside scope', async () => {
         const f = await seed(client); const extra = await seed(client);
         const extraIds = extra.manifest.preflight.roles.map((r) => r.userId);
-        await client.query("UPDATE users SET profile='{}'::jsonb WHERE id=ANY($1::text[])", [extraIds]);
         f.environment.SIT_STAGING_ALLOWED_USER_IDS += `,${extraIds.join(',')}`;
         const before = await readFixtureSnapshot(client, f.manifest.preflight);
+        const extraBefore = await readFixtureSnapshot(client, extra.manifest.preflight);
+        const queries = []; const observed = { query: async (sql, params = []) => {
+          queries.push({ sql, params }); return client.query(sql, params);
+        } };
         const draft = () => generateFixtureDraft({ source, environment: f.environment,
-          photo: f.manifest.preflight.photo, client, rehearsal: isolatedFixtureRehearsal,
+          photo: f.manifest.preflight.photo, client: observed, rehearsal: isolatedFixtureRehearsal,
           readPhoto: () => photoBytes }); // Real default adapter preflight, no SQL mock.
         const result = await draft();
         assert.deepEqual(result.preflight.roles, f.manifest.preflight.roles);
         assert.equal(result.preflight.snapshotDigest, fixtureDigest(before));
         assert.equal(result.preflight.environmentDigest, fixtureEnvironmentDigest(f.environment));
         assert.equal(result.ledgerDigest, source.ledgerDigest);
+        const discovery = queries.findIndex(({ sql }) => sql.startsWith('SELECT id, email,'));
+        for (const id of extraIds) assert.ok(!JSON.stringify(queries.slice(discovery + 1).map((q) => q.params)).includes(id));
         assert.deepEqual(await readFixtureSnapshot(client, result.preflight), before);
+        assert.deepEqual(await readFixtureSnapshot(client, extra.manifest.preflight), extraBefore);
+        assert.equal((await events(extra)).length, 0);
         assert.equal((await events(f)).length, 0);
         assert.equal((await client.query('SHOW transaction_read_only')).rows[0].transaction_read_only, 'off');
-        await client.query("UPDATE users SET profile=$1::jsonb WHERE id=$2",
-          [JSON.stringify({ syntheticOnly: true, syntheticMarker: 'ambiguous-test' }), extraIds[0]]);
-        await assert.rejects(draft(), /fixture_draft_roles_ambiguous/u);
-        await client.query("UPDATE users SET profile='{}'::jsonb WHERE id=$1", [extraIds[0]]);
+        // A dependency of the selected renter fails; other eligible accounts
+        // are never tried to make this draft pass.
         await client.query('UPDATE listings SET moderated_by=$1 WHERE id=$2',
-          [f.manifest.preflight.roles[0].userId, extra.manifest.preflight.listingId]);
+          [f.manifest.preflight.roles[1].userId, extra.manifest.preflight.listingId]);
         await assert.rejects(draft(), /fixture_adapter_dependencies_present/u);
         assert.deepEqual(await readFixtureSnapshot(client, f.manifest.preflight), before);
         assert.equal((await events(f)).length, 0);

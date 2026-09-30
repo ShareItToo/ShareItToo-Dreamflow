@@ -311,10 +311,13 @@ node backend/ops/staging_web_fixture_runner.mjs --draft \
 
 This derives an ephemeral one-hour runtime binding from fresh Docker/env reads,
 then uses the same isolated immutable-image runner to read the actual DB. It
-requires exactly one guest-bound listing/upload and exactly two eligible
-`syntheticOnly`, `@example.invalid`, phone-null roles among all allowed accounts
-(four allowed accounts are supported; a third eligible role is ambiguity).
-The listing determines the owner; no caller-supplied IDs/snapshots are accepted.
+requires exactly one guest-bound listing/upload. Its actual owner must be an
+eligible `syntheticOnly`, `@example.invalid`, phone-null allowed account. The
+renter is the first eligible non-owner in the administrator-configured, verified
+allowlist sequence, never SQL row order. At least one must exist. Additional
+eligible accounts are not selected, snapshotted or dependency-scanned; the full
+unchanged adapter/FK preflight applies only to the chosen pair. If that pair
+fails, no alternate renter is tried. No caller-supplied IDs/snapshots are accepted.
 Actual 98-migration ledger, complete snapshot/availability and protected security
 environment are bound. The stored upload bytes must match the separate photo.
 Every draft transaction rolls back; the unchanged adapter default preflight

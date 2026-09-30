@@ -51,11 +51,14 @@ export async function generateFixtureDraft({ source, environment, photo, client,
       && typeof row.profile.syntheticMarker === 'string' && row.profile.syntheticMarker.length > 0
       && row.role === 'user' && row.account_status === 'active' && row.deactivated_at === null
       && row.email_verified_at && row.private_use_confirmed_at && row.private_marketplace_review_status === 'clear');
-    check(eligible.length === 2, 'fixture_draft_roles_ambiguous');
     const listing = (await client.query('SELECT id, owner_id FROM listings WHERE id = $1', [preflight.listingId])).rows;
     check(listing.length === 1 && eligible.some((row) => row.id === listing[0].owner_id), 'fixture_draft_owner_missing');
     const owner = eligible.find((row) => row.id === listing[0].owner_id);
-    const renter = eligible.find((row) => row.id !== owner.id);
+    // The administrator's verified allowlist order, never SQL row order,
+    // selects one renter. A failed pair preflight must not try an alternate.
+    const eligibleById = new Map(eligible.map((row) => [row.id, row]));
+    const renter = gate.allowedUserIds.map((id) => eligibleById.get(id)).find((row) => row && row.id !== owner.id);
+    check(renter, 'fixture_draft_renter_missing');
     preflight.roles = [owner, renter].map((row, index) => ({ role: index ? 'renter' : 'owner', userId: row.id, syntheticMarker: row.profile.syntheticMarker }));
     snapshot = await readFixtureSnapshot(client, preflight, { withinTransaction: true });
     preflight.snapshotDigest = fixtureDigest(snapshot);

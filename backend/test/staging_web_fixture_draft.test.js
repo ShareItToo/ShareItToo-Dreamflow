@@ -34,12 +34,14 @@ function fixture() {
     private_status_confirmed_at: null, private_pilot_region_code: null }],
     upload: [{ storage_name: 'photo.jpg', owner_id: 'owner', listing_id: 'listing', purpose: 'listing_image', visibility: 'public', content_scan_status: 'passed' }],
     rules: [], blocks: [], bookings: [], requests: [], sessions: [], identities: [], push: [] };
-  const f = { now, source, environment, photo, photoBytes, snapshot, ledger, calls: [], adapterCalls: [] };
-  f.client = { query: async (sql) => {
+  const f = { now, source, environment, photo, photoBytes, snapshot, ledger, calls: [], parameters: [], adapterCalls: [] };
+  f.client = { query: async (sql, params = []) => {
+    f.parameters.push(params);
     f.calls.push(sql); if (f.failAt === f.calls.length) throw Error('injected');
     if (sql.includes('FROM schema_migrations')) return { rows: f.ledger };
     if (sql.includes('current_database()')) return { rows: [{ name: 'shareittoo_green', username: 'shareittoo_green' }] };
     if (sql.startsWith('SELECT id, owner_id FROM listings')) return { rows: f.snapshot.listing };
+    if (sql.startsWith('SELECT id, email, phone_e164, profile,')) return { rows: f.allowedUsers ?? f.snapshot.users };
     const table = /FROM (\w+)/u.exec(sql)?.[1];
     const key = { users: 'users', listings: 'listing', uploads: 'upload', listing_availability_rules: 'rules', listing_availability_blocks: 'blocks',
       bookings: 'bookings', rental_requests: 'requests', auth_sessions: 'sessions', auth_identities: 'identities', push_devices: 'push' }[table];
@@ -51,6 +53,37 @@ function fixture() {
   } });
   return f;
 }
+
+for (const count of [3, 4]) test(`${count} eligible accounts select by allowlist order, not reordered SQL rows`, async () => {
+  for (const reverse of [false, true]) {
+    const f = fixture();
+    const extras = Array.from({ length: count - 2 }, (_, i) => ({ ...f.snapshot.users[1],
+      id: `extra-${i}`, email: `extra-${i}@example.invalid` }));
+    f.allowedUsers = [...extras, ...f.snapshot.users]; if (reverse) f.allowedUsers.reverse();
+    f.environment.SIT_STAGING_ALLOWED_USER_IDS = ['owner', 'renter', ...extras.map((r) => r.id)].join(',');
+    const before = structuredClone(f.allowedUsers); const result = await f.run();
+    assert.deepEqual(result.preflight.roles.map((r) => r.userId), ['owner', 'renter']);
+    assert.equal(result.preflight.snapshotDigest, fixtureDigest(f.snapshot));
+    const discovery = f.calls.findIndex((sql) => sql.startsWith('SELECT id, email,'));
+    for (const extra of extras) {
+      assert.ok(!JSON.stringify(f.parameters.slice(discovery + 1)).includes(extra.id));
+      assert.ok(!JSON.stringify(f.adapterCalls[0].manifest).includes(extra.id));
+    }
+    assert.deepEqual(f.allowedUsers, before);
+    // Change only the administrator's order: the new first eligible renter wins.
+    f.environment.SIT_STAGING_ALLOWED_USER_IDS = ['extra-0', 'owner', 'renter', ...extras.slice(1).map((r) => r.id)].join(',');
+    f.snapshot.users = [f.snapshot.users[0], extras[0]];
+    assert.deepEqual((await f.run()).preflight.roles.map((r) => r.userId), ['owner', 'extra-0']);
+  }
+});
+
+test('selected renter failure never retries another eligible account', async () => {
+  const f = fixture(); f.allowedUsers = [...f.snapshot.users, { ...f.snapshot.users[1], id: 'extra', email: 'extra@example.invalid' }];
+  f.environment.SIT_STAGING_ALLOWED_USER_IDS += ',extra'; f.failAdapter = true;
+  await assert.rejects(f.run(), /dependency-failure/u);
+  assert.equal(f.adapterCalls.length, 1);
+  assert.deepEqual(f.adapterCalls[0].manifest.preflight.roles.map((r) => r.userId), ['owner', 'renter']);
+});
 
 test('draft derives owner/renter, complete snapshot/availability/env/source and repeats default adapter gate', async () => {
   const f = fixture(); const draft = await f.run();
@@ -71,7 +104,7 @@ for (const [name, alter] of Object.entries({
   realEmail: (f) => { f.snapshot.users[0].email = 'real@example.com'; },
   telephone: (f) => { f.snapshot.users[0].phone_e164 = '+491234'; },
   missingRole: (f) => { f.snapshot.users.pop(); },
-  ambiguous: (f) => { f.environment.SIT_STAGING_ALLOWED_USER_IDS += ',third'; f.snapshot.users.push({ ...f.snapshot.users[0], id: 'third', email: 'third@example.invalid' }); },
+  noEligibleRenter: (f) => { f.snapshot.users[1].profile.syntheticOnly = false; },
   owner: (f) => { f.snapshot.listing[0].owner_id = 'foreign'; },
   uploadOwner: (f) => { f.snapshot.upload[0].owner_id = 'foreign'; },
   scan: (f) => { f.snapshot.upload[0].content_scan_status = 'pending'; },
