@@ -17,6 +17,21 @@ export function canonicalJson(value) {
   if (value && typeof value === 'object') return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
   return JSON.stringify(value);
 }
+// `caddy adapt --config /dev/stdin` records only its input filename in a
+// generated file_server `hide` entry. A live reload from the mounted file
+// records `/etc/caddy/Caddyfile`; no other path or config difference is ignored.
+export function normalizedCaddyConfig(value, key = '') {
+  if (Array.isArray(value)) {
+    return value.map((item) => key === 'hide' && item === '/dev/stdin'
+      ? '/etc/caddy/Caddyfile'
+      : normalizedCaddyConfig(item));
+  }
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([childKey, child]) =>
+      [childKey, normalizedCaddyConfig(child, childKey)]));
+  }
+  return value;
+}
 function ownedDirectory(directory, mode) {
   confinedDirectory(directory);
   const stat = fs.statSync(directory);
@@ -93,7 +108,7 @@ export function bootstrap({ hostRoot, manifest: m, sourceRoot, artifact, adapter
   function configReadback(content, active) {
     runtime();
     check(sha256(hostFile(config, m.hostFile)) === sha256(content) && sha256(adapter.mountedConfig()) === sha256(content), 'config_readback');
-    check(canonicalJson(adapter.activeConfig()) === canonicalJson(active), 'active_config_readback');
+    check(canonicalJson(normalizedCaddyConfig(adapter.activeConfig())) === canonicalJson(normalizedCaddyConfig(active)), 'active_config_readback');
   }
   function gatewayReadback() { check(Buffer.from(adapter.fetch('/')).equals(Buffer.from(GATEWAY_BODY)), 'gateway_readback'); }
   absentWeb();
@@ -168,8 +183,8 @@ export function bootstrap({ hostRoot, manifest: m, sourceRoot, artifact, adapter
       runtime();
       check(sha256(privateFile(backupPath)) === m.gatewayConfigHash, 'backup_changed');
       if (configTouched) {
-        const activeNow = canonicalJson(adapter.activeConfig());
-        check([canonicalJson(oldActive), canonicalJson(newActive)].includes(activeNow), 'rollback_foreign_active_config');
+        const activeNow = canonicalJson(normalizedCaddyConfig(adapter.activeConfig()));
+        check([canonicalJson(normalizedCaddyConfig(oldActive)), canonicalJson(normalizedCaddyConfig(newActive))].includes(activeNow), 'rollback_foreign_active_config');
         const currentConfig = hostFile(config, m.hostFile);
         const candidateBytes = Buffer.from(candidate);
         const ownInterruptedWrite = currentConfig.equals(backup) ||

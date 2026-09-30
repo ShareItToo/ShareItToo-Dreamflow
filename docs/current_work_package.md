@@ -9,13 +9,16 @@ uses the exact currently served gateway and a protected original Caddyfile,
 not a fabricated Web release. Source/artifact/runtime/mount/inode bindings,
 inode-preserving file-bind install/restore, shared deployment lock, bounded
 Caddy validation/reload and static readback are rehearsed with injected local
-failures (51 bootstrap tests plus 53 existing contract/route/smoke tests).
+failures (52 bootstrap tests plus 53 existing contract/route/smoke tests).
 Production/API/legal/assets remain byte-preserved outside the Staging
 handler. No live deployment or reload is performed by this source package.
 
 Sol's independent review found and fixed one interrupted-write race: automatic
 recovery now refuses foreign host-file bytes even before the candidate write
-completed. The focused package is 104/104 green and consumer closure/diff
+completed. Live preflight also exposed Caddy's sole generated `hide` filename
+difference between `/dev/stdin` adaptation and mounted-file runtime; only that
+metadata value is normalized, while all other config drift remains blocking.
+The focused package is 105/105 green and consumer closure/diff
 checks pass. Residual gate: exact-HEAD GitHub checks, accepted exact-source
 artifact and fresh owner-only bootstrap manifest/backup, then default server preflight.
 Only a separately authorized `--execute-bootstrap` may install. Functional

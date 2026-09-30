@@ -118,7 +118,9 @@ Preflight reads the mounted bytes, Caddy active JSON via its container-local
 admin endpoint, and the HTTPS gateway body. It validates/adapts both configs
 through `docker exec -i <exact-id> caddy validate|adapt --config /dev/stdin
 --adapter caddyfile`. The active JSON must equal the adapted gateway config;
-missing admin readback/tool support fails closed. Reconstructing the gateway
+only Caddy's generated file-server `hide` filename is normalized from
+`/dev/stdin` to `/etc/caddy/Caddyfile`, while every other difference remains
+blocking. Missing admin readback/tool support fails closed. Reconstructing the gateway
 from the candidate is restricted to the exact Staging handler, so every other
 Production/API/legal/assetlink byte must be unchanged.
 

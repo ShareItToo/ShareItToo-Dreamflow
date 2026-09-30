@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { bootstrap, gatewayFromCandidate, GATEWAY_BODY, mountDigest } from '../../tool/staging_web_bootstrap.mjs';
+import { bootstrap, gatewayFromCandidate, GATEWAY_BODY, mountDigest, normalizedCaddyConfig } from '../../tool/staging_web_bootstrap.mjs';
 import { serverAdapter } from '../../tool/bootstrap_staging_web.mjs';
 import { sealArtifact, sha256, TARGET } from '../../tool/staging_web_contract.mjs';
 
@@ -186,6 +186,12 @@ test('foreign host-file bytes during an interrupted in-place write are never ove
   assert.equal(fs.readFileSync(f.config, 'utf8'), 'foreign-config');
   assert.equal(f.reloads(), 0);
   assert.ok(fs.existsSync(path.join(f.root, '.deployment-lock')));
+});
+test('only the Caddy-generated stdin filename in hide metadata is normalized', () => {
+  const adapted = { apps: { http: { hide: ['/dev/stdin', '/private/file'], root: '/dev/stdin' } } };
+  assert.deepEqual(normalizedCaddyConfig(adapted), {
+    apps: { http: { hide: ['/etc/caddy/Caddyfile', '/private/file'], root: '/dev/stdin' } },
+  });
 });
 test('gateway reconstruction binds untouched Production/API/legal bytes to historical gateway hash', () => {
   const candidate = fs.readFileSync(path.join(repo, 'backend/ops/Caddyfile'), 'utf8');
