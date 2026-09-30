@@ -26,6 +26,7 @@ export const catalogActivationKey = 'SIT_STAGING_SYNTHETIC_CATALOG_ENABLED';
 export const requiredDatabasePreparationEvidenceSha256 = '109e29f5e0f13db97b0423cc6e00dbc1501f8a8daed85209d76f1565071acc32';
 export const requiredLoginProofEvidenceSha256 = 'f1b8310c88d0bc1937d4ef5d6f0efb41af09f261b6c75deae2a77938765e5419';
 export const requiredLoginProofOpsCommit = 'ef5eae4472f6349f6da0cec6249dc8ca88f96fa3';
+export const requiredLoginProofLedgerDigest = '4fff35fbe15c64a38f0ca423222b32298b5595da8dab81e306a7ad5a48e80f08';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const digestPattern = /^[a-f0-9]{64}$/u;
@@ -125,7 +126,7 @@ export function validateLoginProofEvidence(evidence, { runtimeRevision, imageDig
     && evidence.credentialsAttested === 2 && evidence.activeSessions === 0
     && evidence.activeRefreshTokens === 0 && evidence.retainedSessionRecords === 2
     && evidence.loginAudits === 2 && evidence.schemaCount === 98
-    && evidence.ledgerDigest === requiredMigrationLedger
+    && evidence.ledgerDigest === requiredLoginProofLedgerDigest
     && digestPattern.test(evidence.identityDigest ?? '') && evidence.identityUnchanged === true
     && digestPattern.test(evidence.catalogStateDigest ?? '') && evidence.visibilityUnchanged === true
     && digestPattern.test(evidence.effectDigest ?? '') && evidence.apiReadback === true

@@ -444,7 +444,11 @@ the exact login-proof SHA-256
 `f1b8310c88d0bc1937d4ef5d6f0efb41af09f261b6c75deae2a77938765e5419`.
 The latter remains historically bound to Ops commit
 `ef5eae4472f6349f6da0cec6249dc8ca88f96fa3`; it must not be rewritten to the
-new activation commit. All three inputs are reopened with their exact protected
+new activation commit. Its canonical-row ledger digest is
+`4fff35fbe15c64a38f0ca423222b32298b5595da8dab81e306a7ad5a48e80f08`;
+that historical algorithm is deliberately distinct from the current DB
+text-ledger digest `796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196`.
+All three inputs are reopened with their exact protected
 ownership/mode and digest. The backup, result evidence and runtime manifest are
 new, pairwise-distinct root-owned `0600` targets in root-owned `0700` parents;
 none may alias an input or `green.env`.

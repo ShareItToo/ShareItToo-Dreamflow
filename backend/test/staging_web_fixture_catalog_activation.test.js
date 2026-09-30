@@ -12,6 +12,7 @@ import {
   prepareCatalogActivationManifest,
   requiredDatabasePreparationEvidenceSha256,
   requiredLoginProofEvidenceSha256,
+  requiredLoginProofLedgerDigest,
   requiredLoginProofOpsCommit,
   runCatalogActivation,
   validateLoginProofEvidence,
@@ -85,7 +86,7 @@ function loginEvidence(bootstrapSha, runSha, overrides = {}) {
     runtimeCommit, imageDigest, bootstrapManifestSha256: bootstrapSha, bootstrapRunIdSha256: runSha,
     rolesVerified: 2, loginsVerified: 2, meVerified: 2, logoutsVerified: 2,
     accessTokensRejected: 2, credentialsAttested: 2, activeSessions: 0, activeRefreshTokens: 0,
-    retainedSessionRecords: 2, loginAudits: 2, schemaCount: 98, ledgerDigest: migrationLedger,
+    retainedSessionRecords: 2, loginAudits: 2, schemaCount: 98, ledgerDigest: requiredLoginProofLedgerDigest,
     identityDigest: activationState().identityDigest, identityUnchanged: true,
     catalogStateDigest: activationState().catalogDigest, visibilityUnchanged: true,
     effectDigest: '3'.repeat(64), apiReadback: true, paymentMemory: true, stripeLivemode: false,
@@ -242,7 +243,7 @@ function fakeExecutor(fx, { failPhase, lateEvidenceCollision = false } = {}) {
 const evidenceHash = (bytes) => bytes.toString().includes('database-prepared')
   ? requiredDatabasePreparationEvidenceSha256 : requiredLoginProofEvidenceSha256;
 
-test('login proof remains bound to historical proof commit, not the new activation source', async () => {
+test('login proof remains bound to its historical commit and canonical-row ledger digest', async () => {
   const fx = await fixture();
   try {
     const evidence = JSON.parse(fx.loginBytes);
@@ -251,6 +252,12 @@ test('login proof remains bound to historical proof commit, not the new activati
     assert.throws(() => validateLoginProofEvidence({ ...evidence, opsCommit }, { runtimeRevision: runtimeCommit, imageDigest,
       bootstrapManifestSha256: fx.bootstrapSha, bootstrapRunIdSha256: hash(fx.runId) }),
     /catalog_activation_login_evidence_invalid/u);
+    for (const ledgerDigest of [migrationLedger, '6'.repeat(64)]) {
+      assert.throws(() => validateLoginProofEvidence({ ...evidence, ledgerDigest }, {
+        runtimeRevision: runtimeCommit, imageDigest,
+        bootstrapManifestSha256: fx.bootstrapSha, bootstrapRunIdSha256: hash(fx.runId),
+      }), /catalog_activation_login_evidence_invalid/u);
+    }
   } finally { await rm(fx.root, { recursive: true, force: true }); }
 });
 
