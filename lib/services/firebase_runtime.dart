@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:firebase_app_installations/firebase_app_installations.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -15,6 +16,7 @@ import 'firebase_service_preferences.dart';
 import 'local_principal_scope.dart';
 import 'release_identity.dart';
 import 'shared_persistence_sync.dart';
+import 'web_google_auth.dart';
 
 const controlledCrashDiagnosticCustomKeys = <String>{
   'sit_release_commit',
@@ -96,6 +98,18 @@ bool shouldRecordUnhandledErrorAsFatal(Object error) {
 }
 
 class FirebaseRuntimeConfig {
+  static const webGoogleConfig = WebGooglePublicConfig(
+    projectId: projectId,
+    messagingSenderId: messagingSenderId,
+    appId: String.fromEnvironment('SIT_FIREBASE_WEB_APP_ID'),
+    apiKey: String.fromEnvironment('SIT_FIREBASE_WEB_API_KEY'),
+    authDomain: String.fromEnvironment('SIT_FIREBASE_WEB_AUTH_DOMAIN'),
+    backendProjectId:
+        String.fromEnvironment('SIT_FIREBASE_WEB_BACKEND_PROJECT_ID'),
+    authorizedOrigin:
+        String.fromEnvironment('SIT_FIREBASE_WEB_AUTHORIZED_ORIGIN'),
+    approvedDigest: String.fromEnvironment('SIT_FIREBASE_WEB_CONFIG_SHA256'),
+  );
   static const String projectId = String.fromEnvironment(
     'SIT_FIREBASE_PROJECT_ID',
   );
@@ -131,7 +145,14 @@ class FirebaseRuntimeConfig {
   }
 
   static FirebaseOptions? get currentOptions {
-    if (kIsWeb) return null;
+    if (kIsWeb) {
+      return webGoogleConfig.optionsFor(
+        googleEnabled: const bool.fromEnvironment('SIT_SOCIAL_GOOGLE_ENABLED'),
+        backendEnabled: BackendConfig.enabled,
+        apiBaseUrl: BackendConfig.apiBaseUrl,
+        origin: Uri.base.origin,
+      );
+    }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
         if (!hasCompleteValues(
@@ -330,6 +351,14 @@ class FirebaseRuntime {
   static final EpochBoundSerialOperationQueue _pushOperationQueue =
       EpochBoundSerialOperationQueue();
   static bool _initialized = false;
+  static bool _webGoogleInitialized = false;
+  static bool get webGoogleReady =>
+      kIsWeb &&
+      webGoogleControlAvailable(
+        googleEnabled: const bool.fromEnvironment('SIT_SOCIAL_GOOGLE_ENABLED'),
+        optionsBound: FirebaseRuntimeConfig.currentOptions != null,
+        initialized: _webGoogleInitialized,
+      );
   static bool _pushEnabled = false;
   // Foreground delivery is account-session scoped even though the native FCM
   // token is installation scoped. A logout closes this gate synchronously;
@@ -376,11 +405,36 @@ class FirebaseRuntime {
 
   static Future<void> ensureFirebaseApp() async {
     final options = FirebaseRuntimeConfig.currentOptions;
-    if (options == null || Firebase.apps.isNotEmpty) return;
+    if (options == null) return;
+    if (Firebase.apps.isNotEmpty) {
+      if (kIsWeb) {
+        final actual = Firebase.app().options;
+        if (actual.projectId != options.projectId ||
+            actual.appId != options.appId ||
+            actual.apiKey != options.apiKey ||
+            actual.authDomain != options.authDomain ||
+            actual.messagingSenderId != options.messagingSenderId) {
+          throw StateError('web_firebase_app_binding_mismatch');
+        }
+      }
+      return;
+    }
     await Firebase.initializeApp(options: options);
   }
 
   static Future<bool> _initialize() async {
+    if (kIsWeb) {
+      _webGoogleInitialized = false;
+      _webGoogleInitialized = await prepareWebGoogleAuth(
+        options: FirebaseRuntimeConfig.currentOptions,
+        initializeBoundApp: ensureFirebaseApp,
+        useMemoryPersistence: () =>
+            FirebaseAuth.instance.setPersistence(Persistence.NONE),
+      );
+      // Auth-only Web initialization never enables native push/Crashlytics.
+      // This return value remains device-service readiness, not auth readiness.
+      return false;
+    }
     await _initializeNativeActionLinks();
     final options = FirebaseRuntimeConfig.currentOptions;
     if (options == null) return false;
@@ -878,6 +932,7 @@ class FirebaseRuntime {
   }
 
   static Future<bool> _retryPendingInstallationCleanup() async {
+    if (kIsWeb) return false;
     try {
       await ensureFirebaseApp();
       if (Firebase.apps.isEmpty) return false;
@@ -900,6 +955,7 @@ class FirebaseRuntime {
   }
 
   static Future<bool> _retryPendingPushLocalCleanup() async {
+    if (kIsWeb) return false;
     final preferences = await FirebaseServicePreferencesStore.read();
     if (!preferences.pushLocalCleanupPending) return true;
     try {
@@ -914,6 +970,7 @@ class FirebaseRuntime {
   }
 
   static Future<bool> _retryPendingCrashCleanup() async {
+    if (kIsWeb) return false;
     final preferences = await FirebaseServicePreferencesStore.read();
     if (!preferences.crashDiagnosticsCleanupPending) return true;
     try {

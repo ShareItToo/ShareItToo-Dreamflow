@@ -218,6 +218,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (!result.ok) {
         final msg = switch (result.failure) {
           AuthFailure.emailInUse => 'Diese E-Mail ist bereits registriert.',
+          AuthFailure.pilotRegistrationClosed =>
+            'Die Registrierung ist auf eingeladene Pilotkonten beschränkt. Du hast bereits Zugang? Bitte melde dich an.',
           AuthFailure.weakPassword =>
             'Das Passwort muss mindestens 10 Zeichen, einen Buchstaben und eine Zahl enthalten.',
           AuthFailure.consentRequired =>

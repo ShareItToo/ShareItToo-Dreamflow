@@ -236,6 +236,7 @@ const sourcePaths = [
   'lib/services/account_deletion_service.dart',
   'lib/services/blue_ocean_draft_recovery_service.dart',
   'lib/services/auth_service.dart',
+  'lib/services/web_google_auth.dart',
   'lib/screens/notification_settings_screen.dart',
   'lib/screens/contact_data_screen.dart',
   'lib/openai/openai_config.dart',

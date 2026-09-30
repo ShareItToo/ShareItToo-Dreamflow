@@ -1,5 +1,39 @@
 # Current Work Package: Staging Web Pilot delivery — ACTIVE
 
+## Staging Web auth/CORS package — source review complete, live gate open
+
+The reported live internal-only `CORS_ORIGINS` rejects the browser before the
+registration route. The exact successor value is
+`http://shareittoo-staging-api:8080,https://staging.shareittoo.com`.
+Staging Compose retains both origins; Green promotion now requires that exact
+value in its protected environment, candidate probe and final/rollback
+inventory. There is no implicit origin expansion in general API runtime code,
+and Production Compose is unchanged. Local HTTP regression reproduces the old
+403, then proves exact-origin OPTIONS succeeds and POST reaches the unchanged
+`staging_registration_disabled` boundary with zero database calls. Lookalike,
+HTTP-Staging and Production origins remain denied.
+
+The client now also maps only the exact structured
+`403/staging_registration_disabled` response to a truthful closed-pilot
+message that directs invited users to login. Unknown, unstructured or
+mismatched failures remain network outcomes. The separately prepared Google
+Web path is auth-only, uses memory persistence and remains fail-closed until
+reviewed Firebase Web values, backend-project equality and the exact authorized
+Staging origin are bound at build time. Apple and Facebook remain off.
+
+Focused review is green: CORS/Green 59/59, Web Google and adjacent Flutter
+57/57 with 28 provider-ownership skips, Web wiring 3/3, closed-registration
+mapping/wiring 22/22, analyzer, privacy, retention-consumer closure and diff
+checks PASS. Source hashes in both disclosure inventories match the reviewed
+bytes.
+
+This source capsule does not itself prove an environment/container mutation or
+deployment. Next: commit and CI, then the separately controlled one-key Staging
+env correction with exact rollback/runtime readback, followed by
+Origin-bearing OPTIONS/POST and authenticated browser checks. Public
+registration stays closed; Google remains visibly off until its verified
+external configuration is available.
+
 ## Bounded first-install transaction — source preparation only
 
 Authoritative baseline: clean `0d130b481eac873a0702e4088c6d37ef204862fb`.

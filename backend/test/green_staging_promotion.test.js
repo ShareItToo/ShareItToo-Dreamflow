@@ -22,6 +22,7 @@ import {
   buildGreenPromotionCommands,
   buildGreenPromotionPlan,
   greenTarget,
+  greenWebCorsOrigins,
   greenBroadPromotionEnvironment,
   greenTechnicalSandboxEnvironment,
   greenTechnicalSandboxHealth,
@@ -132,7 +133,7 @@ const finalMounts = sourceMounts.filter((mount) => mount.destination === '/data/
   ...(mount.type === 'bind' ? { Source: mount.source } : { Name: mount.volume }),
   RW: !mount.readOnly,
 }));
-const greenRuntimeEnvEntries = Object.entries({ ...greenBroadPromotionEnvironment, ...greenTechnicalSandboxEnvironment, FIREBASE_AUTH_ENABLED: 'true', SIT_STAGING_ALLOWED_USER_IDS: enrolledAllowedIds }).map(([name, value]) => `${name}=${value}`);
+const greenRuntimeEnvEntries = Object.entries({ ...greenBroadPromotionEnvironment, ...greenTechnicalSandboxEnvironment, CORS_ORIGINS: greenWebCorsOrigins, FIREBASE_AUTH_ENABLED: 'true', SIT_STAGING_ALLOWED_USER_IDS: enrolledAllowedIds }).map(([name, value]) => `${name}=${value}`);
 const originalApiIdentityRecord = {
   Id: 'api-original-id',
   State: { Running: false },
@@ -361,6 +362,7 @@ test('Green provider-off contract matches the real Listing-AI server parser', ()
 
 test('protected Green runtime environment binds memory payment, pilot, paths and no provider secrets', () => {
   const values = {
+    CORS_ORIGINS: greenWebCorsOrigins,
     NODE_ENV: 'production', DEPLOYMENT_ENVIRONMENT: 'test', FIREBASE_AUTH_ENABLED: 'false', FIREBASE_PHONE_VERIFICATION_ENABLED: 'false', SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'false', SIT_STAGING_ACCESS_GATE_ENABLED: 'true',
     ENABLE_STAGING_STRIPE: '0', PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false',
     MAIL_TRANSPORT: 'memory', PUSH_TRANSPORT: 'memory', IDENTITY_VERIFICATION_TRANSPORT: 'memory', SIT_LISTING_AI_PROVIDER: 'on_device', SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '0', SIT_LISTING_AI_BUDGET_CENTS: '0',
@@ -369,6 +371,9 @@ test('protected Green runtime environment binds memory payment, pilot, paths and
     SYNTHETIC_SANDBOX_PASSWORD_FILE: syntheticSandboxCredentialFilePath,
   };
   assert.equal(assertGreenProtectedEnvironment(values, config), true);
+  for (const CORS_ORIGINS of [undefined, 'http://shareittoo-staging-api:8080', 'https://staging.shareittoo.com', `${greenWebCorsOrigins},https://shareittoo.com`]) {
+    assert.throws(() => assertGreenProtectedEnvironment({ ...values, CORS_ORIGINS }, config), /green_web_cors_environment_invalid/u);
+  }
   assert.equal(assertGreenTechnicalSandboxProviderOff(values), true);
   assert.throws(() => assertGreenProtectedEnvironment({ ...values, FIREBASE_AUTH_ENABLED: 'true' }, config));
   assert.throws(() => assertGreenProtectedEnvironment({ ...values, FIREBASE_PHONE_VERIFICATION_ENABLED: 'true' }, config));
@@ -397,6 +402,7 @@ test('Green promotion has an explicit provider-off technical Sandbox plan and re
   const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
   assert.equal(commands.some((entry) => entry.args.some((arg) => /technical-sandbox-(?:key|webhook)/u.test(arg))), false);
   assert.equal(assertGreenRuntimeEnvironmentReadback({
+    CORS_ORIGINS: greenWebCorsOrigins,
     DEPLOYMENT_ENVIRONMENT: 'test', FIREBASE_AUTH_ENABLED: 'false',
     FIREBASE_PHONE_VERIFICATION_ENABLED: 'false', SIT_STAGING_ACCESS_GATE_ENABLED: 'true',
     SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'false', PAYMENT_TRANSPORT: 'memory',
@@ -684,6 +690,7 @@ test('executor preserves required post-enrollment auth through candidate, recove
   const evidenceFile = path.join(root, 'green-promotion.json');
   const runtimeConfig = { ...config, envFile: configFile };
   const envValues = {
+    CORS_ORIGINS: greenWebCorsOrigins,
     NODE_ENV: 'production', DEPLOYMENT_ENVIRONMENT: 'test',
     DATABASE_URL: `postgres://shareittoo_green:fixture@${greenTarget.databaseContainer}:5432/shareittoo_green`,
     JWT_SECRET: 'synthetic-fixture-jwt', PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false',
@@ -863,7 +870,7 @@ test('executor preserves required post-enrollment auth through candidate, recove
       if (phase === 'failure_candidate_identity_readback') return { stdout: JSON.stringify({ Id: candidateId, Name: `/${plan.isolated.candidate}`, Config: { Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.green.candidate': plan.target.runId, 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } } }) };
       if (phase === 'failure_isolated_database_identity_readback') return { stdout: JSON.stringify({ Id: isolatedDatabaseId, Name: `/${plan.isolated.database}`, Config: { Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } } }) };
       if (phase === 'failure_isolated_network_identity_readback') return { stdout: JSON.stringify({ Id: isolatedNetworkId, Name: plan.isolated.network, Labels: { 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } }) };
-      if (phase === 'candidate_runtime_flags_readback') return { stdout: JSON.stringify({ DEPLOYMENT_ENVIRONMENT: 'test', FIREBASE_AUTH_ENABLED: 'false', FIREBASE_PHONE_VERIFICATION_ENABLED: 'false', SIT_STAGING_ACCESS_GATE_ENABLED: 'true', SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'false', PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false', ...greenBroadPromotionEnvironment, ...greenTechnicalSandboxEnvironment, googleRegistrationAllowlistEmpty: true, ...(postEnrollment ? { FIREBASE_AUTH_ENABLED: 'true', ...summarizeGreenAllowedIds(enrolledAllowedIds) } : {}) }) };
+      if (phase === 'candidate_runtime_flags_readback') return { stdout: JSON.stringify({ CORS_ORIGINS: greenWebCorsOrigins, DEPLOYMENT_ENVIRONMENT: 'test', FIREBASE_AUTH_ENABLED: 'false', FIREBASE_PHONE_VERIFICATION_ENABLED: 'false', SIT_STAGING_ACCESS_GATE_ENABLED: 'true', SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'false', PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false', ...greenBroadPromotionEnvironment, ...greenTechnicalSandboxEnvironment, googleRegistrationAllowlistEmpty: true, ...(postEnrollment ? { FIREBASE_AUTH_ENABLED: 'true', ...summarizeGreenAllowedIds(enrolledAllowedIds) } : {}) }) };
       if (phase === 'candidate_health_and_feature_probes' || phase === 'candidate_ready_probe') return { stdout: JSON.stringify(payload) };
       if (phase === 'candidate_version_probe') return { stdout: JSON.stringify({ commit: runtimeCommit, environment: 'test' }) };
       if (phase === 'fresh_protected_backup') return { stdout: 'synthetic protected backup' };
@@ -1156,6 +1163,10 @@ test('final readback binds topology and required post-enrollment cohort', () => 
     }
   }
   assert.equal(assertGreenFinalContainerReadback({ record, plan, expectedId: record.Id, expectedNetworkIds }), true);
+  for (const value of ['http://shareittoo-staging-api:8080', `${greenWebCorsOrigins},https://shareittoo.com`]) {
+    const drifted = { ...record, Config: { ...record.Config, Env: record.Config.Env.map((entry) => entry.startsWith('CORS_ORIGINS=') ? `CORS_ORIGINS=${value}` : entry) } };
+    assert.throws(() => assertGreenFinalContainerReadback({ record: drifted, plan, expectedId: record.Id, expectedNetworkIds }), /green_web_cors_environment_invalid/u);
+  }
   assert.equal(summarizeGreenFinalContainerReadback(record, plan, expectedNetworkIds, record.Id).hostPorts, 0);
   assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Id: 'b'.repeat(64) }, plan, expectedId: record.Id, expectedNetworkIds }), /green_final_inventory_mismatch/u);
   assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, NetworkSettings: { ...record.NetworkSettings, Networks: { ...record.NetworkSettings.Networks, [greenTarget.providerNetwork]: { NetworkID: '6'.repeat(64) } } } }, plan, expectedId: record.Id, expectedNetworkIds }), /green_final_network_identity_mismatch/u);

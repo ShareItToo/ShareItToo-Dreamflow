@@ -45,7 +45,7 @@ services:
       PORT: 8080
       DATABASE_URL: postgres://shareittoo_staging:${POSTGRES_PASSWORD}@postgres:5432/shareittoo_staging
       JWT_SECRET: ${JWT_SECRET}
-      CORS_ORIGINS: ${CORS_ORIGINS:-https://staging.shareittoo.com}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://shareittoo-staging-api:8080,https://staging.shareittoo.com}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://staging.shareittoo.com/api/v1}
       APP_PUBLIC_URL: ${APP_PUBLIC_URL:-https://staging.shareittoo.com}
       PUBLIC_COMPLIANCE_APPROVED: ${PUBLIC_COMPLIANCE_APPROVED:-false}

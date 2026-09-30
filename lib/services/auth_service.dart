@@ -19,6 +19,7 @@ import 'blue_ocean_draft_recovery_service.dart';
 import 'firebase_runtime.dart';
 import 'remote_auth_attempt_transaction.dart';
 import 'shared_persistence_sync.dart';
+import 'web_google_auth.dart';
 
 class _SocialSdkAcquisition {
   String? firebaseUid;
@@ -163,14 +164,20 @@ class AuthService {
   ///
   /// The UI uses this release gate to keep unavailable providers disabled;
   /// token acquisition enforces the same gate again before any SDK call.
-  static bool socialProviderEnabled(AuthSocialProvider provider) =>
-      switch (provider) {
-        AuthSocialProvider.google => _googleSocialAuthEnabled,
-        AuthSocialProvider.apple => _appleSocialAuthEnabled &&
-            (!_productBuild || _socialProviderActivationValidated),
-        AuthSocialProvider.facebook => _facebookSocialAuthEnabled &&
-            (!_productBuild || _socialProviderActivationValidated),
-      };
+  static bool socialProviderEnabled(AuthSocialProvider provider) {
+    if (kIsWeb) {
+      return provider == AuthSocialProvider.google &&
+          _googleSocialAuthEnabled &&
+          FirebaseRuntime.webGoogleReady;
+    }
+    return switch (provider) {
+      AuthSocialProvider.google => _googleSocialAuthEnabled,
+      AuthSocialProvider.apple => _appleSocialAuthEnabled &&
+          (!_productBuild || _socialProviderActivationValidated),
+      AuthSocialProvider.facebook => _facebookSocialAuthEnabled &&
+          (!_productBuild || _socialProviderActivationValidated),
+    };
+  }
 
   static Future<void> ensureSeeded() async {
     if (BackendConfig.enabled) return;
@@ -634,6 +641,28 @@ class AuthService {
     }
   }
 
+  static AuthFailure classifyRegistrationBackendError(BackendException error) {
+    // Only the server's exact closed-pilot rejection proves this outcome.
+    // An arbitrary 403 or transport error must never imply no account write.
+    if (error.statusCode == 403 &&
+        error.code == 'staging_registration_disabled') {
+      return AuthFailure.pilotRegistrationClosed;
+    }
+    return switch (error.code) {
+      'password_too_short' ||
+      'password_too_long' ||
+      'password_too_weak' =>
+        AuthFailure.weakPassword,
+      'registration_consents_required' ||
+      'registration_action_label_required' ||
+      'registration_action_label_mismatch' =>
+        AuthFailure.consentRequired,
+      'verification_delivery_unavailable' =>
+        AuthFailure.verificationDeliveryUnavailable,
+      _ => AuthFailure.network,
+    };
+  }
+
   static Future<AuthResult> registerLocalAccount({
     required String email,
     required String password,
@@ -682,23 +711,11 @@ class AuthService {
           verificationPending: response['verificationPending'] == true,
         );
       } on BackendException catch (error) {
-        if (error.code == 'password_too_short' ||
-            error.code == 'password_too_long' ||
-            error.code == 'password_too_weak') {
-          return const AuthResult.failure(AuthFailure.weakPassword);
+        final failure = classifyRegistrationBackendError(error);
+        if (failure == AuthFailure.network) {
+          debugPrint('[AuthService] remote registration failed: $error');
         }
-        if (error.code == 'registration_consents_required' ||
-            error.code == 'registration_action_label_required' ||
-            error.code == 'registration_action_label_mismatch') {
-          return const AuthResult.failure(AuthFailure.consentRequired);
-        }
-        if (error.code == 'verification_delivery_unavailable') {
-          return const AuthResult.failure(
-            AuthFailure.verificationDeliveryUnavailable,
-          );
-        }
-        debugPrint('[AuthService] remote registration failed: $error');
-        return const AuthResult.failure(AuthFailure.network);
+        return AuthResult.failure(failure);
       } catch (error) {
         debugPrint('[AuthService] remote registration failed: $error');
         return const AuthResult.failure(AuthFailure.network);
@@ -1478,6 +1495,32 @@ class AuthService {
         'provider is disabled in this release candidate',
       );
     }
+    if (kIsWeb) {
+      try {
+        return await acquireWebGoogleToken(
+          available: provider == AuthSocialProvider.google &&
+              FirebaseRuntime.webGoogleReady,
+          requireCurrent: requireCurrent,
+          popup: () async {
+            final credential = await FirebaseAuth.instance.signInWithPopup(
+              GoogleAuthProvider()
+                ..setCustomParameters({'prompt': 'select_account'}),
+            );
+            final user = credential.user;
+            if (user == null) {
+              throw const WebGoogleAuthFailure('missing_firebase_user');
+            }
+            return WebGoogleIdentity(
+                uid: user.uid, readFreshIdToken: () => user.getIdToken(true));
+          },
+          currentFirebaseUid: () => FirebaseAuth.instance.currentUser?.uid,
+          acquired: (uid) => acquisition.firebaseUid = uid,
+        );
+      } on WebGoogleAuthFailure catch (error) {
+        if (error.cancelled) throw const _SocialSignInCancelled();
+        throw _SocialProviderUnavailable(error.code);
+      }
+    }
     await FirebaseRuntime.ensureFirebaseApp();
     requireCurrent();
     if (Firebase.apps.isEmpty) throw const _SocialProviderUnavailable();
@@ -2078,6 +2121,7 @@ enum AuthFailure {
   emailVerificationRequired,
   weakPassword,
   consentRequired,
+  pilotRegistrationClosed,
   verificationDeliveryUnavailable,
   network,
   mfaCodeRejected,
