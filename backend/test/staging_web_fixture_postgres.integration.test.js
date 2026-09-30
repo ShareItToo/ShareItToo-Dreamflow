@@ -14,6 +14,8 @@ import { programmaticPlaceholder } from './fixtures/programmatic_placeholder.mjs
 import { bootstrapFileStore, buildFixtureBootstrapManifest, dedicatedFixture, runFixtureBootstrap,
   fixtureBootstrapHandoff } from '../ops/staging_web_fixture_bootstrap.mjs';
 import { createFixtureLoginProofStore, loginProofMarker } from '../ops/staging_web_fixture_login_verifier.mjs';
+import { assertCatalogActivationState,
+  catalogActivationStateSql } from '../ops/staging_web_fixture_catalog_activation.mjs';
 import { fixtureDigest, fixtureEnvironmentDigest, fixtureNotice, fixtureTarget,
   isolatedFixtureRehearsal, readFixtureSnapshot } from '../ops/staging_web_fixture_preflight.mjs';
 
@@ -354,6 +356,58 @@ test('PG16 fixture adapter uses real schema, transactions, triggers and two clie
         assert.equal((await runFixtureAdapter(bind(await cleanupManifest(cleanup, result.activationDigest)))).status, 'already-cleaned');
         assert.equal((await events(f)).length, 3);
         assert.equal(f.environment.SIT_STAGING_SYNTHETIC_CATALOG_ENABLED, 'false');
+      });
+
+      await t.test('catalog activation attestation SQL runs on PG16/98 and ignores foreign rows', async () => {
+        const f = await seed(client); const activated = await runFixtureAdapter(bind(f));
+        assert.equal(activated.status, 'database-prepared-runtime-still-blocked');
+        await client.query(`INSERT INTO audit_log
+          (actor_role,action,resource_type,resource_id,request_id,metadata)
+          VALUES ('system','staging_web_fixture_seed.seeded','staging_web_fixture_seed',$1,$2,'{}'::jsonb)`,
+        [f.manifest.preflight.listingId, f.manifest.preflight.runId]);
+        for (const role of f.manifest.preflight.roles) {
+          const sessionId = randomUUID();
+          await client.query(`INSERT INTO auth_sessions (id,user_id,device_label,user_agent,revoked_at)
+            VALUES ($1,$2,'Catalog attestation integration','Catalog-Attestation-Integration',now())`,
+          [sessionId, role.userId]);
+          await client.query(`INSERT INTO refresh_tokens
+            (user_id,session_id,family_id,token_hash,expires_at,user_agent,revoked_at)
+            VALUES ($1,$2,$2,$3,now()+interval '1 hour','Catalog-Attestation-Integration',now())`,
+          [role.userId, sessionId, sha(randomUUID())]);
+          await client.query(`INSERT INTO audit_log
+            (actor_id,actor_role,action,resource_type,resource_id,request_id)
+            VALUES ($1,'user','auth.login','auth_session',$2,$3)`,
+          [role.userId, sessionId, `catalog-attestation-${sessionId}`]);
+        }
+        const m = f.manifest.preflight;
+        const sql = catalogActivationStateSql
+          .replaceAll(dedicatedFixture.owner, m.roles[0].userId)
+          .replaceAll(dedicatedFixture.renter, m.roles[1].userId)
+          .replaceAll(dedicatedFixture.listing, m.listingId)
+          .replaceAll(dedicatedFixture.upload, m.uploadName)
+          .replaceAll(":'run_hash'", '$1');
+        const row = (await client.query(sql, [sha(m.runId)])).rows[0]?.json_build_object;
+        const attested = assertCatalogActivationState(JSON.stringify(row));
+        assert.equal(attested.activeSessions, 0); assert.equal(attested.activeRefresh, 0);
+        assert.equal(attested.mfaFactors, 0);
+        assert.equal(attested.retainedSessions, 2); assert.equal(attested.retainedRefresh, 2);
+        await client.query(`INSERT INTO mfa_totp_factors
+          (user_id,encrypted_secret,status,enabled_at) VALUES ($1,'test-encrypted-secret','enabled',now())`,
+        [m.roles[0].userId]);
+        await assert.rejects(async () => assertCatalogActivationState(JSON.stringify(
+          (await client.query(sql, [sha(m.runId)])).rows[0].json_build_object)),
+        /catalog_activation_database_state_invalid/u);
+        await client.query('DELETE FROM mfa_totp_factors WHERE user_id=$1', [m.roles[0].userId]);
+        const foreign = await seed(client);
+        await client.query(`INSERT INTO mfa_totp_factors
+          (user_id,encrypted_secret,status,enabled_at) VALUES ($1,'foreign-encrypted-secret','enabled',now())`,
+        [foreign.manifest.preflight.roles[0].userId]);
+        const afterForeign = assertCatalogActivationState(JSON.stringify((await client.query(sql, [sha(m.runId)])).rows[0]
+          .json_build_object));
+        assert.deepEqual(afterForeign, attested);
+        assert.equal((await readFixtureSnapshot(client, foreign.manifest.preflight)).users.length, 2);
+        const cleaned = await runFixtureAdapter(bind(await cleanupManifest(f, activated.activationDigest)));
+        assert.equal(cleaned.status, 'cleaned-noncatalogued-audits-retained');
       });
 
       await t.test('real FK inventory catches foreign moderation and created-by availability edges', async () => {

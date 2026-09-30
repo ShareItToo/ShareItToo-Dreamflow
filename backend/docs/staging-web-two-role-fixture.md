@@ -425,6 +425,88 @@ status, counts, booleans and digests—never email, password or token material.
 There is no auth-request retry; preserve a failure and prepare a new binding only
 after exact readback and review.
 
+### Separate synthetic catalog activation — source contract only
+
+`backend/ops/activate_staging_web_fixture_catalog.mjs` is the final, separate
+one-key Green transition. This source package does not run it. It reuses the
+same atomic env replacement, immutable container seal, exact-ID rollback and
+shared transition lock as the proven fixture env handoff. Its only permitted
+forward difference is
+`SIT_STAGING_SYNTHETIC_CATALOG_ENABLED=false -> true`; every other env key/value
+must remain semantically exact even if Docker reorders `Config.Env`. Runtime
+identity remains image-owned: `APP_COMMIT`, `APP_VERSION` and `APP_BUILD_TIME`
+are forbidden in `green.env` and fail before any Docker command.
+
+Prepare requires the unchanged runner-owned bootstrap `adapter.json`, the exact
+DB preparation readback SHA-256
+`109e29f5e0f13db97b0423cc6e00dbc1501f8a8daed85209d76f1565071acc32`, and
+the exact login-proof SHA-256
+`f1b8310c88d0bc1937d4ef5d6f0efb41af09f261b6c75deae2a77938765e5419`.
+The latter remains historically bound to Ops commit
+`ef5eae4472f6349f6da0cec6249dc8ca88f96fa3`; it must not be rewritten to the
+new activation commit. All three inputs are reopened with their exact protected
+ownership/mode and digest. The backup, result evidence and runtime manifest are
+new, pairwise-distinct root-owned `0600` targets in root-owned `0700` parents;
+none may alias an input or `green.env`.
+
+```sh
+node backend/ops/activate_staging_web_fixture_catalog.mjs --prepare \
+  "$PRIVATE_BOOTSTRAP_ADAPTER" "$EXACT_BOOTSTRAP_SHA256" \
+  "$DB_PREPARATION_EVIDENCE" 109e29f5e0f13db97b0423cc6e00dbc1501f8a8daed85209d76f1565071acc32 \
+  "$LOGIN_PROOF_EVIDENCE" f1b8310c88d0bc1937d4ef5d6f0efb41af09f261b6c75deae2a77938765e5419 \
+  /docker/shareittoo/backups/staging-web-fixture-catalog/NEW_RUN.green.env \
+  /docker/shareittoo/evidence/NEW_RUN.catalog-activation-result.json \
+  /docker/shareittoo/evidence/NEW_RUN.catalog-activation-runtime.json
+```
+
+Prepare and the default invocation are read-only. They bind and recheck clean
+source; current API/image/mount/network IDs; exact protected env; schema 98 and
+ledger; dedicated owner/renter/listing/upload plus seed and activation audits;
+the retained revoked login-proof records; zero MFA factors and zero active sessions/refresh tokens;
+zero booking/request/identity/push/payment/provider/notification effects; closed
+registration; memory payment; Stripe false; provider boundaries off; catalog
+flag false; and public catalog count zero. Candidate config is imported with
+only the proposed flag true before any mutation.
+
+```sh
+STAGING_WEB_FIXTURE_CATALOG_RUNTIME_MANIFEST=/docker/shareittoo/evidence/NEW_RUN.catalog-activation-runtime.json \
+STAGING_WEB_FIXTURE_CATALOG_RUNTIME_MANIFEST_SHA256="$EXACT_RUNTIME_MANIFEST_SHA256" \
+STAGING_WEB_FIXTURE_CATALOG_BOOTSTRAP_MANIFEST="$PRIVATE_BOOTSTRAP_ADAPTER" \
+STAGING_WEB_FIXTURE_CATALOG_BOOTSTRAP_MANIFEST_SHA256="$EXACT_BOOTSTRAP_SHA256" \
+STAGING_WEB_FIXTURE_CATALOG_DATABASE_EVIDENCE="$DB_PREPARATION_EVIDENCE" \
+STAGING_WEB_FIXTURE_CATALOG_LOGIN_EVIDENCE="$LOGIN_PROOF_EVIDENCE" \
+node backend/ops/activate_staging_web_fixture_catalog.mjs
+```
+
+Only after separate live authorization may the exact same binding execute once.
+Both argv and environment must confirm the clean activation Ops SHA and the
+private bootstrap run ID; the run value is never printed:
+
+```sh
+STAGING_WEB_FIXTURE_CATALOG_RUNTIME_MANIFEST=/docker/shareittoo/evidence/NEW_RUN.catalog-activation-runtime.json \
+STAGING_WEB_FIXTURE_CATALOG_RUNTIME_MANIFEST_SHA256="$EXACT_RUNTIME_MANIFEST_SHA256" \
+STAGING_WEB_FIXTURE_CATALOG_BOOTSTRAP_MANIFEST="$PRIVATE_BOOTSTRAP_ADAPTER" \
+STAGING_WEB_FIXTURE_CATALOG_BOOTSTRAP_MANIFEST_SHA256="$EXACT_BOOTSTRAP_SHA256" \
+STAGING_WEB_FIXTURE_CATALOG_DATABASE_EVIDENCE="$DB_PREPARATION_EVIDENCE" \
+STAGING_WEB_FIXTURE_CATALOG_LOGIN_EVIDENCE="$LOGIN_PROOF_EVIDENCE" \
+STAGING_WEB_FIXTURE_CATALOG_EXECUTE=1 \
+STAGING_WEB_FIXTURE_CATALOG_CONFIRM_SOURCE="$EXACT_ACTIVATION_OPS_SHA" \
+STAGING_WEB_FIXTURE_CATALOG_CONFIRM_RUN="$EXACT_PRIVATE_BOOTSTRAP_RUN_ID" \
+node backend/ops/activate_staging_web_fixture_catalog.mjs --execute \
+  "$EXACT_ACTIVATION_OPS_SHA" "$EXACT_PRIVATE_BOOTSTRAP_RUN_ID"
+```
+
+Success additionally requires live/ready/version, flag true, and public catalog
+count exactly one: the exact synthetic fixture, visibly labelled as a test,
+`synthetic_noncontractual_catalog_only`, `realOffer:false`,
+`ownerDeclaration:false`, `bookingAllowed:false` and `paymentAllowed:false`.
+The bound DB/effect/session/provider digests must remain unchanged. No login,
+booking, request, payment, identity, notification or provider action is issued.
+Every replacement, DB or public-readback failure—including a late foreign
+evidence collision—performs the shared identity-checked exact rollback and can
+never report PASS on uncertain state. The sanitized root-owned `0600` result
+contains counts, booleans and digests only.
+
 ## Authorized semantic cleanup contract
 
 Cleanup means **semantic safety restoration**, never byte-for-byte database
