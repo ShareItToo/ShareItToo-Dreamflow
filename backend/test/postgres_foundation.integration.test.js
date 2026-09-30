@@ -25,6 +25,7 @@ import {
   listingPhotoTruthPolicyText,
   listingPhotoTruthPolicyVersion,
 } from '../src/listing_photo_truth_policy.js';
+import { futureBerlinBookingWindow } from './future_booking_fixture.js';
 
 const databaseUrl = process.env.TEST_DATABASE_URL?.trim();
 
@@ -4645,17 +4646,18 @@ if (!databaseUrl) {
       assert.equal(blockedCheck.status, 409);
       assert.equal((await blockedCheck.json()).reason, 'listing_period_blocked');
 
+      const b6Window = futureBerlinBookingWindow();
       const quotePayload = {
         itemId: 'listing-1',
-        startDate: '2026-10-01',
-        endDate: '2026-10-03',
+        startDate: b6Window.startDate,
+        endDate: b6Window.endDate,
         ownerDeliversAtDropoffChosen: false,
         ownerPicksUpAtReturnChosen: false,
       };
       const exactQuotePayload = {
         ...quotePayload,
-        handoverAt: '2026-10-01T10:00:00+02:00',
-        returnAt: '2026-10-03T16:00:00+02:00',
+        handoverAt: b6Window.handoverAt,
+        returnAt: b6Window.returnAt,
       };
       const quoteResponse = await fetch(`${baseUrl}/v1/bookings/quote`, {
         method: 'POST',
@@ -4668,7 +4670,8 @@ if (!databaseUrl) {
       assert.equal(quoted.quote.baseRentalMinor, 3000);
       assert.equal(quoted.quote.platformFeeMinor, 300);
       assert.equal(quoted.quote.totalMinor, 3300);
-      assert.match(quoted.start, /T22:00:00\.000Z$/);
+      assert.equal(quoted.start, b6Window.periodStartAt);
+      assert.equal(quoted.end, b6Window.periodEndAt);
       assert.match(quoted.quoteId, /^quote_[0-9a-f-]{36}$/);
       assert.match(quoted.quoteHash, /^[0-9a-f]{64}$/);
       assert.ok(Date.parse(quoted.quotedAt) < Date.parse(quoted.expiresAt));
@@ -4685,8 +4688,8 @@ if (!databaseUrl) {
       assert.equal(persistedQuote.rows[0].quote_hash, quoted.quoteHash);
       assert.equal(persistedQuote.rows[0].quote_payload.totalMinor, 3300);
       assert.equal(persistedQuote.rows[0].time_snapshot_version, 'booking-time-v1');
-      assert.equal(persistedQuote.rows[0].handover_at.toISOString(), '2026-10-01T08:00:00.000Z');
-      assert.equal(persistedQuote.rows[0].return_at.toISOString(), '2026-10-03T14:00:00.000Z');
+      assert.equal(persistedQuote.rows[0].handover_at.toISOString(), b6Window.handoverAt);
+      assert.equal(persistedQuote.rows[0].return_at.toISOString(), b6Window.returnAt);
 
       const bookingCountBeforeGroup = (await setupPool.query(
         'SELECT count(*)::int AS count FROM bookings',
@@ -4726,12 +4729,21 @@ if (!databaseUrl) {
            payment_configuration_key, compatibility_hash
          ) VALUES (
            $1, 'owner', 'renter-a', 'EUR',
-           '2026-10-01', '2026-10-03', $2, $3, $4,
-           $5, 'private_owner_pickup_v1',
+           $2::date, $3::date, $4, $5, $6,
+           $7, 'private_owner_pickup_v1',
            'G3L-DRAFT-2026-08-20.1', 'v52_private_cancellation',
-           'disabled_test_only', $6
+           'disabled_test_only', $8
          )`,
-        [bookingGroupId, quoted.timezone, quoted.start, quoted.end, 'a'.repeat(64), 'b'.repeat(64)],
+        [
+          bookingGroupId,
+          b6Window.startDate,
+          b6Window.endDate,
+          quoted.timezone,
+          quoted.start,
+          quoted.end,
+          'a'.repeat(64),
+          'b'.repeat(64),
+        ],
       );
       await setupPool.query(
         `INSERT INTO booking_group_positions (
@@ -5597,7 +5609,7 @@ if (!databaseUrl) {
       const amendedB6 = await fetch(`${baseUrl}/v1/bookings/b6-flow`, {
         method: 'PATCH',
         headers: { ...renterAHeaders, 'Idempotency-Key': 'amend-b6-flow-integration' },
-        body: JSON.stringify({ ...quotePayload, endDate: '2026-10-04' }),
+        body: JSON.stringify({ ...quotePayload, endDate: b6Window.amendedEndDate }),
       });
       assert.equal(amendedB6.status, 200);
       const amendedBooking = (await amendedB6.json()).booking;
@@ -5611,8 +5623,8 @@ if (!databaseUrl) {
         body: JSON.stringify({
           itemId: 'listing-1',
           id: 'b6-conflict',
-          startDate: '2026-10-02',
-          endDate: '2026-10-05',
+          startDate: b6Window.conflictStartDate,
+          endDate: b6Window.conflictEndDate,
         }),
       });
       assert.equal(createConflict.status, 201);
@@ -5662,8 +5674,11 @@ if (!databaseUrl) {
         JSON.stringify(proposeB6FlowTimePayload),
       );
       const proposedB6FlowTime = proposeB6FlowTimePayload.state;
-      assert.equal(proposedB6FlowTime.handoverTimeRequested, 'Donnerstag, 10:15');
-      assert.equal(proposedB6FlowTime.handoverTimeIso, '2026-10-01T08:15:00.000Z');
+      assert.equal(
+        proposedB6FlowTime.handoverTimeRequested,
+        `${b6Window.weekday}, 10:15`,
+      );
+      assert.equal(proposedB6FlowTime.handoverTimeIso, b6Window.flowPickupAt);
       const confirmB6FlowTime = await fetch(`${baseUrl}/v1/bookings/b6-flow/flow-time`, {
         method: 'POST',
         headers: { ...renterAHeaders, 'Idempotency-Key': 'confirm-b6-flow-time-integration' },
@@ -5678,8 +5693,8 @@ if (!databaseUrl) {
         [b6ThreadId],
       );
       assert.deepEqual(flowTimeMessages.rows.map((row) => row.body), [
-        '📦 Übergabezeit angefragt: Donnerstag, 10:15 Uhr',
-        '📦 Übergabezeit bestätigt: Donnerstag, 10:15 Uhr',
+        `📦 Übergabezeit angefragt: ${b6Window.weekday}, 10:15 Uhr`,
+        `📦 Übergabezeit bestätigt: ${b6Window.weekday}, 10:15 Uhr`,
       ]);
 
       const { getBookingAddressReveal } = await import(
@@ -5695,14 +5710,19 @@ if (!databaseUrl) {
       await setupPool.query(
         `UPDATE rental_requests
             SET payload = payload || jsonb_build_object(
-              'handoverTimeRequested', 'Donnerstag, 18:00',
-              'handoverTimeIso', '2026-10-01T16:00:00.000Z',
+              'handoverTimeRequested', $2::text,
+              'handoverTimeIso', $3::text,
               'handoverTimeRequestedByUserId', 'owner',
               'handoverTimeConfirmed', true,
               'handoverTimeConfirmedByUserId', 'renter-a',
               'handoverTimeConfirmedAt', now()::text
             )
-          WHERE id = 'b6-flow'`,
+          WHERE id = $1`,
+        [
+          'b6-flow',
+          `${b6Window.weekday}, 18:00`,
+          b6Window.confirmedPickupAt,
+        ],
       );
       const earlyAddress = await getBookingAddressReveal(setupPool, {
         actor: { id: 'renter-a', role: 'user' },
@@ -5785,8 +5805,9 @@ if (!databaseUrl) {
       );
       await setupPool.query(
         `UPDATE bookings
-            SET listing_id = 'listing-1', rental_start_date = '2026-10-01'
-          WHERE id = 'b6-flow'`,
+            SET listing_id = 'listing-1', rental_start_date = $2::date
+          WHERE id = $1`,
+        ['b6-flow', b6Window.startDate],
       );
       await setupPool.query(
         `UPDATE rental_requests
