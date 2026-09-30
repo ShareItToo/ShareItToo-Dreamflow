@@ -387,7 +387,12 @@ Prepare binds the exact clean Ops source, immutable API/DB/network fingerprints,
 protected env and private-input hashes, runtime image, schema-98 ledger, fixture
 roles/run and a new one-hour proof marker. The second command is the default
 read-only preflight: its database transactions are explicitly read only and it
-makes no auth request. Both modes use one inspected UID100:101, root-read-only,
+makes no auth request. Before either mode can reach an auth route, the same
+bound database must attest both exact IDs, emails, active user role/state,
+synthetic-only profiles, zero failed attempts, no login lock or MFA, and verify
+both private passwords against their stored canonical scrypt hashes. Any drift
+fails before HTTP and cannot increment failed attempts. Both modes use one
+inspected UID100:101, root-read-only,
 capability-free, no-log, no-port container on only the internal Green network.
 
 Only after the default result and a separate live authorization may the exact
@@ -404,13 +409,20 @@ sequentially owner then renter. A run-specific neutral user-agent marks only
 the sessions created by this proof. Whether an API response succeeds, fails or
 is lost, reconciliation can revoke only rows for the exact two IDs, exact
 marker and exact captured session IDs; foreign/duplicate marker state is an
-error and is never broadly deleted. Success requires both access tokens to be
+error and is never broadly deleted. Auth requests are never retried. Reconcile
+also row-locks the exact two principals, so an already-running login transaction
+must settle or the bounded lock/statement timeout fails closed. After any
+success, failure or uncertain response, bounded five-second reconciliation and
+readback rounds must prove two consecutive stable zero-active windows. A session
+that commits after the first reconciliation is revoked in a later round; if
+quiescence cannot be proven, the result is FAIL and requires manual readback,
+never PASS. Success requires both access tokens to be
 rejected after logout, zero active sessions and refresh tokens, unchanged
 identity/effect digests, retained login/session audit counts, registration and
 catalog still closed, memory payment, Stripe false and every external provider
 boundary still off. Evidence is exclusive root-owned `0600` and contains only
 status, counts, booleans and digests—never email, password or token material.
-There is no automatic retry; preserve a failure and prepare a new binding only
+There is no auth-request retry; preserve a failure and prepare a new binding only
 after exact readback and review.
 
 ## Authorized semantic cleanup contract

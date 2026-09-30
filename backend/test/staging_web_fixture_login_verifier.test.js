@@ -19,6 +19,7 @@ import {
   validateFixtureLoginProofBinding,
   validateFixtureLoginProofConfirmation,
   validateFixtureLoginProofEnvironment,
+  verifyFixtureLoginProofPassword,
 } from '../ops/staging_web_fixture_login_verifier.mjs';
 
 const sha = (value) => crypto.createHash('sha256').update(value).digest('hex');
@@ -35,6 +36,13 @@ const ledgerDigest = 'd'.repeat(64);
 const networkName = 'sit-green-network-20260918011528-wp254';
 const dbName = 'sit-green-postgres-20260918011528-wp254';
 const credentialField = ['pass', 'word'].join('');
+
+async function encodedSecret(secret) {
+  const salt = crypto.randomBytes(16);
+  const derived = await new Promise((resolve, reject) => crypto.scrypt(secret, salt, 64,
+    (error, value) => error ? reject(error) : resolve(value)));
+  return `scrypt$${salt.toString('hex')}$${Buffer.from(derived).toString('hex')}`;
+}
 
 function privateInput() {
   const secrets = [crypto.randomBytes(36).toString('base64url'), crypto.randomBytes(36).toString('base64url')]
@@ -91,10 +99,11 @@ function baseState(overrides = {}) {
 }
 
 function fakeProof(input, { fault, responseRole = 'user', foreignMarker = false,
-  cleanupFault = false, healthFault = false } = {}) {
+  cleanupFault = false, healthFault = false, credentialFault = false,
+  lateSessionAfterFirstReconcile = false, unstableCleanupReadback = false } = {}) {
   const sessions = [];
   const calls = [];
-  let sequence = 0;
+  let sequence = 0; let reconciles = 0; let lateInserted = false;
   const own = () => sessions.filter((entry) => [ownerId, renterId].includes(entry.userId));
   const snapshot = async ({ readOnly = false } = {}) => {
     calls.push(`snapshot:${readOnly ? 'read-only' : 'readback'}`);
@@ -102,16 +111,22 @@ function fakeProof(input, { fault, responseRole = 'user', foreignMarker = false,
     return baseState({ activeSessions: owned.filter((entry) => entry.active).length,
       activeRefreshTokens: owned.filter((entry) => entry.refreshActive).length,
       markerSessions: sessions.length, markerActiveSessions: sessions.filter((entry) => entry.active).length,
-      markerRefreshTokens: sessions.length,
+      markerRefreshTokens: sessions.length + (unstableCleanupReadback ? reconciles : 0),
       markerActiveRefreshTokens: sessions.filter((entry) => entry.refreshActive).length,
       markerLoginAudits: sessions.length });
   };
   const store = {
     attest: async (manifest) => { calls.push('attest:read-only'); return {
       schemaCount: manifest.schemaCount, ledgerDigest: manifest.ledgerDigest } },
+    attestCredentials: async () => {
+      calls.push('credentials:read-only');
+      if (credentialFault) throw Object.assign(Error('fixture_login_proof_credential_attestation_failed'),
+        { code: 'fixture_login_proof_credential_attestation_failed' });
+      return { credentialsAttested: 2 };
+    },
     snapshot,
     reconcile: async () => {
-      calls.push('reconcile');
+      calls.push('reconcile'); reconciles++;
       for (const entry of own()) { entry.active = false; entry.refreshActive = false; }
       if (cleanupFault) throw Error('injected-cleanup-fault');
       if (sessions.some((entry) => ![ownerId, renterId].includes(entry.userId))) {
@@ -119,6 +134,14 @@ function fakeProof(input, { fault, responseRole = 'user', foreignMarker = false,
       }
       return { matchedSessions: own().length };
     },
+  };
+  const sleep = async () => {
+    calls.push('quiescence');
+    if (lateSessionAfterFirstReconcile && reconciles === 1 && !lateInserted) {
+      lateInserted = true;
+      sessions.push({ userId: ownerId, active: true, refreshActive: true,
+        access: 'late-access', refresh: 'late-refresh' });
+    }
   };
   const json = (status, body) => ({ status, json: async () => body });
   const request = async (path, options) => {
@@ -166,7 +189,7 @@ function fakeProof(input, { fault, responseRole = 'user', foreignMarker = false,
     }
     assert.fail(`unexpected request ${path}`);
   };
-  return { store, request, sessions, calls };
+  return { store, request, sleep, sessions, calls };
 }
 
 test('protected bootstrap reader requires exact runner-owned file contract without exposing contents', () => {
@@ -211,9 +234,20 @@ test('default proof preflight uses DB read-only plus health/version and makes no
   const input = privateInput(); const fake = fakeProof(input);
   const result = await runFixtureLoginProof({ input, environment: environment(), ...fake, marker });
   assert.equal(result.status, 'fixture-login-proof-preflight-passed-no-mutation');
-  assert.deepEqual(fake.calls, ['attest:read-only', 'snapshot:read-only',
-    'GET:/health/live:token', 'GET:/health/ready:token', 'GET:/version:token']);
+  assert.deepEqual(fake.calls, ['attest:read-only', 'credentials:read-only', 'snapshot:read-only', 'GET:/health/live:token',
+    'GET:/health/ready:token', 'GET:/version:token']);
   assert.equal(result.executed, false); assert.equal(result.activeSessions, 0);
+  assert.equal(result.credentialsAttested, 2); assert.equal(result.quiescenceReadbacks, 0);
+});
+
+test('credential drift blocks default and execute before every HTTP request without DB mutation', async () => {
+  for (const execute of [false, true]) {
+    const input = privateInput(); const fake = fakeProof(input, { credentialFault: true });
+    await assert.rejects(runFixtureLoginProof({ input, environment: environment(), ...fake,
+      execute, marker }), /credential_attestation_failed/u);
+    assert.deepEqual(fake.calls, ['attest:read-only', 'credentials:read-only']);
+    assert.deepEqual(fake.sessions, []);
+  }
 });
 
 test('execute requires both exact current source and private bootstrap run confirmations', () => {
@@ -243,6 +277,7 @@ test('execute verifies owner then renter through login, me, logout and rejects b
   assert.equal(result.status, 'fixture-login-proof-verified-sessions-revoked');
   assert.deepEqual([result.loginsVerified, result.meVerified, result.logoutsVerified,
     result.accessTokensRejected, result.activeSessions, result.activeRefreshTokens], [2, 2, 2, 2, 0, 0]);
+  assert.equal(result.credentialsAttested, 2); assert.equal(result.quiescenceReadbacks, 3);
   assert.deepEqual(fake.calls.filter((call) => call.includes('/v1/auth/login')),
     ['POST:/v1/auth/login:owner', 'POST:/v1/auth/login:renter']);
   assert.ok(fake.sessions.every((entry) => !entry.active && !entry.refreshActive));
@@ -267,8 +302,29 @@ for (const [fault, code] of [
   await assert.rejects(runFixtureLoginProof({ input, environment: environment(), ...fake,
     execute: true, marker }), new RegExp(code, 'u'));
   assert.ok(fake.sessions.every((entry) => !entry.active && !entry.refreshActive));
-  assert.equal(fake.calls.filter((call) => call === 'reconcile').length, 1);
+  assert.equal(fake.calls.filter((call) => call === 'reconcile').length, 3);
   assert.ok(fake.calls.filter((call) => call.includes('/v1/auth/login')).length <= 2);
+});
+
+test('lost login response with a session committed after first reconcile is revoked before failure returns', async () => {
+  const input = privateInput(); const fake = fakeProof(input, {
+    fault: 'login-before:owner', lateSessionAfterFirstReconcile: true,
+  });
+  await assert.rejects(runFixtureLoginProof({ input, environment: environment(), ...fake,
+    execute: true, marker }), /login-before-response/u);
+  assert.equal(fake.calls.filter((call) => call === 'POST:/v1/auth/login:owner').length, 1);
+  assert.equal(fake.calls.filter((call) => call === 'reconcile').length, 4);
+  assert.equal(fake.calls.filter((call) => call === 'quiescence').length, 3);
+  assert.equal(fake.sessions.length, 1);
+  assert.ok(fake.sessions.every((entry) => !entry.active && !entry.refreshActive));
+});
+
+test('unstable cleanup readback never becomes success and requires manual readback', async () => {
+  const input = privateInput(); const fake = fakeProof(input, { unstableCleanupReadback: true });
+  await assert.rejects(runFixtureLoginProof({ input, environment: environment(), ...fake,
+    execute: true, marker }), /cleanup_quiescence_unproven_manual_readback_required/u);
+  assert.equal(fake.calls.filter((call) => call === 'reconcile').length, 4);
+  assert.ok(fake.sessions.every((entry) => !entry.active && !entry.refreshActive));
 });
 
 test('wrong API role and unexpected MFA fail closed and reconcile', async () => {
@@ -303,6 +359,7 @@ test('real store compensation SQL scopes updates to exact IDs, session IDs and m
   const foreignId = '22222222-2222-4222-8222-222222222222';
   const client = { query: async (sql, params) => {
     queries.push({ sql, params });
+    if (String(sql).includes('SELECT id FROM users')) return { rows: [{ id: ownerId }, { id: renterId }] };
     if (String(sql).includes('SELECT id::text,user_id,revoked_at')) return { rows: [
       { id: ownedId, user_id: ownerId, revoked_at: null },
       { id: foreignId, user_id: 'foreign-user', revoked_at: null },
@@ -340,6 +397,39 @@ test('real store attestation and snapshots are enforced inside read-only transac
   assert.equal(calls.filter((sql) => sql === 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY').length, 2);
   assert.equal(calls.filter((sql) => sql === 'ROLLBACK').length, 2);
   assert.ok(calls.some((sql) => /identity_digest/u.test(sql) && /marker_login_audits/u.test(sql)));
+});
+
+test('real credential attestation is read-only and rejects hash, email, attempt, lock and encoding drift', async () => {
+  const input = privateInput();
+  const validRows = await Promise.all(input.credentials.accounts.map(async (account) => ({
+    id: account.id, email: account.email, password_hash: await encodedSecret(account[credentialField]),
+    role: 'user', account_status: 'active', deactivated_at: null, profile: { syntheticOnly: true },
+    failed_login_attempts: 0, login_locked_until: null, mfa_enabled: false,
+  })));
+  assert.equal(await verifyFixtureLoginProofPassword(input.credentials.accounts[0][credentialField],
+    validRows[0].password_hash), true);
+  const cases = [
+    ['stored hash', async (rows) => { rows[0].password_hash = await encodedSecret(crypto.randomBytes(36).toString('base64url')); }],
+    ['email', async (rows) => { rows[0].email = 'foreign@example.invalid'; }],
+    ['failed attempts', async (rows) => { rows[0].failed_login_attempts = 1; }],
+    ['login lock', async (rows) => { rows[0].login_locked_until = new Date(); }],
+    ['malformed scrypt', async (rows) => { rows[0].password_hash = 'scrypt$not-hex$also-not-hex'; }],
+  ];
+  for (const [label, mutate] of [['valid', async () => {}], ...cases]) {
+    const rows = structuredClone(validRows); await mutate(rows); const before = structuredClone(rows); const calls = [];
+    const client = { query: async (sql, params) => {
+      calls.push({ sql: String(sql), params });
+      if (String(sql).includes('SELECT account.id,account.email,account.password_hash')) return { rows };
+      return { rows: [] };
+    } };
+    const store = createFixtureLoginProofStore(client, { runId, marker });
+    if (label === 'valid') assert.deepEqual(await store.attestCredentials(input.credentials), { credentialsAttested: 2 });
+    else await assert.rejects(store.attestCredentials(input.credentials), /credential_attestation_failed/u, label);
+    assert.deepEqual(rows, before, label);
+    assert.equal(calls[0].sql, 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    assert.equal(calls.at(-1).sql, 'ROLLBACK');
+    assert.ok(!calls.some(({ sql }) => /^\s*(?:UPDATE|INSERT|DELETE)\b/u.test(sql)), label);
+  }
 });
 
 function sourceAndBinding(input) {
@@ -428,6 +518,7 @@ function hostFixture(input) {
     : 'fixture-login-proof-preflight-passed-no-mutation', executed: execute, rolesVerified: 2,
   loginsVerified: execute ? 2 : 0, meVerified: execute ? 2 : 0, logoutsVerified: execute ? 2 : 0,
   accessTokensRejected: execute ? 2 : 0, activeSessions: 0, activeRefreshTokens: 0,
+  credentialsAttested: 2, quiescenceReadbacks: execute ? 3 : 0,
   retainedSessionRecords: execute ? 2 : 0, loginAudits: execute ? 2 : 0, schemaCount: 98,
   ledgerDigest, identityDigest: '9'.repeat(64), identityUnchanged: true, effectDigest: '8'.repeat(64),
   catalogStateDigest: '7'.repeat(64), visibilityUnchanged: true,

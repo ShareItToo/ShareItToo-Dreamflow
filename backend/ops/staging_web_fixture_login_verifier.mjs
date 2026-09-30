@@ -6,6 +6,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { lstatSync, readFileSync, realpathSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { promisify } from 'node:util';
 
 import { readStablePrivateFile, writeExclusivePrivateFile } from './stable_private_file.mjs';
 
@@ -23,10 +24,13 @@ const codeRoot = '/run/sit-login-proof-code';
 const uid = 100;
 const gid = 101;
 const ids = Object.freeze(['synthetic_web_catalog_owner_v1', 'synthetic_web_catalog_renter_v1']);
+const credentialFieldName = ['pass', 'word'].join('');
 const listingId = 'synthetic_web_catalog_listing_v1';
 const uploadName = 'synthetic_web_catalog_placeholder_v1.webp';
 const digestPattern = /^[a-f0-9]{64}$/u;
 const commitPattern = /^[a-f0-9]{40}$/u;
+const scrypt = promisify(crypto.scrypt);
+const cleanupQuietWindowMs = 5000;
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const fail = (code) => { throw Object.assign(new Error(code), { code }); };
 const check = (value, code) => { if (!value) fail(code); };
@@ -34,6 +38,20 @@ const canonical = (value) => Array.isArray(value) ? value.map(canonical)
   : value && typeof value === 'object'
     ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])])) : value;
 export const fixtureLoginProofDigest = (value) => hash(JSON.stringify(canonical(value)));
+
+export async function verifyFixtureLoginProofPassword(secret, encoded) {
+  if (typeof secret !== 'string' || typeof encoded !== 'string') return false;
+  const match = /^scrypt\$([a-f0-9]{32})\$([a-f0-9]{128})$/u.exec(encoded);
+  if (!match) return false;
+  const [, saltHex, hashHex] = match;
+  try {
+    const expected = Buffer.from(hashHex, 'hex');
+    const actual = Buffer.from(await scrypt(secret, Buffer.from(saltHex, 'hex'), expected.length));
+    return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+  } catch {
+    return false;
+  }
+}
 
 function exact(value, keys, code) {
   check(value && typeof value === 'object' && !Array.isArray(value)
@@ -119,11 +137,10 @@ function parseBootstrapBytes(manifestBytes, credentialsBytes) {
   check(fixtureLoginProofDigest(manifest.preflight.roles) === fixtureLoginProofDigest(expectedRoles)
     && Array.isArray(credentials.accounts) && credentials.accounts.length === 2,
   'fixture_login_proof_bootstrap_scope_invalid');
-  const credentialField = ['pass', 'word'].join('');
   for (let index = 0; index < ids.length; index++) {
     const account = credentials.accounts[index];
-    exact(account, ['id', 'email', credentialField], 'fixture_login_proof_credentials_invalid');
-    const secret = account[credentialField];
+    exact(account, ['id', 'email', credentialFieldName], 'fixture_login_proof_credentials_invalid');
+    const secret = account[credentialFieldName];
     check(account.id === ids[index] && account.email === `${ids[index]}@example.invalid`
       && typeof secret === 'string' && secret.length >= 32 && secret.length <= 200
       && !/\s/u.test(secret) && /[A-Za-z]/u.test(secret) && /[0-9]/u.test(secret)
@@ -324,6 +341,30 @@ export function createFixtureLoginProofStore(client, { runId, marker }) {
       return Object.freeze({ schemaCount: ledger.length, ledgerDigest: fixtureLoginProofDigest(ledger) });
     } finally { await client.query('ROLLBACK'); }
   };
+  const attestCredentials = async (credentials) => {
+    await client.query('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    try {
+      await client.query("SET LOCAL statement_timeout='5s'");
+      const rows = (await client.query(`SELECT account.id,account.email,account.password_hash,
+        account.role,account.account_status,account.deactivated_at,account.profile,
+        account.failed_login_attempts,account.login_locked_until,
+        EXISTS (SELECT 1 FROM mfa_totp_factors AS factor
+          WHERE factor.user_id=account.id AND factor.status='enabled') AS mfa_enabled
+        FROM users AS account WHERE account.id=ANY($1::text[]) ORDER BY account.id`, [ids])).rows;
+      check(rows.length === ids.length, 'fixture_login_proof_credential_attestation_failed');
+      for (let index = 0; index < ids.length; index++) {
+        const account = credentials.accounts[index];
+        const row = rows.find((candidate) => candidate.id === ids[index]);
+        check(row?.email === account.email && row.role === 'user' && row.account_status === 'active'
+          && row.deactivated_at === null && row.profile?.syntheticOnly === true
+          && row.failed_login_attempts === 0 && row.login_locked_until === null
+          && row.mfa_enabled === false
+          && await verifyFixtureLoginProofPassword(account[credentialFieldName], row.password_hash),
+        'fixture_login_proof_credential_attestation_failed');
+      }
+      return Object.freeze({ credentialsAttested: ids.length });
+    } finally { await client.query('ROLLBACK'); }
+  };
   const snapshot = async ({ readOnly = false } = {}) => {
     await client.query('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
     try {
@@ -372,6 +413,10 @@ export function createFixtureLoginProofStore(client, { runId, marker }) {
     await client.query('BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE');
     try {
       await client.query("SET LOCAL statement_timeout='5s'"); await client.query("SET LOCAL lock_timeout='2s'");
+      const principals = (await client.query(`SELECT id FROM users
+        WHERE id=ANY($1::text[]) ORDER BY id FOR UPDATE`, [ids])).rows;
+      check(principals.length === ids.length && principals.every((row, index) => row.id === ids[index]),
+        'fixture_login_proof_cleanup_principal_drift');
       const rows = (await client.query(`SELECT id::text,user_id,revoked_at FROM auth_sessions
         WHERE user_agent=$1 ORDER BY user_id,id FOR UPDATE`, [marker])).rows;
       const owned = rows.filter((row) => ids.includes(row.user_id));
@@ -396,20 +441,25 @@ export function createFixtureLoginProofStore(client, { runId, marker }) {
       throw error;
     }
   };
-  return Object.freeze({ attest, snapshot, reconcile });
+  return Object.freeze({ attest, attestCredentials, snapshot, reconcile });
 }
 
 async function responseJson(response, code) {
   try { return await response.json(); } catch { fail(code); }
 }
 
-export async function runFixtureLoginProof({ input, environment, store, request, execute = false, marker }) {
+export async function runFixtureLoginProof({ input, environment, store, request, execute = false, marker,
+  sleep = (milliseconds) => new Promise((resolveSleep) => setTimeout(resolveSleep, milliseconds)) }) {
   validateFixtureLoginProofEnvironment(environment, input.manifest);
-  check(typeof request === 'function' && store?.attest && store?.snapshot && store?.reconcile
+  check(typeof request === 'function' && store?.attest && store?.attestCredentials
+    && store?.snapshot && store?.reconcile
     && /^SIT-Staging-Login-Proof\/[a-f0-9]{40}$/u.test(marker ?? '')
     && input.credentials.runId === input.manifest.preflight.runId,
   'fixture_login_proof_request_invalid');
   const database = await store.attest(input.manifest);
+  const credentialAttestation = await store.attestCredentials(input.credentials);
+  check(credentialAttestation.credentialsAttested === 2,
+    'fixture_login_proof_credential_attestation_failed');
   const before = await store.snapshot({ readOnly: true }); assertPreflightState(before);
   try {
     const headers = { 'User-Agent': marker };
@@ -430,13 +480,14 @@ export async function runFixtureLoginProof({ input, environment, store, request,
   if (!execute) return Object.freeze({ status: 'fixture-login-proof-preflight-passed-no-mutation', executed: false,
     rolesVerified: 2, loginsVerified: 0, meVerified: 0, logoutsVerified: 0, accessTokensRejected: 0,
     activeSessions: 0, activeRefreshTokens: 0, schemaCount: database.schemaCount,
+    credentialsAttested: credentialAttestation.credentialsAttested,
+    quiescenceReadbacks: 0,
     retainedSessionRecords: 0, loginAudits: 0, ledgerDigest: database.ledgerDigest,
     identityDigest: before.identityDigest, identityUnchanged: true,
     catalogStateDigest: before.catalogDigest, visibilityUnchanged: true, effectDigest,
     apiReadback: true,
     paymentMemory: true, stripeLivemode: false, registrationClosed: true, catalogEnabled: false,
     externalProvidersEnabled: false, markerSha256: hash(marker), cleanupVerified: true });
-  const credentialField = ['pass', 'word'].join('');
   const tokens = [];
   let loginsVerified = 0; let meVerified = 0; let logoutsVerified = 0; let accessTokensRejected = 0;
   let failure;
@@ -446,7 +497,7 @@ export async function runFixtureLoginProof({ input, environment, store, request,
       const headers = { 'Content-Type': 'application/json', 'User-Agent': marker,
         'X-Request-ID': `sit-login-proof-${hash(`${marker}:${role}`).slice(0, 32)}` };
       const login = await request('/v1/auth/login', { method: 'POST', headers,
-        body: JSON.stringify({ email: account.email, [credentialField]: account[credentialField] }) });
+        body: JSON.stringify({ email: account.email, [credentialFieldName]: account[credentialFieldName] }) });
       if (login.status === 202) fail('fixture_login_proof_mfa_unexpected');
       check(login.status === 200, 'fixture_login_proof_login_failed');
       const session = await responseJson(login, 'fixture_login_proof_login_response_invalid');
@@ -470,9 +521,23 @@ export async function runFixtureLoginProof({ input, environment, store, request,
       check(rejected.status === 401, 'fixture_login_proof_access_token_still_active'); accessTokensRejected++;
     }
   } catch (error) { failure = error; }
-  try { await store.reconcile(); }
-  catch { fail('fixture_login_proof_cleanup_failed'); }
-  const after = await store.snapshot(); assertPostState(before, after);
+  let previousCleanupDigest; let stableWindows = 0; let after; let quiescenceReadbacks = 0;
+  for (let round = 0; round < 4; round++) {
+    if (round > 0) await sleep(cleanupQuietWindowMs);
+    try { await store.reconcile(); }
+    catch { fail('fixture_login_proof_cleanup_failed_manual_readback_required'); }
+    after = await store.snapshot(); assertPostState(before, after); quiescenceReadbacks++;
+    const cleanupDigest = fixtureLoginProofDigest({ markerSessions: after.markerSessions,
+      markerRefreshTokens: after.markerRefreshTokens, markerActiveSessions: after.markerActiveSessions,
+      markerActiveRefreshTokens: after.markerActiveRefreshTokens,
+      activeSessions: after.activeSessions, activeRefreshTokens: after.activeRefreshTokens });
+    if (cleanupDigest === previousCleanupDigest) stableWindows++;
+    else stableWindows = 0;
+    if (stableWindows >= 2) break;
+    previousCleanupDigest = cleanupDigest;
+  }
+  check(stableWindows >= 2,
+    'fixture_login_proof_cleanup_quiescence_unproven_manual_readback_required');
   for (const token of tokens) {
     try {
       const rejected = await request('/v1/auth/me', { method: 'GET', headers: {
@@ -488,6 +553,8 @@ export async function runFixtureLoginProof({ input, environment, store, request,
   return Object.freeze({ status: 'fixture-login-proof-verified-sessions-revoked', executed: true,
     rolesVerified: 2, loginsVerified, meVerified, logoutsVerified, accessTokensRejected,
     activeSessions: after.activeSessions, activeRefreshTokens: after.activeRefreshTokens,
+    credentialsAttested: credentialAttestation.credentialsAttested,
+    quiescenceReadbacks,
     retainedSessionRecords: after.markerSessions, loginAudits: after.markerLoginAudits,
     schemaCount: database.schemaCount, ledgerDigest: database.ledgerDigest,
     identityDigest: after.identityDigest, identityUnchanged: true,
@@ -589,7 +656,8 @@ function readBinding(filePath, expectedSha256) {
 
 function validateResult(result, binding, execute) {
   exact(result, ['status', 'executed', 'rolesVerified', 'loginsVerified', 'meVerified', 'logoutsVerified',
-    'accessTokensRejected', 'activeSessions', 'activeRefreshTokens', 'retainedSessionRecords',
+    'accessTokensRejected', 'activeSessions', 'activeRefreshTokens', 'credentialsAttested',
+    'quiescenceReadbacks', 'retainedSessionRecords',
     'loginAudits', 'schemaCount', 'ledgerDigest', 'identityDigest', 'identityUnchanged',
     'catalogStateDigest', 'visibilityUnchanged', 'effectDigest', 'apiReadback',
     'paymentMemory', 'stripeLivemode', 'registrationClosed', 'catalogEnabled',
@@ -600,6 +668,10 @@ function validateResult(result, binding, execute) {
   check(result.executed === expected[0] && result.status === expected[1] && result.rolesVerified === expected[2]
     && result.loginsVerified === expected[3] && result.meVerified === expected[4] && result.logoutsVerified === expected[5]
     && result.accessTokensRejected === (execute ? 2 : 0) && result.activeSessions === 0
+    && result.credentialsAttested === 2
+    && (execute ? Number.isInteger(result.quiescenceReadbacks)
+      && result.quiescenceReadbacks >= 3 && result.quiescenceReadbacks <= 4
+      : result.quiescenceReadbacks === 0)
     && result.retainedSessionRecords === (execute ? 2 : 0) && result.loginAudits === (execute ? 2 : 0)
     && result.activeRefreshTokens === 0 && result.schemaCount === 98
     && digestPattern.test(result.ledgerDigest ?? '') && digestPattern.test(result.identityDigest ?? '')
@@ -670,7 +742,9 @@ export async function runFixtureLoginProofContainer({ binding, source, execute =
       roleDigest: binding.roleDigest, markerSha256: binding.markerSha256, rolesVerified: result.rolesVerified,
       loginsVerified: result.loginsVerified, meVerified: result.meVerified, logoutsVerified: result.logoutsVerified,
       accessTokensRejected: result.accessTokensRejected, activeSessions: result.activeSessions,
-      activeRefreshTokens: result.activeRefreshTokens, retainedSessionRecords: result.retainedSessionRecords,
+      activeRefreshTokens: result.activeRefreshTokens, credentialsAttested: result.credentialsAttested,
+      quiescenceReadbacks: result.quiescenceReadbacks,
+      retainedSessionRecords: result.retainedSessionRecords,
       loginAudits: result.loginAudits, schemaCount: result.schemaCount, ledgerDigest: result.ledgerDigest,
       identityDigest: result.identityDigest, identityUnchanged: result.identityUnchanged,
       catalogStateDigest: result.catalogStateDigest, visibilityUnchanged: result.visibilityUnchanged,

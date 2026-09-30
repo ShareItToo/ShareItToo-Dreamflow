@@ -13,6 +13,7 @@ import { generateFixtureDraft } from '../ops/staging_web_fixture_draft.mjs';
 import { programmaticPlaceholder } from './fixtures/programmatic_placeholder.mjs';
 import { bootstrapFileStore, buildFixtureBootstrapManifest, dedicatedFixture, runFixtureBootstrap,
   fixtureBootstrapHandoff } from '../ops/staging_web_fixture_bootstrap.mjs';
+import { createFixtureLoginProofStore, loginProofMarker } from '../ops/staging_web_fixture_login_verifier.mjs';
 import { fixtureDigest, fixtureEnvironmentDigest, fixtureNotice, fixtureTarget,
   isolatedFixtureRehearsal, readFixtureSnapshot } from '../ops/staging_web_fixture_preflight.mjs';
 
@@ -115,7 +116,7 @@ test('PG16 fixture adapter uses real schema, transactions, triggers and two clie
       assert.equal(ledger.length, 98);
       assert.deepEqual((await client.query('SELECT name,checksum FROM schema_migrations ORDER BY name')).rows, ledger);
 
-      await t.test('dedicated seed never touches old principals; real rollback, commit-unknown, replay and cleanup', async () => {
+      await t.test('dedicated seed/login proof use real credential attest, scoped reconcile, rollback and cleanup', async () => {
         const old = await seed(client);
         await client.query('UPDATE users SET email=$1 WHERE id=$2', ['untouched@example.com', old.manifest.preflight.roles[0].userId]);
         const oldBefore = await readFixtureSnapshot(client, old.manifest.preflight);
@@ -157,6 +158,78 @@ test('PG16 fixture adapter uses real schema, transactions, triggers and two clie
           await assert.rejects(runFixtureBootstrap({ ...input, ...execute, client: unknownClient }), /commit_unknown_file_retained/u);
           assert.equal(await count(), 2); assert.equal(files.inspect(), 'owned');
           assert.equal((await runFixtureBootstrap({ ...input, ...execute })).status, 'dedicated-seed-already-prepared-runtime-blocked');
+
+          const proofMarker = loginProofMarker(manifest.preflight.runId, sha(randomUUID()).slice(0, 32));
+          const proofStore = createFixtureLoginProofStore(client, { runId: manifest.preflight.runId, marker: proofMarker });
+          const proofCredentials = { accounts: [dedicatedFixture.owner, dedicatedFixture.renter].map((id, index) => ({
+            id, email: `${id}@example.invalid`, password: passwords[index],
+          })) };
+          const principalsBefore = (await client.query(`SELECT id,email,password_hash,role,account_status,
+            deactivated_at,profile,failed_login_attempts,login_locked_until FROM users
+            WHERE id=ANY($1::text[]) ORDER BY id`, [[dedicatedFixture.owner, dedicatedFixture.renter]])).rows;
+          assert.deepEqual(await proofStore.attest(manifest), { schemaCount: 98, ledgerDigest: source.ledgerDigest });
+          assert.deepEqual(await proofStore.attestCredentials(proofCredentials), { credentialsAttested: 2 });
+          assert.equal((await client.query('SHOW transaction_read_only')).rows[0].transaction_read_only, 'off');
+          assert.deepEqual((await client.query(`SELECT id,email,password_hash,role,account_status,
+            deactivated_at,profile,failed_login_attempts,login_locked_until FROM users
+            WHERE id=ANY($1::text[]) ORDER BY id`, [[dedicatedFixture.owner, dedicatedFixture.renter]])).rows,
+          principalsBefore);
+          const proofBefore = await proofStore.snapshot({ readOnly: true });
+          assert.equal(proofBefore.users, 2); assert.equal(proofBefore.seedAudits, 1);
+          assert.equal(proofBefore.activeSessions, 0); assert.equal(proofBefore.activeRefreshTokens, 0);
+
+          const ownedSessionIds = [randomUUID(), randomUUID()];
+          for (let index = 0; index < ownedSessionIds.length; index++) {
+            await client.query(`INSERT INTO auth_sessions (id,user_id,device_label,user_agent)
+              VALUES ($1,$2,'Bounded login proof integration',$3)`,
+            [ownedSessionIds[index], proofCredentials.accounts[index].id, proofMarker]);
+            await client.query(`INSERT INTO refresh_tokens
+              (user_id,session_id,family_id,token_hash,expires_at,user_agent)
+              VALUES ($1,$2,$2,$3,now()+interval '1 hour',$4)`,
+            [proofCredentials.accounts[index].id, ownedSessionIds[index], sha(randomUUID()), proofMarker]);
+          }
+          assert.deepEqual(await proofStore.reconcile(), { matchedSessions: 2 });
+          const ownedReadback = (await client.query(`SELECT session.id,session.revoked_reason,
+            token.revoked_reason AS refresh_reason FROM auth_sessions AS session
+            JOIN refresh_tokens AS token ON token.session_id=session.id
+            WHERE session.id=ANY($1::uuid[]) ORDER BY session.id`, [ownedSessionIds])).rows;
+          assert.equal(ownedReadback.length, 2);
+          assert.ok(ownedReadback.every((row) => row.revoked_reason === 'staging_fixture_login_proof'
+            && row.refresh_reason === 'staging_fixture_login_proof'));
+          const proofAfter = await proofStore.snapshot({ readOnly: true });
+          assert.equal(proofAfter.markerSessions, 2); assert.equal(proofAfter.markerRefreshTokens, 2);
+          assert.equal(proofAfter.markerActiveSessions, 0); assert.equal(proofAfter.markerActiveRefreshTokens, 0);
+          assert.equal(proofAfter.identityDigest, proofBefore.identityDigest);
+          assert.equal(proofAfter.catalogDigest, proofBefore.catalogDigest);
+
+          const ambiguousMarker = loginProofMarker(manifest.preflight.runId, sha(randomUUID()).slice(0, 32));
+          const foreignUserId = `fixture-login-proof-foreign-${randomUUID()}`;
+          const scopedSessionId = randomUUID(); const foreignSessionId = randomUUID();
+          await client.query(`INSERT INTO users (id,email,profile,role,account_status)
+            VALUES ($1,$2,'{}'::jsonb,'user','active')`, [foreignUserId, `${foreignUserId}@example.invalid`]);
+          for (const [sessionId, userId] of [[scopedSessionId, dedicatedFixture.owner], [foreignSessionId, foreignUserId]]) {
+            await client.query(`INSERT INTO auth_sessions (id,user_id,device_label,user_agent)
+              VALUES ($1,$2,'Foreign retention integration',$3)`, [sessionId, userId, ambiguousMarker]);
+            await client.query(`INSERT INTO refresh_tokens
+              (user_id,session_id,family_id,token_hash,expires_at,user_agent)
+              VALUES ($1,$2,$2,$3,now()+interval '1 hour',$4)`,
+            [userId, sessionId, sha(randomUUID()), ambiguousMarker]);
+          }
+          const ambiguousStore = createFixtureLoginProofStore(client,
+            { runId: manifest.preflight.runId, marker: ambiguousMarker });
+          await assert.rejects(ambiguousStore.reconcile(), /marker_ambiguous/u);
+          const ambiguityReadback = (await client.query(`SELECT session.id,session.revoked_at,
+            token.revoked_at AS refresh_revoked_at FROM auth_sessions AS session
+            JOIN refresh_tokens AS token ON token.session_id=session.id
+            WHERE session.id=ANY($1::uuid[]) ORDER BY session.id`, [[scopedSessionId, foreignSessionId]])).rows;
+          assert.ok(ambiguityReadback.find((row) => row.id === scopedSessionId).revoked_at);
+          assert.ok(ambiguityReadback.find((row) => row.id === scopedSessionId).refresh_revoked_at);
+          assert.equal(ambiguityReadback.find((row) => row.id === foreignSessionId).revoked_at, null);
+          assert.equal(ambiguityReadback.find((row) => row.id === foreignSessionId).refresh_revoked_at, null);
+          await client.query('DELETE FROM auth_sessions WHERE id=ANY($1::uuid[])',
+            [[...ownedSessionIds, scopedSessionId, foreignSessionId]]);
+          await client.query('DELETE FROM users WHERE id=$1', [foreignUserId]);
+
           const handoff = fixtureBootstrapHandoff(manifest, old.environment);
           const projected = { ...old.environment, ...handoff.proposed };
           const draft = await generateFixtureDraft({ source, environment: projected, photo: media.photo, client,
