@@ -13,6 +13,7 @@ import {
   runCommand,
 } from './activate_staging_google_auth.mjs';
 import { readStablePrivateFile } from './stable_private_file.mjs';
+import { assertCorsBinding, assertCorsPreState, corsAfter, corsBefore, corsManifestKind, isCorsTransition, readCorsUserCounts, readCorsWitnesses, withCorsTransitionLock } from './staging_web_cors_transition.mjs';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const requiredTerminalMigration = '098_booking_checkout_declaration_constraints.up.sql';
@@ -24,13 +25,20 @@ const apiContainer = 'shareittoo-staging-api';
 
 const finalizationKind = 'sit-staging-google-registration-finalization-runtime-manifest';
 const isFinalization = (manifest) => manifest?.kind === finalizationKind;
-const rollbackName = (manifest) => `${manifest.apiContainer}-google-registration-${isFinalization(manifest) ? 'finalization-' : ''}rollback-${manifest.runtimeRevision.slice(0, 12)}`;
+const rollbackName = (manifest) => isCorsTransition(manifest)
+  ? `${manifest.apiContainer}-web-cors-rollback-${manifest.apiContainerId.slice(0, 12)}`
+  : `${manifest.apiContainer}-google-registration-${isFinalization(manifest) ? 'finalization-' : ''}rollback-${manifest.runtimeRevision.slice(0, 12)}`;
 
-export function assertGoogleRegistrationRuntimeManifest(manifest, { finalize = false } = {}) {
-  if (manifest?.kind !== (finalize ? finalizationKind : 'sit-staging-google-registration-runtime-manifest')
+export function assertGoogleRegistrationRuntimeManifest(manifest, { finalize = false, cors = false } = {}) {
+  if ((cors && finalize) || manifest?.kind !== (cors ? corsManifestKind : finalize ? finalizationKind : 'sit-staging-google-registration-runtime-manifest')
       || manifest?.safetyEnv?.FIREBASE_AUTH_ENABLED !== 'true'
       || !/^[0-9a-f]{64}$/u.test(manifest?.apiContainerId ?? '')) fail('registration_manifest_pre_state_invalid');
   const { apiContainerId, ...shared } = manifest;
+  if (cors) {
+    assertCorsBinding(shared.corsBinding);
+    delete shared.corsBinding;
+    shared.kind = 'sit-staging-google-registration-runtime-manifest';
+  }
   if (finalize) {
     exactKeys(shared.finalizationBinding, ['mappingDigest', 'allowedUserIdsDigest', 'allowedUserIdsCount'], 'finalization_binding_invalid');
     if (!/^[0-9a-f]{64}$/u.test(shared.finalizationBinding.mappingDigest ?? '')
@@ -43,7 +51,7 @@ export function assertGoogleRegistrationRuntimeManifest(manifest, { finalize = f
   // Reuse the topology schema, while this successor binds the already-enabled
   // Firebase pre-state and the immutable current container explicitly.
   const validated = assertGoogleAuthRuntimeManifest(shared, { registrationSuccessor: true });
-  return Object.freeze({ ...validated, kind: manifest.kind, apiContainerId, safetyEnv: Object.freeze({ ...manifest.safetyEnv }), ...(finalize ? { finalizationBinding: Object.freeze({ ...manifest.finalizationBinding }) } : {}) });
+  return Object.freeze({ ...validated, kind: manifest.kind, apiContainerId, safetyEnv: Object.freeze({ ...manifest.safetyEnv }), ...(finalize ? { finalizationBinding: Object.freeze({ ...manifest.finalizationBinding }) } : {}), ...(cors ? { corsBinding: Object.freeze({ ...manifest.corsBinding }) } : {}) });
 }
 
 export function readGoogleRegistrationRuntimeManifest(filePath, options) {
@@ -189,6 +197,16 @@ function normalizedContainer(record, omitRegistrationEnv = false) {
 
 function sameExceptRegistrationFlags(left, right) {
   return JSON.stringify(normalizedContainer(left, true)) === JSON.stringify(normalizedContainer(right, true));
+}
+
+function assertCorsDelta(originalApi, replacement) {
+  if (!/^sha256:[a-f0-9]{64}$/u.test(originalApi?.Image ?? '') || replacement?.Image !== originalApi.Image) fail('replacement_cors_image_drift');
+  const original = normalizedContainer(originalApi);
+  const next = normalizedContainer(replacement);
+  if (original.config.env.CORS_ORIGINS !== corsBefore || next.config.env.CORS_ORIGINS !== corsAfter) fail('replacement_cors_delta_invalid');
+  delete original.config.env.CORS_ORIGINS;
+  delete next.config.env.CORS_ORIGINS;
+  if (JSON.stringify(original) !== JSON.stringify(next)) fail('replacement_cors_config_drift');
 }
 
 const diagnosticShape = normalizedContainer({});
@@ -364,7 +382,11 @@ function assertPreState({ values, api, manifest, mapping }) {
       || values.STRIPE_LIVEMODE !== 'false'
       || values.SIT_STAGING_ACCESS_GATE_ENABLED !== 'true') fail('runtime_pre_state_invalid');
   const enabled = values[registrationEnabledKey];
-  if (isFinalization(manifest)) {
+  if (isCorsTransition(manifest)) {
+    if (enabled !== 'false' || String(values[registrationAllowlistKey] ?? '') !== ''
+        || values.CORS_ORIGINS !== corsBefore) fail('cors_prestate_invalid');
+    allowedUserIds(values[allowedUserIdsKey]);
+  } else if (isFinalization(manifest)) {
     if (enabled !== 'true' || values[registrationAllowlistKey] !== `${mapping.digest}=${mapping.userId}`) fail('finalization_enabled_lane_mismatch');
     const ids = allowedUserIds(values[allowedUserIdsKey]);
     if (!ids.includes(mapping.userId) || ids.length !== manifest.finalizationBinding.allowedUserIdsCount
@@ -443,7 +465,7 @@ export function buildGoogleRegistrationPreflightCommands(manifest, mapping) {
     { phase: 'current_image_inspect', command: 'docker', args: ['image', 'inspect', '--format', '{{json .}}', manifest.image] },
     { phase: 'sealed_name_conflict_check', command: 'docker', args: ['ps', '--all', '--filter', `name=^/${rollbackName(manifest)}$`, '--format', '{{.Names}}'] },
     dbExec('current_database_probe', 'SELECT 1'),
-    ...(isFinalization(manifest) ? [dbExec('current_enrolled_identity_readback', buildEnrolledIdentitySql(mapping))] : [dbExec('current_mapping_target_absent', `SELECT count(*) FROM users WHERE encode(sha256(convert_to(id, 'UTF8')), 'hex') = '${sha256(mapping.userId)}'`)]),
+    ...(isCorsTransition(manifest) ? [] : isFinalization(manifest) ? [dbExec('current_enrolled_identity_readback', buildEnrolledIdentitySql(mapping))] : [dbExec('current_mapping_target_absent', `SELECT count(*) FROM users WHERE encode(sha256(convert_to(id, 'UTF8')), 'hex') = '${sha256(mapping.userId)}'`)]),
     dbExec('current_schema_migration_readback', 'SELECT name FROM schema_migrations ORDER BY applied_at DESC LIMIT 1'),
     { phase: 'current_migration_ledger_readback', command: 'docker', args: ['exec', manifest.databaseContainer, 'sh', '-c', `set -eu; psql -X --set ON_ERROR_STOP=1 -U '${manifest.databaseUser}' -d '${manifest.databaseName}' -Atc "SELECT string_agg(name || '|' || checksum, E'\\n' ORDER BY name) FROM schema_migrations" | sha256sum | awk '{print $1}'`] },
     runtimeProbe('current_live_probe', "const r=await fetch('http://127.0.0.1:8080/health/live'); process.stdout.write(JSON.stringify({status:r.status,payload:await r.json()})); if(r.status!==200) process.exit(1)"),
@@ -515,6 +537,17 @@ async function collectPreflight(manifest, command, mapping, originalEnv) {
   for (const [name, value] of Object.entries(values)) {
     if (apiValues[name] !== value) fail('env_file_container_drift');
   }
+  if (isCorsTransition(manifest)) {
+    assertCorsPreState(manifest, readbacks.api, originalEnv, values);
+    if (!/^sha256:[a-f0-9]{64}$/u.test(readbacks.api?.Image ?? '') || readbacks.api.Image !== readbacks.image?.Id) fail('cors_current_image_binding_invalid');
+    buildReplacementCreateArgs({ manifest, envFile: manifest.envFile, currentApi: readbacks.api, networkName: primaryNetworkMode });
+    const probe = await command('docker', ['exec', manifest.apiContainerId, 'node', '--input-type=module', '-e', `process.env.CORS_ORIGINS=${JSON.stringify(corsAfter)};const {config}=await import('./src/config.js');process.stdout.write(JSON.stringify({origins:config.corsOrigins,registration:config.stagingGoogleRegistration.enabled,accessGate:config.stagingAccess.enabled}));`], { phase: 'candidate_cors_config_import' });
+    const parsed = parseJson(probe.stdout, 'candidate_cors_config_invalid');
+    if (JSON.stringify(parsed.origins) !== JSON.stringify(corsAfter.split(',')) || parsed.registration !== false || parsed.accessGate !== true) fail('candidate_cors_config_invalid');
+    readbacks.corsWitnesses = await readCorsWitnesses({ manifest, command, phase: 'current_cors' });
+    readbacks.corsUserCounts = await readCorsUserCounts(manifest, command, 'current_cors_user_counts');
+    return Object.freeze({ entries: Object.freeze([...entries, ...['candidate_cors_config_import', 'current_cors_shareittoo-api_witness', 'current_cors_shareittoo-web_witness', 'current_cors_external_readback', 'current_cors_user_counts'].map((phase) => ({ phase }))]), readbacks, primaryNetworkMode });
+  }
   const nextValues = {
     [registrationEnabledKey]: finalize ? 'false' : 'true',
     [registrationAllowlistKey]: finalize ? '' : `${mapping.digest}=${mapping.userId}`,
@@ -579,6 +612,7 @@ function isExactOriginalContainer(record, manifest, originalApi, name, stopped =
     if (record?.Name?.replace(/^\//u, '') !== name
         || !originalApi?.Id || record?.Id !== originalApi.Id
         || record?.Config?.Image !== originalApi.Config?.Image
+        || (isCorsTransition(manifest) && record?.Image !== originalApi.Image)
         || !sameOriginalContainer(originalApi, record)) return false;
     assertNetworks(record, manifest, 'original_identity_network_invalid');
     assertNoHostPort(record, 'original_identity_host_port_invalid');
@@ -596,6 +630,12 @@ function isExactCreatedReplacement(record, manifest, originalApi, name, expected
     assertReplacementImageReadback(record, manifest, 'replacement_identity_image_invalid');
     const comparable = structuredClone(record);
     comparable.Config.Image = originalApi.Config.Image;
+    if (isCorsTransition(manifest)) {
+      assertCorsDelta(originalApi, comparable);
+      if (JSON.stringify(Object.keys(record?.NetworkSettings?.Networks ?? {}).sort()) !== JSON.stringify([manifest.network])) return false;
+      assertNoHostPort(record, 'replacement_identity_host_port_invalid');
+      return true;
+    }
     const separator = expectedAllowlist.indexOf('=');
     assertRegistrationDelta(originalApi, comparable, { digest: expectedAllowlist.slice(0, separator), userId: expectedAllowlist.slice(separator + 1) }, isFinalization(manifest));
     const entries = record?.Config?.Env ?? [];
@@ -873,6 +913,11 @@ async function writeEvidence(filePath, evidence) {
 
 export const runStagingGoogleRegistrationEnable = (options) => runRegistrationTransition(options, false);
 export const runStagingGoogleRegistrationFinalize = (options) => runRegistrationTransition(options, true);
+export const runStagingWebCorsTransition = async (options = {}) => withCorsTransitionLock(
+  assertGoogleRegistrationRuntimeManifest(options.manifest, { cors: true }),
+  options.execute === true,
+  () => runRegistrationTransition(options, false, true),
+);
 
 async function runRegistrationTransition({
   manifest,
@@ -881,19 +926,20 @@ async function runRegistrationTransition({
   command = runCommand,
   commandEnv = process.env,
   execute = false,
-} = {}, finalize = false) {
-  const target = assertGoogleRegistrationRuntimeManifest(manifest, { finalize });
+} = {}, finalize = false, cors = false) {
+  const target = assertGoogleRegistrationRuntimeManifest(manifest, { finalize, cors });
   if (typeof command !== 'function') fail('command_runner_required');
   if (target.apiContainer !== apiContainer) fail('target_api_container_invalid');
-  const mapping = readRegistrationMapping(mappingFile);
+  // Only injected deterministic executors may use local fixture paths.
+  if (cors && command === runCommand && target.envFile !== '/docker/shareittoo/ops/green.env') fail('cors_live_env_path_invalid');
+  const mapping = cors ? null : readRegistrationMapping(mappingFile);
   if (finalize && mapping.mappingDigest !== target.finalizationBinding.mappingDigest) fail('finalization_mapping_binding_mismatch');
   const original = await readEnv(target);
   const preflight = await collectPreflight(target, command, mapping, original.content);
-  const confirmedMapping = readRegistrationMapping(mappingFile);
-  if (confirmedMapping.content !== mapping.content) fail('mapping_changed_since_preflight');
-  const firstIrreversiblePhase = finalize ? 'atomic_registration_finalize' : 'atomic_registration_enable';
-  if (!execute) return Object.freeze({ status: 'preflight-passed-no-mutation', firstIrreversiblePhase, mappingDigest: mapping.mappingDigest, commands: Object.freeze(preflight.entries.map((entry) => entry.phase)) });
-  const prefix = finalize ? 'STAGING_GOOGLE_REGISTRATION_FINALIZE' : 'STAGING_GOOGLE_REGISTRATION';
+  if (!cors && readRegistrationMapping(mappingFile).content !== mapping.content) fail('mapping_changed_since_preflight');
+  const firstIrreversiblePhase = cors ? 'atomic_cors_enable' : finalize ? 'atomic_registration_finalize' : 'atomic_registration_enable';
+  if (!execute) return Object.freeze({ status: 'preflight-passed-no-mutation', firstIrreversiblePhase, ...(cors ? { envSha256: sha256(original.content), changedEnvironmentKeys: ['CORS_ORIGINS'] } : { mappingDigest: mapping.mappingDigest }), commands: Object.freeze(preflight.entries.map((entry) => entry.phase)) });
+  const prefix = cors ? 'STAGING_WEB_CORS' : finalize ? 'STAGING_GOOGLE_REGISTRATION_FINALIZE' : 'STAGING_GOOGLE_REGISTRATION';
   if (commandEnv[`${prefix}_EXECUTE`] !== '1'
       || commandEnv[`${prefix}_CONFIRM`] !== target.runtimeRevision) fail('explicit_execute_confirmation_required');
   if (typeof evidenceFile !== 'string' || !evidenceFile) fail('evidence_path_required');
@@ -904,7 +950,7 @@ async function runRegistrationTransition({
   let replacementCreated = false;
   let replacementId = null;
   let envMutationOwned = false;
-  const appliedEnv = registrationEnv(original.content, mapping, finalize);
+  const appliedEnv = cors ? replaceEnvKey(original.content, 'CORS_ORIGINS', corsAfter) : registrationEnv(original.content, mapping, finalize);
   const verifyEnrollment = async (phase) => {
     const result = await command('docker', ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', target.databaseUser, '-d', target.databaseName, '-Atc', buildEnrolledIdentitySql(mapping)], { phase, env: commandEnv });
     if (String(result.stdout ?? '').trim() !== '1|1|1') fail('finalization_enrolled_identity_mismatch');
@@ -914,6 +960,10 @@ async function runRegistrationTransition({
     const unchangedRecord = parseJson(unchangedApi.stdout, 'pre_mutation_api_readback_invalid');
     assertOriginalIdentity(unchangedRecord, target, preflight.readbacks.api, target.apiContainer, 'pre_mutation_api_changed');
     if (unchangedRecord.State?.Running !== true) fail('pre_mutation_api_stopped');
+    if (cors) {
+      assertCorsPreState(target, unchangedRecord, (await readEnv(target)).content, original.values);
+      await readCorsWitnesses({ manifest: target, command, phase: 'pre_mutation_cors' });
+    }
     if (finalize) await verifyEnrollment('pre_mutation_enrolled_identity_readback');
     await applyRegistrationFlags(target, original.content, appliedEnv);
     envMutationOwned = true;
@@ -947,20 +997,38 @@ async function runRegistrationTransition({
     assertReplacementImageReadback(replacementRecord, target);
     const comparableReplacement = structuredClone(replacementRecord);
     comparableReplacement.Config.Image = preflight.readbacks.api.Config.Image;
-    assertRegistrationDelta(preflight.readbacks.api, comparableReplacement, mapping, finalize);
+    if (cors) assertCorsDelta(preflight.readbacks.api, comparableReplacement);
+    else assertRegistrationDelta(preflight.readbacks.api, comparableReplacement, mapping, finalize);
     assertNoHostPort(replacementRecord);
     assertNetworks(replacementRecord, target);
     boundPrimaryNetworkMode(replacementRecord, target, preflight.readbacks.network, preflight.readbacks.providerNetwork);
-    const startup = await runBoundedStartupProbe(command, target.apiContainer, commandEnv, 'replacement_public_runtime_probe');
+    const startup = await runBoundedStartupProbe(command, cors ? replacementId : target.apiContainer, commandEnv, 'replacement_public_runtime_probe');
     assertRuntimeFlags(startup.flags, null);
     if (startup.version?.commit !== target.runtimeRevision || startup.version?.environment !== 'test') fail('replacement_version_readback_invalid');
     const registration = await command('docker', ['exec', target.apiContainer, 'node', '--input-type=module', '-e', `import crypto from 'node:crypto'; const raw=process.env.${registrationAllowlistKey}??''; process.stdout.write(JSON.stringify({enabled:process.env.${registrationEnabledKey}==='true',allowlist:raw?'present':'absent',allowlistDigest:crypto.createHash('sha256').update(raw).digest('hex'),allowlistEntryCount:raw?raw.split(',').length:0,accessGateEnabled:process.env.SIT_STAGING_ACCESS_GATE_ENABLED==='true'}));`], { phase: 'replacement_registration_config_readback', env: commandEnv });
     const registrationReadback = parseRegistrationConfigReadback(registration.stdout);
-    if (registrationReadback.enabled !== !finalize || registrationReadback.allowlist !== (finalize ? 'absent' : 'present') || registrationReadback.allowlistEntryCount !== (finalize ? 0 : 1) || registrationReadback.accessGateEnabled !== true || registrationReadback.allowlistDigest !== sha256(finalize ? '' : `${mapping.digest}=${mapping.userId}`)) fail('registration_config_readback_invalid');
+    const closeLane = finalize || cors;
+    if (registrationReadback.enabled !== !closeLane || registrationReadback.allowlist !== (closeLane ? 'absent' : 'present') || registrationReadback.allowlistEntryCount !== (closeLane ? 0 : 1) || registrationReadback.accessGateEnabled !== true || registrationReadback.allowlistDigest !== sha256(closeLane ? '' : `${mapping.digest}=${mapping.userId}`)) fail('registration_config_readback_invalid');
     const schema = await command('docker', ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', target.databaseUser, '-d', target.databaseName, '-Atc', 'SELECT name FROM schema_migrations ORDER BY applied_at DESC LIMIT 1'], { phase: 'replacement_schema_readback', env: commandEnv });
     assertTerminalMigration(schema.stdout);
     const ledger = await command('docker', ['exec', target.databaseContainer, 'sh', '-c', `set -eu; psql -X --set ON_ERROR_STOP=1 -U '${target.databaseUser}' -d '${target.databaseName}' -Atc "SELECT string_agg(name || '|' || checksum, E'\\n' ORDER BY name) FROM schema_migrations" | sha256sum | awk '{print $1}'`], { phase: 'replacement_migration_ledger_readback', env: commandEnv });
     parseSchemaLedger(ledger.stdout);
+    if (cors) {
+      if ((await readEnv(target)).content !== appliedEnv) fail('final_env_readback_drift');
+      const seal = await command('docker', ['inspect', '--format', '{{json .}}', preflight.readbacks.api.Id], { phase: 'cors_rollback_seal_readback' });
+      const sealedRecord = parseJson(seal.stdout, 'cors_rollback_seal_invalid');
+      if (!isExactOriginalContainer(sealedRecord, target, preflight.readbacks.api, sealedName)) fail('cors_rollback_seal_invalid');
+      const config = await command('docker', ['exec', replacementId, 'node', '--input-type=module', '-e', "const {config}=await import('./src/config.js');process.stdout.write(JSON.stringify({origins:config.corsOrigins,registration:config.stagingGoogleRegistration.enabled,accessGate:config.stagingAccess.enabled}));"], { phase: 'replacement_cors_config_import' });
+      const parsed = parseJson(config.stdout, 'replacement_cors_config_invalid');
+      if (JSON.stringify(parsed.origins) !== JSON.stringify(corsAfter.split(',')) || parsed.registration !== false || parsed.accessGate !== true) fail('replacement_cors_config_invalid');
+      if (await readCorsUserCounts(target, command, 'pre_external_cors_user_counts') !== preflight.readbacks.corsUserCounts) fail('cors_user_counts_changed');
+      const proof = await readCorsWitnesses({ manifest: target, command, phase: 'replacement_cors', includeCors: true });
+      if (await readCorsUserCounts(target, command, 'final_cors_user_counts') !== preflight.readbacks.corsUserCounts) fail('cors_user_counts_changed');
+      if ((await readEnv(target)).content !== appliedEnv) fail('final_env_readback_drift');
+      const result = Object.freeze({ status: 'staging-web-cors-enabled-registration-closed', firstIrreversiblePhase, changedEnvironmentKeys: ['CORS_ORIGINS'], corsOrigins: corsAfter, envSha256Before: sha256(original.content), envSha256After: sha256(appliedEnv), sealedName, originalContainerId: preflight.readbacks.api.Id, replacementContainerId: replacementId, ...proof, userCountsUnchanged: true });
+      await writeEvidence(evidenceFile, { kind: 'sit-staging-web-cors-transition', schemaVersion: 1, runtimeRevision: target.runtimeRevision, imageDigest: target.imageDigest, schemaMigration: requiredTerminalMigration, migrationLedger: requiredMigrationLedger, ...result });
+      return result;
+    }
     const invalidToken = await command('docker', ['exec', target.apiContainer, 'node', '--input-type=module', '-e', "const r=await fetch('http://127.0.0.1:8080/v1/auth/social',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({idToken:'synthetic-invalid-token'}),signal:AbortSignal.timeout(5000)});const p=await r.json();process.stdout.write(JSON.stringify({status:r.status,error:p.error}));if(r.status!==401||p.error!=='invalid_social_token')process.exit(1)"], { phase: 'replacement_invalid_social_token_probe', env: commandEnv });
     const invalidTokenPayload = parseJson(invalidToken.stdout, 'invalid_social_token_probe_invalid');
     if (invalidTokenPayload.status !== 401 || invalidTokenPayload.error !== 'invalid_social_token') fail('invalid_social_token_probe_invalid');
@@ -971,7 +1039,15 @@ async function runRegistrationTransition({
     return result;
   } catch (error) {
     envMutationOwned ||= error.envReplaced === true;
-    error.rollback = await rollback({ manifest: target, originalEnv: original.content, appliedEnv, envMutationOwned, originalApi: preflight.readbacks.api, expectedAllowlist: `${mapping.digest}=${mapping.userId}`, command, commandEnv, sealedName, sealed, currentStopped, stopStateUnknown: error.stopStateUnknown === true, replacementCreated, replacementId, createResponseUnknown: error.createResponseUnknown === true, renameResponseUnknown: error.renameResponseUnknown === true });
+    error.rollback = await rollback({ manifest: target, originalEnv: original.content, appliedEnv, envMutationOwned, originalApi: preflight.readbacks.api, expectedAllowlist: cors ? '' : `${mapping.digest}=${mapping.userId}`, command, commandEnv, sealedName, sealed, currentStopped, stopStateUnknown: error.stopStateUnknown === true, replacementCreated, replacementId, createResponseUnknown: error.createResponseUnknown === true, renameResponseUnknown: error.renameResponseUnknown === true });
+    if (cors) {
+      try {
+        await readCorsWitnesses({ manifest: target, command, phase: 'rollback_cors' });
+        if (await readCorsUserCounts(target, command, 'rollback_cors_user_counts') !== preflight.readbacks.corsUserCounts) fail('cors_user_counts_changed');
+      } catch (witnessError) {
+        error.rollback = { ...error.rollback, restored: false, results: [...error.rollback.results, { phase: 'rollback_cors_witnesses', ok: false, code: witnessError.code ?? 'cors_witness_failed' }] };
+      }
+    }
     throw error;
   }
 }

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { chmod, lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import test from 'node:test';
 import { join } from 'node:path';
@@ -11,9 +12,17 @@ import {
   readRegistrationMapping,
   runStagingGoogleRegistrationEnable,
   runStagingGoogleRegistrationFinalize,
+  runStagingWebCorsTransition,
   buildEnrolledIdentitySql,
   sanitizeGoogleRegistrationEnableError,
 } from '../ops/enable_staging_google_registration.mjs';
+import { corsAfter, corsBefore, corsContainerFingerprint, corsManifestKind } from '../ops/staging_web_cors_transition.mjs';
+import { greenWebCorsOrigins } from '../ops/green_staging_promotion.mjs';
+
+const corsOptions = (fx, command, execute = true) => ({
+  manifest: fx.manifest, evidenceFile: fx.evidenceFile, command, execute,
+  commandEnv: { STAGING_WEB_CORS_EXECUTE: '1', STAGING_WEB_CORS_CONFIRM: revision },
+});
 
 const revision = '0123456789abcdef0123456789abcdef01234567';
 const imageDigest = `sha256:${'a'.repeat(64)}`;
@@ -43,7 +52,7 @@ function mappingLine() {
   return `${mappingDigest}=${userId}\n`;
 }
 
-async function fixture({ apiContainer = 'shareittoo-staging-api', image = `registry.example/shareittoo-api:${revision}`, mapping = mappingLine(), hostname = null, finalize = false } = {}) {
+async function fixture({ apiContainer = 'shareittoo-staging-api', image = `registry.example/shareittoo-api:${revision}`, mapping = mappingLine(), hostname = null, finalize = false, cors = false } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'sit-google-registration-enable-'));
   const envFile = join(root, 'green.env');
   const mappingFile = join(root, 'mapping.txt');
@@ -52,7 +61,7 @@ async function fixture({ apiContainer = 'shareittoo-staging-api', image = `regis
   const mfa = join(root, 'mfa.key');
   await writeFile(firebase, '{}');
   await writeFile(mfa, 'm'.repeat(32));
-  const originalEnv = finalize ? envContent({ registration: true, allowlist: mappingLine().trimEnd() }).replace(`SIT_STAGING_ALLOWED_USER_IDS=${originalAllowedIds}`, `SIT_STAGING_ALLOWED_USER_IDS=${originalAllowedIds},${userId}`) : envContent();
+  const originalEnv = cors ? `${envContent()}CORS_ORIGINS=${corsBefore}\nSIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false\nSIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED=0\n` : finalize ? envContent({ registration: true, allowlist: mappingLine().trimEnd() }).replace(`SIT_STAGING_ALLOWED_USER_IDS=${originalAllowedIds}`, `SIT_STAGING_ALLOWED_USER_IDS=${originalAllowedIds},${userId}`) : envContent();
   await writeFile(envFile, originalEnv, { mode: 0o600 });
   await chmod(envFile, 0o600);
   await writeFile(mappingFile, mapping, { mode: 0o600 });
@@ -99,7 +108,21 @@ async function fixture({ apiContainer = 'shareittoo-staging-api', image = `regis
       allowedUserIdsCount: 4,
     };
   }
-  return { root, envFile, mappingFile, evidenceFile, manifest, api, image, originalEnv, finalize, state: { api, stopped: false, sealed: false, created: false, failurePhase: null } };
+  const witnesses = {
+    'shareittoo-api': { Id: '7'.repeat(64), Name: '/shareittoo-api', State: { Running: true }, Config: { Image: 'synthetic-production-image', Env: ['SYNTHETIC=preserved'] } },
+    'shareittoo-web': { Id: '8'.repeat(64), Name: '/shareittoo-web', State: { Running: true }, Config: { Image: 'synthetic-gateway-image' } },
+  };
+  if (cors) {
+    api.Image = `sha256:${'9'.repeat(64)}`;
+    manifest.kind = corsManifestKind;
+    manifest.corsBinding = {
+      apiFingerprint: corsContainerFingerprint(api), envSha256: crypto.createHash('sha256').update(originalEnv).digest('hex'),
+      productionApiId: witnesses['shareittoo-api'].Id, productionApiFingerprint: corsContainerFingerprint(witnesses['shareittoo-api']),
+      webId: witnesses['shareittoo-web'].Id, webFingerprint: corsContainerFingerprint(witnesses['shareittoo-web']),
+      productionRootSha256: crypto.createHash('sha256').update('synthetic-production-root').digest('hex'),
+    };
+  }
+  return { root, envFile, mappingFile, evidenceFile, manifest, api, image, originalEnv, finalize, cors, witnesses, state: { api, stopped: false, sealed: false, created: false, failurePhase: null } };
 }
 
 function startupPayload(fx, enabled) {
@@ -142,7 +165,7 @@ function statefulDockerExecutor(fx, {
   const network = { Name: fx.manifest.network, Id: primaryNetworkId, Internal: true };
   const providerNetwork = { Name: fx.manifest.providerNetwork, Id: providerNetworkId };
   const uploads = { Name: fx.manifest.uploadsVolume };
-  const image = { RepoTags: [fx.image], Config: { User: 'shareittoo', Labels: { 'org.opencontainers.image.revision': revision } }, RepoDigests: [`${fx.image}@${imageDigest}`] };
+  const image = { ...(fx.cors ? { Id: `sha256:${'9'.repeat(64)}` } : {}), RepoTags: [fx.image], Config: { User: 'shareittoo', Labels: { 'org.opencontainers.image.revision': revision } }, RepoDigests: [`${fx.image}@${imageDigest}`] };
   const containers = new Map([[fx.manifest.apiContainer, fx.api]]);
   const calls = [];
   const state = { stopReadbackConsumed: false };
@@ -171,6 +194,20 @@ function statefulDockerExecutor(fx, {
     return { container, script: args.slice(index + 1).join(' ') };
   };
   const command = async (cmd, args, options = {}) => {
+    if (fx.cors && cmd === process.execPath) {
+      assert.deepEqual(args.slice(0, 2), ['--input-type=module', '-e']);
+      assert.ok(args[2].includes("fetch('https://shareittoo.com/'"));
+      const includeCors = args[2].includes("method:'OPTIONS'");
+      if (includeCors) {
+        assert.ok(args[2].includes("fetch('https://staging.shareittoo.com/api/v1/auth/register'"));
+        assert.ok(args[2].includes("body:'{}'"));
+      }
+      calls.push({ phase: options.phase, args: [...args] });
+      return json({ productionRootSha256: fx.manifest.corsBinding.productionRootSha256, ...(includeCors ? {
+        options: { status: 204, origin: 'https://staging.shareittoo.com', methods: 'GET,POST,OPTIONS', headers: 'Content-Type' },
+        post: { status: 403, origin: 'https://staging.shareittoo.com', error: 'staging_registration_disabled' },
+      } : {}) });
+    }
     assert.equal(cmd, 'docker');
     calls.push({ phase: options.phase, args: [...args] });
     let operation = args[0];
@@ -185,6 +222,8 @@ function statefulDockerExecutor(fx, {
     if (operation === 'inspect') {
       if (args.length !== 4 || args[1] !== '--format' || args[2] !== '{{json .}}') throw new Error(`unexpected_docker_command:${args.join(' ')}`);
       const target = args.at(-1);
+      if (fx.cors && fx.witnesses[target]) return json(fx.witnesses[target]);
+      if (fx.cors && /^[a-f0-9]{64}$/u.test(target)) return json(inspectContainerReference(target));
       if (target === fx.manifest.apiContainer && state.stopAttempted && (stopMode === 'unknown-inspect-no-recovery' || stopMode === 'unknown-inspect' && !state.stopReadbackConsumed)) {
         state.stopReadbackConsumed = true;
         fail('stop_state_readback', options.phase);
@@ -213,12 +252,14 @@ function statefulDockerExecutor(fx, {
     }
     if (operation === 'exec') {
       const { container, script } = parseExec(args);
-      if (!containers.has(container) && container !== fx.manifest.databaseContainer) fail('exec_target', options.phase);
+      const apiReference = fx.cors && /^[a-f0-9]{64}$/u.test(container) ? inspectContainerReference(container).Name.slice(1) : container;
+      if (!containers.has(apiReference) && container !== fx.manifest.databaseContainer) fail('exec_target', options.phase);
       if (container === fx.manifest.databaseContainer) {
         const directPsql = args[2] === 'psql' && !args.includes('-e');
         const ledgerShell = args[2] === 'sh' && args[3] === '-c' && !args.includes('-e');
         if ((!directPsql && !ledgerShell) || args.length < 3) throw new Error(`unexpected_docker_command:${args.join(' ')}`);
         if (script.includes('SELECT 1')) return { stdout: '1\n', code: 0 };
+        if (fx.cors && script.includes("SELECT count(*) || '|' || (SELECT count(*) FROM auth_identities")) return { stdout: '4|1\n', code: 0 };
         if (script.includes('WITH target AS')) return { stdout: '1|1|1\n', code: 0 };
         if (script.includes('SELECT count(*) FROM users')) return { stdout: `${occupiedTarget ? 1 : 0}\n`, code: 0 };
         if (script.includes('ORDER BY applied_at')) return { stdout: `${wrongSchema ? '097_registration_consent_bundle.up.sql' : '098_booking_checkout_declaration_constraints.up.sql'}\n`, code: 0 };
@@ -227,6 +268,14 @@ function statefulDockerExecutor(fx, {
       }
       if (args.filter((arg) => arg === '-e').length !== 1 || !args.includes('--input-type=module') || args.at(-2) !== '-e') throw new Error(`unexpected_docker_command:${args.join(' ')}`);
       if (script.includes("import('./src/config.js')")) {
+        if (fx.cors) {
+          const values = envMap(inspectContainerReference(container).Config.Env);
+          if (options.phase === 'candidate_cors_config_import') {
+            assert.ok(script.includes(`process.env.CORS_ORIGINS=${JSON.stringify(corsAfter)};`));
+            values.CORS_ORIGINS = corsAfter;
+          } else assert.equal(options.phase, 'replacement_cors_config_import');
+          return json({ origins: values.CORS_ORIGINS.split(','), registration: values.SIT_STAGING_GOOGLE_REGISTRATION_ENABLED === 'true', accessGate: values.SIT_STAGING_ACCESS_GATE_ENABLED === 'true' });
+        }
         const assignment = /Object\.assign\(process\.env,(\{[^;]+\})\);/u.exec(script)?.[1];
         assert.ok(assignment, 'candidate imports exact derived env in the same current image');
         const derived = JSON.parse(assignment);
@@ -238,7 +287,7 @@ function statefulDockerExecutor(fx, {
         return json({ enabled: !fx.finalize, mappingCount: fx.finalize ? 0 : 1, targetAllowed: true });
       }
       if (script.includes('runtimeNames')) {
-        if (failOperation === 'replacement-startup' && inspectContainer(container).Id === 'b'.repeat(64)) fail('replacement_public_runtime_probe', options.phase);
+        if (failOperation === 'replacement-startup' && inspectContainerReference(container).Id === 'b'.repeat(64)) fail('replacement_public_runtime_probe', options.phase);
         return { stdout: startupPayload(fx, true), code: 0 };
       }
       if (script.includes('/health/live')) return { stdout: JSON.stringify({ status: 200, payload: { status: 'ok' } }), code: 0 };
@@ -358,7 +407,7 @@ function statefulDockerExecutor(fx, {
       const imageArg = effectiveArgs[networkIndex + 2];
       if (!name || envFile !== fx.envFile || networkIndex < 0 || ![fx.manifest.network, network.Id].includes(networkName) || imageArg !== `${fx.image}@${imageDigest}`
           || JSON.stringify(effectiveArgs.slice(networkIndex + 3)) !== JSON.stringify(fx.api.Config.Cmd)) fail('unexpected_create_args', options.phase);
-      const env = (await readFile(envFile, 'utf8')).trim().split('\n');
+      const env = (await readFile(envFile, 'utf8')).split(/\r?\n/u).filter((line) => line && !line.startsWith('#'));
       const labels = Object.fromEntries(optionValues('--label').map((entry) => {
         const index = entry.indexOf('=');
         return [entry.slice(0, index), entry.slice(index + 1)];
@@ -508,6 +557,247 @@ function statefulDockerExecutor(fx, {
   };
   return { command, calls, state: { containers } };
 }
+
+test('CORS default preflight is read-only and its manifest cannot activate Google registration', async () => {
+  assert.equal(corsAfter, greenWebCorsOrigins);
+  const fx = await fixture({ cors: true });
+  try {
+    const fake = statefulDockerExecutor(fx);
+    const result = await runStagingWebCorsTransition(corsOptions(fx, fake.command, false));
+    assert.equal(result.status, 'preflight-passed-no-mutation');
+    assert.equal(result.firstIrreversiblePhase, 'atomic_cors_enable');
+    assert.deepEqual(result.changedEnvironmentKeys, ['CORS_ORIGINS']);
+    assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+    assert.ok(fake.calls.every((entry) => !['create', 'stop', 'rename', 'start', 'rm'].includes(entry.args[0])));
+    await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+    await assert.rejects(lstat(`${fx.envFile}.web-cors.lock`), { code: 'ENOENT' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ ...corsOptions(fx, fake.command, false), mappingFile: fx.mappingFile }), /registration_manifest_pre_state_invalid/u);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('CORS success changes one env value only and retains exact rollback seal, production and closed registration', async () => {
+  const fx = await fixture({ cors: true });
+  try {
+    fx.api.HostConfig.NetworkMode = primaryNetworkId;
+    fx.manifest.corsBinding.apiFingerprint = corsContainerFingerprint(fx.api);
+    const fake = statefulDockerExecutor(fx);
+    const result = await runStagingWebCorsTransition(corsOptions(fx, fake.command));
+    assert.equal(result.status, 'staging-web-cors-enabled-registration-closed');
+    const expected = fx.originalEnv.replace(`CORS_ORIGINS=${corsBefore}\n`, `CORS_ORIGINS=${corsAfter}\n`);
+    assert.equal(await readFile(fx.envFile, 'utf8'), expected);
+    assert.equal(fake.state.containers.get(result.sealedName).Id, fx.manifest.apiContainerId);
+    assert.equal(fake.state.containers.get(result.sealedName).State.Running, false);
+    assert.equal(fake.state.containers.get(fx.manifest.apiContainer).Id, 'b'.repeat(64));
+    const proof = JSON.parse(await readFile(fx.evidenceFile, 'utf8'));
+    assert.deepEqual(proof.changedEnvironmentKeys, ['CORS_ORIGINS']);
+    assert.equal(proof.postError, 'staging_registration_disabled');
+    assert.equal(proof.userCountsUnchanged, true);
+    assert.equal(proof.envSha256Before, crypto.createHash('sha256').update(fx.originalEnv).digest('hex'));
+    assert.equal(proof.envSha256After, crypto.createHash('sha256').update(expected).digest('hex'));
+    assert.equal((await lstat(fx.evidenceFile)).mode & 0o777, 0o600);
+    assert.doesNotMatch(JSON.stringify(proof), /preserve-me|DATABASE_URL|synthetic-owner/u);
+    for (const call of fake.calls.filter((entry) => ['stop', 'rename', 'start', 'rm'].includes(entry.args[0]))) {
+      assert.ok(call.args.some((arg) => [fx.manifest.apiContainerId, 'b'.repeat(64)].includes(arg)));
+      assert.ok(!call.args.includes('shareittoo-api') && !call.args.includes('shareittoo-web'));
+    }
+    const external = fake.calls.find((entry) => entry.phase === 'replacement_cors_external_readback');
+    const stub = `let calls=0;globalThis.fetch=async(url,options)=>{calls++;if(url==='https://shareittoo.com/')return new Response('synthetic-production-root');if(url!=='https://staging.shareittoo.com/api/v1/auth/register'||options.headers.Origin!=='https://staging.shareittoo.com'||options.redirect!=='error')throw new Error('bad target');if(options.method==='OPTIONS')return new Response(null,{status:204,headers:{'access-control-allow-origin':options.headers.Origin,'access-control-allow-methods':'POST','access-control-allow-headers':'Content-Type'}});if(options.method!=='POST'||options.body!=='{}')throw new Error('unsafe payload');return new Response(JSON.stringify({error:'staging_registration_disabled'}),{status:403,headers:{'access-control-allow-origin':options.headers.Origin}});};`;
+    const scriptProof = JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e', `${stub}\n${external.args[2]}\nif(calls!==3)throw new Error('wrong count');`], { encoding: 'utf8' }));
+    assert.equal(scriptProof.options.status, 204);
+    assert.equal(scriptProof.post.status, 403);
+    assert.equal(scriptProof.productionRootSha256, fx.manifest.corsBinding.productionRootSha256);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('CORS stale bindings, wrong targets, registration and unsafe origins fail before mutation', async () => {
+  for (const mutation of [
+    (fx) => { fx.manifest.corsBinding.envSha256 = '0'.repeat(64); },
+    (fx) => { fx.manifest.corsBinding.apiFingerprint = '0'.repeat(64); },
+    (fx) => { fx.manifest.corsBinding.productionApiId = '0'.repeat(64); },
+    (fx) => { fx.manifest.corsBinding.webFingerprint = '0'.repeat(64); },
+    (fx) => { fx.manifest.apiContainer = 'shareittoo-api'; },
+    (fx) => { fx.api.Config.Env.push('CORS_ORIGINS=*'); },
+    (fx) => { fx.api.Config.Labels.foreign = 'drift'; },
+    (fx) => { fx.api.Image = `sha256:${'6'.repeat(64)}`; fx.manifest.corsBinding.apiFingerprint = corsContainerFingerprint(fx.api); },
+    async (fx) => { await writeFile(fx.envFile, fx.originalEnv.replace('CORS_ORIGINS=http://shareittoo-staging-api:8080', 'CORS_ORIGINS=https://shareittoo.com')); },
+    async (fx) => { await writeFile(fx.envFile, fx.originalEnv.replace('SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=true')); },
+  ]) {
+    const fx = await fixture({ cors: true });
+    try {
+      await mutation(fx);
+      const before = await readFile(fx.envFile, 'utf8');
+      const fake = statefulDockerExecutor(fx);
+      await assert.rejects(runStagingWebCorsTransition(corsOptions(fx, fake.command)));
+      assert.equal(await readFile(fx.envFile, 'utf8'), before);
+      assert.ok(fake.calls.every((entry) => !['create', 'stop', 'rename', 'start', 'rm'].includes(entry.args[0])));
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('CORS forward failure matrix restores exact env and original immutable container', async () => {
+  for (const phase of [
+    'pre_mutation_api_readback', 'pre_mutation_cors_external_readback',
+    'stop_current_api', 'seal_current_api', 'create_replacement_api',
+    'attach_provider_network', 'start_replacement_api', 'replacement_config_readback',
+    'replacement_public_runtime_probe', 'replacement_registration_config_readback',
+    'replacement_schema_readback', 'replacement_migration_ledger_readback',
+    'cors_rollback_seal_readback', 'replacement_cors_config_import',
+    'pre_external_cors_user_counts', 'replacement_cors_shareittoo-api_witness',
+    'replacement_cors_shareittoo-web_witness', 'replacement_cors_external_readback', 'final_cors_user_counts',
+  ]) {
+    const fx = await fixture({ cors: true });
+    try {
+      const fake = statefulDockerExecutor(fx);
+      let fired = false;
+      const command = (cmd, args, options) => {
+        if (!fired && options.phase === phase) { fired = true; throw Object.assign(new Error('injected'), { code: 'cors_injected_fault' }); }
+        return fake.command(cmd, args, options);
+      };
+      await assert.rejects(runStagingWebCorsTransition(corsOptions(fx, command)), (error) => error.code === 'cors_injected_fault' && error.rollback.restored);
+      assert.equal(fired, true, phase);
+      assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv, phase);
+      assert.equal(fake.state.containers.get(fx.manifest.apiContainer).Id, fx.manifest.apiContainerId);
+      assert.equal(fake.state.containers.get(fx.manifest.apiContainer).State.Running, true);
+      await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('CORS lost create rename and stop responses reconcile only owned exact state', async () => {
+  for (const options of [{ createMode: 'response-loss' }, { renameMode: 'response-loss' }, { stopMode: 'response-loss' }]) {
+    const fx = await fixture({ cors: true });
+    try {
+      const fake = statefulDockerExecutor(fx, options);
+      if (options.stopMode) {
+        assert.equal((await runStagingWebCorsTransition(corsOptions(fx, fake.command))).status, 'staging-web-cors-enabled-registration-closed');
+      } else {
+        await assert.rejects(runStagingWebCorsTransition(corsOptions(fx, fake.command)), (error) => error.rollback.restored);
+        assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+        assert.equal(fake.state.containers.get(fx.manifest.apiContainer).Id, fx.manifest.apiContainerId);
+      }
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('CORS external false success, extra env drift and account-count drift never write success evidence', async () => {
+  for (const fault of ['external', 'extra-env', 'image', 'counts', 'production']) {
+    const fx = await fixture({ cors: true });
+    try {
+      const fake = statefulDockerExecutor(fx);
+      const command = async (cmd, args, options) => {
+        const result = await fake.command(cmd, args, options);
+        if (fault === 'extra-env' && options.phase === 'replacement_config_readback') {
+          const parsed = JSON.parse(result.stdout); parsed.Config.Env.push('UNEXPECTED=drift'); return { stdout: JSON.stringify(parsed) };
+        }
+        if (fault === 'image' && options.phase === 'replacement_config_readback') {
+          const parsed = JSON.parse(result.stdout); parsed.Image = `sha256:${'6'.repeat(64)}`; return { stdout: JSON.stringify(parsed) };
+        }
+        if (fault === 'external' && options.phase === 'replacement_cors_external_readback') {
+          const parsed = JSON.parse(result.stdout); parsed.post = { status: 201 }; return { stdout: JSON.stringify(parsed) };
+        }
+        if (fault === 'production' && options.phase === 'replacement_cors_shareittoo-api_witness') {
+          const parsed = JSON.parse(result.stdout); parsed.Config.Image = 'foreign'; return { stdout: JSON.stringify(parsed) };
+        }
+        if (fault === 'counts' && options.phase === 'final_cors_user_counts') return { stdout: '5|1' };
+        return result;
+      };
+      await assert.rejects(runStagingWebCorsTransition(corsOptions(fx, command)), (error) => error.rollback.restored);
+      assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+      await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('CORS occupied evidence and exclusive lock refuse mutation; failed rollback is explicit', async () => {
+  for (const fault of ['evidence', 'lock', 'rollback']) {
+    const fx = await fixture({ cors: true });
+    try {
+      if (fault === 'evidence') await writeFile(fx.evidenceFile, 'independent', { mode: 0o600 });
+      if (fault === 'lock') await writeFile(`${fx.envFile}.web-cors.lock`, 'another-run', { mode: 0o600 });
+      const fake = statefulDockerExecutor(fx);
+      const command = (cmd, args, options) => {
+        if (fault === 'rollback' && ['replacement_cors_config_import', 'rollback_restore_start'].includes(options.phase)) throw Object.assign(new Error('injected'), { code: 'cors_injected_fault' });
+        return fake.command(cmd, args, options);
+      };
+      await assert.rejects(runStagingWebCorsTransition(corsOptions(fx, command)), (error) => fault !== 'rollback' || error.rollback.restored === false);
+      if (fault !== 'rollback') assert.ok(fake.calls.every((entry) => !['create', 'stop', 'rename', 'start', 'rm'].includes(entry.args[0])));
+      assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('CORS CLI is separately loadable and missing manifest never invokes an external command', () => {
+  const result = spawnSync(process.execPath, ['ops/enable_staging_web_cors.mjs'], {
+    env: { PATH: '/nonexistent', STAGING_WEB_CORS_RUNTIME_MANIFEST: '' }, encoding: 'utf8', timeout: 5000,
+  });
+  assert.equal(result.status, 1);
+  assert.equal(JSON.parse(result.stderr).code, 'manifest_path_invalid');
+  assert.equal(result.stdout, '');
+});
+
+test('CORS preserves CRLF comments and credential-like bytes with no raw env in evidence', async () => {
+  const fx = await fixture({ cors: true });
+  try {
+    const privateMarker = ['fixture', '$literal', '=kept', '#unchanged'].join('-');
+    fx.originalEnv = `# retained comment\r\n${fx.originalEnv.replaceAll('\n', '\r\n')}UNRELATED_MORE=${privateMarker}\r\n`;
+    await writeFile(fx.envFile, fx.originalEnv);
+    fx.api.Config.Env = fx.originalEnv.split('\r\n').filter((line) => line && !line.startsWith('#'));
+    fx.manifest.corsBinding.envSha256 = crypto.createHash('sha256').update(fx.originalEnv).digest('hex');
+    fx.manifest.corsBinding.apiFingerprint = corsContainerFingerprint(fx.api);
+    const fake = statefulDockerExecutor(fx);
+    await runStagingWebCorsTransition(corsOptions(fx, fake.command));
+    assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv.replace(`CORS_ORIGINS=${corsBefore}\r\n`, `CORS_ORIGINS=${corsAfter}\r\n`));
+    assert.ok(!(await readFile(fx.evidenceFile, 'utf8')).includes(privateMarker));
+    assert.ok(!fake.calls.some((call) => call.args.some((arg) => arg.includes(privateMarker))));
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('CORS private-file permissions symlinks and missing execute confirmation fail closed', async () => {
+  for (const fault of ['env-mode', 'env-symlink', 'lock-symlink', 'confirm', 'real-path']) {
+    const fx = await fixture({ cors: true });
+    try {
+      const fake = statefulDockerExecutor(fx);
+      if (fault === 'env-mode') await chmod(fx.envFile, 0o644);
+      if (fault === 'env-symlink') {
+        const backing = join(fx.root, 'original.env');
+        await writeFile(backing, fx.originalEnv, { mode: 0o600 });
+        await rm(fx.envFile); await symlink(backing, fx.envFile);
+      }
+      if (fault === 'lock-symlink') await symlink(fx.envFile, `${fx.envFile}.web-cors.lock`);
+      const options = corsOptions(fx, fake.command);
+      if (fault === 'confirm') options.commandEnv.STAGING_WEB_CORS_CONFIRM = 'wrong';
+      if (fault === 'real-path') { delete options.command; options.execute = false; }
+      await assert.rejects(runStagingWebCorsTransition(options));
+      assert.ok(fake.calls.every((entry) => !['create', 'stop', 'rename', 'start', 'rm'].includes(entry.args[0])));
+      assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('CORS late evidence collision restores original; concurrent env ownership is never overwritten', async () => {
+  for (const fault of ['evidence', 'foreign-env']) {
+    const fx = await fixture({ cors: true });
+    try {
+      const fake = statefulDockerExecutor(fx);
+      const command = async (cmd, args, options) => {
+        const result = await fake.command(cmd, args, options);
+        if (options.phase === 'final_cors_user_counts') {
+          if (fault === 'evidence') await writeFile(fx.evidenceFile, 'independent', { mode: 0o600 });
+          else await writeFile(fx.envFile, 'FOREIGN=owned\n', { mode: 0o600 });
+        }
+        return result;
+      };
+      await assert.rejects(runStagingWebCorsTransition(corsOptions(fx, command)), (error) => error.rollback.restored === (fault === 'evidence'));
+      if (fault === 'evidence') {
+        assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+        assert.equal(await readFile(fx.evidenceFile, 'utf8'), 'independent');
+      } else {
+        assert.equal(await readFile(fx.envFile, 'utf8'), 'FOREIGN=owned\n');
+        await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+      }
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
 
 test('default-off preflight validates schema 98 and does not mutate or expose mapping', async () => {
   const fx = await fixture();
