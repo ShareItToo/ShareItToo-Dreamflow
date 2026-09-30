@@ -181,6 +181,93 @@ Only after separately reviewed runtime/gate changes may the existing fresh
 draft + adapter preflight consume that exact fixture. DB seed success is not
 catalog visibility, account login verification or runtime activation.
 
+### Controlled Green env handoff — source successor, not executed here
+
+`backend/ops/promote_staging_web_fixture_env.mjs` is the separate, fail-closed
+successor for that private proposal. It does not seed data, generate or rotate
+credentials, enable the synthetic catalog, change Google/Firebase accounts, or
+touch Production, Play, payment or provider configuration. Its only permitted
+forward delta is:
+
+- prepend `synthetic_web_catalog_owner_v1,synthetic_web_catalog_renter_v1` to
+  `SIT_STAGING_ALLOWED_USER_IDS`, deduplicating only those two fixed IDs while
+  retaining every prior ID in its prior relative order;
+- set `SIT_STAGING_PUBLIC_LISTING_IDS=synthetic_web_catalog_listing_v1`;
+- set
+  `SIT_STAGING_PUBLIC_UPLOAD_NAMES=synthetic_web_catalog_placeholder_v1.webp`;
+- keep `SIT_STAGING_SYNTHETIC_CATALOG_ENABLED=false`.
+
+Do not hand-author `fixtureBinding`. The protected prepare mode derives it from
+fresh read-only Docker/env/database inventory plus the exact private bootstrap
+manifest. It binds the clean Ops HEAD, immutable current API fingerprint,
+protected env digest, bootstrap file/source/run digests, seeded audit scope and
+snapshot digests, old allowed-ID digest/count, exact handoff digest and the new
+unused backup target. It never prints IDs, passwords, password hashes, env
+values, database URLs or raw Docker inspection. The only persistent prepare
+effect is one exclusive owner-only `0600` runtime manifest in an existing
+owner-only `0700` directory; the old-env backup target must still be absent.
+
+From the exact clean reviewed checkout, use a new backup path and output path:
+
+```sh
+node backend/ops/promote_staging_web_fixture_env.mjs --prepare \
+  "$PRIVATE_BOOTSTRAP_MANIFEST" "$EXACT_BOOTSTRAP_MANIFEST_SHA256" \
+  /docker/shareittoo/backups/staging-web-fixture-env/NEW_RUN.green.env \
+  /docker/shareittoo/evidence/NEW_RUN.fixture-env-runtime.json
+```
+
+Record the returned runtime-manifest SHA-256 privately. Default invocation is a
+read-only preflight. It reopens both inputs through stable owner-only `0600`
+descriptors, requires their exact SHA-256 values, rechecks all live inventory,
+schema 98/ledger, seeded audit digests, current runtime health/version and a
+real config import with the proposed four values. It creates no lock, backup,
+evidence, container or env change:
+
+```sh
+STAGING_WEB_FIXTURE_ENV_RUNTIME_MANIFEST=/docker/shareittoo/evidence/NEW_RUN.fixture-env-runtime.json \
+STAGING_WEB_FIXTURE_ENV_RUNTIME_MANIFEST_SHA256="$EXACT_RUNTIME_MANIFEST_SHA256" \
+STAGING_WEB_FIXTURE_ENV_BOOTSTRAP_MANIFEST="$PRIVATE_BOOTSTRAP_MANIFEST" \
+STAGING_WEB_FIXTURE_ENV_BOOTSTRAP_MANIFEST_SHA256="$EXACT_BOOTSTRAP_MANIFEST_SHA256" \
+node backend/ops/promote_staging_web_fixture_env.mjs
+```
+
+Only after that exact preflight and a separate live authorization, repeat with
+all five execution confirmations. The CLI source confirmation is the clean Ops
+HEAD, while the run confirmation is the private bootstrap run ID; neither is
+printed by the executor:
+
+```sh
+STAGING_WEB_FIXTURE_ENV_RUNTIME_MANIFEST=/docker/shareittoo/evidence/NEW_RUN.fixture-env-runtime.json \
+STAGING_WEB_FIXTURE_ENV_RUNTIME_MANIFEST_SHA256="$EXACT_RUNTIME_MANIFEST_SHA256" \
+STAGING_WEB_FIXTURE_ENV_BOOTSTRAP_MANIFEST="$PRIVATE_BOOTSTRAP_MANIFEST" \
+STAGING_WEB_FIXTURE_ENV_BOOTSTRAP_MANIFEST_SHA256="$EXACT_BOOTSTRAP_MANIFEST_SHA256" \
+STAGING_WEB_FIXTURE_ENV_EVIDENCE_FILE=/docker/shareittoo/evidence/NEW_RUN.fixture-env-result.json \
+STAGING_WEB_FIXTURE_ENV_EXECUTE=1 \
+STAGING_WEB_FIXTURE_ENV_CONFIRM_SOURCE="$EXACT_OPS_SHA" \
+STAGING_WEB_FIXTURE_ENV_CONFIRM_RUN="$EXACT_BOOTSTRAP_RUN_ID" \
+node backend/ops/promote_staging_web_fixture_env.mjs --execute \
+  "$EXACT_OPS_SHA" "$EXACT_BOOTSTRAP_RUN_ID"
+```
+
+Execution shares the existing controlled env-writer lock, atomically and
+exclusively publishes the exact old env bytes once to the new `0600` backup,
+atomically replaces `green.env`, stops and seals only the captured immutable
+Green API ID, and recreates the same
+image, mounts, security/resource settings and two networks. Success requires
+live/ready/version, exact four-value config readback, registration still closed,
+catalog flag still false, schema/ledger and unchanged seed evidence. Sanitized
+success evidence contains counts and digests only.
+
+Every forward error uses an identity-checked rollback: restore the env only if
+it is still either the executor's exact after-image or exact old bytes; remove
+only an exact owned replacement; rename/start the immutable original; then
+re-read runtime health/version. A late foreign evidence-file collision is
+preserved and can trigger that verified rollback, but is never overwritten or
+used as authority for a blind mutation. Unknown/foreign state returns
+`rollback.restored=false`. The retained successful backup and stopped original
+are rollback material only; reversing a successful handoff remains a separate
+reviewed operation, not an automatic command in this package.
+
 The host runner binds immutable image/APP_COMMIT, clean Ops source (separate
 from runtime revision), all mounted source hashes and the 98-file ledger, actual
 API/DB fingerprints, internal Green network, uploads and protected env bytes.
