@@ -235,6 +235,36 @@ not to that runtime SHA. Fresh owner-only target/config manifests and inventory
 remain required. This update does not activate the synthetic catalog flag,
 provision another role, publish an image or authorize a live promotion.
 
+Default mode is a read-only preflight, not a promotion. It validates the protected
+manifests/env/runtime files, the exact 8a90 predecessor and all 15 retained seals,
+auth/access/topology, the locally present immutable runtime image, schema/ledger
+and enrolled identity. Only the existing 26 Docker read commands before
+`quiesce_green_api` run, in that exact order; only Docker needs to be available
+for this mode. No pull, curl, stop, rename, backup, evidence, isolated env,
+directory or resource creation occurs, including on failure. Output is only
+`preflight-passed-no-mutation` plus digests; `configDigest` hashes the exact
+protected env bytes, as execution evidence does. The evidence-family path must
+still be safely bound and unused, but is neither created nor reserved.
+
+From `backend/`, using a fresh owner-only target/config pair and unused evidence
+path (no execute/confirm variables are needed):
+
+```sh
+GREEN_STAGING_TARGET_MANIFEST=/docker/shareittoo/ops/green-target.json \
+GREEN_STAGING_CONFIG_MANIFEST=/docker/shareittoo/ops/green-config.json \
+GREEN_STAGING_OPS_COMMIT=FULL_40_CHARACTER_OPS_COMMIT \
+GREEN_STAGING_EVIDENCE_FILE=/docker/shareittoo/evidence/green-promotion.json \
+GREEN_RUNTIME_IMAGE_DIGEST=sha256:IMMUTABLE_IMAGE_DIGEST \
+node ops/green_staging_promotion.mjs FULL_40_CHARACTER_RUNTIME_COMMIT
+```
+
+Execution is a separate authorized operation. It repeats the same read-only
+prefix and validators before creating even the isolated env, retains the full
+command-availability gate, and requires **all three** explicit gates:
+CLI `--execute`, `GREEN_STAGING_PROMOTION_EXECUTE=1`, and the exact runtime commit
+in `GREEN_STAGING_PROMOTION_CONFIRM`. Environment flags alone never execute.
+Using the same five manifest/image/Ops/evidence inputs above:
+
 ```sh
 GREEN_STAGING_TARGET_MANIFEST=/docker/shareittoo/ops/green-target.json \
 GREEN_STAGING_CONFIG_MANIFEST=/docker/shareittoo/ops/green-config.json \
@@ -243,7 +273,7 @@ GREEN_STAGING_EVIDENCE_FILE=/docker/shareittoo/evidence/green-promotion.json \
 GREEN_RUNTIME_IMAGE_DIGEST=sha256:IMMUTABLE_IMAGE_DIGEST \
 GREEN_STAGING_PROMOTION_EXECUTE=1 \
 GREEN_STAGING_PROMOTION_CONFIRM=FULL_40_CHARACTER_RUNTIME_COMMIT \
-node ops/green_staging_promotion.mjs FULL_40_CHARACTER_RUNTIME_COMMIT
+node ops/green_staging_promotion.mjs FULL_40_CHARACTER_RUNTIME_COMMIT --execute
 ```
 
 `GREEN_STAGING_CONFIG_MANIFEST` is a protected JSON descriptor. Docker never

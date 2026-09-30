@@ -40,6 +40,8 @@ import {
   runGreenForwardRecovery,
   runGreenCommandWithBufferInput,
   runGreenPromotion,
+  greenReadOnlyPreflightCommands,
+  parseGreenPromotionArguments,
   syntheticSandboxCredentialFilePath,
   containsForbiddenGreenTargetIdentifier,
 } from '../ops/green_staging_promotion.mjs';
@@ -631,6 +633,40 @@ test('retained historical seal is read-only and the new seal is the only rename 
   assert.deepEqual(rename.args, ['rename', plan.target.apiContainer, plan.target.sealedApiContainer]);
 });
 
+test('default CLI is read-only and execution requires both explicit mode and exact environmental consent', async () => {
+  assert.deepEqual(parseGreenPromotionArguments([runtimeCommit]), { runtimeCommit, execute: false });
+  assert.deepEqual(parseGreenPromotionArguments([runtimeCommit, '--execute']), { runtimeCommit, execute: true });
+  for (const args of [[], [runtimeCommit, '--unknown'], [runtimeCommit, '--execute', 'extra']]) assert.throws(() => parseGreenPromotionArguments(args), /green_cli_arguments_invalid/u);
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  for (const environment of [{}, { GREEN_STAGING_PROMOTION_EXECUTE: '1' }, { GREEN_STAGING_PROMOTION_EXECUTE: '1', GREEN_STAGING_PROMOTION_CONFIRM: 'f'.repeat(40) }]) {
+    let calls = 0;
+    await assert.rejects(runGreenPromotion({ plan, config, configFile: config.envFile, execute: true, environment, command: async () => { calls++; } }));
+    assert.equal(calls, 0);
+  }
+  const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
+  const prefix = greenReadOnlyPreflightCommands(commands, plan);
+  assert.equal(prefix.length, 26);
+  assert.deepEqual(greenRequiredControlExecutables(prefix), ['docker']);
+  assert.deepEqual(await assertGreenControlExecutables({ commands: prefix, executableAvailable: async (name) => name === 'docker' }), ['docker']);
+  for (const change of [
+    (entries) => { entries[0].command = 'curl'; },
+    (entries) => { entries[0].args = ['stop', plan.target.apiContainer]; },
+    (entries) => { entries[0].stdoutFile = '/tmp/forbidden'; },
+    (entries) => { entries[1].args[3] = 'foreign-container'; },
+    (entries) => { entries[24].args.splice(3, 0, '--unsafe'); },
+    (entries) => { entries[24].args[entries[24].args.length - 1] = 'DELETE FROM users'; },
+    (entries) => { [entries[0], entries[1]] = [entries[1], entries[0]]; },
+  ]) {
+    const altered = structuredClone(commands); change(altered);
+    assert.throws(() => greenReadOnlyPreflightCommands(altered, plan), /green_read_only_preflight_command_invalid/u);
+  }
+  const source = readFileSync(new URL('../ops/green_staging_promotion.mjs', import.meta.url), 'utf8');
+  const main = source.slice(source.indexOf('async function main()'));
+  assert.match(main, /parseGreenPromotionArguments\(process\.argv\.slice\(2\)\)/u);
+  assert.match(main, /execute: mode\.execute/u);
+  assert.doesNotMatch(main, /execute: true/u);
+});
+
 test('control executable preflight fails before any mutating executor command and accepts modeled prerequisites', async () => {
   const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
@@ -724,7 +760,7 @@ test('executor preserves required post-enrollment auth through candidate, recove
   const databaseRecord = { Name: `/${greenTarget.databaseContainer}`, State: { Running: true }, Config: { Labels: { 'com.shareittoo.sit.green': 'true' } } };
   let candidateAuthOverride = null;
   let missingEnrollmentPhase = null;
-  const fakeRun = async (image, isolatedLedger = currentMigrationLedger, initLog = 'PostgreSQL init process complete; ready for start up.\n', stableSelect2 = '1\n', targetSet = targetContainerSet, foreignBefore = '[]\n', foreignAfter = foreignBefore, candidateFinding = emptyFindingFingerprint, stopAtPhase = 'quiesce_green_api', restoreCode, postgresIdentityOverrides = {}) => {
+  const fakeRun = async (image, isolatedLedger = currentMigrationLedger, initLog = 'PostgreSQL init process complete; ready for start up.\n', stableSelect2 = '1\n', targetSet = targetContainerSet, foreignBefore = '[]\n', foreignAfter = foreignBefore, candidateFinding = emptyFindingFingerprint, stopAtPhase = 'quiesce_green_api', restoreCode, postgresIdentityOverrides = {}, readOnly = null) => {
     const calls = [];
     let recoveryRecord = null;
     const candidateRecord = {
@@ -744,6 +780,8 @@ test('executor preserves required post-enrollment auth through candidate, recove
     const fake = async (command, args, options = {}) => {
       calls.push({ command, args, phase: options.phase, env: options.env });
       const phase = options.phase;
+      if (readOnly?.failPhase === phase) return { code: 1, stdout: '' };
+      if (readOnly?.overrides?.[phase] !== undefined) return { stdout: readOnly.overrides[phase] };
       if (phase.endsWith('_post_enrollment_identity_readback')) {
         if (phase === 'isolated_post_enrollment_identity_readback') assert.equal(args[1], isolatedDatabaseId);
         return { stdout: phase === missingEnrollmentPhase ? '0\n' : '1\n' };
@@ -888,12 +926,12 @@ test('executor preserves required post-enrollment auth through candidate, recove
     };
     let result;
     try {
-      await runGreenPromotion({
-        plan, config: runtimeConfig, configFile, environment: {
+      result = await runGreenPromotion({
+        plan, config: runtimeConfig, configFile, environment: readOnly?.environment ?? (readOnly ? {} : {
           GREEN_STAGING_PROMOTION_EXECUTE: '1', GREEN_STAGING_PROMOTION_CONFIRM: runtimeCommit,
-        }, execute: true, command: fake, executableAvailable: async () => true, assertRuntimeFiles: async () => {},
+        }), ...(readOnly ? {} : { execute: true }), command: fake, executableAvailable: async (name) => !readOnly || name === 'docker', assertRuntimeFiles: async () => {},
       });
-      assert.fail('promotion should stop before quiesce');
+      if (!readOnly) assert.fail('promotion should stop before quiesce');
     } catch (error) {
       result = error;
     }
@@ -902,6 +940,45 @@ test('executor preserves required post-enrollment auth through candidate, recove
   const expectedReversible = buildGreenPromotionCommands({ plan, configFile, config: runtimeConfig })
     .slice(0, buildGreenPromotionCommands({ plan, configFile, config: runtimeConfig }).findIndex((entry) => entry.phase === 'quiesce_green_api'))
     .map((entry) => entry.phase);
+  const preflight = (options = {}, image = prePromotionImageReference) => fakeRun(image, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, options);
+  const beforeFiles = readdirSync(root);
+  const beforeEnv = readFileSync(configFile);
+  for (const environment of [{}, { GREEN_STAGING_PROMOTION_EXECUTE: '1', GREEN_STAGING_PROMOTION_CONFIRM: runtimeCommit }]) {
+    const readOnly = await preflight({ environment });
+    assert.equal(readOnly.result.status, 'preflight-passed-no-mutation');
+    assert.equal(readOnly.result.configDigest, crypto.createHash('sha256').update(beforeEnv).digest('hex'));
+    assert.deepEqual(Object.keys(readOnly.result).sort(), ['status', 'targetDigest', 'configDigest', 'inventoryDigest', 'runtimeCommit', 'runtimeImageDigest', 'opsCommit', 'sourceLedgerDigest'].sort());
+    assert.deepEqual(readOnly.calls.map((entry) => entry.phase), expectedReversible);
+    assert.equal(readOnly.calls.length, 26);
+    for (const [key, value] of Object.entries(readOnly.result)) if (key !== 'status') assert.match(value, /^(?:sha256:)?[0-9a-f]{40,64}$/u, key);
+    assert.deepEqual(readdirSync(root), beforeFiles, 'no evidence, backup, or isolated env created');
+    assert.deepEqual(readFileSync(configFile), beforeEnv);
+  }
+  for (const failPhase of expectedReversible) {
+    const rejected = await preflight({ failPhase });
+    assert.equal(rejected.result.code, `green_${failPhase}_failed`);
+    assert.equal(rejected.result.cleanup, undefined);
+    assert.deepEqual(rejected.calls.map((entry) => entry.phase), expectedReversible.slice(0, expectedReversible.indexOf(failPhase) + 1));
+    assert.deepEqual(readdirSync(root), beforeFiles);
+  }
+  for (const overrides of [
+    { sealed_name_conflict_check: 'occupied' },
+    { source_schema_readback: '097_stale.up.sql' },
+    { source_migration_ledger_readback: 'drift' },
+    { source_post_enrollment_identity_readback: '0' },
+    { runtime_image_readback: JSON.stringify({ ...imageReadback, RepoDigests: [] }) },
+    { retained_sealed_inventory_readback_14: '{}' },
+    { target_inventory_network: JSON.stringify({ Id: 'f'.repeat(64), Name: greenTarget.network, Internal: true }) },
+  ]) {
+    const rejected = await preflight({ overrides });
+    assert.ok(rejected.result.code, Object.keys(overrides).join(','));
+    assert.equal(rejected.result.cleanup, undefined);
+    assert.equal(rejected.calls.some((entry) => !expectedReversible.includes(entry.phase)), false);
+    assert.deepEqual(readdirSync(root), beforeFiles);
+  }
+  const stalePredecessor = await preflight({}, 'ghcr.io/shareittoo/shareittoo-api:5d3b42613da73451e9d9169a7b99ca1aba0c4227');
+  assert.ok(stalePredecessor.result.code);
+  assert.deepEqual(readdirSync(root), beforeFiles);
   const good = await fakeRun(prePromotionImageReference);
   assert.equal(good.result?.code, 'test_stop_before_quiesce', `${good.result?.message ?? 'no-error'} :: ${good.calls.map((entry) => entry.phase).join('|')}`);
   const quiesceIndex = good.calls.findIndex((entry) => entry.phase === 'quiesce_green_api');

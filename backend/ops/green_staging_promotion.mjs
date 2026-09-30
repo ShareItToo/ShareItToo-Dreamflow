@@ -610,7 +610,7 @@ async function readProtectedEnv(filePath) {
     if (!match || (!isAllowedGreenEnvName(match[1]) && !(forbiddenGreenEnvNames.has(match[1]) && match[2] === '')) || Object.hasOwn(values, match[1])) fail('green_env_file_allowlist_invalid');
     values[match[1]] = match[2];
   }
-  return Object.freeze(values);
+  return Object.freeze({ values: Object.freeze(values), digest: sha256(content) });
 }
 
 async function readExecutionEnv(filePath) {
@@ -1985,32 +1985,62 @@ export async function runGreenEmergencyCleanup({ plan, command, commandEnv = {},
   return Object.freeze({ clean, schemaMutationStarted, restored, results: Object.freeze(results), restoreError });
 }
 
+export function greenReadOnlyPreflightCommands(commands, plan) {
+  const phases = [
+    'target_container_set_readback', 'target_inventory_api', 'target_inventory_database',
+    'target_inventory_network', 'target_inventory_provider_network', 'target_inventory_uploads',
+    'sealed_name_conflict_check',
+    ...plan.target.retainedSealed.map((_, index) => `retained_sealed_inventory_readback_${index}`),
+    'runtime_image_readback', 'source_schema_readback', 'source_migration_ledger_readback',
+    ...(plan.target.authProfile ? ['source_post_enrollment_identity_readback'] : []),
+  ];
+  const inspect = (name) => ['inspect', '--format', '{{json .}}', name];
+  const sql = {
+    source_schema_readback: 'SELECT name FROM schema_migrations ORDER BY applied_at DESC LIMIT 1',
+    source_migration_ledger_readback: "SELECT name || '|' || checksum FROM schema_migrations ORDER BY name",
+    source_post_enrollment_identity_readback: `SELECT count(*) FROM auth_identities AS identity JOIN users AS account ON account.id = identity.user_id WHERE identity.provider = 'google' AND encode(sha256(convert_to(account.id, 'UTF8')), 'hex') = '${plan.target.authProfile?.googleUserIdDigest}' AND account.account_status = 'active' AND account.deactivated_at IS NULL`,
+  };
+  const allowedArgs = {
+    target_container_set_readback: ['ps', '--all', '--format', '{{.Names}}\t{{.Label "com.docker.compose.project"}}\t{{.Label "com.docker.compose.service"}}\t{{.Label "com.shareittoo.sit.green"}}\t{{.Label "com.shareittoo.sit.green.run_id"}}'],
+    target_inventory_api: inspect(plan.target.apiContainer),
+    target_inventory_database: inspect(plan.target.databaseContainer),
+    target_inventory_network: inspect(plan.target.network),
+    target_inventory_provider_network: inspect(plan.target.providerNetwork),
+    target_inventory_uploads: inspect(plan.target.uploadsVolume),
+    sealed_name_conflict_check: ['ps', '--all', '--filter', `name=^/${plan.target.sealedApiContainer}$`, '--format', '{{.Names}}'],
+    ...Object.fromEntries(plan.target.retainedSealed.map((descriptor, index) => [`retained_sealed_inventory_readback_${index}`, inspect(descriptor.name)])),
+    runtime_image_readback: ['image', 'inspect', '--format', '{{json .}}', plan.runtime.image],
+    ...Object.fromEntries(Object.entries(sql).map(([phase, query]) => [phase, ['exec', plan.target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', greenTarget.databaseUser, '-d', greenTarget.databaseName, '-Atc', query]])),
+  };
+  const prefix = commands.slice(0, phases.length);
+  if (commands[phases.length]?.phase !== 'quiesce_green_api' || prefix.some((entry, index) =>
+    entry.phase !== phases[index] || entry.command !== 'docker' || entry.inputFile || entry.stdoutFile || entry.envFile || entry.runtimeEnv
+    || JSON.stringify(entry.args) !== JSON.stringify(allowedArgs[entry.phase]))) {
+    fail('green_read_only_preflight_command_invalid');
+  }
+  return Object.freeze(prefix);
+}
+
+export function parseGreenPromotionArguments(args) {
+  if (args.length < 1 || args.length > 2 || (args.length === 2 && args[1] !== '--execute')) fail('green_cli_arguments_invalid');
+  return Object.freeze({ runtimeCommit: args[0], execute: args[1] === '--execute' });
+}
+
 export async function runGreenPromotion({ plan, config, configFile, environment = process.env, execute = false, command = runGreenCommand, assertRuntimeFiles = assertGreenProtectedRuntimeFiles, executableAvailable = greenControlExecutableAvailable } = {}) {
-  assertGreenPromotionExecutionAllowed({ environment, plan });
-  if (!execute) fail('explicit_green_execute_flag_required');
+  if (execute !== true && execute !== false) fail('explicit_green_execute_flag_required');
+  if (execute) assertGreenPromotionExecutionAllowed({ environment, plan });
   assertGreenRuntimeConfig(config);
   if (typeof command !== 'function') fail('green_command_runner_required');
   if (typeof assertRuntimeFiles !== 'function') fail('green_runtime_file_assertion_required');
   const commands = buildGreenPromotionCommands({ plan, configFile, config });
+  const preflightCommands = greenReadOnlyPreflightCommands(commands, plan);
   await assertGreenEvidenceArtifactFamilyAvailable({ evidenceFile: plan?.evidenceFile, isolatedEnvFile: plan?.isolated?.envFile });
-  await assertGreenControlExecutables({ commands, executableAvailable });
-  const protectedEnv = await readProtectedEnv(configFile);
+  await assertGreenControlExecutables({ commands: execute ? commands : preflightCommands, executableAvailable });
+  const { values: protectedEnv, digest: protectedEnvDigest } = await readProtectedEnv(configFile);
   assertGreenProtectedEnvironment(protectedEnv, config, plan.target.authProfile);
   await assertRuntimeFiles(config, protectedEnv);
-  const isolatedPassword = crypto.randomBytes(32).toString('base64url');
-  await mkdir(dirname(plan.isolated.envFile), { recursive: true, mode: 0o700 });
-  try {
-    await writeFile(plan.isolated.envFile, [
-      `POSTGRES_DB=${plan.isolated.databaseName}`,
-      `POSTGRES_USER=${plan.isolated.databaseUser}`,
-      `POSTGRES_PASSWORD=${isolatedPassword}`,
-      `DATABASE_URL=postgres://${plan.isolated.databaseUser}:${isolatedPassword}@${plan.isolated.database}:5432/${plan.isolated.databaseName}`,
-    ].join('\n') + '\n', { flag: 'wx', mode: 0o600 });
-  } catch (error) {
-    if (error?.code === 'EEXIST') fail('green_evidence_artifact_family_occupied');
-    throw error;
-  }
-  const isolatedEnv = await readExecutionEnv(plan.isolated.envFile);
+  let isolatedEnv = {};
+  let isolatedEnvCreated = false;
   const commandEnv = Object.freeze({ ...environment, ...protectedEnv });
   const completed = [];
   const readbacks = {};
@@ -2028,7 +2058,27 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
   let targetNetworkId;
   let providerNetworkId;
   try {
-    for (const entry of commands) {
+    // Both modes execute the same ordered reads and validators. No preparation
+    // write (including isolated credentials) is allowed before they all pass.
+    for (const entry of execute ? commands : preflightCommands) {
+      if (entry.phase === 'quiesce_green_api') {
+        assertGreenPromotionExecutionAllowed({ environment, plan });
+        const isolatedPassword = crypto.randomBytes(32).toString('base64url');
+        await mkdir(dirname(plan.isolated.envFile), { recursive: true, mode: 0o700 });
+        try {
+          await writeFile(plan.isolated.envFile, [
+            `POSTGRES_DB=${plan.isolated.databaseName}`,
+            `POSTGRES_USER=${plan.isolated.databaseUser}`,
+            `POSTGRES_PASSWORD=${isolatedPassword}`,
+            `DATABASE_URL=postgres://${plan.isolated.databaseUser}:${isolatedPassword}@${plan.isolated.database}:5432/${plan.isolated.databaseName}`,
+          ].join('\n') + '\n', { flag: 'wx', mode: 0o600 });
+          isolatedEnvCreated = true;
+        } catch (error) {
+          if (error?.code === 'EEXIST') fail('green_evidence_artifact_family_occupied');
+          throw error;
+        }
+        isolatedEnv = await readExecutionEnv(plan.isolated.envFile);
+      }
       phaseStarted = entry.phase;
       const boundEntry = bindGreenRuntimeCommand(entry, plan, { isolatedNetworkId, isolatedDatabaseId, candidateId, finalApiId, targetNetworkId, providerNetworkId });
       const entryEnv = entry.envFile === configFile ? protectedEnv : entry.envFile === plan.isolated.envFile ? isolatedEnv : {};
@@ -2162,11 +2212,23 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
       if (entry.phase === 'final_version_readback') assertGreenRuntimeReadbacks({ version: JSON.parse(readbacks.final_version_readback), health: JSON.parse(readbacks.final_health_probe), ready: JSON.parse(readbacks.final_ready_wait), runtimeCommit: plan.runtime.runtimeCommit });
       completed.push(entry.phase);
     }
+    if (!execute) return Object.freeze({
+      status: 'preflight-passed-no-mutation',
+      targetDigest: normalizedGreenTargetDigest(plan.target),
+      configDigest: protectedEnvDigest,
+      inventoryDigest: sha256(JSON.stringify(readbacks)),
+      runtimeCommit: plan.runtime.runtimeCommit,
+      runtimeImageDigest: plan.runtime.digest,
+      opsCommit: plan.opsCommit,
+      sourceLedgerDigest: greenTarget.sourceLedgerDigest,
+    });
     if (!backupDigest || !readbacks.final_image_readback || !readbacks.final_version_readback || !readbacks.final_inventory_readback) fail('green_final_readback_missing');
     const evidence = sanitizeGreenEvidence({ plan, status: 'executed', backupDigest, configDigest: sha256(await readFile(configFile)), targetReadback: { sourceSchemaReadback: schemaNumberFromName(readbacks.source_schema_readback, 'green_source_schema_readback_invalid'), sourceLedgerDigest: assertMigrationLedgerReadback(readbacks.source_migration_ledger_readback, plan.target.sourceSchema, greenTarget.sourceLedgerDigest, 'green_source_migration_ledger_invalid').digest, currentSchema: schemaNumberFromName(readbacks.canonical_schema_readback, 'green_canonical_schema_readback_invalid'), currentMigration: currentMigrationFromReadback(readbacks.canonical_schema_readback, 'green_canonical_schema_readback_invalid'), migrationLedgerDigest: assertMigrationLedgerReadback(readbacks.canonical_migration_ledger_readback, plan.target.currentSchema, greenTarget.currentLedgerDigest, 'green_canonical_migration_ledger_invalid').digest, cleanup: 'verified', finalInventory: summarizeGreenFinalContainerReadback(JSON.parse(readbacks.final_inventory_readback), plan, { [plan.target.network]: targetNetworkId, [plan.target.providerNetwork]: providerNetworkId }, finalApiId) }, imageReadback: JSON.parse(readbacks.final_version_readback) });
     const evidenceResult = await writeGreenEvidence(plan.evidenceFile, evidence);
     return Object.freeze({ status: 'executed', completedPhases: Object.freeze(completed), evidence: evidenceResult });
   } catch (error) {
+    // A rejected read-only prefix must never dispatch cleanup/mutation commands.
+    if (!isolatedEnvCreated) throw error;
     const cleanup = await runGreenEmergencyCleanup({ plan, command, commandEnv, completed, phaseStarted, schemaMutationStarted, originalApiIdentity, resourceIds: { isolatedNetworkId, isolatedDatabaseId, candidateId, finalApiId } });
     error.cleanup = cleanup;
     let forwardRecovery = { status: 'not-required' };
@@ -2182,31 +2244,33 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
     else if (schemaMutationStarted && forwardRecovery.status !== 'verified') error.code = 'green_forward_recovery_failed';
     throw error;
   } finally {
-    await unlink(plan.isolated.envFile).catch(() => {});
+    if (isolatedEnvCreated) await unlink(plan.isolated.envFile).catch(() => {});
   }
 }
 
 async function main() {
+  const mode = parseGreenPromotionArguments(process.argv.slice(2));
   // The executable path intentionally requires a caller-supplied protected manifest/config.
-  // This package does not execute Docker/SSH in CI or without the explicit operational gate.
+  // Default dispatch is confined to Docker reads; mutation requires all execute gates.
   const target = await readProtectedGreenManifest(process.env.GREEN_STAGING_TARGET_MANIFEST ?? '');
   const configPath = process.env.GREEN_STAGING_CONFIG_MANIFEST;
   const config = await readProtectedJson(configPath, 'green_config_manifest_missing');
   const plan = buildGreenPromotionPlan({
     targetManifest: target,
     config,
-    runtimeCommit: process.argv[2],
+    runtimeCommit: mode.runtimeCommit,
     runtimeImageDigest: process.env.GREEN_RUNTIME_IMAGE_DIGEST,
     opsCommit: process.env.GREEN_STAGING_OPS_COMMIT,
     evidenceFile: process.env.GREEN_STAGING_EVIDENCE_FILE,
   });
-  await runGreenPromotion({
+  const result = await runGreenPromotion({
     plan,
     config,
     configFile: config.envFile,
     environment: process.env,
-    execute: true,
+    execute: mode.execute,
   });
+  if (!mode.execute) process.stdout.write(`${JSON.stringify(result)}\n`);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
