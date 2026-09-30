@@ -1,5 +1,19 @@
 # SIT Pilot Phase Capsule — 2026-09-23
 
+## Parent objective addendum — SIT Mission / Blue Ocean — 2026-09-30
+
+The authoritative top-level objective is the
+[SIT Mission Masterplan](../product/SIT_MISSION_MASTERPLAN_2026-09-30.md).
+Staging Web/CORS and safe two-role synthetic catalog QA remain **Phase 0**,
+with separate source/runtime evidence and unchanged safety gates. They support
+the Mission goal; they do not replace or close it. After Phase 0 closure, resume
+the masterplan at **P2 — dauerhafter unverbindlicher Missionsbedarf**.
+Preserve the historical phase/readiness records below without treating their
+older ordering or status as current authority. Keep execution autonomous inside
+the authorized package; involve Walid only for unavoidable physical actions.
+Use Gemini only for narrow, named critical gates bound to current sources.
+No new live/provider/payment/Production/Play authorization follows.
+
 ## Web-first pilot execution addendum — 2026-09-30
 
 Walid changed the active execution order on 30 September 2026. Routine product

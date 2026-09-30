@@ -1,5 +1,20 @@
 # Current Work Package: Staging Web Pilot delivery — ACTIVE
 
+## Parent objective addendum — SIT Mission / Blue Ocean — 2026-09-30
+
+The top-level objective is now the authoritative
+[SIT Mission Masterplan](product/SIT_MISSION_MASTERPLAN_2026-09-30.md).
+Existing Staging Web/CORS delivery and safe two-role synthetic catalog QA are
+**Phase 0 prerequisites**, not the product goal. Their exact-source/live gates
+remain separate and must not be damaged or mistaken for Mission completion.
+After Phase 0 closure, the next Mission package is **P2 — dauerhafter
+unverbindlicher Missionsbedarf**, with its masterplan acceptance/exclusions.
+The older capsules below remain historical evidence, not a replacement goal.
+Proceed within bounded authorized packages without involving Walid except for
+an unavoidable physical action. Gemini is reserved for narrow, named critical
+gates using current sources; it is not a routine execution prerequisite.
+This addendum grants no new live, provider, payment, Production or Play authority.
+
 ## Staging Web auth/CORS package — source review complete, live gate open
 
 The reported live internal-only `CORS_ORIGINS` rejects the browser before the
