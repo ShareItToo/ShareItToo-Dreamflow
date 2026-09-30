@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { programmaticPlaceholder } from './fixtures/programmatic_placeholder.mjs';
 import { fixtureDigest, fixtureEnvironmentDigest, fixtureNotice, fixtureTarget,
   validateFixtureManifest, isolatedFixtureRehearsal } from '../ops/staging_web_fixture_preflight.mjs';
 import { adapterSources, runFixtureAdapter, validateAdapterInputs, parseAdapterArguments,
@@ -10,6 +11,17 @@ import { adapterSources, runFixtureAdapter, validateAdapterInputs, parseAdapterA
 const now = new Date('2026-09-30T12:00:00Z');
 const bytesHash = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const copy = (value) => structuredClone(value);
+test('adapter accepts only the typed stored WebP placeholder, rejects DB media drift before writes', async () => {
+  const { photo, bytes } = await programmaticPlaceholder();
+  for (const edit of [null, { mime_type: 'image/jpeg' }, { byte_size: bytes.length + 1 }, { content_sha256: '0'.repeat(64) }]) {
+    const f = fixture(); f.photoBytes = bytes; f.storedPhotoBytes = bytes; f.manifest.preflight.photo = photo;
+    Object.assign(f.state.snapshot.upload[0], { mime_type: 'image/webp', byte_size: bytes.length, content_sha256: photo.sha256 }, edit);
+    f.manifest.preflight.snapshotDigest = fixtureDigest(f.state.snapshot); f.bind();
+    if (edit) await assert.rejects(runFixtureAdapter(f), /media_row_drift/u);
+    else assert.equal((await runFixtureAdapter(f)).status, 'preflight-passed-no-mutation');
+    assert.equal(f.state.events.length, 0);
+  }
+});
 function fixture() {
   const photoBytes = Buffer.from([255, 216, 255, 0, 3]);
   const roles = ['owner', 'renter'].map((role) => ({ role, userId: `synthetic-${role}`, syntheticMarker: 'synthetic-test' }));

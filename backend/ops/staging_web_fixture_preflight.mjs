@@ -13,6 +13,41 @@ const digestPattern = /^[a-f0-9]{64}$/u;
 const identifier = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,119}$/u;
 export const fixtureTarget = 'https://staging.shareittoo.com/api/v1';
 export const fixtureNotice = 'Synthetische Katalogfixture – kein reales Angebot, kein Vertrag, keine Zahlung';
+export const placeholderStatement = 'Objectively verified uniform-color placeholder; original generator, date and license unknown; internal noncontractual catalog test only.';
+export function fixturePhotoFileName(photo) {
+  if (photo?.classification === 'synthetic_programmatic_placeholder' && photo.mimeType === 'image/webp') return 'photo.webp';
+  requireThat(['authentic_non_ai', 'synthetic_ai_illustration'].includes(photo?.classification)
+    && photo.mimeType === 'image/jpeg', 'fixture_photo_type_invalid');
+  return 'photo.jpg';
+}
+export function fixturePhotoBytesValid(photo, bytes) {
+  if (!Buffer.isBuffer(bytes) || bytes.length <= 3 || bytes.length > 8388608
+    || bytesDigest(bytes) !== photo?.sha256) return false;
+  if (photo.classification === 'synthetic_programmatic_placeholder') return photo.mimeType === 'image/webp'
+    && bytes.length === photo.byteSize && bytes.length >= 20
+    && bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP'
+    && bytes.readUInt32LE(4) === bytes.length - 8;
+  return ['authentic_non_ai', 'synthetic_ai_illustration'].includes(photo.classification)
+    && photo.mimeType === 'image/jpeg' && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
+}
+export async function validateFixturePhotoContent(photo, bytes) {
+  requireThat(fixturePhotoBytesValid(photo, bytes), 'fixture_photo_bytes_invalid');
+  if (photo.classification !== 'synthetic_programmatic_placeholder') return;
+  // Use the existing image decoder, not a declared MIME or caller's pixel claim.
+  // No network or new dependency; bounded single-frame input/output only.
+  try {
+    const { default: sharp } = await import('sharp');
+    const image = sharp(bytes, { limitInputPixels: 4194304, failOn: 'warning' });
+    const metadata = await image.metadata();
+    requireThat(metadata.format === 'webp' && metadata.width === photo.width && metadata.height === photo.height
+      && (metadata.pages ?? 1) === 1, 'fixture_placeholder_content_invalid');
+    const { data, info } = await image.toColourspace('srgb').ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const rgb = [1, 3, 5].map((i) => parseInt(photo.rgbHex.slice(i, i + 2), 16));
+    requireThat(info.channels === 4 && data.length === photo.width * photo.height * 4, 'fixture_placeholder_content_invalid');
+    for (let i = 0; i < data.length; i += 4) requireThat(data[i] === rgb[0] && data[i + 1] === rgb[1]
+      && data[i + 2] === rgb[2] && data[i + 3] === 255, 'fixture_placeholder_content_invalid');
+  } catch { fail('fixture_placeholder_content_invalid'); }
+}
 // Capability passed only by the isolated PG16 rehearsal. JSON/env/argv cannot
 // reproduce this identity; both CLIs deliberately omit it.
 export const isolatedFixtureRehearsal = Symbol('isolated-fixture-pg16-rehearsal');
@@ -106,13 +141,20 @@ export function validateFixtureManifest(manifest, now = new Date(), rehearsal) {
   const common = ['classification', 'mimeType', 'sha256', 'currentProductEvidence', 'file'];
   const authentic = photo?.classification === 'authentic_non_ai';
   const synthetic = photo?.classification === 'synthetic_ai_illustration';
+  const placeholder = photo?.classification === 'synthetic_programmatic_placeholder';
   const fields = authentic ? ['sourceUrl', 'creator', 'license', 'capturedAt']
-    : ['syntheticAi', 'generatedAt', 'toolIdentity', 'promptHash', 'usageLicenseStatement', 'sourceUrl'];
+    : placeholder ? ['syntheticAi', 'byteSize', 'width', 'height', 'rgbHex', 'opaque', 'testOnlyStatement']
+      : ['syntheticAi', 'generatedAt', 'toolIdentity', 'promptHash', 'usageLicenseStatement', 'sourceUrl'];
   const text = (value) => typeof value === 'string' && value.trim().length > 0 && value.length <= 2000;
   const past = (value) => Number.isFinite(Date.parse(value)) && Date.parse(value) <= +now;
-  requireThat((authentic || synthetic) && photo.mimeType === 'image/jpeg' && digestPattern.test(photo.sha256 ?? '')
+  requireThat((authentic || synthetic || placeholder) && photo.mimeType === (placeholder ? 'image/webp' : 'image/jpeg') && digestPattern.test(photo.sha256 ?? '')
     && Object.keys(photo).every((key) => [...common, ...fields].includes(key))
     && (authentic ? text(photo.creator) && text(photo.license) && past(photo.capturedAt)
+      : placeholder ? photo.syntheticAi === false && photo.opaque === true && photo.testOnlyStatement === placeholderStatement
+        && Number.isInteger(photo.width) && photo.width > 0 && photo.width <= 2048
+        && Number.isInteger(photo.height) && photo.height > 0 && photo.height <= 2048
+        && Number.isInteger(photo.byteSize) && photo.byteSize >= 20 && photo.byteSize <= 8388608
+        && /^#[0-9A-F]{6}$/u.test(photo.rgbHex ?? '')
       : photo.syntheticAi === true && past(photo.generatedAt) && text(photo.toolIdentity)
         && digestPattern.test(photo.promptHash ?? '') && text(photo.usageLicenseStatement)),
   'fixture_photo_provenance_required');
@@ -225,6 +267,9 @@ export function validateFixtureSnapshot(manifest, snapshot) {
   requireThat(upload.storage_name === manifest.uploadName && upload.owner_id === listing.owner_id
     && upload.listing_id === listing.id && upload.purpose === 'listing_image'
     && upload.visibility === 'public' && upload.content_scan_status === 'passed', 'fixture_upload_unsafe');
+  if (manifest.photo.classification === 'synthetic_programmatic_placeholder') requireThat(
+    upload.mime_type === 'image/webp' && Number(upload.byte_size) === manifest.photo.byteSize
+      && upload.content_sha256 === manifest.photo.sha256, 'fixture_upload_media_drift');
   requireThat(fixtureDigest({ rules: snapshot.rules, blocks: snapshot.blocks })
     === manifest.availabilityDigest, 'fixture_availability_drift');
 }
@@ -234,9 +279,7 @@ export async function preflightWebFixture({ manifest, environment, client, photo
   requireThat(execute === false, 'fixture_mutation_adapter_not_approved');
   validateFixtureManifest(manifest, now, rehearsal);
   validateFixtureEnvironment(manifest, environment, rehearsal);
-  requireThat(Buffer.isBuffer(photoBytes) && photoBytes.length > 3 && photoBytes.length <= 8388608
-    && photoBytes[0] === 0xff && photoBytes[1] === 0xd8 && photoBytes[2] === 0xff
-    && bytesDigest(photoBytes) === manifest.photo.sha256, 'fixture_photo_bytes_invalid');
+  await validateFixturePhotoContent(manifest.photo, photoBytes);
   validateFixtureSnapshot(manifest, await readFixtureSnapshot(client, manifest));
   return { status: 'preflight-passed-no-mutation', executable: false,
     roles: 2, listings: 1, uploads: 1,

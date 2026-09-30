@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { programmaticPlaceholder } from './fixtures/programmatic_placeholder.mjs';
 import test from 'node:test';
 import { createHash } from 'node:crypto';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync, symlinkSync } from 'node:fs';
@@ -15,6 +16,35 @@ const networkName = 'sit-green-network-20260918011528-wp254';
 const dbName = 'sit-green-postgres-20260918011528-wp254';
 const uploadsName = 'sit-green-uploads-20260918011528-wp254';
 
+test('runner binds WebP extension across preparation, private inventory, binding and cleanup', async () => {
+  const f = fixture(); const { photo, bytes } = await programmaticPlaceholder();
+  f.manifest.preflight.photo = photo;
+  const prepared = JSON.parse(prepareFixtureRunnerInput({ manifest: f.manifest, photoBytes: bytes, source: f.source }));
+  assert.equal(prepared.preflight.photo.mimeType, 'image/webp');
+  assert.equal(prepared.preflight.photo.file, '/run/sit-fixture-input/photo.webp');
+  const cleanup = structuredClone(prepared); cleanup.operation = 'cleanup'; cleanup.activationDigest = 'c'.repeat(64);
+  assert.equal(JSON.parse(prepareFixtureRunnerInput({ manifest: cleanup, photoBytes: bytes, source: f.source })).preflight.photo.file,
+    '/run/sit-fixture-input/photo.webp');
+  cleanup.preflight.photo.file = '/run/sit-fixture-input/photo.jpg';
+  assert.throws(() => prepareFixtureRunnerInput({ manifest: cleanup, photoBytes: bytes, source: f.source }), /cleanup_input_scope/u);
+  const invoke = async (inputNames, photoPath = '/run/sit-fixture-input/photo.webp') => {
+    f.manifest.preflight.photo = { ...photo, file: photoPath };
+    const adapterBytes = Buffer.from(JSON.stringify(f.manifest));
+    const binding = buildFixtureRunnerBinding({ ...f, inputDirectory: f.binding.inputDirectory, adapterBytes });
+    return runFixtureContainer({ ...f, binding, args: { ...f.args, fileHash: hash(adapterBytes) },
+      runtimeTreeDigest: '8'.repeat(64), assertSourceReadable: () => {}, inputNames: () => inputNames,
+      readEnv: () => f.envBytes, readInput: (path) => {
+        if (path === binding.adapterFile) return adapterBytes;
+        assert.equal(path, `${binding.inputDirectory}/photo.webp`); return bytes;
+      } });
+  };
+  assert.equal((await invoke(['adapter.json', 'photo.webp'])).status, 'preflight-passed-no-mutation');
+  await assert.rejects(invoke(['adapter.json', 'photo.jpg']), /input_directory_scope/u);
+  await assert.rejects(invoke(['adapter.json', 'photo.webp', 'photo.jpg']), /input_directory_scope/u);
+  await assert.rejects(invoke(['adapter.json', 'photo.webp'], '/run/sit-fixture-input/photo.jpg'), /adapter_source/u);
+  f.manifest.preflight.photo.classification = 'authentic_non_ai';
+  assert.throws(() => prepareFixtureRunnerInput({ manifest: f.manifest, photoBytes: bytes, source: f.source }));
+});
 function fixture() {
   const source = { commit: 'b'.repeat(40), schemaCount: 98, ledgerDigest: 'c'.repeat(64), hashes: Object.fromEntries(adapterSources.map((p) => [p, 'd'.repeat(64)])) };
   const environment = { DEPLOYMENT_ENVIRONMENT: 'test', APP_COMMIT: 'a'.repeat(40),
@@ -214,7 +244,8 @@ test('binding builder derives one-hour authority from actual immutable readbacks
   assert.throws(() => buildFixtureRunnerBinding({ ...f, inputDirectory: f.binding.inputDirectory, adapterBytes: f.bytes }), /image_drift/u);
   const text = readFileSync(new URL('../ops/staging_web_fixture_runner.mjs', import.meta.url), 'utf8');
   assert.match(text, /mkdirSync\(argv\[5\], \{ mode: 0o700 \}\); chownSync\(argv\[5\], uid, gid\)/u);
-  assert.match(text, /writeExclusivePrivateFile\(.*photo\.jpg.*\{ uid, gid \}/u);
+  assert.match(text, /const photoName = fixturePhotoFileName\(JSON\.parse\(bytes\)\.preflight\.photo\)/u);
+  assert.match(text, /writeExclusivePrivateFile\(.*photoName.*\{ uid, gid \}/u);
   assert.match(text, /writeExclusivePrivateFile\(argv\[2\], bytes, \{ uid: 0, gid: 0 \}\)/u);
 });
 

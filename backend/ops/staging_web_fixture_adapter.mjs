@@ -8,7 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readStablePrivateFile } from './stable_private_file.mjs';
 import { fixtureDigest, fixtureNotice, readPrivateFixtureInput, readFixtureSnapshot,
   validateFixtureManifest, validateFixtureEnvironment, validateFixtureSnapshot,
-  preflightWebFixture, hasSyntheticFixtureContact } from './staging_web_fixture_preflight.mjs';
+  preflightWebFixture, hasSyntheticFixtureContact, fixturePhotoBytesValid, validateFixturePhotoContent } from './staging_web_fixture_preflight.mjs';
 
 const root = realpathSync(fileURLToPath(new URL('../..', import.meta.url)));
 const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -48,9 +48,7 @@ export function validateAdapterInputs({ manifest, manifestHash, source, environm
   check(execute === false || (execute === true && confirmSource === manifest.sourceCommit
     && confirmRun === manifest.preflight.runId), 'fixture_adapter_confirmation_required');
   check(execute || (confirmSource === undefined && confirmRun === undefined), 'fixture_adapter_unexpected_confirmation');
-  check(Buffer.isBuffer(photoBytes) && photoBytes.length > 3 && photoBytes.length <= 8388608
-    && photoBytes[0] === 0xff && photoBytes[1] === 0xd8 && photoBytes[2] === 0xff
-    && sha(photoBytes) === manifest.preflight.photo.sha256
+  check(fixturePhotoBytesValid(manifest.preflight.photo, photoBytes)
     && Buffer.isBuffer(storedPhotoBytes) && photoBytes.equals(storedPhotoBytes), 'fixture_adapter_stored_photo_drift');
   check(manifest.uploadDirectory === resolve(environment.UPLOAD_DIR ?? '/data/uploads'), 'fixture_adapter_media_root_drift');
   if (manifest.operation === 'cleanup') check(/^[a-f0-9]{64}$/u.test(manifest.activationDigest ?? ''),
@@ -97,7 +95,8 @@ const snapshotIdentity = (snapshot, m) => {
   'fixture_adapter_listing_drift');
   check(upload.storage_name === m.uploadName && upload.owner_id === row.owner_id && upload.listing_id === row.id
     && upload.purpose === 'listing_image' && upload.visibility === 'public' && upload.content_scan_status === 'passed'
-    && upload.mime_type === 'image/jpeg' && upload.content_sha256 === m.photo.sha256,
+    && upload.mime_type === m.photo.mimeType && upload.content_sha256 === m.photo.sha256
+    && (m.photo.classification !== 'synthetic_programmatic_placeholder' || Number(upload.byte_size) === m.photo.byteSize),
   'fixture_adapter_media_row_drift');
   check(fixtureDigest({ rules: snapshot.rules, blocks: snapshot.blocks }) === m.availabilityDigest,
     'fixture_adapter_availability_drift');
@@ -229,6 +228,7 @@ async function verifyRevocation(client, m) {
 export async function runFixtureAdapter(input) {
   validateAdapterInputs(input);
   const { manifest, manifestHash, client, environment, execute = false, photoBytes, now, rehearsal } = input;
+  await validateFixturePhotoContent(manifest.preflight.photo, photoBytes);
   const m = manifest.preflight; const scope = scopeDigest(m);
   const key = `sit-web-fixture:${m.listingId}`;
   const locked = (await client.query('SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS locked', [key])).rows[0]?.locked;

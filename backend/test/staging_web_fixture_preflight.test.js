@@ -2,13 +2,48 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
+import { programmaticPlaceholder } from './fixtures/programmatic_placeholder.mjs';
 import {
   fixtureDigest, fixtureEnvironmentDigest, fixtureEnvironmentKeys,
   fixtureNotice, fixtureTarget, preflightWebFixture,
-  readPrivateFixtureInput, validateFixtureManifest,
+  readPrivateFixtureInput, validateFixtureManifest, validateFixturePhotoContent,
 } from '../ops/staging_web_fixture_preflight.mjs';
 
 const now = new Date('2026-09-30T12:00:00Z');
+test('WebP placeholder requires actual uniform opaque pixels and exact discriminated provenance', async () => {
+  const { photo, bytes } = await programmaticPlaceholder();
+  const f = fixture(); f.manifest.photo = photo; f.photoBytes = bytes;
+  Object.assign(f.snapshot.upload[0], { mime_type: 'image/webp', byte_size: bytes.length, content_sha256: photo.sha256 });
+  f.manifest.snapshotDigest = fixtureDigest(f.snapshot);
+  assert.equal((await preflightWebFixture(f)).status, 'preflight-passed-no-mutation');
+  for (const edit of [
+    { creator: 'invented' }, { generatedAt: '2020-01-01' }, { license: 'invented' }, { sourceUrl: 'https://example.invalid' },
+    { syntheticAi: true }, { mimeType: 'image/jpeg' }, { currentProductEvidence: true }, { width: 0 },
+    { testOnlyStatement: 'Real offer' }, { rgbHex: 'unknown' }, { opaque: false },
+  ]) assert.throws(() => validateFixtureManifest({ ...f.manifest, photo: { ...photo, ...edit } }, now));
+  for (const edit of [{ width: 959 }, { height: 639 }, { rgbHex: '#FFFFFF' }, { byteSize: bytes.length + 1 }])
+    await assert.rejects(validateFixturePhotoContent({ ...photo, ...edit }, bytes));
+  for (const offset of [0, 4, 8]) {
+    const wrong = Buffer.from(bytes); wrong[offset] ^= 1;
+    await assert.rejects(validateFixturePhotoContent({ ...photo, sha256: createHash('sha256').update(wrong).digest('hex') }, wrong));
+  }
+  const transparent = await programmaticPlaceholder({ background: { r: 42, g: 88, b: 143, alpha: 0.5 } });
+  await assert.rejects(validateFixturePhotoContent(transparent.photo, transparent.bytes), /placeholder_content_invalid/u);
+  const { default: sharp } = await import('sharp');
+  const patch = await sharp({ create: { width: 1, height: 1, channels: 3, background: '#FFFFFF' } }).png().toBuffer();
+  const varied = await sharp(bytes).composite([{ input: patch, left: 0, top: 0 }]).webp({ lossless: true }).toBuffer();
+  await assert.rejects(validateFixturePhotoContent({ ...photo, byteSize: varied.length,
+    sha256: createHash('sha256').update(varied).digest('hex') }, varied), /placeholder_content_invalid/u);
+  const malformed = Buffer.alloc(20); malformed.write('RIFF'); malformed.writeUInt32LE(12, 4); malformed.write('WEBP', 8);
+  await assert.rejects(validateFixturePhotoContent({ ...photo, byteSize: malformed.length,
+    sha256: createHash('sha256').update(malformed).digest('hex') }, malformed), /placeholder_content_invalid/u);
+  for (const edit of [{ mime_type: 'image/jpeg' }, { byte_size: bytes.length + 1 }, { content_sha256: '0'.repeat(64) }]) {
+    const original = { ...f.snapshot.upload[0] }; Object.assign(f.snapshot.upload[0], edit);
+    f.manifest.snapshotDigest = fixtureDigest(f.snapshot);
+    await assert.rejects(preflightWebFixture(f), /upload_media_drift/u);
+    f.snapshot.upload[0] = original;
+  }
+});
 function fixture() {
   const photoBytes = Buffer.from([0xff, 0xd8, 0xff, 0, 1]);
   const roles = ['owner', 'renter'].map((role) => ({ role, userId: `synthetic-${role}`,

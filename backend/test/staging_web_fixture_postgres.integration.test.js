@@ -8,6 +8,7 @@ import pg from 'pg';
 import { runMigrations } from '../src/migrations.js';
 import { adapterSources, runFixtureAdapter } from '../ops/staging_web_fixture_adapter.mjs';
 import { generateFixtureDraft } from '../ops/staging_web_fixture_draft.mjs';
+import { programmaticPlaceholder } from './fixtures/programmatic_placeholder.mjs';
 import { fixtureDigest, fixtureEnvironmentDigest, fixtureNotice, fixtureTarget,
   isolatedFixtureRehearsal, readFixtureSnapshot } from '../ops/staging_web_fixture_preflight.mjs';
 
@@ -137,6 +138,32 @@ test('PG16 fixture adapter uses real schema, transactions, triggers and two clie
         assert.deepEqual(await readFixtureSnapshot(client, f.manifest.preflight), before);
         assert.equal((await events(f)).length, 0);
         assert.equal((await client.query('SHOW transaction_read_only')).rows[0].transaction_read_only, 'off');
+      });
+
+      await t.test('real WebP placeholder draft/activation/cleanup bind media without runtime activation', async () => {
+        const f = await seed(client); const media = await programmaticPlaceholder(); const m = f.manifest.preflight;
+        const uploadName = m.uploadName.replace(/\.jpg$/u, '.webp');
+        await client.query('UPDATE uploads SET storage_name=$1,mime_type=$2,byte_size=$3,content_sha256=$4 WHERE storage_name=$5',
+          [uploadName, 'image/webp', media.bytes.length, media.photo.sha256, m.uploadName]);
+        m.uploadName = uploadName; f.environment.SIT_STAGING_PUBLIC_UPLOAD_NAMES = uploadName;
+        m.environmentDigest = fixtureEnvironmentDigest(f.environment); m.photo = { ...media.photo, file: '/run/sit-fixture-input/photo.webp' };
+        f.photoBytes = media.bytes; f.storedPhotoBytes = media.bytes;
+        const before = await readFixtureSnapshot(client, m); m.snapshotDigest = fixtureDigest(before);
+        const draft = await generateFixtureDraft({ source, environment: f.environment, photo: media.photo,
+          client, rehearsal: isolatedFixtureRehearsal, readPhoto: () => media.bytes });
+        assert.equal(draft.preflight.photo.file, '/run/sit-fixture-input/photo.webp');
+        assert.deepEqual(await readFixtureSnapshot(client, m), before); assert.equal((await events(f)).length, 0);
+        await client.query('UPDATE uploads SET byte_size=byte_size+1 WHERE storage_name=$1', [uploadName]);
+        await assert.rejects(runFixtureAdapter(bind(f, false)), /media_row_drift/u);
+        await client.query('UPDATE uploads SET byte_size=byte_size-1 WHERE storage_name=$1', [uploadName]);
+        const rebound = await readFixtureSnapshot(client, m); m.snapshotDigest = fixtureDigest(rebound);
+        const activated = await runFixtureAdapter(bind(f)); assert.equal(activated.runtimeActivated, false);
+        const cleaned = await runFixtureAdapter(bind(await cleanupManifest(f, activated.activationDigest)));
+        assert.equal(cleaned.status, 'cleaned-noncatalogued-audits-retained'); assert.equal(cleaned.runtimeActivated, false);
+        const after = await readFixtureSnapshot(client, m);
+        assert.deepEqual(after.upload, rebound.upload);
+        assert.equal(after.upload[0].content_sha256, media.photo.sha256); assert.equal(after.listing[0].is_active, false);
+        assert.equal((await events(f)).length, 3);
       });
 
       await t.test('default is read-only; activate/cleanup/replays retain truth and append-only audits', async () => {

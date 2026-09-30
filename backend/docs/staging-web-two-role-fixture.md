@@ -51,7 +51,7 @@ credential-generation, SQL mutation, upload, HTTP login or cleanup branches.
 ## Private input and read-only invocation
 
 Only after a separate authorization to prepare external inputs, supply a fresh
-(maximum one hour old) 0600 manifest and 0600 JPEG in a 0700 directory owned by
+(maximum one hour old) 0600 manifest and 0600 typed image in a 0700 directory owned by
 the executing UID, outside this repository. Symlinks and in-repository inputs
 are rejected; private bytes use the existing stable-descriptor reader.
 Do not copy credentials, user identifiers or raw snapshots into this document.
@@ -87,12 +87,18 @@ Manifest contract is implemented in `validateFixtureManifest`:
   `ownerDeclaration=false`, `bookingAllowed=false`, `paymentAllowed=false`;
 - notice exactly: “Synthetische Katalogfixture – kein reales Angebot, kein
   Vertrag, keine Zahlung”;
-- photo file, SHA-256, JPEG MIME, `currentProductEvidence=false`, and exactly
+- photo file, SHA-256, exact typed MIME, `currentProductEvidence=false`, and exactly
   one provenance variant: `authentic_non_ai` requires HTTPS `sourceUrl`,
   `creator`, `license`, `capturedAt`; `synthetic_ai_illustration` instead requires
   `syntheticAi:true`, `generatedAt`, versioned `toolIdentity`, `promptHash`
   (not a raw prompt), `usageLicenseStatement`, and an optional actual HTTPS
-  `sourceUrl`. Mixed/unknown fields and missing provenance fail closed;
+  `sourceUrl`. Both remain JPEG-only. A third exact variant
+  `synthetic_programmatic_placeholder` is WebP-only: `syntheticAi:false`,
+  `byteSize`, integer `width`/`height` (1–2048), uppercase `rgbHex`, `opaque:true`,
+  and `testOnlyStatement` exactly equal to the exported `placeholderStatement`.
+  It explicitly states that the original generator/date/license are unknown and
+  use is internal, synthetic and noncontractual. No invented origin/rights fields
+  are accepted. Mixed/unknown fields and missing provenance fail closed;
 - exact availability rules/blocks digest. This binds observed availability; it
   does not attest that a real item is available or change any calendar.
 
@@ -134,8 +140,19 @@ authenticity, copyright permission, current condition or ownership.
 
 An explicitly synthetic/AI-generated illustration may also be used for this
 noncontractual fixture, with the discriminated provenance fields above, exact
-SHA, scan and owner binding. Neither image class is current ownership/condition
+SHA, scan and owner binding. No fixture image class is current ownership/condition
 evidence. Real listings still require authentic current product photographs.
+The programmatic placeholder variant asserts only objectively verified content:
+RIFF/WEBP magic and exact container length, SHA, DB MIME/size/hash, scan/owner,
+plus an actual bounded single-frame decoder read proving every pixel has the
+declared RGB value and full opacity. It rejects animation, transparency,
+nonuniform pixels and corrupt content. There is no general WebP photo support.
+The supplied live read-only evidence identifies 960×640 opaque `#2A588F`,
+1172 bytes, SHA-256
+`d5b762e354eff48a5a8b744ce144ab9edafdc1c8a85be96ec6bf40a135ad04bf`.
+These observed values are manifest inputs, not claims about who created it or
+when; this source-only package did not fetch or independently read live bytes.
+Local tests generate different rehearsal bytes and do not replace that evidence.
 The historical photo may illustrate a visibly synthetic, nonbookable fixture
 only. It is not a current photo of the owner's real offered object. The existing
 guest listing category is `cat3/Sonstiges`; using a drill picture does not
@@ -279,7 +296,7 @@ private inputs, which must remain `0600`, never `0644`.
 
 Fresh activation draft after separate authorization (read-only DB operation):
 
-Provide only the already verified private JPEG and its exact provenance JSON
+Provide only the already verified private typed image and its exact provenance JSON
 (the discriminated `photo` schema above), root-owned `0600` in a private `0700`
 directory. No download, new rights assertion or real-product evidence is implied.
 Create a new root-owned `0700` run parent under `/docker/shareittoo/evidence/`.
@@ -314,7 +331,7 @@ The draft is not approval for activation, and never means runtime activation.
 
 Reproducible input preparation after separate authorization (no DB operation):
 
-1. Use the fresh activation draft above and matching private JPEG, both
+1. Use the fresh activation draft above and matching private typed image, both
    root-owned `0600`; review its exact source/runtime/provenance binding privately.
    Reuse this run's protected parent, never another historical run's inputs.
    Subsequent preparation does not refresh or invent snapshot/environment facts.
@@ -328,13 +345,17 @@ Reproducible input preparation after separate authorization (no DB operation):
    ```
 
    This exclusively creates `inputs` (`0700`, owner `100:101`), `adapter.json`
-   and `photo.jpg` (`0600`, `100:101`); no credential or SQL operation occurs.
+   and format-bound `photo.jpg` (JPEG) or `photo.webp` (typed placeholder),
+   both `0600`, `100:101`; no credential or SQL operation occurs.
    The source fields come from actual clean Git/file/ledger reads. Creation
    fails if the directory exists. Output contains hashes only. Partial file
    preparation is a failure, not a reusable input; inspect it before any
    separately authorized cleanup. The runner mounts this directory read-only
    at `/run/sit-fixture-input`, so the manifest's canonical photo path stays
    identical across activation and cleanup despite fresh host directories.
+   For a placeholder, use `photo.webp` in the two image argument examples above;
+   canonical private paths, binding and exact two-file inventory enforce that
+   extension. Cross-extension cleanup or extra image files fail closed.
 3. Bind the fresh live Docker readbacks and the prepared inputs:
 
    ```sh

@@ -1,9 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createHash } from 'node:crypto';
+import { programmaticPlaceholder } from './fixtures/programmatic_placeholder.mjs';
 import { generateFixtureDraft, fixtureDraftScope } from '../ops/staging_web_fixture_draft.mjs';
 import { fixtureDigest, fixtureEnvironmentDigest } from '../ops/staging_web_fixture_preflight.mjs';
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
+test('draft preserves objectively bound WebP placeholder metadata and verifies real pixels', async () => {
+  const f = fixture(); const { photo, bytes } = await programmaticPlaceholder();
+  f.photo = photo; f.photoBytes = bytes;
+  Object.assign(f.snapshot.upload[0], { mime_type: 'image/webp', byte_size: bytes.length, content_sha256: photo.sha256 });
+  assert.deepEqual((await f.run()).preflight.photo, { ...photo, file: '/run/sit-fixture-input/photo.webp' });
+  f.photo.rgbHex = '#FFFFFF'; await assert.rejects(f.run(), /placeholder_content_invalid/u);
+});
 function fixture() {
   const now = new Date(); const photoBytes = Buffer.from([255, 216, 255, 0, 3]);
   const photo = { classification: 'synthetic_ai_illustration', syntheticAi: true, generatedAt: '2026-01-01',

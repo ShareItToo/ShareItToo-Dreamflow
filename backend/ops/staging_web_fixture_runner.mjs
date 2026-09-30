@@ -7,7 +7,7 @@ import { dirname, basename, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { adapterSources, readAdapterSource, parseAdapterArguments } from './staging_web_fixture_adapter.mjs';
 import { fixtureDigest, fixtureEnvironmentDigest, readPrivateFixtureInput, validateFixtureManifest,
-  validateFixtureEnvironment } from './staging_web_fixture_preflight.mjs';
+  validateFixtureEnvironment, fixturePhotoBytesValid, validateFixturePhotoContent, fixturePhotoFileName } from './staging_web_fixture_preflight.mjs';
 import { readStablePrivateFile, writeExclusivePrivateFile } from './stable_private_file.mjs';
 import { fixtureDraftScope } from './staging_web_fixture_draft.mjs';
 
@@ -242,9 +242,10 @@ export async function runFixtureContainer({ binding, args, source = readAdapterS
   'fixture_runner_adapter_source');
   check(!args.execute || (args.confirmSource === source.commit && args.confirmRun === manifest.preflight.runId), 'fixture_runner_confirm');
   check(args.execute || (args.confirmSource === undefined && args.confirmRun === undefined), 'fixture_runner_confirm');
-  check(manifest.preflight.photo.file === `${inputRoot}/photo.jpg` && basename(args.file) === 'adapter.json', 'fixture_runner_photo_scope');
-  check(hash(readInput(`${binding.inputDirectory}/photo.jpg`, 8388608)) === manifest.preflight.photo.sha256, 'fixture_runner_photo_hash');
-  check(fixtureDigest(inputNames().sort()) === fixtureDigest(['adapter.json', 'photo.jpg']), 'fixture_runner_input_directory_scope');
+  const photoName = fixturePhotoFileName(manifest.preflight.photo);
+  check(manifest.preflight.photo.file === `${inputRoot}/${photoName}` && basename(args.file) === 'adapter.json', 'fixture_runner_photo_scope');
+  check(hash(readInput(`${binding.inputDirectory}/${photoName}`, 8388608)) === manifest.preflight.photo.sha256, 'fixture_runner_photo_hash');
+  check(fixtureDigest(inputNames().sort()) === fixtureDigest(['adapter.json', photoName]), 'fixture_runner_input_directory_scope');
   }
   const nonce = randomBytes(12).toString('hex'); const name = `sit-web-fixture-${nonce}`;
   const launch = buildFixtureRunnerLaunch({ binding, source, runtimeTreeDigest, args, name, nonce, draftPhoto });
@@ -263,7 +264,7 @@ export async function runFixtureContainer({ binding, args, source = readAdapterS
       validateFixtureManifest(result.draft.preflight); validateFixtureEnvironment(result.draft.preflight, expectedEnv);
       check(result.draft.sourceCommit === source.commit && fixtureDigest(result.draft.sourceHashes) === fixtureDigest(source.hashes)
         && result.draft.ledgerDigest === source.ledgerDigest && result.draft.schemaCount === 98
-        && fixtureDigest(result.draft.preflight.photo) === fixtureDigest({ ...draftPhoto, file: `${inputRoot}/photo.jpg` }), 'fixture_runner_draft_result');
+        && fixtureDigest(result.draft.preflight.photo) === fixtureDigest({ ...draftPhoto, file: `${inputRoot}/${fixturePhotoFileName(draftPhoto)}` }), 'fixture_runner_draft_result');
     } else {
     check(result.runtimeActivated === false && result.sourceCommit === source.commit
       && /^[a-f0-9]{64}$/u.test(result.manifestDigest) && /^[a-f0-9]{64}$/u.test(result.activationDigest)
@@ -296,16 +297,15 @@ export async function runFixtureContainer({ binding, args, source = readAdapterS
 export function prepareFixtureRunnerInput({ manifest: draft, photoBytes, source }) {
   check(draft?.kind === 'sit-staging-web-fixture-adapter' && draft.schemaVersion === 1
     && ['activate', 'cleanup'].includes(draft.operation) && source.schemaCount === 98, 'fixture_runner_input_manifest');
-  check(Buffer.isBuffer(photoBytes) && photoBytes.length > 3 && photoBytes.length <= 8388608
-    && photoBytes[0] === 255 && photoBytes[1] === 216 && photoBytes[2] === 255
-    && hash(photoBytes) === draft.preflight?.photo?.sha256, 'fixture_runner_input_photo');
+  check(fixturePhotoBytesValid(draft.preflight?.photo, photoBytes), 'fixture_runner_input_photo');
   // Canonical in-container path stays byte-identical across activation/cleanup;
   // fresh host directories must never silently change the audit scope.
-  if (draft.operation === 'cleanup') check(draft.preflight.photo.file === `${inputRoot}/photo.jpg`
+  const photoName = fixturePhotoFileName(draft.preflight.photo);
+  if (draft.operation === 'cleanup') check(draft.preflight.photo.file === `${inputRoot}/${photoName}`
     && /^[a-f0-9]{64}$/u.test(draft.activationDigest), 'fixture_runner_cleanup_input_scope');
   const manifest = structuredClone(draft);
   Object.assign(manifest, { sourceCommit: source.commit, sourceHashes: source.hashes, schemaCount: source.schemaCount, ledgerDigest: source.ledgerDigest });
-  manifest.preflight.photo.file = `${inputRoot}/photo.jpg`;
+  manifest.preflight.photo.file = `${inputRoot}/${photoName}`;
   validateFixtureManifest(manifest.preflight);
   // Never refresh createdAt/snapshot/environment or invent media provenance.
   return Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`);
@@ -326,7 +326,7 @@ export function buildFixtureRunnerBinding({ source, api, database, network, volu
   validateFixtureManifest(manifest.preflight); validateFixtureEnvironment(manifest.preflight, environment);
   check(manifest.sourceCommit === source.commit && fixtureDigest(manifest.sourceHashes) === fixtureDigest(source.hashes)
     && manifest.ledgerDigest === source.ledgerDigest && manifest.schemaCount === source.schemaCount
-    && manifest.preflight.photo.file === `${inputRoot}/photo.jpg`, 'fixture_runner_adapter_source');
+    && manifest.preflight.photo.file === `${inputRoot}/${fixturePhotoFileName(manifest.preflight.photo)}`, 'fixture_runner_adapter_source');
   return binding;
 }
 
@@ -348,14 +348,15 @@ async function main() {
     catch (error) { if (error.code !== 'ENOENT') throw error; }
     const metadataBytes = readPrivateFixtureInput(argv[1]); check(hash(metadataBytes) === argv[2], 'fixture_runner_private_binding');
     const photoBytes = readPrivateFixtureInput(argv[3], { maxBytes: 8388608 }); check(hash(photoBytes) === argv[4], 'fixture_runner_private_binding');
-    const draftPhoto = JSON.parse(metadataBytes); check(draftPhoto.sha256 === hash(photoBytes)
-      && photoBytes[0] === 255 && photoBytes[1] === 216 && photoBytes[2] === 255, 'fixture_runner_input_photo');
+    const draftPhoto = JSON.parse(metadataBytes);
+    check(fixturePhotoBytesValid(draftPhoto, photoBytes), 'fixture_runner_input_photo');
     const source = readAdapterSource(); assertFixtureRunnerReadableSources();
     const api = inspect(apiName); const database = inspect(dbName); const network = inspect(networkName); const volume = inspect(uploadsName);
     check(/^ghcr\.io\/shareittoo\/shareittoo-api:[a-f0-9]{40}@sha256:[a-f0-9]{64}$/u.test(api.Config?.Image ?? ''), 'fixture_runner_current_image');
     const image = JSON.parse(docker(['image', 'inspect', '--format', '{{json .}}', api.Config.Image]));
     const binding = buildFixtureRunnerBinding({ source, api, database, network, volume, image, draftPhoto,
       envBytes: readStablePrivateFile(envFile, { encoding: null, expectedMode: 0o600, expectedUid: 0 }) });
+    await validateFixturePhotoContent(draftPhoto, photoBytes);
     const draft = await runFixtureContainer({ binding, args: { execute: false }, source, draftPhoto });
     const bytes = Buffer.from(`${JSON.stringify(draft, null, 2)}\n`); writeExclusivePrivateFile(argv[5], bytes, { uid: 0, gid: 0 });
     check(hash(readPrivateFixtureInput(argv[5])) === hash(bytes), 'fixture_runner_draft_file_drift');
@@ -367,11 +368,12 @@ async function main() {
     const draft = readPrivateFixtureInput(argv[1]); check(hash(draft) === argv[2], 'fixture_runner_private_binding');
     const photo = readPrivateFixtureInput(argv[3], { maxBytes: 8388608 }); check(hash(photo) === argv[4], 'fixture_runner_private_binding');
     const bytes = prepareFixtureRunnerInput({ manifest: JSON.parse(draft), photoBytes: photo, source: readAdapterSource() });
+    const photoName = fixturePhotoFileName(JSON.parse(bytes).preflight.photo);
     assertOutputParent(argv[5]);
     mkdirSync(argv[5], { mode: 0o700 }); chownSync(argv[5], uid, gid);
-    writeExclusivePrivateFile(`${argv[5]}/photo.jpg`, photo, { uid, gid });
+    writeExclusivePrivateFile(`${argv[5]}/${photoName}`, photo, { uid, gid });
     writeExclusivePrivateFile(`${argv[5]}/adapter.json`, bytes, { uid, gid });
-    privateRuntimeInput(`${argv[5]}/photo.jpg`, 8388608); privateRuntimeInput(`${argv[5]}/adapter.json`);
+    privateRuntimeInput(`${argv[5]}/${photoName}`, 8388608); privateRuntimeInput(`${argv[5]}/adapter.json`);
     process.stdout.write(`${JSON.stringify({ status: 'private-inputs-prepared-no-database', adapterSha256: hash(bytes), photoSha256: hash(photo) })}\n`);
     return;
   }
@@ -385,8 +387,9 @@ async function main() {
       envBytes: readStablePrivateFile(envFile, { encoding: null, expectedMode: 0o600, expectedUid: 0 }),
       inputDirectory: argv[1], adapterBytes: privateRuntimeInput(`${argv[1]}/adapter.json`) });
     const manifest = JSON.parse(privateRuntimeInput(binding.adapterFile));
-    check(hash(privateRuntimeInput(`${argv[1]}/photo.jpg`, 8388608)) === manifest.preflight.photo.sha256
-      && JSON.stringify(readdirSync(argv[1]).sort()) === JSON.stringify(['adapter.json', 'photo.jpg']), 'fixture_runner_input_directory_scope');
+    const photoName = fixturePhotoFileName(manifest.preflight.photo);
+    check(hash(privateRuntimeInput(`${argv[1]}/${photoName}`, 8388608)) === manifest.preflight.photo.sha256
+      && JSON.stringify(readdirSync(argv[1]).sort()) === JSON.stringify(['adapter.json', photoName]), 'fixture_runner_input_directory_scope');
     const bytes = Buffer.from(`${JSON.stringify(binding, null, 2)}\n`); writeExclusivePrivateFile(argv[2], bytes, { uid: 0, gid: 0 });
     process.stdout.write(`${JSON.stringify({ status: 'binding-prepared-no-database', bindingSha256: hash(bytes), opsCommit: source.commit, runtimeCommit: binding.runtimeCommit })}\n`);
     return;

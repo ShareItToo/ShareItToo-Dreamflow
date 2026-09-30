@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { readStagingAccessConfiguration } from '../src/staging_access_gate.js';
 import { fixtureDigest, fixtureEnvironmentDigest, fixtureNotice, fixtureTarget,
   readFixtureSnapshot, validateFixtureManifest, validateFixtureEnvironment,
-  validateFixtureSnapshot, hasSyntheticFixtureContact } from './staging_web_fixture_preflight.mjs';
+  validateFixtureSnapshot, hasSyntheticFixtureContact, validateFixturePhotoContent, fixturePhotoFileName } from './staging_web_fixture_preflight.mjs';
 import { readAdapterStoredPhoto, runFixtureAdapter } from './staging_web_fixture_adapter.mjs';
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const check = (value, code) => { if (!value) throw Object.assign(Error(code), { code }); };
@@ -26,7 +26,7 @@ export function fixtureDraftScope({ source, environment, photo, now = new Date()
     listingId: gate.publicListingIds[0], uploadName: gate.publicUploadNames[0], region: 'heilbronn',
     fixtureClass: 'synthetic_noncontractual_catalog_only', notice: fixtureNotice, realOffer: false,
     ownerDeclaration: false, bookingAllowed: false, paymentAllowed: false,
-    availabilityDigest: '0'.repeat(64), photo: { ...photo, file: '/run/sit-fixture-input/photo.jpg' } };
+    availabilityDigest: '0'.repeat(64), photo: { ...photo, file: `/run/sit-fixture-input/${fixturePhotoFileName(photo)}` } };
   validateFixtureManifest(preflight, now, rehearsal);
   validateFixtureEnvironment(preflight, environment, rehearsal);
   check(!environment.SIT_WEB_FIXTURE_EXECUTE && !environment.SIT_WEB_FIXTURE_CONFIRM, 'fixture_draft_execution_forbidden');
@@ -68,6 +68,7 @@ export async function generateFixtureDraft({ source, environment, photo, client,
     ledgerDigest: source.ledgerDigest, uploadDirectory: '/data/uploads', preflight };
   const photoBytes = readPhoto(manifest, environment);
   check(Buffer.isBuffer(photoBytes) && hash(photoBytes) === photo.sha256, 'fixture_draft_stored_photo_drift');
+  await validateFixturePhotoContent(photo, photoBytes);
   // The unchanged adapter rechecks the complete dependency/FK inventory,
   // refresh tokens, schema and snapshot on this connection. No write mode.
   const accepted = await adapterPreflight({ manifest, manifestHash: hash(JSON.stringify(manifest)), source,
