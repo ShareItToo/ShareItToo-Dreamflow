@@ -313,7 +313,8 @@ import {
   listFinancialDocuments,
 } from './financial_documents.js';
 import { releaseMetadata } from './release.js';
-import { syntheticCatalogProjection, syntheticCatalogMutationGuard, SyntheticCatalogError } from './staging_synthetic_catalog.js';
+import { isSyntheticCatalogListing, syntheticCatalogProjection,
+  syntheticCatalogMutationGuard, SyntheticCatalogError } from './staging_synthetic_catalog.js';
 import {
   assertPrivatePilotAccountState,
   assertPrivatePilotStoredListing,
@@ -1393,14 +1394,20 @@ export function buildCatalogSearch(search, { publicListingIds = null, syntheticC
 function publicListingFromRow(row) {
   const allowed = new Set(row.storage_names ?? []);
   const payload = ensureObject(row.payload, 'invalid_stored_listing');
-  const photos = Array.isArray(payload.photos)
-    ? payload.photos.filter((photo) => {
-        const storageName = storageNameFromListingPhoto(photo, config.publicBaseUrl);
-        return storageName && allowed.has(storageName);
-      })
-    : [];
+  const listingId = row.catalog_listing_id ?? payload.id;
+  const synthetic = isSyntheticCatalogListing(listingId, config.syntheticCatalog);
+  const photos = synthetic
+    ? (allowed.has(config.syntheticCatalog.uploadName)
+      ? [`${config.publicBaseUrl}/uploads/${config.syntheticCatalog.uploadName}`]
+      : [])
+    : (Array.isArray(payload.photos)
+      ? payload.photos.filter((photo) => {
+          const storageName = storageNameFromListingPhoto(photo, config.publicBaseUrl);
+          return storageName && allowed.has(storageName);
+        })
+      : []);
   return syntheticCatalogProjection(shapePublicListing({ ...payload, photos }, { distanceKm: row.distance_km }),
-    config.syntheticCatalog, row.catalog_listing_id ?? payload.id);
+    config.syntheticCatalog, listingId);
 }
 
 function rentalPayload(raw, { id, itemId, ownerId, renterId, existingStatus = null }) {

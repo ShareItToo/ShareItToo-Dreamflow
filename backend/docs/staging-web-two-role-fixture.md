@@ -515,6 +515,9 @@ Success additionally requires live/ready/version, flag true, and public catalog
 count exactly one: the exact synthetic fixture, visibly labelled as a test,
 `synthetic_noncontractual_catalog_only`, `realOffer:false`,
 `ownerDeclaration:false`, `bookingAllowed:false` and `paymentAllowed:false`.
+It must also expose exactly one server-generated canonical public photo URL for
+the exact configured synthetic upload; persisted or client-supplied photo URLs
+cannot substitute for that database-bound upload evidence.
 The bound DB/effect/session/provider digests must remain unchanged. No login,
 booking, request, payment, identity, notification or provider action is issued.
 Every replacement, DB or public-readback failure—including a late foreign

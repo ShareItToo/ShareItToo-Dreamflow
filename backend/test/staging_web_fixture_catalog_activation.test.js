@@ -78,15 +78,17 @@ function activationState() {
 }
 
 function publicState(visible) {
+  const expectedPhoto = hash(`https://staging.example.invalid/api/v1/uploads/${dedicatedFixture.upload}`);
   return { status: 200, count: visible ? 1 : 0, pageCount: visible ? 1 : 0,
     idDigest: visible ? hash(dedicatedFixture.listing) : null,
     titleDigest: visible ? hash('Synthetische Katalogfixture') : null,
     noticeDigest: visible ? hash(fixtureNotice) : null,
+    photoCount: visible ? 1 : 0, photoDigest: visible ? expectedPhoto : null,
     catalogClass: visible ? 'synthetic_noncontractual_catalog_only' : null,
     realOffer: visible ? false : null, ownerDeclaration: visible ? false : null,
     bookingAllowed: visible ? false : null, paymentAllowed: visible ? false : null,
     expectedVisible: visible, expectedId: hash(dedicatedFixture.listing),
-    expectedTitle: hash('Synthetische Katalogfixture'), expectedNotice: hash(fixtureNotice) };
+    expectedTitle: hash('Synthetische Katalogfixture'), expectedNotice: hash(fixtureNotice), expectedPhoto };
 }
 
 function loginEvidence(bootstrapSha, runSha, overrides = {}) {
@@ -174,7 +176,7 @@ function startupPayload() {
       SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '0' } });
 }
 
-function fakeExecutor(fx, { failPhase, lateEvidenceCollision = false } = {}) {
+function fakeExecutor(fx, { failPhase, lateEvidenceCollision = false, publicPhotoFault = null } = {}) {
   const containers = new Map([[fx.manifest.apiContainer, structuredClone(fx.api)]]); const calls = [];
   const fixed = new Map([
     [fx.manifest.databaseContainer, { Name: `/${fx.manifest.databaseContainer}`, State: { Running: true } }],
@@ -229,7 +231,10 @@ function fakeExecutor(fx, { failPhase, lateEvidenceCollision = false } = {}) {
       if (String(args.at(-1)).includes('expectedVisible')) {
         const visible = !String(options.phase).includes('before') && !String(options.phase).includes('pre_mutation')
           && !String(options.phase).includes('rollback');
-        return { stdout: JSON.stringify(publicState(visible)), code: 0 };
+        const value = publicState(visible);
+        if (visible && publicPhotoFault === 'missing') Object.assign(value, { photoCount: 0, photoDigest: null });
+        if (visible && publicPhotoFault === 'wrong-digest') value.photoDigest = hash('wrong-canonical-public-photo');
+        return { stdout: JSON.stringify(value), code: 0 };
       }
       throw Error(`unexpected_exec:${options.phase}`);
     }
@@ -447,6 +452,26 @@ test('all activation replacement and public/evidence faults restore exact old en
           STAGING_WEB_FIXTURE_CATALOG_CONFIRM_SOURCE: opsCommit,
           STAGING_WEB_FIXTURE_CATALOG_CONFIRM_RUN: fx.runId }, testOnlyEvidenceHash: evidenceHash }),
       (error) => error.rollback?.restored === true);
+      assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+      assert.equal(fake.containers.get(fx.manifest.apiContainer).Id, fx.api.Id);
+      await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  });
+});
+
+test('missing or wrong canonical synthetic photo fails public readback and restores the original', async (t) => {
+  for (const publicPhotoFault of ['missing', 'wrong-digest']) await t.test(publicPhotoFault, async () => {
+    const fx = await fixture();
+    try {
+      const fake = fakeExecutor(fx, { publicPhotoFault });
+      await assert.rejects(runCatalogActivation({ manifest: fx.manifest,
+        bootstrapManifestBytes: fx.bootstrapBytes, databaseEvidenceBytes: fx.dbBytes,
+        loginEvidenceBytes: fx.loginBytes, sourceCommit: opsCommit, evidenceFile: fx.evidenceFile,
+        execute: true, confirmSource: opsCommit, confirmRun: fx.runId, command: fake.command,
+        commandEnv: { STAGING_WEB_FIXTURE_CATALOG_EXECUTE: '1',
+          STAGING_WEB_FIXTURE_CATALOG_CONFIRM_SOURCE: opsCommit,
+          STAGING_WEB_FIXTURE_CATALOG_CONFIRM_RUN: fx.runId }, testOnlyEvidenceHash: evidenceHash }),
+      (error) => error.code === 'catalog_activation_public_readback_invalid' && error.rollback?.restored === true);
       assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
       assert.equal(fake.containers.get(fx.manifest.apiContainer).Id, fx.api.Id);
       await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });

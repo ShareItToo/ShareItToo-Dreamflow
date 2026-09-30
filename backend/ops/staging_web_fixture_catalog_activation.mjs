@@ -242,16 +242,19 @@ export function assertCatalogActivationConfig(stdout, enabled) {
 export function catalogActivationPublicScript(expectVisible) {
   const expectedId = hash(dedicatedFixture.listing); const expectedTitle = hash('Synthetische Katalogfixture');
   const expectedNotice = hash(fixtureNotice);
-  return `import crypto from 'node:crypto';const h=(v)=>crypto.createHash('sha256').update(String(v)).digest('hex');const r=await fetch('http://127.0.0.1:8080/v1/listings');let b={};try{b=await r.json()}catch{}const rows=Array.isArray(b.listings)?b.listings:[];const x=rows[0]??{};process.stdout.write(JSON.stringify({status:r.status,count:rows.length,pageCount:b.page?.count,idDigest:rows.length?h(x.id):null,titleDigest:rows.length?h(x.title):null,noticeDigest:rows.length?h(x.syntheticNotice):null,catalogClass:x.catalogClass??null,realOffer:x.realOffer??null,ownerDeclaration:x.ownerDeclaration??null,bookingAllowed:x.bookingAllowed??null,paymentAllowed:x.paymentAllowed??null,expectedVisible:${expectVisible},expectedId:'${expectedId}',expectedTitle:'${expectedTitle}',expectedNotice:'${expectedNotice}'}));`;
+  return `import crypto from 'node:crypto';const {config}=await import('./src/config.js');const h=(v)=>crypto.createHash('sha256').update(String(v)).digest('hex');const expectedPhoto=h(config.publicBaseUrl+'/uploads/${dedicatedFixture.upload}');const r=await fetch('http://127.0.0.1:8080/v1/listings');let b={};try{b=await r.json()}catch{}const rows=Array.isArray(b.listings)?b.listings:[];const x=rows[0]??{};const photos=Array.isArray(x.photos)?x.photos:[];process.stdout.write(JSON.stringify({status:r.status,count:rows.length,pageCount:b.page?.count,idDigest:rows.length?h(x.id):null,titleDigest:rows.length?h(x.title):null,noticeDigest:rows.length?h(x.syntheticNotice):null,photoCount:photos.length,photoDigest:photos.length===1?h(photos[0]):null,catalogClass:x.catalogClass??null,realOffer:x.realOffer??null,ownerDeclaration:x.ownerDeclaration??null,bookingAllowed:x.bookingAllowed??null,paymentAllowed:x.paymentAllowed??null,expectedVisible:${expectVisible},expectedId:'${expectedId}',expectedTitle:'${expectedTitle}',expectedNotice:'${expectedNotice}',expectedPhoto}));`;
 }
 
 export function assertCatalogActivationPublic(stdout, visible) {
   const value = parseJson(stdout, 'catalog_activation_public_readback_invalid');
   check(value.status === 200 && value.expectedVisible === visible && value.pageCount === value.count,
     'catalog_activation_public_readback_invalid');
-  if (!visible) check(value.count === 0, 'catalog_activation_public_readback_invalid');
+  if (!visible) check(value.count === 0 && value.photoCount === 0 && value.photoDigest === null,
+    'catalog_activation_public_readback_invalid');
   else check(value.count === 1 && value.idDigest === value.expectedId && value.titleDigest === value.expectedTitle
     && value.noticeDigest === value.expectedNotice
+    && value.photoCount === 1 && digestPattern.test(value.expectedPhoto ?? '')
+    && value.photoDigest === value.expectedPhoto
     && value.catalogClass === 'synthetic_noncontractual_catalog_only'
     && value.realOffer === false && value.ownerDeclaration === false
     && value.bookingAllowed === false && value.paymentAllowed === false,

@@ -35,10 +35,12 @@ export function assertNotSyntheticCatalogListing(id, configuration = readSynthet
 }
 export function syntheticCatalogProjection(payload, configuration, id = payload.id) {
   // Client/persisted fields never grant or remove this server-owned class.
-  const { catalogClass, bookingAllowed, paymentAllowed, syntheticNotice, ...ordinary } = payload;
+  const { catalogClass, realOffer, ownerDeclaration, bookingAllowed, paymentAllowed,
+    syntheticNotice, ...ordinary } = payload;
   if (!isSyntheticCatalogListing(id, configuration)) return ordinary;
-  return { ...ordinary, catalogClass: syntheticCatalogClass, bookingAllowed: false,
-    paymentAllowed: false, syntheticNotice: syntheticCatalogNotice,
+  return { ...ordinary, catalogClass: syntheticCatalogClass, realOffer: false,
+    ownerDeclaration: false, bookingAllowed: false, paymentAllowed: false,
+    syntheticNotice: syntheticCatalogNotice,
     privateStatusConfirmed: false, verificationStatus: 'unverified', timesLent: 0 };
 }
 
