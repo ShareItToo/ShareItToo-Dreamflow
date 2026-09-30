@@ -2,13 +2,17 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, mkdtempSync, rmSync, realpathSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { runMigrations } from '../src/migrations.js';
 import { adapterSources, runFixtureAdapter } from '../ops/staging_web_fixture_adapter.mjs';
 import { generateFixtureDraft } from '../ops/staging_web_fixture_draft.mjs';
 import { programmaticPlaceholder } from './fixtures/programmatic_placeholder.mjs';
+import { bootstrapFileStore, buildFixtureBootstrapManifest, dedicatedFixture, runFixtureBootstrap,
+  fixtureBootstrapHandoff } from '../ops/staging_web_fixture_bootstrap.mjs';
 import { fixtureDigest, fixtureEnvironmentDigest, fixtureNotice, fixtureTarget,
   isolatedFixtureRehearsal, readFixtureSnapshot } from '../ops/staging_web_fixture_preflight.mjs';
 
@@ -110,6 +114,75 @@ test('PG16 fixture adapter uses real schema, transactions, triggers and two clie
       await runMigrations(pool);
       assert.equal(ledger.length, 98);
       assert.deepEqual((await client.query('SELECT name,checksum FROM schema_migrations ORDER BY name')).rows, ledger);
+
+      await t.test('dedicated seed never touches old principals; real rollback, commit-unknown, replay and cleanup', async () => {
+        const old = await seed(client);
+        await client.query('UPDATE users SET email=$1 WHERE id=$2', ['untouched@example.com', old.manifest.preflight.roles[0].userId]);
+        const oldBefore = await readFixtureSnapshot(client, old.manifest.preflight);
+        const directory = realpathSync(mkdtempSync(join(tmpdir(), 'sit-seed-pg-')));
+        try {
+          const media = await programmaticPlaceholder();
+          const passwords = ['OwnerSyntheticTestOnlyPassword-123456789', 'RenterSyntheticTestOnlyPassword-987654321'];
+          const manifest = buildFixtureBootstrapManifest({ source, environment: old.environment, photo: media.photo, passwords,
+            runId: 'web-fixture-dedicated-pg-test' });
+          const files = bootstrapFileStore(directory, manifest);
+          const input = { manifest, source, environment: old.environment, passwords, photoBytes: media.bytes,
+            client, files, rehearsal: isolatedFixtureRehearsal };
+          const execute = { execute: true, confirmSource: source.commit, confirmRun: manifest.preflight.runId };
+          const count = async () => Number((await client.query('SELECT count(*) FROM users WHERE id=ANY($1::text[])',
+            [[dedicatedFixture.owner, dedicatedFixture.renter]])).rows[0].count);
+          assert.equal((await runFixtureBootstrap(input)).status, 'preflight-passed-no-mutation');
+          assert.equal(await count(), 0); assert.equal(files.inspect(), 'absent');
+          await other.query('SELECT pg_advisory_lock(hashtextextended($1,0))', ['sit-dedicated-web-fixture-bootstrap-v1']);
+          try { await assert.rejects(runFixtureBootstrap(input), /concurrent/u); }
+          finally { await other.query('SELECT pg_advisory_unlock(hashtextextended($1,0))', ['sit-dedicated-web-fixture-bootstrap-v1']); }
+          for (const [id, email] of [[dedicatedFixture.owner, 'foreign-contact@example.com'],
+            ['collision-test-only', `${dedicatedFixture.owner}@example.invalid`]]) {
+            await client.query('INSERT INTO users (id,email) VALUES ($1,$2)', [id, email]);
+            const before = (await client.query('SELECT * FROM users WHERE id=$1', [id])).rows;
+            await assert.rejects(runFixtureBootstrap({ ...input, ...execute }), /existing_not_exact|collision/u);
+            assert.deepEqual((await client.query('SELECT * FROM users WHERE id=$1', [id])).rows, before);
+            assert.equal(files.inspect(), 'absent');
+            await client.query('DELETE FROM users WHERE id=$1', [id]); // Own isolated collision fixture only.
+          }
+          for (const match of ['INSERT INTO users', 'INSERT INTO listings', 'INSERT INTO uploads', 'INSERT INTO audit_log']) {
+            const faultClient = { query: (sql, params) => { if (sql.includes(match)) throw Error('injected'); return client.query(sql, params); } };
+            await assert.rejects(runFixtureBootstrap({ ...input, ...execute, client: faultClient }), /injected/u);
+            assert.equal(await count(), 0); assert.equal(files.inspect(), 'absent');
+          }
+          let lost = false;
+          const unknownClient = { query: async (sql, params) => {
+            const result = await client.query(sql, params); if (sql === 'COMMIT' && !lost) { lost = true; throw Error('lost-response'); } return result;
+          } };
+          await assert.rejects(runFixtureBootstrap({ ...input, ...execute, client: unknownClient }), /commit_unknown_file_retained/u);
+          assert.equal(await count(), 2); assert.equal(files.inspect(), 'owned');
+          assert.equal((await runFixtureBootstrap({ ...input, ...execute })).status, 'dedicated-seed-already-prepared-runtime-blocked');
+          const handoff = fixtureBootstrapHandoff(manifest, old.environment);
+          const projected = { ...old.environment, ...handoff.proposed };
+          const draft = await generateFixtureDraft({ source, environment: projected, photo: media.photo, client,
+            rehearsal: isolatedFixtureRehearsal, readPhoto: () => media.bytes });
+          assert.deepEqual(draft.preflight.roles.map((r) => r.userId), [dedicatedFixture.owner, dedicatedFixture.renter]);
+          const cleanup = { ...input, ...execute, manifest: { ...manifest, operation: 'cleanup' } };
+          if (process.env.SIT_FIXTURE_BOOTSTRAP_REHEARSAL_CASE === 'used') {
+            const dedicated = { client, manifest: { preflight: manifest.preflight } }; await sessions(dedicated);
+            await assert.rejects(runFixtureBootstrap(cleanup), /used_seed_retained_hidden/u);
+            const hidden = await readFixtureSnapshot(client, manifest.preflight);
+            assert.equal(hidden.listing[0].is_active, false); assert.ok(hidden.sessions.every((s) => s.revoked_at));
+            assert.equal(Number((await client.query('SELECT count(*) FROM users WHERE id=ANY($1::text[]) AND password_hash IS NOT NULL',
+              [[dedicatedFixture.owner, dedicatedFixture.renter]])).rows[0].count), 0);
+            assert.equal(Number((await client.query('SELECT count(*) FROM refresh_tokens WHERE user_id=ANY($1::text[]) AND revoked_at IS NULL',
+              [[dedicatedFixture.owner, dedicatedFixture.renter]])).rows[0].count), 0);
+            await assert.rejects(runFixtureBootstrap(cleanup), /used_seed_retained_hidden/u);
+          } else {
+            assert.equal((await runFixtureBootstrap(cleanup)).status, 'dedicated-seed-cleaned');
+            assert.equal((await runFixtureBootstrap(cleanup)).status, 'dedicated-seed-cleaned');
+            assert.equal(await count(), 0); assert.equal(files.inspect(), 'absent');
+          }
+          assert.deepEqual(await readFixtureSnapshot(client, old.manifest.preflight), oldBefore);
+          assert.equal(Number((await client.query("SELECT count(*) FROM audit_log WHERE resource_type='staging_web_fixture_seed'")).rows[0].count),
+            process.env.SIT_FIXTURE_BOOTSTRAP_REHEARSAL_CASE === 'used' ? 2 : 3);
+        } finally { rmSync(directory, { recursive: true, force: true }); }
+      });
 
       await t.test('fresh draft selects ordered pair from four eligible accounts, leaving extras outside scope', async () => {
         const f = await seed(client); const extra = await seed(client);

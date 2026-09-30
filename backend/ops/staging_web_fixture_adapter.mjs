@@ -18,6 +18,7 @@ export const adapterSources = Object.freeze([
   'backend/ops/staging_web_fixture_adapter.mjs', 'backend/ops/staging_web_fixture_preflight.mjs',
   'backend/ops/staging_web_fixture_runner.mjs',
   'backend/ops/staging_web_fixture_draft.mjs',
+  'backend/ops/staging_web_fixture_bootstrap.mjs', 'backend/ops/provision_synthetic_sandbox_user.mjs',
   'backend/ops/stable_private_file.mjs', 'backend/src/staging_synthetic_catalog.js',
   'backend/src/staging_access_gate.js', 'backend/src/private_pilot_domain.js',
 ]);

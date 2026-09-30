@@ -58,7 +58,7 @@ function safeEmailHash() {
   return sha256(syntheticSandboxUser.email);
 }
 
-function readPasswordFile(filePath, { expectedUid = runtimeUid, expectedGid = runtimeGid } = {}) {
+export function readPasswordFile(filePath, { expectedUid = runtimeUid, expectedGid = runtimeGid } = {}) {
   if (typeof filePath !== 'string' || !filePath.startsWith('/')) fail('password_file_path_invalid');
   let opened;
   try {

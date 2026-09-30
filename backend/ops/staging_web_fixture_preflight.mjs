@@ -184,6 +184,11 @@ export function validateFixtureEnvironment(manifest, environment, rehearsal) {
     && gate.publicUploadNames[0] === manifest.uploadName
     && manifest.roles.every((role) => gate.allowedUserIds.includes(role.userId)),
   'fixture_access_scope_drift');
+  validateFixtureEffectBoundary(environment);
+  validateFixtureDatabase(manifest, environment, rehearsal);
+}
+
+export function validateFixtureEffectBoundary(environment) {
   requireThat(environment.PRIVATE_PILOT_V4_ENABLED === 'true'
     && environment.PRIVATE_PILOT_ALLOWED_REGIONS === 'heilbronn'
     && environment.SIT_STAGING_GOOGLE_REGISTRATION_ENABLED === 'false'
@@ -192,6 +197,9 @@ export function validateFixtureEnvironment(manifest, environment, rehearsal) {
     && environment.PAYMENT_TRANSPORT === 'memory' && environment.STRIPE_LIVEMODE === 'false'
     && ['disabled', 'memory'].includes(environment.MAIL_TRANSPORT)
     && ['disabled', 'memory'].includes(environment.PUSH_TRANSPORT), 'fixture_effect_boundary_unsafe');
+}
+
+export function validateFixtureDatabase(manifest, environment, rehearsal) {
   let database;
   try { database = new URL(environment.DATABASE_URL); } catch { fail('fixture_database_invalid'); }
   requireThat(rehearsal === undefined || (rehearsal === isolatedFixtureRehearsal

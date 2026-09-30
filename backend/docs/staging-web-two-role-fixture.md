@@ -128,6 +128,68 @@ table or a new production schema.
 
 ## Photo input: illustration is not product evidence
 
+### Dedicated bootstrap domain — source-only core, host-runner gate still open
+
+`backend/ops/staging_web_fixture_bootstrap.mjs` is a programmatic domain core,
+**not a deployable CLI or authorization to connect to Green**. It creates only
+the two fixed-purpose `synthetic_web_catalog_{owner,renter}_v1@example.invalid`
+principals, `synthetic_web_catalog_listing_v1`, and the dedicated
+`synthetic_web_catalog_placeholder_v1.webp` upload. Existing synthetic-marked
+Gmail/other routable accounts, credentials and listings are never reused or
+changed. No migration, public registration, provider or runtime flag is enabled.
+
+The one-hour private manifest binds actual clean Ops source hashes/98-ledger,
+current runtime/security-environment/database, run ID, independently verified
+typed WebP bytes/provenance and two distinct strong private password inputs.
+It reuses the existing stable `0600` password reader and runtime password hasher;
+no credential rotation path exists. Default is read-only; writes require both
+exact source and run confirmation. The domain emits only status and
+`runtimeActivated:false`, never identities, passwords, password hashes or env.
+Accounts carry explicit synthetic purpose/notice, null phone, verified technical
+acknowledgements and clear review state, but no provider identity/session/push.
+Acknowledgements are test-account state, not consent by a real person. The
+listing has no real owner declaration or authoritative pilot-region field.
+
+Seed writes are insert-only in a locked serializable transaction. Every existing
+row/email/file collision fails unless the exact private ownership receipt,
+append-only seed audit, immutable scope, snapshot and supplied credentials prove
+an exact replay. Files are created exclusively, never overwritten; a private
+receipt binds file inode/device/SHA to the run. Known rollback removes only a
+newly owned exact file. Unknown COMMIT or post-commit readback retains the file
+and receipt and reports failure: fresh readback/replay, not blind rollback.
+Foreign bytes/inodes and unreceipted orphan files are never adopted or deleted.
+A receipt-only interrupted removal is recoverable only for this exact scope;
+no broad directory cleanup exists. A retired run cannot reseed itself.
+
+Cleanup requires catalog flag off and the same exact scope. Ownership/contact/
+profile drift rejects before writes rather than risking another principal's data.
+For a proven dedicated scope it first commits
+listing-hidden, passwords-invalid and sessions/refresh-revoked state with audit.
+Only an exact never-used seed may then be deleted after root row locks and the
+complete FK dependency inventory. Login/session/token/activity, booking, cart,
+message, payment, evidence, listing edits or other dependencies cause failure
+with the hidden checkpoint retained. Used data and all audits remain. Old
+passwords/sessions are never restored. File removal after DB cleanup also
+requires the exact receipt and bytes; interrupted cleanup is replayable.
+
+`fixtureBootstrapHandoff` is a **private proposal only**: put the two dedicated
+IDs first (needed by deterministic renter selection), preserve every old ID in
+its previous relative order, and bind the public listing/upload to the dedicated
+pair while keeping synthetic catalog activation false. It never writes env.
+Only after separately reviewed runtime/gate changes may the existing fresh
+draft + adapter preflight consume that exact fixture. DB seed success is not
+catalog visibility, account login verification or runtime activation.
+
+Remaining operational gate: a reviewed host runner must bind immutable image/
+APP_COMMIT, clean source, Green DB/internal network/uploads/env, UID/GID and
+protected inputs, with read-only root, cap-drop/no-new-privileges, no ports and
+logging disabled; only the exact uploads volume may become RW under execute.
+It must exclusively create owner-only credential evidence outside Git and never
+print it. This core does not yet supply that host command. Do not run it manually
+against live DB or bypass this gate. Local proofs use isolated PG16 plus all 98
+migrations and temporary files only, including used-cleanup rehearsal via
+`SIT_FIXTURE_BOOTSTRAP_REHEARSAL_CASE=used` with the existing PG harness.
+
 The supplied research identifies Wikimedia Commons
 [Cordless electric (screw) drill.jpg](https://commons.wikimedia.org/wiki/File:Cordless_electric_(screw)_drill.jpg),
 Fructibus, 2017-05-26, CC0/Public Domain Dedication, 2448×3264 JPEG,
