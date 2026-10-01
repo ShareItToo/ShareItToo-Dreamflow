@@ -1223,6 +1223,76 @@ class BackendRepository {
         },
       );
 
+  static Future<List<Map<String, dynamic>>> getMissionSupplyDemandsForOwner(
+    AuthSessionOwner owner,
+  ) async {
+    final response = await _authorizedForOwner(
+      owner: owner,
+      method: 'GET',
+      path: '/mission-supply-demands',
+    );
+    return _strictMaps(response['demands']);
+  }
+
+  static Future<Map<String, dynamic>> getMissionSupplyDemandForOwner({
+    required AuthSessionOwner owner,
+    required String demandId,
+  }) async {
+    final response = await _authorizedForOwner(
+      owner: owner,
+      method: 'GET',
+      path: '/mission-supply-demands/${Uri.encodeComponent(demandId)}',
+    );
+    if (response['demand'] is! Map) {
+      throw const FormatException('mission_supply_demand_invalid');
+    }
+    return Map<String, dynamic>.from(response['demand'] as Map);
+  }
+
+  static Future<Map<String, dynamic>> createMissionSupplyDemandForOwner({
+    required AuthSessionOwner owner,
+    required String resolutionId,
+    required Map<String, dynamic> payload,
+    required String idempotencyKey,
+  }) =>
+      _authorizedForOwner(
+        owner: owner,
+        method: 'POST',
+        path:
+            '/mission-inventory-resolutions/${Uri.encodeComponent(resolutionId)}/supply-demands',
+        body: payload,
+        additionalHeaders: <String, String>{'Idempotency-Key': idempotencyKey},
+      );
+
+  static Future<Map<String, dynamic>> respondToMissionSupplyDemandForOwner({
+    required AuthSessionOwner owner,
+    required String demandId,
+    required Map<String, dynamic> payload,
+    required String idempotencyKey,
+  }) =>
+      _authorizedForOwner(
+        owner: owner,
+        method: 'POST',
+        path:
+            '/mission-supply-demands/${Uri.encodeComponent(demandId)}/respond',
+        body: payload,
+        additionalHeaders: <String, String>{'Idempotency-Key': idempotencyKey},
+      );
+
+  static Future<Map<String, dynamic>> revokeMissionSupplyDemandForOwner({
+    required AuthSessionOwner owner,
+    required String demandId,
+    required Map<String, dynamic> payload,
+    required String idempotencyKey,
+  }) =>
+      _authorizedForOwner(
+        owner: owner,
+        method: 'POST',
+        path: '/mission-supply-demands/${Uri.encodeComponent(demandId)}/revoke',
+        body: payload,
+        additionalHeaders: <String, String>{'Idempotency-Key': idempotencyKey},
+      );
+
   static Future<List<Map<String, dynamic>>> getPrivateShelfItemsForOwner(
     AuthSessionOwner owner,
   ) async {

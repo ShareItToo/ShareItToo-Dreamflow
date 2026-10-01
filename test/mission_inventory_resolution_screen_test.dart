@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lendify/models/mission_inventory_resolution.dart';
 import 'package:lendify/models/mission_need.dart';
+import 'package:lendify/models/mission_supply_demand.dart';
 import 'package:lendify/screens/mission_inventory_resolution_screen.dart';
 import 'package:lendify/services/auth_service.dart';
 import 'package:lendify/services/backend_http.dart';
@@ -65,6 +66,12 @@ void main() {
     expect(find.textContaining('Bedarfstyp nicht unterstützt'), findsWidgets);
     expect(find.text('Suche war begrenzt'), findsOneWidget);
     expect(find.textContaining('keine Reservierung, Buchung'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey(
+        'mission-inventory-demand-required:plant_container_equipment:2',
+      )),
+      findsNothing,
+    );
 
     await tester.tap(find.byKey(const Key('mission-inventory-correct')));
     await tester.pump();
@@ -187,6 +194,63 @@ void main() {
     expect(find.text('Mission B'), findsOneWidget);
     expect(find.byKey(const Key('mission-inventory-location-query')),
         findsNothing);
+  });
+
+  testWidgets(
+      'exact current gap opens one owned demand route and switch removes only it',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1000, 1700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final navigatorKey = GlobalKey<NavigatorState>();
+    final service = _ContextService();
+    var builds = 0;
+    MissionSupplyDemandCreateContext? captured;
+    await tester.pumpWidget(MaterialApp(
+      navigatorKey: navigatorKey,
+      home: MissionInventoryResolutionScreen(
+        missionNeedId: testMissionInventoryMissionId,
+        missionGateway: _MissionGateway(),
+        inventoryGateway: _InventoryGateway(
+          initial: <MissionInventoryResolution>[_resolution()],
+        ),
+        listingMutationService: service,
+        supplyDemandScreenBuilder: (createContext) {
+          builds += 1;
+          captured = createContext;
+          return const Scaffold(body: Text('Private Gap-Anfrage A'));
+        },
+        enableForTesting: true,
+      ),
+    ));
+    await tester.pumpAndSettle();
+    final finder = find.byKey(
+      const ValueKey(
+        'mission-inventory-demand-required:plant_container_equipment:2',
+      ),
+    );
+    await tester.ensureVisible(finder);
+    final button = tester.widget<OutlinedButton>(finder);
+    button.onPressed!();
+    button.onPressed!();
+    await tester.pumpAndSettle();
+    expect(builds, 1);
+    expect(captured?.resolutionId, testMissionInventoryResolutionId);
+    expect(captured?.resolutionRevision, 1);
+    expect(captured?.slotKey, 'required:plant_container_equipment:2');
+    expect(find.text('Private Gap-Anfrage A'), findsOneWidget);
+
+    navigatorKey.currentState!.push<void>(MaterialPageRoute<void>(
+      builder: (_) => const Scaffold(body: Text('Fremde Gap-Overlay-Route')),
+    ));
+    await tester.pumpAndSettle();
+    service.activateAccountB();
+    SharedPersistenceSync.notify(SharedPersistenceSync.accountSecurityStateKey);
+    await tester.pumpAndSettle();
+    expect(find.text('Fremde Gap-Overlay-Route'), findsOneWidget);
+    navigatorKey.currentState!.pop();
+    await tester.pumpAndSettle();
+    expect(find.text('Private Gap-Anfrage A'), findsNothing);
+    expect(find.text('Mission B'), findsOneWidget);
   });
 }
 

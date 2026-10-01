@@ -342,7 +342,7 @@ public activation changed. Exact source
 `36899283121`, including Backend, PostgreSQL, Flutter and R10; publication was
 skipped. CodeQL workflow `36899283429` also passed.
 
-## P6-A private one-recipient Mission demand — LOCAL SOURCE IN REVIEW
+## P6-A private one-recipient Mission demand — EXACT-HEAD PASS
 
 The next additive backend slice creates at most one private demand for one
 exact unresolved P5 slot and one server-selected eligible Shelf owner. Current
@@ -379,9 +379,39 @@ drift, export, public non-leakage, erasure and rollback refusal. The local R9
 backup/restore/legacy-upgrade proof passes all `103` migrations and preserves
 legacy cart rows byte-for-byte. This package is source-only and standard-off;
 no UI, Live, Green, Play, provider, payment or public state changed. Exact-head
-CI remains pending until Sol accepts the local package. A D3/D4 gate must later
-define and prove real owner/location eligibility selection before any real-data
-activation; this source package does not imply launch capability.
+successor `898a9bae83a200a935e34579b64c909ab3d548a8` passed Regression
+`36905155462`, including all required jobs with publication skipped, and CodeQL
+workflow `36905155481`. A D3/D4 gate must later define and prove real
+owner/location eligibility selection before any real-data activation; this
+source package does not imply launch capability.
+
+## P6-B private Mission demand UI — LOCAL SOURCE IN REVIEW
+
+The smallest additive Flutter/Web slice adds one private participant screen.
+The requester may open it only from an exact current unresolved P5 gap and must
+choose the demand expiry explicitly. A recipient reaches the same participant
+inbox through one internal action in `Meine Missionen`; there is no new global
+navigation. The screen lists only the server's role-shaped truth and permits
+the recipient to reject, release and later revoke the private access.
+
+The client strictly rejects recipient payloads containing requester Mission/P5
+IDs, slot keys, Shelf identity/media, exact location fingerprints or any true
+public/marketing/notification/reservation/booking/contract/payment/AI effect.
+The dedicated `SIT_PLANNER_DEMAND_UI_ENABLED` client gate is independently
+default-off and is not enabled by any build/deploy script. All five P6 routes
+are owner-bound before and after every await. Writes are single-flight; every
+exact request fingerprint retains its own idempotency key after a `409` or
+unknown outcome, including interleaved inbox actions. Account switch, logout
+and restart clear all demand and expiry state, prevent old-owner follow-up
+reads, discard late responses and remove only the exact owned nested route. No
+demand data is written to disk, cache or analytics.
+
+Focused contract, enabled-HTTP, widget/state and nested-route regressions plus
+the structural wiring gate pass locally. Existing Mission and inventory widget
+tests remain green. This remains source-only behind the existing Planner gate:
+there is still no real eligibility resolver, Live activation, notification,
+public listing/search, booking, payment, provider, Green or Play change.
+Exact-head CI remains pending after Sol review.
 
 ## Closed prerequisite: Phase 0 Web/CORS and safe synthetic catalog QA
 

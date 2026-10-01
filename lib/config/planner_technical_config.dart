@@ -12,11 +12,18 @@ class PlannerTechnicalConfig {
     defaultValue: false,
   );
 
+  static const bool demandEnabled = bool.fromEnvironment(
+    'SIT_PLANNER_DEMAND_UI_ENABLED',
+    defaultValue: false,
+  );
+
   static const bool publicReleaseAllowed = false;
   static const bool externalGenerativeAiAllowed = false;
   static const bool inventoryResolutionAllowed = false;
 
   static bool get available => availableForMode(releaseMode: kReleaseMode);
+  static bool get demandAvailable =>
+      demandAvailableForMode(releaseMode: kReleaseMode);
 
   @visibleForTesting
   static bool availableForMode({required bool releaseMode}) {
@@ -39,6 +46,32 @@ class PlannerTechnicalConfig {
         !inventoryResolutionAllowed &&
         PrivatePilotConfig.technicalSurfaceAvailableFor(
           featureEnabled: featureEnabled,
+          releaseMode: releaseMode,
+          signedStageAInternalEnvelope: signedStageAInternalEnvelope,
+        );
+  }
+
+  @visibleForTesting
+  static bool demandAvailableForMode({required bool releaseMode}) {
+    return demandAvailableForConfiguration(
+      plannerFeatureEnabled: enabled,
+      demandFeatureEnabled: demandEnabled,
+      releaseMode: releaseMode,
+      signedStageAInternalEnvelope:
+          PrivatePilotConfig.signedStageAInternalEnvelopeEnabled,
+    );
+  }
+
+  @visibleForTesting
+  static bool demandAvailableForConfiguration({
+    required bool plannerFeatureEnabled,
+    required bool demandFeatureEnabled,
+    required bool releaseMode,
+    required bool signedStageAInternalEnvelope,
+  }) {
+    return demandFeatureEnabled &&
+        availableForConfiguration(
+          featureEnabled: plannerFeatureEnabled,
           releaseMode: releaseMode,
           signedStageAInternalEnvelope: signedStageAInternalEnvelope,
         );

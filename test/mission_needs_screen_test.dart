@@ -435,6 +435,53 @@ void main() {
     expect(find.text('Private Inventarroute'), findsNothing);
     expect(find.text('Inventarmission B'), findsOneWidget);
   });
+
+  testWidgets(
+      'supply inbox opens single-flight and account switch removes only its route',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(900, 1300));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final navigatorKey = GlobalKey<NavigatorState>();
+    final service = _SwitchableContextService();
+    var builds = 0;
+    await tester.pumpWidget(MaterialApp(
+      navigatorKey: navigatorKey,
+      home: MissionNeedsScreen(
+        gateway: _MissionGateway(
+          accountA: <MissionNeed>[_mission(_idA, 'Mission A')],
+          accountB: <MissionNeed>[_mission(_idB, 'Mission B')],
+        ),
+        listingMutationService: service,
+        supplyDemandScreenBuilder: () {
+          builds += 1;
+          return const Scaffold(body: Text('Private Demand-Inbox A'));
+        },
+        enableForTesting: true,
+      ),
+    ));
+    await tester.pumpAndSettle();
+    final button = tester.widget<IconButton>(
+      find.byKey(const Key('mission-open-supply-demands')),
+    );
+    button.onPressed!();
+    button.onPressed!();
+    await tester.pumpAndSettle();
+    expect(builds, 1);
+    expect(find.text('Private Demand-Inbox A'), findsOneWidget);
+
+    navigatorKey.currentState!.push<void>(MaterialPageRoute<void>(
+      builder: (_) => const Scaffold(body: Text('Fremde Demand-Overlay-Route')),
+    ));
+    await tester.pumpAndSettle();
+    service.activateAccountB();
+    SharedPersistenceSync.notify(SharedPersistenceSync.accountSecurityStateKey);
+    await tester.pumpAndSettle();
+    expect(find.text('Fremde Demand-Overlay-Route'), findsOneWidget);
+    navigatorKey.currentState!.pop();
+    await tester.pumpAndSettle();
+    expect(find.text('Private Demand-Inbox A'), findsNothing);
+    expect(find.text('Mission B'), findsOneWidget);
+  });
 }
 
 final _userA = buildTestUser(

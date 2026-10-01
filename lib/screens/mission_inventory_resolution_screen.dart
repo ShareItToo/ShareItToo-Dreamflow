@@ -8,18 +8,24 @@ import 'package:flutter/services.dart';
 import 'package:lendify/config/planner_technical_config.dart';
 import 'package:lendify/models/mission_inventory_resolution.dart';
 import 'package:lendify/models/mission_need.dart';
+import 'package:lendify/models/mission_supply_demand.dart';
+import 'package:lendify/screens/mission_supply_demand_screen.dart';
 import 'package:lendify/services/backend_http.dart';
 import 'package:lendify/services/listing_mutation_service.dart';
 import 'package:lendify/services/maps_service.dart';
 import 'package:lendify/services/mission_inventory_resolution_gateway.dart';
 import 'package:lendify/services/mission_need_gateway.dart';
 import 'package:lendify/services/shared_persistence_sync.dart';
+import 'package:lendify/widgets/listing_mutation_interaction.dart';
 
 typedef MissionInventoryTokenFactory = String Function();
 typedef MissionInventoryAutocomplete = Future<List<MapsAddressSuggestion>>
     Function(String input);
 typedef MissionInventoryPlaceLookup = Future<PlaceDetails?> Function(
   String placeId,
+);
+typedef MissionSupplyDemandCreateScreenBuilder = Widget Function(
+  MissionSupplyDemandCreateContext createContext,
 );
 
 @visibleForTesting
@@ -34,6 +40,11 @@ Future<List<MapsAddressSuggestion>> _defaultAutocomplete(String input) =>
 Future<PlaceDetails?> _defaultPlaceLookup(String placeId) =>
     MapsService.placeDetails(placeId);
 
+Widget _defaultSupplyDemandCreateScreenBuilder(
+  MissionSupplyDemandCreateContext createContext,
+) =>
+    MissionSupplyDemandScreen(createContext: createContext);
+
 class MissionInventoryResolutionScreen extends StatefulWidget {
   const MissionInventoryResolutionScreen({
     super.key,
@@ -44,6 +55,7 @@ class MissionInventoryResolutionScreen extends StatefulWidget {
     this.autocomplete = _defaultAutocomplete,
     this.placeLookup = _defaultPlaceLookup,
     this.tokenFactory = newMissionInventoryToken,
+    this.supplyDemandScreenBuilder = _defaultSupplyDemandCreateScreenBuilder,
     this.enableForTesting = false,
   });
 
@@ -54,6 +66,7 @@ class MissionInventoryResolutionScreen extends StatefulWidget {
   final MissionInventoryAutocomplete autocomplete;
   final MissionInventoryPlaceLookup placeLookup;
   final MissionInventoryTokenFactory tokenFactory;
+  final MissionSupplyDemandCreateScreenBuilder supplyDemandScreenBuilder;
 
   @visibleForTesting
   final bool enableForTesting;
@@ -68,6 +81,8 @@ class _MissionInventoryResolutionScreenState
   final _formKey = GlobalKey<FormState>();
   final _locationController = TextEditingController();
   final _radiusController = TextEditingController(text: '25');
+  final ListingMutationInteractionController _ownedRoutes =
+      ListingMutationInteractionController();
   StreamSubscription<String>? _sessionSubscription;
   Timer? _locationDebounce;
   ListingMutationContext? _context;
@@ -85,6 +100,7 @@ class _MissionInventoryResolutionScreenState
   bool _loadActive = false;
   bool _actionActive = false;
   bool _locationLookupActive = false;
+  bool _supplyDemandRouteOpening = false;
   int _accountGeneration = 0;
   String? _message;
   bool _messageIsError = false;
@@ -98,6 +114,10 @@ class _MissionInventoryResolutionScreenState
       PlannerTechnicalConfig.available ||
       (!kReleaseMode && widget.enableForTesting);
 
+  bool get _demandAvailable =>
+      PlannerTechnicalConfig.demandAvailable ||
+      (!kReleaseMode && widget.enableForTesting);
+
   bool get _busy =>
       _loading || _loadActive || _actionActive || _locationLookupActive;
 
@@ -107,6 +127,7 @@ class _MissionInventoryResolutionScreenState
     _sessionSubscription = SharedPersistenceSync.changes.listen((key) {
       if (key != SharedPersistenceSync.accountSecurityStateKey) return;
       _accountGeneration += 1;
+      _ownedRoutes.invalidate();
       _clearPrincipalState();
       if (mounted) setState(() {});
       unawaited(_load());
@@ -118,6 +139,7 @@ class _MissionInventoryResolutionScreenState
   void dispose() {
     _accountGeneration += 1;
     _sessionSubscription?.cancel();
+    _ownedRoutes.dispose();
     _locationDebounce?.cancel();
     _locationController.dispose();
     _radiusController.dispose();
@@ -140,6 +162,7 @@ class _MissionInventoryResolutionScreenState
     _loadActive = false;
     _actionActive = false;
     _locationLookupActive = false;
+    _supplyDemandRouteOpening = false;
     _message = null;
     _messageIsError = false;
     _boundMissionRevision = null;
@@ -192,6 +215,7 @@ class _MissionInventoryResolutionScreenState
       if (!await _mayUpdate(captured, generation)) return;
       setState(() {
         _context = captured;
+        _ownedRoutes.replaceContext(captured);
         _mission = mission;
         _resolutions = resolutions;
         if (!_editing) {
@@ -226,6 +250,51 @@ class _MissionInventoryResolutionScreenState
     } finally {
       if (mounted && generation == _accountGeneration) {
         setState(() => _loadActive = false);
+      }
+    }
+  }
+
+  Future<void> _openSupplyDemand(MissionInventorySlot slot) async {
+    final truth = _selectedTruth;
+    if (!_demandAvailable ||
+        _supplyDemandRouteOpening ||
+        _busy ||
+        truth == null ||
+        truth.currentApplicability != MissionInventoryApplicability.current ||
+        slot.status != 'gap' ||
+        slot.assignment != null ||
+        slot.gapReason != 'no_current_unique_candidate') {
+      return;
+    }
+    final owner = _ownedRoutes.capture();
+    if (owner == null) return;
+    final generation = _accountGeneration;
+    setState(() => _supplyDemandRouteOpening = true);
+    try {
+      if (!await _ownedRoutes.isCurrent(widget.listingMutationService, owner) ||
+          !mounted ||
+          generation != _accountGeneration) {
+        return;
+      }
+      final createContext = MissionSupplyDemandCreateContext(
+        resolutionId: truth.resolutionId,
+        resolutionRevision: truth.revision,
+        slotKey: slot.slotKey,
+        needKey: slot.needKey,
+        necessity: slot.necessity,
+        ordinal: slot.ordinal,
+        periodEnd: truth.endDate,
+      );
+      await _ownedRoutes.pushOwnedRoute<void>(
+        context: context,
+        owner: owner,
+        route: MaterialPageRoute<void>(
+          builder: (_) => widget.supplyDemandScreenBuilder(createContext),
+        ),
+      );
+    } finally {
+      if (mounted && generation == _accountGeneration) {
+        setState(() => _supplyDemandRouteOpening = false);
       }
     }
   }
@@ -719,24 +788,50 @@ class _MissionInventoryResolutionScreenState
 
   Widget _buildSlot(MissionInventorySlot value) {
     final assignment = value.assignment;
+    final mayRequest = assignment == null &&
+        _demandAvailable &&
+        value.gapReason == 'no_current_unique_candidate' &&
+        _selectedTruth?.currentApplicability ==
+            MissionInventoryApplicability.current;
     return Card(
-      child: ListTile(
-        leading: Icon(
-          assignment == null ? Icons.remove_circle_outline : Icons.inventory,
-        ),
-        title: Text(
-          assignment?.title ??
-              (value.gapReason == 'unsupported_need_key'
-                  ? 'Lücke: Bedarfstyp nicht unterstützt'
-                  : 'Lücke: kein aktueller eindeutiger Kandidat'),
-        ),
-        subtitle: assignment == null
-            ? Text(
-                '${value.necessity == 'required' ? 'Erforderlich' : 'Optional'} · ${value.needKey} · Menge ${value.ordinal}',
-              )
-            : Text(
-                '${assignment.city ?? 'Ort nicht angegeben'}${assignment.country == null ? '' : ', ${assignment.country}'} · ${assignment.distanceKm.toStringAsFixed(1)} km · unverbindliche Quote',
+      child: Column(
+        children: <Widget>[
+          ListTile(
+            leading: Icon(
+              assignment == null
+                  ? Icons.remove_circle_outline
+                  : Icons.inventory,
+            ),
+            title: Text(
+              assignment?.title ??
+                  (value.gapReason == 'unsupported_need_key'
+                      ? 'Lücke: Bedarfstyp nicht unterstützt'
+                      : 'Lücke: kein aktueller eindeutiger Kandidat'),
+            ),
+            subtitle: assignment == null
+                ? Text(
+                    '${value.necessity == 'required' ? 'Erforderlich' : 'Optional'} · ${value.needKey} · Menge ${value.ordinal}',
+                  )
+                : Text(
+                    '${assignment.city ?? 'Ort nicht angegeben'}${assignment.country == null ? '' : ', ${assignment.country}'} · ${assignment.distanceKm.toStringAsFixed(1)} km · unverbindliche Quote',
+                  ),
+          ),
+          if (mayRequest)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  key: ValueKey('mission-inventory-demand-${value.slotKey}'),
+                  onPressed: _busy || _supplyDemandRouteOpening
+                      ? null
+                      : () => _openSupplyDemand(value),
+                  icon: const Icon(Icons.send_outlined),
+                  label: const Text('Private Anfrage für diese Lücke'),
+                ),
               ),
+            ),
+        ],
       ),
     );
   }

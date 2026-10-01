@@ -1094,6 +1094,12 @@ flutter test --no-pub --test-randomize-ordering-seed=7 \
   --dart-define=SIT_BACKEND_ENABLED=true \
   --dart-define=SIT_API_BASE_URL=http://127.0.0.1:1/api/v1 \
   test/mission_inventory_resolution_gateway_http_test.dart
+# Private Mission demand participant reads and lifecycle writes must execute
+# all five owner-bound HTTP routes; disabled-backend skips are not evidence.
+flutter test --no-pub --test-randomize-ordering-seed=7 \
+  --dart-define=SIT_BACKEND_ENABLED=true \
+  --dart-define=SIT_API_BASE_URL=http://127.0.0.1:1/api/v1 \
+  test/mission_supply_demand_gateway_http_test.dart
 # Bound project writes and guest migration must exercise the real HTTP helper
 # with synthetic, zone-local mocks; default disabled mode is not this proof.
 flutter test --reporter expanded --test-randomize-ordering-seed=7 \
