@@ -53,6 +53,34 @@ fixed failure code, the whitelisted replacement-or-final phase and sanitized
 rollback result. Success evidence is written only after the stable final public
 gate.
 
+The exact-source `a74de55fa955eae2ecc38b83155066fc5eff98a4` attempt then
+failed closed with code `catalog_activation_public_readback_not_converged` at
+the fixed phase `catalog_activation_replacement_public_readback`. Independent
+closure verified **PASS-safe rollback**. Its root-owned `0600` failure evidence
+has SHA-256
+`bef02de748ea93c11e071bd7486e90fea7db5b6898bfcd23337f25c5babe0d18`;
+manifest SHA-256 is
+`10f4d221d6eda5df1bece3862943a8d6363c56097a200d60bb48ac2f8bfd8630`,
+and the retained backup matches the restored disabled environment SHA-256
+`8b5cd415a6b2a06f93c7911d130d274fee9eca5af0634529ae5e6fd51dae9441`.
+No success evidence, lock, controller, replacement or seal remains.
+
+A reviewed isolated diagnostic, script SHA-256
+`1a030137a6f6c9fa23875525a76f424a0247d427faa3008c0295c99ac3aa5fc9`,
+started a loopback-only application process with the catalog flag enabled and
+database transactions forced read-only. Its fixed-schema result passed process,
+flag, response shape, HTTP status, count, page count, title, notice, photo,
+catalog class and all noncontractual truth predicates; only the ID predicate
+failed. Source inspection proves the cause: `publicListingFromRow` used the
+authoritative relational ID for classification but spread persisted payload
+into the public shape without restoring that ID, so an absent or forged payload
+ID could escape. The source successor applies `id: listingId` after payload
+fields. This diagnosis and source fix are not live activation evidence and do
+not permit reuse of the failed manifest. The currently installed runtime image
+predates the fix; a later attempt therefore requires a newly built, verified
+and promoted runtime containing the fix before a fresh manifest and namespace
+can be prepared.
+
 ## Reviewed execution-capsule requirements
 
 A future fresh capsule must, before any secondary checks:

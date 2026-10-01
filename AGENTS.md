@@ -233,6 +233,10 @@ discover a mechanically stale source hash.
   a whitelisted fixed phase when convergence fails. Retry only the read; never
   replay stop, rename, create, network attach, start or another mutation, and
   never serialize the rejected response or dynamic values in the diagnosis.
+- Public projections must treat relational row identifiers as server-owned:
+  apply the authoritative row ID after persisted or client payload fields so a
+  missing or forged payload ID cannot replace database truth. Focused tests
+  must cover both absent and conflicting payload identifiers.
 - Unauthenticated operational probes must target paths explicitly allowlisted by
   the access gate; focused tests must cover the enabled/valid gate matrix and
   reject nearby protected paths.

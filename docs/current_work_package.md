@@ -91,12 +91,31 @@ and the database, payment and provider boundaries remain unchanged. The fixed
 phase did not exist in this attempt, so no replacement-versus-final public gate
 is claimed. Its retained namespace is non-retriable.
 
-Next: commit and exact-HEAD CI for the source successor's bounded eight-read,
-100-ms public convergence and whitelisted phase diagnosis, then prepare a new
-manifest and failure-preserving restart-stable wrapper before one reviewed
-one-shot transition and authenticated browser acceptance. Phase 0 completion
-still advances automatically to **P2 — dauerhafter unverbindlicher
-Missionsbedarf** and does not complete the SIT Mission / Blue Ocean objective.
+The later exact-source `a74de55f…` attempt failed closed at the now-proven
+replacement public phase with code
+`catalog_activation_public_readback_not_converged`. Independent closure again
+verified **PASS-safe rollback**; failure evidence SHA-256 is
+`bef02de748ea93c11e071bd7486e90fea7db5b6898bfcd23337f25c5babe0d18`,
+manifest SHA-256 is
+`10f4d221d6eda5df1bece3862943a8d6363c56097a200d60bb48ac2f8bfd8630`,
+and backup/environment SHA-256 remains `8b5cd415…`. No success evidence or
+transient activation artifact remains; this namespace is non-retriable.
+
+The isolated loopback diagnostic with DB read-only enforcement passed every
+public predicate except the listing ID. Source inspection proved that the
+server classified by relational `catalog_listing_id` but allowed persisted
+payload to supply the projected `id`. The source successor now applies the
+authoritative relational ID after payload fields and tests missing and forged
+payload IDs for ordinary and synthetic results without weakening any synthetic
+noncontractual field.
+
+Next: commit and exact-HEAD CI for this source fix. The installed runtime image
+predates the fix, so no live retry is prepared or authorized by this record;
+any later attempt first requires a newly built, verified and promoted runtime,
+then a new manifest/namespace and separately reviewed wrapper before
+authenticated browser acceptance. Phase 0 completion still advances
+automatically to **P2 — dauerhafter unverbindlicher Missionsbedarf** and does
+not complete the SIT Mission / Blue Ocean objective.
 
 The dedicated two-role synthetic catalog scope is now seeded and bound to the
 canonical Green Staging environment. Its guarded database preparation and

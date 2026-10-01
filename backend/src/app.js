@@ -1406,7 +1406,8 @@ function publicListingFromRow(row) {
           return storageName && allowed.has(storageName);
         })
       : []);
-  return syntheticCatalogProjection(shapePublicListing({ ...payload, photos }, { distanceKm: row.distance_km }),
+  return syntheticCatalogProjection(
+    shapePublicListing({ ...payload, id: listingId, photos }, { distanceKm: row.distance_km }),
     config.syntheticCatalog, listingId);
 }
 

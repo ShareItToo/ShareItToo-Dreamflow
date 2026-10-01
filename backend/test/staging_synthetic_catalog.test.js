@@ -103,7 +103,7 @@ test('actual API direct endpoints and guest/authenticated projection enforce exa
   assert.equal(storageNameFromListingPhoto(ordinaryPhoto, env.PUBLIC_BASE_URL),
     'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa-full.webp');
   let catalogRows = [{ catalog_listing_id: lane.listingId,
-    payload: { id: lane.listingId, photos: ['https://attacker.invalid/forged.webp'],
+    payload: { photos: ['https://attacker.invalid/forged.webp'],
       city: 'Heilbronn', country: 'Deutschland', catalogClass: 'ordinary',
       realOffer: true, ownerDeclaration: true, bookingAllowed: true, paymentAllowed: true,
       syntheticNotice: 'forged' }, storage_names: [lane.uploadName] }];
@@ -124,6 +124,7 @@ test('actual API direct endpoints and guest/authenticated projection enforce exa
       const r = await fetch(`${base}/v1/listings`, { headers: auth });
       assert.equal(r.status, 200); const body = await r.json();
       assert.equal(body.listings.length, 1);
+      assert.equal(body.listings[0].id, lane.listingId);
       assert.equal(body.listings[0].catalogClass, 'synthetic_noncontractual_catalog_only');
       assert.equal(body.listings[0].realOffer, false);
       assert.equal(body.listings[0].ownerDeclaration, false);
@@ -132,17 +133,34 @@ test('actual API direct endpoints and guest/authenticated projection enforce exa
       assert.equal(body.listings[0].syntheticNotice, syntheticCatalogNotice);
       assert.deepEqual(body.listings[0].photos, [syntheticPhoto]);
     }
-    catalogRows = [{ catalog_listing_id: 'ordinary', payload: { id: 'ordinary', title: 'Ordinary',
-      photos: [ordinaryPhoto, 'https://attacker.invalid/forged.webp'], city: 'Berlin', country: 'Deutschland',
-      realOffer: false, ownerDeclaration: false, bookingAllowed: false, paymentAllowed: false,
-      catalogClass: 'synthetic_noncontractual_catalog_only', syntheticNotice: 'forged' },
-    storage_names: ['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa-full.webp', lane.uploadName] }];
-    const ordinaryResponse = await fetch(`${base}/v1/listings`);
-    assert.equal(ordinaryResponse.status, 200); const ordinary = (await ordinaryResponse.json()).listings[0];
-    assert.equal(ordinary.id, 'ordinary'); assert.equal(ordinary.title, 'Ordinary');
-    assert.deepEqual(ordinary.photos, [ordinaryPhoto]);
-    for (const key of ['catalogClass', 'realOffer', 'ownerDeclaration', 'bookingAllowed',
-      'paymentAllowed', 'syntheticNotice']) assert.equal(Object.hasOwn(ordinary, key), false, key);
+    for (const payloadId of [undefined, 'forged-payload-id']) {
+      catalogRows = [{ catalog_listing_id: 'ordinary', payload: {
+        ...(payloadId === undefined ? {} : { id: payloadId }), title: 'Ordinary',
+        photos: [ordinaryPhoto, 'https://attacker.invalid/forged.webp'], city: 'Berlin', country: 'Deutschland',
+        realOffer: false, ownerDeclaration: false, bookingAllowed: false, paymentAllowed: false,
+        catalogClass: 'synthetic_noncontractual_catalog_only', syntheticNotice: 'forged' },
+      storage_names: ['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa-full.webp', lane.uploadName] }];
+      const ordinaryResponse = await fetch(`${base}/v1/listings`);
+      assert.equal(ordinaryResponse.status, 200); const ordinary = (await ordinaryResponse.json()).listings[0];
+      assert.equal(ordinary.id, 'ordinary'); assert.equal(ordinary.title, 'Ordinary');
+      assert.deepEqual(ordinary.photos, [ordinaryPhoto]);
+      for (const key of ['catalogClass', 'realOffer', 'ownerDeclaration', 'bookingAllowed',
+        'paymentAllowed', 'syntheticNotice']) assert.equal(Object.hasOwn(ordinary, key), false, key);
+    }
+    catalogRows = [{ catalog_listing_id: lane.listingId,
+      payload: { id: 'forged-payload-id', photos: [syntheticPhoto],
+        city: 'Heilbronn', country: 'Deutschland' }, storage_names: [lane.uploadName] }];
+    const forgedSyntheticResponse = await fetch(`${base}/v1/listings`);
+    assert.equal(forgedSyntheticResponse.status, 200);
+    const forgedSynthetic = (await forgedSyntheticResponse.json()).listings[0];
+    assert.equal(forgedSynthetic.id, lane.listingId);
+    assert.equal(forgedSynthetic.catalogClass, 'synthetic_noncontractual_catalog_only');
+    assert.equal(forgedSynthetic.realOffer, false);
+    assert.equal(forgedSynthetic.ownerDeclaration, false);
+    assert.equal(forgedSynthetic.bookingAllowed, false);
+    assert.equal(forgedSynthetic.paymentAllowed, false);
+    assert.equal(forgedSynthetic.syntheticNotice, syntheticCatalogNotice);
+    assert.deepEqual(forgedSynthetic.photos, [syntheticPhoto]);
     catalogRows = [{ catalog_listing_id: lane.listingId,
       payload: { id: lane.listingId, photos: [syntheticPhoto], city: 'Heilbronn', country: 'Deutschland' },
       storage_names: ['not-the-configured-synthetic-upload.webp'] }];
