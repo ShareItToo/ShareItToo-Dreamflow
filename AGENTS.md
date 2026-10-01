@@ -615,6 +615,8 @@ discover a mechanically stale source hash.
    never authorizes changing legal/privacy claims or approval state. If the
    closure is cyclic or self-referential, redesign the binding instead of
    chasing hashes across commits.
+   Hash-bound source changes must update both manifests and every executable
+   canonical hash constant, then pass the common consumer-closure gate.
    Mentor/source-binding ratchet: mutable current inventories may be refreshed
    only against the current source they intentionally bind; historical evidence
    snapshots are immutable and must never be rewritten or rebound. Historical
