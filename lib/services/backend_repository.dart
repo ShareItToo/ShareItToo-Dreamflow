@@ -1096,6 +1096,140 @@ class BackendRepository {
         },
       );
 
+  static Future<List<Map<String, dynamic>>> getPrivateShelfItemsForOwner(
+    AuthSessionOwner owner,
+  ) async {
+    final response = await _authorizedForOwner(
+      owner: owner,
+      method: 'GET',
+      path: '/private-shelf',
+    );
+    return _strictMaps(response['shelfItems']);
+  }
+
+  static Future<Map<String, dynamic>> getPrivateShelfItemForOwner({
+    required AuthSessionOwner owner,
+    required String shelfItemId,
+  }) async {
+    final response = await _authorizedForOwner(
+      owner: owner,
+      method: 'GET',
+      path: '/private-shelf/${Uri.encodeComponent(shelfItemId)}',
+    );
+    if (response['shelfItem'] is! Map) {
+      throw const FormatException('private_shelf_item_invalid');
+    }
+    return Map<String, dynamic>.from(response['shelfItem'] as Map);
+  }
+
+  static Future<Map<String, dynamic>> createPrivateShelfItemForOwner({
+    required AuthSessionOwner owner,
+    required Map<String, dynamic> payload,
+    required String idempotencyKey,
+  }) =>
+      _authorizedForOwner(
+        owner: owner,
+        method: 'POST',
+        path: '/private-shelf',
+        body: payload,
+        additionalHeaders: <String, String>{
+          'Idempotency-Key': idempotencyKey,
+        },
+      );
+
+  static Future<void> deletePrivateShelfItemForOwner({
+    required AuthSessionOwner owner,
+    required String shelfItemId,
+  }) async {
+    await _authorizedForOwner(
+      owner: owner,
+      method: 'DELETE',
+      path: '/private-shelf/${Uri.encodeComponent(shelfItemId)}',
+    );
+  }
+
+  static Future<Map<String, dynamic>> uploadPrivateShelfMediaForOwner({
+    required AuthSessionOwner owner,
+    required String shelfItemId,
+    required Uint8List bytes,
+    required String filename,
+  }) async {
+    if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+      throw const BackendException(409, 'principal_changed');
+    }
+    final token = await AuthService.accessTokenForOwner(owner);
+    if (token == null ||
+        token.isEmpty ||
+        !await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+      throw const BackendException(401, 'authentication_required');
+    }
+    final request = http.MultipartRequest(
+      'POST',
+      BackendConfig.uri(
+        '/private-shelf/${Uri.encodeComponent(shelfItemId)}/media',
+      ),
+    )
+      ..headers['Authorization'] = 'Bearer $token'
+      ..files.add(
+        http.MultipartFile.fromBytes('file', bytes, filename: filename),
+      );
+    final response = await request.send().timeout(const Duration(seconds: 45));
+    if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+      throw const BackendException(409, 'principal_changed');
+    }
+    final body = await response.stream.bytesToString();
+    if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+      throw const BackendException(409, 'principal_changed');
+    }
+    Map<String, dynamic> decoded = <String, dynamic>{};
+    if (body.trim().isNotEmpty) {
+      try {
+        final value = jsonDecode(body);
+        if (value is Map) decoded = Map<String, dynamic>.from(value);
+      } catch (_) {
+        throw BackendException(response.statusCode, 'invalid_server_response');
+      }
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw BackendException(
+        response.statusCode,
+        decoded['error']?.toString() ?? 'private_shelf_upload_failed',
+        details: decoded['details'],
+      );
+    }
+    if (decoded['media'] is! Map) {
+      throw const BackendException(
+          502, 'private_shelf_upload_response_invalid');
+    }
+    return Map<String, dynamic>.from(decoded['media'] as Map);
+  }
+
+  static Future<BackendBinaryResponse> readPrivateShelfMediaForOwner({
+    required AuthSessionOwner owner,
+    required String shelfItemId,
+    required String mediaId,
+    required String variant,
+  }) async {
+    if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+      throw const BackendException(409, 'principal_changed');
+    }
+    final token = await AuthService.accessTokenForOwner(owner);
+    if (token == null ||
+        token.isEmpty ||
+        !await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+      throw const BackendException(401, 'authentication_required');
+    }
+    final response = await BackendHttp.requestBytes(
+      path: '/private-shelf/${Uri.encodeComponent(shelfItemId)}'
+          '/media/${Uri.encodeComponent(mediaId)}/${Uri.encodeComponent(variant)}',
+      accessToken: token,
+    );
+    if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+      throw const BackendException(409, 'principal_changed');
+    }
+    return response;
+  }
+
   static Future<Map<String, dynamic>> updateListing(
     Map<String, dynamic> listing,
   ) async {

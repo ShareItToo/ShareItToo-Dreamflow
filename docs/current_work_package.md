@@ -101,7 +101,7 @@ negative fixture still derived a fast digest from test password data. The
 local successor now uses a deterministic non-secret 64-hex literal for that
 invalid-format case; it is included in the exact-head P2 PASS above.
 
-## P3-A private Shelf backend — COMMIT `09796ac6`; CI FIX LOCAL
+## P3-A private Shelf backend — EXACT-HEAD PASS
 
 The smallest additive P3 backend slice introduces migration `100` and an
 owner-only private Shelf API. An authenticated owner can idempotently create,
@@ -142,12 +142,44 @@ Sol's independent review passed 19 focused Node tests plus backend check and
 diff-check, the real PostgreSQL 16 P3 suite, 35 combined R9/privacy tests, and
 both privacy and retention validators before the reviewed source was committed.
 
-Exact commit `09796ac6` reached Regression run `36862998450`; only
-`postgres-runner-proof` job `110371544149` failed. The real migration result was
-correctly append-only with both `099_mission_need_revisions.up.sql` and
-`100_private_shelf_items.up.sql`; the foundation test had replaced 099 in its
-ordered expectation instead of appending 100. The local CI successor restores
-099 and appends 100. Exact-head successor CI remains pending.
+The append-only migration expectation was corrected without changing product
+logic. Exact successor `c83608229546baa8936b313e50e348c0024e5848` passed
+Regression `36863695936`, including Backend, PostgreSQL, Flutter and R10, plus
+CodeQL workflow `36863695879` and separate CodeQL check `110375090588`. P3-A
+therefore remains the accepted source-only predecessor for P3-B; no Live,
+Green, Play, provider or payment state changed.
+
+## P3-B owner-only Mein Regal UI — SOURCE PASS LOCAL; SOL REVIEW PENDING
+
+The smallest internal Flutter/Web slice now exposes `Mein Regal` only behind
+the existing Planner technical gate. The authenticated owner can list, load,
+create and confirm deletion of private Shelf objects, select one photo at a
+time, upload it once, and view its authenticated thumbnail or full bytes. The
+screen and photo controls state `Privat · kein Inserat`; they create no public
+listing, search entry, reservation, booking, contract or payment.
+
+The client accepts only the exact P3-A server shape and authoritative server
+IDs. A dedicated owner-bound gateway uses only `/v1/private-shelf` JSON,
+multipart and binary routes with the initiating bearer. It verifies the owner
+before and after every network result, requires private/no-store image
+responses, and renders private bytes directly with no `/uploads`, `AppImage`,
+network image or durable/global media cache. Account-security notifications
+clear owner, editor, selected bytes, in-flight media futures and every owned
+private modal; delete, full-photo and picker flows become single-flight before
+their first async gap. Late list, media, upload and delete results from account
+A cannot update account B or a logged-out/restarted screen. Same-principal
+collection refresh reconciles or removes the open detail and invalidates media
+futures while preserving an unsent create draft and its idempotency key. An
+unconfirmed upload is never blindly retried; the selected input is retained and
+a fresh authoritative server readback is required.
+
+Local source acceptance passes 4 strict model-contract tests, 3 owner-bound
+HTTP tests, 8 widget/state/accessibility tests and 4 P3-B wiring tests. Three
+existing Mission UI isolation tests, the Planner/profile release-gate tests,
+the runtime image-origin wiring regressions, and the full Flutter analyzer also
+pass. Exact-head CI remains pending after Sol review. This package adds no AI,
+photo analysis, inventory resolution, public/listing/cart/booking/payment or
+provider behavior and makes no Live, Green, Play or deployment change.
 
 ## Closed prerequisite: Phase 0 Web/CORS and safe synthetic catalog QA
 

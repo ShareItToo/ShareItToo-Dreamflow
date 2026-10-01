@@ -646,6 +646,10 @@ discover a mechanically stale source hash.
   not clear an unsent draft or rotate its key; an epoch/session/principal change
   must invalidate that draft. Client-side length limits must include all fixed
   prefixes so the server's bounded summary contract is never exceeded.
+- Account-bound modal/read flows must become single-flight before their first
+  async gap, and every owned route must be dismissed on principal change.
+  Authoritative collection refreshes must reconcile any open detail and private
+  media state while preserving same-principal unsent drafts and idempotency keys.
 - Support/compliance intake booleans must reflect guidance actually shown and
   acknowledged by the user; never manufacture an attestation by hardcoding a
   `guidanceShown`, single-issue, non-urgent, or similar claim without its UI

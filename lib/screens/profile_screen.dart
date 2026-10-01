@@ -19,6 +19,7 @@ import 'package:lendify/screens/legal_screen.dart';
 import 'package:lendify/screens/language_screen.dart';
 import 'package:lendify/config/planner_technical_config.dart';
 import 'package:lendify/screens/mission_needs_screen.dart';
+import 'package:lendify/screens/private_shelf_screen.dart';
 import 'package:lendify/widgets/profile_header_card.dart';
 import 'package:provider/provider.dart';
 import 'package:lendify/services/localization_service.dart';
@@ -669,6 +670,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
             'icon': 'checklist',
             'route': '/missionNeeds',
           },
+        if (PlannerTechnicalConfig.available)
+          {
+            'id': 'private_shelf',
+            'labelKey': 'profile.menu.privateShelf',
+            'icon': 'inventory',
+            'route': '/privateShelf',
+          },
         {
           'id': 'my_listings',
           'labelKey': 'profile.menu.myListings',
@@ -1177,6 +1185,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 final GuestGateContext gateContext = switch (id) {
                   'rental_requests' => GuestGateContext.rentalRequest,
                   'mission_needs' => GuestGateContext.generic,
+                  'private_shelf' => GuestGateContext.generic,
                   'my_listings' => GuestGateContext.listing,
                   'my_bookings' => GuestGateContext.booking,
                   'account_settings' => GuestGateContext.accountSettings,
@@ -1199,6 +1208,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     switch (route) {
       case '/myListings':
       case '/missionNeeds':
+      case '/privateShelf':
       case '/ownerRequests':
       case '/bookings':
       case '/accountSettings':
@@ -1221,6 +1231,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (route.startsWith('/myProfilePublic')) return GuestGateContext.profile;
     if (route.startsWith('/myListings')) return GuestGateContext.listing;
     if (route.startsWith('/missionNeeds')) return GuestGateContext.generic;
+    if (route.startsWith('/privateShelf')) return GuestGateContext.generic;
     if (route.startsWith('/ownerRequests')) {
       return GuestGateContext.rentalRequest;
     }
@@ -1240,6 +1251,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return Icons.storefront_outlined;
       case 'checklist':
         return Icons.checklist_outlined;
+      case 'inventory':
+        return Icons.inventory_2_outlined;
       case 'requests':
         return Icons.mark_unread_chat_alt_outlined;
       case 'calendar':
@@ -1276,6 +1289,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       case '/missionNeeds':
         Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const MissionNeedsScreen()),
+        );
+        break;
+      case '/privateShelf':
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const PrivateShelfScreen()),
         );
         break;
       case '/ownerRequests':
