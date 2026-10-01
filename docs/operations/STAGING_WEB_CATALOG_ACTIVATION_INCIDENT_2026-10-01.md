@@ -118,5 +118,27 @@ identity. The exact runtime namespace must then prove the worker UID/GID can
 traverse every mounted target parent, read every mounted target, and pass the
 required syntax check/import before the worker starts.
 
+Import proof covers the complete transitive source tree at its expected target
+layout, not only the entrypoint directory. Fresh extracted source is normalized
+to the intended controller ownership with reviewed bytes and `0755`/`0644`
+modes before Git checks; `safe.directory` is never a substitute. Wrapper output
+assertions derive their exact backup/evidence paths from the hash-verified
+manifest and never duplicate alternate basenames.
+
+## Browser projection incident after successful activation
+
+The later reviewed one-shot D3 activation completed and the public API returned
+HTTP 200 with exactly one correctly classified, noncontractual synthetic row.
+Browser acceptance nevertheless showed `Noch keine Anzeigen` without a console
+error. Source inspection proved the Flutter catalog loader was correctly
+discarding the row because `Item.fromJson` remained strict while the synthetic
+server projection omitted mandatory item fields. The source-only successor
+keeps that parser strict and leaves ordinary projection unchanged. For the sole
+synthetic row it now ignores persisted payload authority, builds the complete
+public item from relational owner/listing values, emits only coarse Heilbronn
+coordinates and the one exact bound public image, and fails the row closed if
+relational or media evidence is incomplete. Booking, payment, ownership and
+real-offer claims remain false. This record is not deployment or browser PASS.
+
 This source successor is not live activation evidence and does not authorize a
 remote run.

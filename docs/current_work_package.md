@@ -17,6 +17,24 @@ This objective record grants no new live, provider, payment, Production or Play 
 
 ## Active prerequisite: Phase 0 Web/CORS and safe synthetic catalog QA
 
+### Synthetic catalog browser projection — SOURCE FIX ACTIVE 2026-10-01
+
+The reviewed D3 one-shot activation is live and its public endpoint returns
+HTTP 200 with exactly one synthetic, explicitly noncontractual listing. Browser
+acceptance exposed the next bounded defect: the Web UI displayed
+`Noch keine Anzeigen` with no console error because the strict Flutter
+`Item.fromJson` contract correctly rejected the incomplete synthetic server
+projection. The source successor does not weaken the client parser or ordinary
+listing projection. It constructs only the configured synthetic row from
+server-owned relational owner/listing values, uses coarse Heilbronn coordinates
+and the exact bound canonical image, and returns no row when required relational
+or media evidence is missing. Persisted payload cannot forge any canonical
+field; real-offer, owner-declaration, booking and payment capabilities remain
+false. One shared backend/Flutter fixture proves the exact visible card and
+disabled detail path. This is source evidence only: the live D3 runtime remains
+unchanged until exact-HEAD CI, later publication/promotion and authenticated
+browser acceptance complete.
+
 ### Current D3 runtime and login prerequisite — LIVE PASS 2026-10-01
 
 Green now runs exact runtime `d3c2f5d7d7516d3bfaac4b61689c2c433924cc6e`

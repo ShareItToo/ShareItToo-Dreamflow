@@ -1369,8 +1369,25 @@ export function buildCatalogSearch(search, { publicListingIds = null, syntheticC
   }[search.sort];
   const limit = bind(search.limit + 1);
   const offset = bind(search.offset);
+  const syntheticProjectionColumns = syntheticCatalog.enabled ? `,
+        listing.owner_id AS catalog_owner_id,
+        listing.title AS catalog_title,
+        listing.description AS catalog_description,
+        listing.category_id AS catalog_category_id,
+        listing.subcategory AS catalog_subcategory,
+        listing.condition AS catalog_condition,
+        listing.price_per_day_minor AS catalog_price_per_day_minor,
+        listing.currency AS catalog_currency,
+        listing.min_days AS catalog_min_days,
+        listing.max_days AS catalog_max_days,
+        listing.created_at AS catalog_created_at,
+        listing.status AS catalog_status,
+        listing.is_active AS catalog_is_active,
+        listing.catalog_revision AS catalog_revision,
+        listing.city AS catalog_city,
+        listing.country AS catalog_country` : '';
   return {
-    text: `SELECT listing.id AS catalog_listing_id, listing.payload, media.storage_names, ${distanceExpression} AS distance_km
+    text: `SELECT listing.id AS catalog_listing_id, listing.payload, media.storage_names, ${distanceExpression} AS distance_km${syntheticProjectionColumns}
       FROM listings AS listing
       JOIN LATERAL (
         SELECT array_agg(upload.storage_name ORDER BY upload.created_at) AS storage_names
@@ -1391,24 +1408,109 @@ export function buildCatalogSearch(search, { publicListingIds = null, syntheticC
   };
 }
 
+const syntheticCatalogConditions = new Set(['new', 'like-new', 'good', 'acceptable', 'worn', 'used']);
+const syntheticCatalogCoordinates = Object.freeze({ latitude: 49.14, longitude: 9.22 });
+
+function syntheticPublicListingFromRow(row, listingId) {
+  const requiredText = (value, maximum = 10_000) => typeof value === 'string'
+    ? value.trim().slice(0, maximum)
+    : '';
+  const integer = (value) => {
+    const candidate = typeof value === 'number' ? value : Number(value);
+    return Number.isSafeInteger(candidate) ? candidate : null;
+  };
+  const ownerId = requiredText(row.catalog_owner_id, 120);
+  const title = requiredText(row.catalog_title, 160);
+  const description = requiredText(row.catalog_description);
+  const categoryId = requiredText(row.catalog_category_id, 80);
+  const subcategory = requiredText(row.catalog_subcategory, 120);
+  const condition = requiredText(row.catalog_condition, 30);
+  const priceMinor = integer(row.catalog_price_per_day_minor);
+  const currency = requiredText(row.catalog_currency, 3).toUpperCase();
+  const minDays = integer(row.catalog_min_days);
+  const maxDays = integer(row.catalog_max_days);
+  const revision = integer(row.catalog_revision);
+  const city = requiredText(row.catalog_city, 120);
+  const country = requiredText(row.catalog_country, 120);
+  const createdAt = row.catalog_created_at instanceof Date
+    ? row.catalog_created_at
+    : new Date(row.catalog_created_at);
+  const storageNames = Array.isArray(row.storage_names) ? row.storage_names : [];
+  if (!listingId || !ownerId || title.length < 3 || description.length < 10
+      || !categoryId || !subcategory || !syntheticCatalogConditions.has(condition)
+      || priceMinor === null || priceMinor <= 0 || priceMinor > 100_000_000
+      || !/^[A-Z]{3}$/u.test(currency)
+      || minDays === null || minDays < 1 || maxDays === null || maxDays < minDays
+      || revision === null || revision < 1 || Number.isNaN(createdAt.getTime())
+      || row.catalog_status !== 'active' || row.catalog_is_active !== true
+      || city.toLowerCase() !== 'heilbronn'
+      || !['de', 'deutschland', 'germany'].includes(country.toLowerCase())
+      || storageNames.length !== 1 || storageNames[0] !== config.syntheticCatalog.uploadName) {
+    return null;
+  }
+  const price = priceMinor / 100;
+  return syntheticCatalogProjection(shapePublicListing({
+    id: listingId,
+    ownerId,
+    title,
+    description,
+    categoryId,
+    subcategory,
+    tags: [],
+    pricePerDay: price,
+    currency,
+    priceUnit: 'day',
+    priceRaw: price,
+    deposit: null,
+    autoApplyDiscounts: false,
+    longRentalDiscounts: [],
+    photos: [`${config.publicBaseUrl}/uploads/${config.syntheticCatalog.uploadName}`],
+    locationText: city,
+    lat: syntheticCatalogCoordinates.latitude,
+    lng: syntheticCatalogCoordinates.longitude,
+    geohash: '',
+    condition,
+    minDays,
+    maxDays,
+    createdAt: createdAt.toISOString(),
+    isActive: true,
+    verificationStatus: 'unverified',
+    city,
+    country,
+    status: 'active',
+    endedAt: null,
+    timesLent: 0,
+    offersDeliveryAtDropoff: false,
+    offersPickupAtReturn: false,
+    offersExpressAtDropoff: false,
+    maxDeliveryKmAtDropoff: null,
+    maxPickupKmAtReturn: null,
+    handoverRadiusKm: null,
+    privateStatusConfirmed: false,
+    pilotRegionCode: '',
+    cancellationPolicy: 'unified',
+    protectionModel: 'none',
+    availabilityMode: 'calendar',
+    catalogRevision: revision,
+  }, { distanceKm: row.distance_km }), config.syntheticCatalog, listingId);
+}
+
 function publicListingFromRow(row) {
+  const listingId = row.catalog_listing_id;
+  const synthetic = isSyntheticCatalogListing(listingId, config.syntheticCatalog);
+  if (synthetic) return syntheticPublicListingFromRow(row, listingId);
   const allowed = new Set(row.storage_names ?? []);
   const payload = ensureObject(row.payload, 'invalid_stored_listing');
-  const listingId = row.catalog_listing_id ?? payload.id;
-  const synthetic = isSyntheticCatalogListing(listingId, config.syntheticCatalog);
-  const photos = synthetic
-    ? (allowed.has(config.syntheticCatalog.uploadName)
-      ? [`${config.publicBaseUrl}/uploads/${config.syntheticCatalog.uploadName}`]
-      : [])
-    : (Array.isArray(payload.photos)
-      ? payload.photos.filter((photo) => {
-          const storageName = storageNameFromListingPhoto(photo, config.publicBaseUrl);
-          return storageName && allowed.has(storageName);
-        })
-      : []);
+  const authoritativeId = listingId ?? payload.id;
+  const photos = Array.isArray(payload.photos)
+    ? payload.photos.filter((photo) => {
+        const storageName = storageNameFromListingPhoto(photo, config.publicBaseUrl);
+        return storageName && allowed.has(storageName);
+      })
+    : [];
   return syntheticCatalogProjection(
-    shapePublicListing({ ...payload, id: listingId, photos }, { distanceKm: row.distance_km }),
-    config.syntheticCatalog, listingId);
+    shapePublicListing({ ...payload, id: authoritativeId, photos }, { distanceKm: row.distance_km }),
+    config.syntheticCatalog, authoritativeId);
 }
 
 function rentalPayload(raw, { id, itemId, ownerId, renterId, existingStatus = null }) {
@@ -4447,12 +4549,13 @@ export function createApp({
     const result = await pool.query(query.text, query.values);
     const hasMore = result.rows.length > search.limit;
     const rows = hasMore ? result.rows.slice(0, search.limit) : result.rows;
+    const listings = rows.map(publicListingFromRow).filter(Boolean);
     res.json({
-      listings: rows.map(publicListingFromRow),
+      listings,
       page: {
         limit: search.limit,
         offset: search.offset,
-        count: rows.length,
+        count: listings.length,
         hasMore,
       },
     });

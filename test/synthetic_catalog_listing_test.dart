@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lendify/models/item.dart';
@@ -7,30 +10,31 @@ import 'package:lendify/widgets/item_details_overlay.dart';
 import 'package:lendify/widgets/listing_carousel_card.dart';
 import 'package:lendify/widgets/synthetic_catalog_listing.dart';
 
-Map<String, dynamic> itemJson({bool synthetic = true}) => {
-      'id': 'synthetic-fixture',
-      'ownerId': 'synthetic-owner',
-      'title': 'Testillustration',
-      'description': 'Erfundene Daten',
-      'categoryId': 'cat3',
-      'subcategory': 'Sonstiges',
-      'condition': 'good',
-      'pricePerDay': 12,
-      'photos': <String>[],
-      'locationText': 'Heilbronn',
-      'lat': 49.14,
-      'lng': 9.22,
-      'geohash': '',
-      'createdAt': '2026-09-30T10:00:00Z',
-      'city': 'Heilbronn',
-      'country': 'Deutschland',
-      if (synthetic) ...{
-        'catalogClass': Item.syntheticCatalogClass,
-        'bookingAllowed': false,
-        'paymentAllowed': false,
-        'syntheticNotice': Item.syntheticCatalogNotice,
-      },
-    };
+final Map<String, dynamic> backendSyntheticFixture = jsonDecode(
+    File('test/fixtures/staging_synthetic_catalog_public_listing.json')
+        .readAsStringSync()) as Map<String, dynamic>;
+
+Map<String, dynamic> itemJson({bool synthetic = true}) {
+  final value = Map<String, dynamic>.from(backendSyntheticFixture);
+  value['tags'] = List<String>.from(value['tags'] as List);
+  value['photos'] = List<String>.from(value['photos'] as List);
+  value['longRentalDiscounts'] =
+      List<dynamic>.from(value['longRentalDiscounts'] as List);
+  if (!synthetic) {
+    for (final key in [
+      'catalogClass',
+      'realOffer',
+      'ownerDeclaration',
+      'bookingAllowed',
+      'paymentAllowed',
+      'syntheticNotice',
+    ]) {
+      value.remove(key);
+    }
+    value['id'] = 'ordinary-fixture';
+  }
+  return value;
+}
 
 void main() {
   test('ordinary parity and synthetic class survive persistence/restart', () {
@@ -46,6 +50,25 @@ void main() {
     final contradictory =
         Item.fromJson({...itemJson(), 'bookingAllowed': true});
     expect(contradictory.bookingAllowed, isFalse);
+  });
+
+  test(
+      'exact backend synthetic fixture parses while malformed ordinary remains strict',
+      () {
+    final item = Item.fromJson(itemJson());
+    expect(item.id, 'synthetic-fixture');
+    expect(item.ownerId, 'synthetic-owner');
+    expect(item.photos, [
+      'https://shareittoo.com/api/v1/uploads/synthetic.jpg',
+    ]);
+    expect(item.lat, 49.14);
+    expect(item.lng, 9.22);
+    expect(item.isSyntheticCatalog, isTrue);
+    expect(item.bookingAllowed, isFalse);
+    expect(item.paymentAllowed, isFalse);
+
+    final malformed = itemJson(synthetic: false)..remove('pricePerDay');
+    expect(() => Item.fromJson(malformed), throwsA(isA<TypeError>()));
   });
 
   for (final carousel in [false, true]) {
@@ -70,6 +93,8 @@ void main() {
       await tester.tap(find.text('Testansicht öffnen'));
       await tester.pumpAndSettle();
       expect(find.byType(SyntheticCatalogDetails), findsOneWidget);
+      await tester.scrollUntilVisible(
+          find.text('Nicht buchbar – nur Katalogtest'), 120);
       final button = tester.widget<FilledButton>(find.byType(FilledButton));
       expect(button.onPressed, isNull);
       expect(find.text('In den Mietkorb'), findsNothing);

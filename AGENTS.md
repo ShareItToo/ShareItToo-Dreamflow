@@ -54,6 +54,15 @@ discover a mechanically stale source hash.
   can traverse every mounted target parent, read every mounted target, and run
   the required syntax check and import. Root readability alone is never proof
   of worker readability.
+- Import gates must mount the complete transitive source tree in its expected
+  target layout. A selected entrypoint directory is insufficient when imports
+  reach sibling source, package metadata or dependencies.
+- Normalize extracted temporary source to the intended controller ownership
+  while preserving reviewed bytes and `0755`/`0644` modes; verify every tracked
+  path before Git-backed checks. Never bypass this proof with `safe.directory`.
+- Execution wrappers must derive backup, evidence and other output paths only
+  from the already hash-verified manifest. Never duplicate or invent output
+  basenames in wrapper assertions.
 
 ## Sol, Luna and Gemini review loop
 
