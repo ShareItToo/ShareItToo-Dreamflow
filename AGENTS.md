@@ -229,6 +229,10 @@ discover a mechanically stale source hash.
   failure before secondary rollback checks, and validate a restarted rollback
   with restart-stable identity plus separate running/health assertions rather
   than a fingerprint containing volatile endpoint or IP fields.
+- Post-start public readbacks must use bounded read-only convergence and retain
+  a whitelisted fixed phase when convergence fails. Retry only the read; never
+  replay stop, rename, create, network attach, start or another mutation, and
+  never serialize the rejected response or dynamic values in the diagnosis.
 - Unauthenticated operational probes must target paths explicitly allowlisted by
   the access gate; focused tests must cover the enabled/valid gate matrix and
   reject nearby protected paths.

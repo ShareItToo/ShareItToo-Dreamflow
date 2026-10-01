@@ -44,6 +44,13 @@ const databaseVolume = 'sit-green-volume-20260918011528-wp254';
 const networkName = 'sit-green-network-20260918011528-wp254';
 const providerNetwork = 'sit-staging-provider-egress';
 const uploadsVolume = 'sit-green-uploads-20260918011528-wp254';
+const publicReadbackAttempts = 8;
+const publicReadbackDelayMs = 100;
+const publicReadbackFailureCode = 'catalog_activation_public_readback_not_converged';
+const publicReadbackFailurePhases = new Set([
+  'catalog_activation_replacement_public_readback',
+  'catalog_activation_final_public_readback',
+]);
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const fail = (code) => { throw Object.assign(new Error(code), { code }); };
 const check = (value, code) => { if (!value) fail(code); };
@@ -479,6 +486,23 @@ async function publicState(command, containerId, visible, phase, commandEnv) {
   return assertCatalogActivationPublic(result.stdout, visible);
 }
 
+async function convergedPublicState(command, containerId, visible, phase, commandEnv) {
+  check(publicReadbackFailurePhases.has(phase), 'catalog_activation_public_readback_phase_invalid');
+  for (let attempt = 1; attempt <= publicReadbackAttempts; attempt += 1) {
+    try { return await publicState(command, containerId, visible, phase, commandEnv); }
+    catch {
+      if (attempt === publicReadbackAttempts) {
+        const error = new Error(publicReadbackFailureCode);
+        error.code = publicReadbackFailureCode;
+        error.failurePhase = phase;
+        throw error;
+      }
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, publicReadbackDelayMs));
+    }
+  }
+  fail(publicReadbackFailureCode);
+}
+
 async function collectPreflight({ manifest, sourceCommit, evidenceFile, command, commandEnv }) {
   check(sourceCommit === manifest.fixtureBinding.opsCommit, 'catalog_activation_source_binding_invalid');
   check(!evidenceFile || evidenceFile === manifest.fixtureBinding.evidenceFile,
@@ -731,7 +755,7 @@ export async function runCatalogActivation({ manifest, bootstrapManifestBytes, d
         const config = await command('docker', ['exec', replacementId, 'node', '--input-type=module', '-e',
           catalogActivationConfigScript(true)], { phase: 'catalog_activation_replacement_config_readback', env: commandEnv });
         assertCatalogActivationConfig(config.stdout, true);
-        await publicState(command, replacementId, true,
+        await convergedPublicState(command, replacementId, true,
           'catalog_activation_replacement_public_readback', commandEnv);
       },
       finalReadback: async ({ replacementId }) => {
@@ -740,7 +764,7 @@ export async function runCatalogActivation({ manifest, bootstrapManifestBytes, d
           'catalog_activation_final_seed_readback', commandEnv), target.fixtureBinding);
         assertCatalogActivationState(await databaseState(command, target,
           'catalog_activation_final_database_readback', commandEnv), target.fixtureBinding);
-        await publicState(command, replacementId, true,
+        await convergedPublicState(command, replacementId, true,
           'catalog_activation_final_public_readback', commandEnv);
       },
       rollbackReadback: async () => {
@@ -785,7 +809,14 @@ export async function runCatalogActivation({ manifest, bootstrapManifestBytes, d
   return withCorsTransitionLock(target, execute, run);
 }
 
-export const sanitizeCatalogActivationError = sanitizeFixtureEnvError;
+export function sanitizeCatalogActivationError(error) {
+  const sanitized = sanitizeFixtureEnvError(error);
+  const failurePhase = publicReadbackFailurePhases.has(error?.failurePhase)
+    ? error.failurePhase : sanitized.failurePhase;
+  return Object.freeze({ status: sanitized.status, code: sanitized.code,
+    ...(failurePhase ? { failurePhase } : {}),
+    ...(sanitized.rollback ? { rollback: sanitized.rollback } : {}) });
+}
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   process.stderr.write('{"status":"failed","code":"use_activate_staging_web_fixture_catalog_entrypoint"}\n');

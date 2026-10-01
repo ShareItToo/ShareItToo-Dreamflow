@@ -17,6 +17,23 @@ database command: applied-env readback or sealed-original inspect/assertion.
 The immediate sealed-container assertion is the only Docker-state read in that
 window and is treated as the likely race, not as a proven exact error code.
 
+The fresh exact-source attempt from commit
+`74b40275b0e19686a8385dcac7e58033f4a76be9` also failed closed and is
+non-retriable. Its sanitized failure code is
+`catalog_activation_public_readback_invalid`; the fixed failure phase was not
+yet present, so the retained evidence does not prove whether the replacement
+or final public gate rejected the readback. Independent closure again verified
+**PASS-safe rollback**: original API
+`cf0548721f2c4c0df061edc0ca8d5f42a4a4e4f6301779aed05ce81eb624ee2a` is
+running, the disabled environment has SHA-256
+`8b5cd415a6b2a06f93c7911d130d274fee9eca5af0634529ae5e6fd51dae9441`,
+the public catalog and active sessions remain zero, and database, payment and
+provider boundaries are unchanged. The root-owned `0600` failure evidence is
+sanitized, reports rollback restored and has SHA-256
+`8f12e6bda8435cdbc6b746245dc0474cd810d66b38b9f3fa7949d56bb734522e`;
+the backup and manifest remain retained while lock, controller, replacement
+and seal artifacts are absent.
+
 ## Source successor
 
 The successor performs bounded read-only `docker inspect` convergence against
@@ -27,6 +44,14 @@ retried; stop, rename, create, network attach and start remain single-attempt
 mutations. Permanent drift fails closed and enters the existing exact rollback.
 The returned diagnostic has a fixed sanitized code and phase without observed
 container values.
+
+The next source successor also gives each post-start public gate an eight-read,
+100-ms bounded convergence window. These reads are observational only; all
+five mutation phases remain one-shot. Persistent public status, count, photo
+or noncontractual-truth drift fails closed, rolls back and exposes only the
+fixed failure code, the whitelisted replacement-or-final phase and sanitized
+rollback result. Success evidence is written only after the stable final public
+gate.
 
 ## Reviewed execution-capsule requirements
 

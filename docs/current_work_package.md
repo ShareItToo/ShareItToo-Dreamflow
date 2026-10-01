@@ -80,10 +80,22 @@ read-only seal convergence with exact config/host/mount/image/environment and
 network-ID checks, plus a fixed sanitized failure phase; it does not authorize
 a live retry. See the
 [catalog activation incident and successor contract](operations/STAGING_WEB_CATALOG_ACTIVATION_INCIDENT_2026-10-01.md).
-Next: commit and exact-HEAD CI, then prepare a fresh manifest/namespace and
-reviewed failure-preserving, restart-stable wrapper before a separately
-reviewed one-shot transition and authenticated browser acceptance. Phase 0
-completion still advances automatically to **P2 — dauerhafter unverbindlicher
+
+The fresh one-shot attempt from exact source `74b40275…` then failed at a public
+readback with sanitized code `catalog_activation_public_readback_invalid` and
+again completed **PASS-safe rollback**. The retained failure evidence SHA-256 is
+`8f12e6bda8435cdbc6b746245dc0474cd810d66b38b9f3fa7949d56bb734522e`.
+The original `cf054872…` API is running on the restored `8b5cd415…` disabled
+environment; public catalog, active sessions and refresh tokens remain zero,
+and the database, payment and provider boundaries remain unchanged. The fixed
+phase did not exist in this attempt, so no replacement-versus-final public gate
+is claimed. Its retained namespace is non-retriable.
+
+Next: commit and exact-HEAD CI for the source successor's bounded eight-read,
+100-ms public convergence and whitelisted phase diagnosis, then prepare a new
+manifest and failure-preserving restart-stable wrapper before one reviewed
+one-shot transition and authenticated browser acceptance. Phase 0 completion
+still advances automatically to **P2 — dauerhafter unverbindlicher
 Missionsbedarf** and does not complete the SIT Mission / Blue Ocean objective.
 
 The dedicated two-role synthetic catalog scope is now seeded and bound to the

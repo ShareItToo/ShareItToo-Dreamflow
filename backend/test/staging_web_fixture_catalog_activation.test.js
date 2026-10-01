@@ -192,9 +192,10 @@ function startupPayload() {
 }
 
 function fakeExecutor(fx, { failPhase, lateEvidenceCollision = false, publicPhotoFault = null,
-  sealReadbackFault = null } = {}) {
+  sealReadbackFault = null, publicReadbackFaults = {} } = {}) {
   const containers = new Map([[fx.manifest.apiContainer, structuredClone(fx.api)]]); const calls = [];
   let sealReadbacks = 0;
+  const publicReadbacks = new Map(); const evidenceDuringFinalPublic = [];
   const fixed = new Map([
     [fx.manifest.databaseContainer, { Name: `/${fx.manifest.databaseContainer}`, State: { Running: true } }],
     [fx.manifest.databaseVolume, { Name: fx.manifest.databaseVolume }],
@@ -257,8 +258,20 @@ function fakeExecutor(fx, { failPhase, lateEvidenceCollision = false, publicPhot
         const visible = !String(options.phase).includes('before') && !String(options.phase).includes('pre_mutation')
           && !String(options.phase).includes('rollback');
         const value = publicState(visible);
-        if (visible && publicPhotoFault === 'missing') Object.assign(value, { photoCount: 0, photoDigest: null });
-        if (visible && publicPhotoFault === 'wrong-digest') value.photoDigest = hash('wrong-canonical-public-photo');
+        const attempt = (publicReadbacks.get(options.phase) ?? 0) + 1;
+        publicReadbacks.set(options.phase, attempt);
+        if (options.phase === 'catalog_activation_final_public_readback') {
+          evidenceDuringFinalPublic.push(await lstat(fx.evidenceFile).then(() => true,
+            (error) => error?.code === 'ENOENT' ? false : Promise.reject(error)));
+        }
+        const fault = publicReadbackFaults[options.phase];
+        const faultApplies = visible && fault && attempt <= fault.attempts;
+        const kind = faultApplies ? fault.kind : publicPhotoFault;
+        if (visible && kind === 'status') value.status = 503;
+        if (visible && kind === 'count') Object.assign(value, { count: 0, pageCount: 0 });
+        if (visible && kind === 'missing') Object.assign(value, { photoCount: 0, photoDigest: null });
+        if (visible && kind === 'wrong-digest') value.photoDigest = hash('wrong-canonical-public-photo');
+        if (visible && kind === 'truth') value.bookingAllowed = true;
         return { stdout: JSON.stringify(value), code: 0 };
       }
       throw Error(`unexpected_exec:${options.phase}`);
@@ -282,11 +295,21 @@ function fakeExecutor(fx, { failPhase, lateEvidenceCollision = false, publicPhot
     if (args[0] === 'rm') { const r = byRef(args.at(-1)); containers.delete(r.Name.slice(1)); return { stdout: '', code: 0 }; }
     throw Error(`unexpected:${args.join(' ')}`);
   };
-  return { command, calls, containers };
+  return { command, calls, containers, publicReadbacks, evidenceDuringFinalPublic };
 }
 
 const evidenceHash = (bytes) => bytes.toString().includes('database-prepared')
   ? requiredDatabasePreparationEvidenceSha256 : requiredLoginProofEvidenceSha256;
+
+const activationMutationPhases = ['fixture_env_stop_current_api', 'fixture_env_seal_current_api',
+  'fixture_env_create_replacement_api', 'fixture_env_attach_provider_network',
+  'fixture_env_start_replacement_api'];
+
+function assertSingleActivationMutations(fake) {
+  for (const phase of activationMutationPhases) {
+    assert.equal(fake.calls.filter((call) => call.phase === phase).length, 1, phase);
+  }
+}
 
 test('schema-2 login proof binds exact verified Ops/runtime/image and canonical-row ledger', async () => {
   const fx = await fixture();
@@ -572,6 +595,93 @@ test('catalog final gates wait for converged sealed-original proof without repla
   } finally { await rm(fx.root, { recursive: true, force: true }); }
 });
 
+test('public gates converge read-only and evidence waits for the stable final public gate', async () => {
+  const fx = await fixture();
+  try {
+    const fake = fakeExecutor(fx, { publicReadbackFaults: {
+      catalog_activation_replacement_public_readback: { kind: 'count', attempts: 1 },
+      catalog_activation_final_public_readback: { kind: 'status', attempts: 1 },
+    } });
+    const result = await runCatalogActivation({ manifest: fx.manifest,
+      bootstrapManifestBytes: fx.bootstrapBytes, databaseEvidenceBytes: fx.dbBytes,
+      loginEvidenceBytes: fx.loginBytes, sourceCommit: opsCommit, evidenceFile: fx.evidenceFile,
+      execute: true, confirmSource: opsCommit, confirmRun: fx.runId, command: fake.command,
+      commandEnv: { STAGING_WEB_FIXTURE_CATALOG_EXECUTE: '1',
+        STAGING_WEB_FIXTURE_CATALOG_CONFIRM_SOURCE: opsCommit,
+        STAGING_WEB_FIXTURE_CATALOG_CONFIRM_RUN: fx.runId }, testOnlyEvidenceHash: evidenceHash });
+    assert.equal(result.status, 'staging-web-synthetic-catalog-activated-noncontractual');
+    assertSingleActivationMutations(fake);
+    assert.equal(fake.publicReadbacks.get('catalog_activation_replacement_public_readback'), 2);
+    assert.equal(fake.publicReadbacks.get('catalog_activation_final_public_readback'), 2);
+    assert.deepEqual(fake.evidenceDuringFinalPublic, [false, false]);
+    assert.equal((await lstat(fx.evidenceFile)).isFile(), true);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('persistent public status, count and truth drift rolls back without mutation replay', async (t) => {
+  for (const kind of ['status', 'count', 'truth']) await t.test(kind, async () => {
+    const fx = await fixture();
+    try {
+      const fake = fakeExecutor(fx, { publicReadbackFaults: {
+        catalog_activation_replacement_public_readback: { kind, attempts: 8 },
+      } });
+      await assert.rejects(runCatalogActivation({ manifest: fx.manifest,
+        bootstrapManifestBytes: fx.bootstrapBytes, databaseEvidenceBytes: fx.dbBytes,
+        loginEvidenceBytes: fx.loginBytes, sourceCommit: opsCommit, evidenceFile: fx.evidenceFile,
+        execute: true, confirmSource: opsCommit, confirmRun: fx.runId, command: fake.command,
+        commandEnv: { STAGING_WEB_FIXTURE_CATALOG_EXECUTE: '1',
+          STAGING_WEB_FIXTURE_CATALOG_CONFIRM_SOURCE: opsCommit,
+          STAGING_WEB_FIXTURE_CATALOG_CONFIRM_RUN: fx.runId }, testOnlyEvidenceHash: evidenceHash }), (error) => {
+        const sanitized = sanitizeCatalogActivationError(error);
+        assert.equal(error.rollback?.restored, true);
+        assert.deepEqual(Object.keys(sanitized).sort(), ['code', 'failurePhase', 'rollback', 'status']);
+        assert.equal(sanitized.code, 'catalog_activation_public_readback_not_converged');
+        assert.equal(sanitized.failurePhase, 'catalog_activation_replacement_public_readback');
+        assert.equal(sanitized.rollback.restored, true);
+        assert.doesNotMatch(JSON.stringify(sanitized), /response|DATABASE_URL|synthetic_web_catalog_owner/u);
+        return true;
+      });
+      assertSingleActivationMutations(fake);
+      assert.equal(fake.publicReadbacks.get('catalog_activation_replacement_public_readback'), 8);
+      assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+      assert.equal(fake.containers.get(fx.manifest.apiContainer).Id, fx.api.Id);
+      await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  });
+});
+
+test('persistent final public drift has a distinct whitelisted phase and no premature evidence', async () => {
+  const fx = await fixture();
+  try {
+    const fake = fakeExecutor(fx, { publicReadbackFaults: {
+      catalog_activation_final_public_readback: { kind: 'count', attempts: 8 },
+    } });
+    await assert.rejects(runCatalogActivation({ manifest: fx.manifest,
+      bootstrapManifestBytes: fx.bootstrapBytes, databaseEvidenceBytes: fx.dbBytes,
+      loginEvidenceBytes: fx.loginBytes, sourceCommit: opsCommit, evidenceFile: fx.evidenceFile,
+      execute: true, confirmSource: opsCommit, confirmRun: fx.runId, command: fake.command,
+      commandEnv: { STAGING_WEB_FIXTURE_CATALOG_EXECUTE: '1',
+        STAGING_WEB_FIXTURE_CATALOG_CONFIRM_SOURCE: opsCommit,
+        STAGING_WEB_FIXTURE_CATALOG_CONFIRM_RUN: fx.runId }, testOnlyEvidenceHash: evidenceHash }), (error) => {
+      const sanitized = sanitizeCatalogActivationError(error);
+      assert.equal(error.rollback?.restored, true);
+      assert.equal(sanitized.code, 'catalog_activation_public_readback_not_converged');
+      assert.equal(sanitized.failurePhase, 'catalog_activation_final_public_readback');
+      assert.equal(sanitized.rollback.restored, true);
+      return true;
+    });
+    assertSingleActivationMutations(fake);
+    assert.equal(fake.publicReadbacks.get('catalog_activation_replacement_public_readback'), 1);
+    assert.equal(fake.publicReadbacks.get('catalog_activation_final_public_readback'), 8);
+    assert.deepEqual(fake.evidenceDuringFinalPublic, Array(8).fill(false));
+    await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+    assert.deepEqual(sanitizeCatalogActivationError({
+      code: 'catalog_activation_public_readback_not_converged',
+      failurePhase: 'untrusted_dynamic_phase', response: { secret: 'must-not-leak' },
+    }), { status: 'failed', code: 'catalog_activation_public_readback_not_converged' });
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
 test('permanent catalog seal drift returns fixed sanitized diagnosis and exact rollback', async () => {
   const fx = await fixture();
   try {
@@ -646,7 +756,11 @@ test('missing or wrong canonical synthetic photo fails public readback and resto
         commandEnv: { STAGING_WEB_FIXTURE_CATALOG_EXECUTE: '1',
           STAGING_WEB_FIXTURE_CATALOG_CONFIRM_SOURCE: opsCommit,
           STAGING_WEB_FIXTURE_CATALOG_CONFIRM_RUN: fx.runId }, testOnlyEvidenceHash: evidenceHash }),
-      (error) => error.code === 'catalog_activation_public_readback_invalid' && error.rollback?.restored === true);
+      (error) => error.code === 'catalog_activation_public_readback_not_converged'
+        && error.failurePhase === 'catalog_activation_replacement_public_readback'
+        && error.rollback?.restored === true);
+      assertSingleActivationMutations(fake);
+      assert.equal(fake.publicReadbacks.get('catalog_activation_replacement_public_readback'), 8);
       assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
       assert.equal(fake.containers.get(fx.manifest.apiContainer).Id, fx.api.Id);
       await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
