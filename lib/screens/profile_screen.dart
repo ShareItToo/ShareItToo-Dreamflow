@@ -17,6 +17,8 @@ import 'package:lendify/screens/bookings_screen.dart';
 import 'package:lendify/screens/help_center_screen.dart';
 import 'package:lendify/screens/legal_screen.dart';
 import 'package:lendify/screens/language_screen.dart';
+import 'package:lendify/config/planner_technical_config.dart';
+import 'package:lendify/screens/mission_needs_screen.dart';
 import 'package:lendify/widgets/profile_header_card.dart';
 import 'package:provider/provider.dart';
 import 'package:lendify/services/localization_service.dart';
@@ -660,6 +662,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         },
       ],
       'mainMenu': [
+        if (PlannerTechnicalConfig.available)
+          {
+            'id': 'mission_needs',
+            'labelKey': 'profile.menu.missionNeeds',
+            'icon': 'checklist',
+            'route': '/missionNeeds',
+          },
         {
           'id': 'my_listings',
           'labelKey': 'profile.menu.myListings',
@@ -1167,6 +1176,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 // Be explicit for menu IDs to avoid mismatches when routes/titles change.
                 final GuestGateContext gateContext = switch (id) {
                   'rental_requests' => GuestGateContext.rentalRequest,
+                  'mission_needs' => GuestGateContext.generic,
                   'my_listings' => GuestGateContext.listing,
                   'my_bookings' => GuestGateContext.booking,
                   'account_settings' => GuestGateContext.accountSettings,
@@ -1188,6 +1198,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // We allow exploration in guest mode, but these features are tied to the user's account.
     switch (route) {
       case '/myListings':
+      case '/missionNeeds':
       case '/ownerRequests':
       case '/bookings':
       case '/accountSettings':
@@ -1209,6 +1220,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
     if (route.startsWith('/myProfilePublic')) return GuestGateContext.profile;
     if (route.startsWith('/myListings')) return GuestGateContext.listing;
+    if (route.startsWith('/missionNeeds')) return GuestGateContext.generic;
     if (route.startsWith('/ownerRequests')) {
       return GuestGateContext.rentalRequest;
     }
@@ -1226,6 +1238,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return Icons.person_outline;
       case 'storefront':
         return Icons.storefront_outlined;
+      case 'checklist':
+        return Icons.checklist_outlined;
       case 'requests':
         return Icons.mark_unread_chat_alt_outlined;
       case 'calendar':
@@ -1258,6 +1272,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       case '/myListings':
         Navigator.of(context)
             .push(MaterialPageRoute(builder: (_) => const MyListingsScreen()));
+        break;
+      case '/missionNeeds':
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const MissionNeedsScreen()),
+        );
         break;
       case '/ownerRequests':
         Navigator.of(context)

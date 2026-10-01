@@ -137,6 +137,13 @@ test('rejects incomplete restore, migration or rollback evidence', () => {
   const rollback = passedObservation();
   rollback.rollback.refusedGuards.pop();
   assert.throws(() => validateR9Observation(rollback), /rollback proof/u);
+
+  const legacyCartParity = passedObservation();
+  delete legacyCartParity.olderUpgrade.legacyCartRowsByteEquivalent;
+  assert.throws(
+    () => validateR9Observation(legacyCartParity),
+    /older-schema upgrade proof/u,
+  );
 });
 
 test('rejects live scope, retained credentials and unsafe cleanup roots', () => {

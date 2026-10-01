@@ -90,6 +90,10 @@ discover a mechanically stale source hash.
 - New integration tests sharing the local PostgreSQL suite must not use generic
   fixed primary keys. Use run-unique IDs or package-namespaced fixtures whose
   non-collision is proved before insertion.
+- Shared validators must continue to accept explicit immutable historical
+  contract variants without rewriting their evidence. Gate newly added fields
+  by the applicable version or terminal schema, and test both the current
+  required-field path and the historical field-absent path.
 - Safety-mode build flags must fail startup whenever their requested
   configuration is invalid; they must never silently downgrade to normal
   behavior. A package report may claim an allowed or rejected configuration

@@ -941,7 +941,7 @@ export function validateR9Observation(value, {
     legacyUsersPreserved: 4,
     legacyListingsPreserved: 2,
     legacyCartItemsPreserved: 1,
-    legacyCartRowsByteEquivalent: true,
+    ...(requiredMigrationCount >= 99 ? { legacyCartRowsByteEquivalent: true } : {}),
     schemaFingerprintMatch: true,
   })) fail('R9 older-schema upgrade proof is invalid.');
   if (!exact(value.rollback, {

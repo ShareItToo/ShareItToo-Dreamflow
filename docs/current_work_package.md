@@ -15,7 +15,7 @@ an unavoidable physical action. Gemini is reserved for narrow, named critical
 gates using current sources; it is not a routine execution prerequisite.
 This objective record grants no new live, provider, payment, Production or Play authority.
 
-## P2-A durable non-binding mission need — SOURCE PASS; exact-HEAD CI pending
+## P2-A durable non-binding mission need — SOURCE PASS; CI successor pending
 
 The first additive P2 backend slice introduces schema migration `099` and an
 owner-bound mission-need API. A server-generated stable `mission_need_id`
@@ -42,9 +42,41 @@ immutable image digest plus publication manifest are independently verified.
 
 Sol review accepted the bounded source package after the real PostgreSQL 16
 mission-need run, focused schema/fixture tests, privacy/retention validators,
-backend syntax checks and a clean diff check passed. Exact-HEAD Regression and
-CodeQL remain the separate final source gate before any image publication or
-Staging successor work.
+backend syntax checks and a clean diff check passed. The run-unique auth-session
+fixture correction is exact source HEAD
+`a99d004332d15c993e2dd7f88161019bce27215e`. Exact-HEAD CodeQL
+`36850858087` passed. Regression `36850858071` was red only in the retained R9
+validator: the shared current validator incorrectly required the schema-99
+`legacyCartRowsByteEquivalent` field in the immutable historical schema-71
+evidence. Its backend and PostgreSQL jobs, including the mission-need proof,
+were green. The local successor now gates that field at schema 99, still rejects
+a missing/false field for current contracts, accepts the unchanged schema-71
+record, and passes all 9 focused R9 tests. Exact-HEAD CI for the next reviewed
+commit remains pending before any image publication or Staging successor work.
+
+## P2-B accessible Mission UI — LOCAL SOURCE PASS; exact-HEAD CI pending
+
+The smallest Flutter/Web vertical slice now exposes `Meine Missionen` only
+inside the existing internal Planner technical gate that also protects P2-A.
+An authenticated owner can list and load only their own missions, manually
+create a mission with a title and one or more needs, choose required/optional
+and quantity per need, select honest `draft`/`planned` state, and save a
+correction as a new revision. IDs and revisions come only from the server.
+Idempotency keys are stable for an unchanged retry, while an HTTP `409` keeps
+all entered data visible and reports revision/key conflicts without inventing
+success.
+
+The screen keeps no durable mission cache. Account-security notifications
+clear its owner context, list and editor before reloading; synthetic tests prove
+that account switch, logout, restart and a late response from the prior account
+cannot reveal foreign or stale missions. The interface labels the workflow as
+unverbindlich and states that it creates no reservation, booking, contract or
+payment. Strict client parsing also rejects binding effects or malformed server
+truth. Six focused Flutter model/widget/state tests, one principal-bound wiring
+test, the full Flutter analyzer, privacy/retention validators, current-consumer
+closure and diff checks pass locally. This package adds no AI, photo analysis,
+inventory resolution, public/listing/cart/booking/payment/provider behavior and
+makes no Live, Green, Play or deployment change. Exact-HEAD CI remains pending.
 
 ## Closed prerequisite: Phase 0 Web/CORS and safe synthetic catalog QA
 

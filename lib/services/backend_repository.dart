@@ -1038,6 +1038,64 @@ class BackendRepository {
         body: request,
       );
 
+  static Future<List<Map<String, dynamic>>> getMissionNeedsForOwner(
+    AuthSessionOwner owner,
+  ) async {
+    final response = await _authorizedForOwner(
+      owner: owner,
+      method: 'GET',
+      path: '/mission-needs',
+    );
+    return _strictMaps(response['missionNeeds']);
+  }
+
+  static Future<Map<String, dynamic>> getMissionNeedForOwner({
+    required AuthSessionOwner owner,
+    required String missionNeedId,
+  }) async {
+    final response = await _authorizedForOwner(
+      owner: owner,
+      method: 'GET',
+      path: '/mission-needs/${Uri.encodeComponent(missionNeedId)}',
+    );
+    return Map<String, dynamic>.from(response['missionNeed'] as Map);
+  }
+
+  static Future<Map<String, dynamic>> createMissionNeedForOwner({
+    required AuthSessionOwner owner,
+    required Map<String, dynamic> payload,
+    required String idempotencyKey,
+  }) =>
+      _authorizedForOwner(
+        owner: owner,
+        method: 'POST',
+        path: '/mission-needs',
+        body: payload,
+        additionalHeaders: <String, String>{
+          'Idempotency-Key': idempotencyKey,
+        },
+      );
+
+  static Future<Map<String, dynamic>> correctMissionNeedForOwner({
+    required AuthSessionOwner owner,
+    required String missionNeedId,
+    required int expectedRevision,
+    required Map<String, dynamic> payload,
+    required String idempotencyKey,
+  }) =>
+      _authorizedForOwner(
+        owner: owner,
+        method: 'POST',
+        path: '/mission-needs/${Uri.encodeComponent(missionNeedId)}/revisions',
+        body: <String, dynamic>{
+          'expectedRevision': expectedRevision,
+          ...payload,
+        },
+        additionalHeaders: <String, String>{
+          'Idempotency-Key': idempotencyKey,
+        },
+      );
+
   static Future<Map<String, dynamic>> updateListing(
     Map<String, dynamic> listing,
   ) async {
