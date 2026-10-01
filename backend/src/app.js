@@ -94,6 +94,23 @@ import {
   MissionNeedError,
 } from './mission_need_workflow.js';
 import {
+  addPrivateShelfMedia,
+  assertPrivateShelfTechnicalAccess,
+  createPrivateShelfItem,
+  deletePrivateShelfItem,
+  getPrivateShelfItem,
+  getPrivateShelfMedia,
+  listPrivateShelfItems,
+  PrivateShelfError,
+} from './private_shelf_workflow.js';
+import {
+  activatePrivateShelfMediaCleanup,
+  attemptPrivateShelfMediaCleanup,
+  clearPrivateShelfMediaCleanup,
+  enqueuePrivateShelfMediaCleanup,
+  readPrivateShelfMediaFile,
+} from './private_shelf_media_files.js';
+import {
   BookingFlowTimeError,
   getBookingFlowTime,
   updateBookingFlowTime,
@@ -2050,9 +2067,20 @@ export async function eraseAccount(client, user, { actorRole = 'user', source = 
      RETURNING storage_name, thumbnail_storage_name`,
     [user.id],
   );
+  const erasedPrivateShelfMedia = await client.query(
+    `SELECT storage_name, thumbnail_storage_name
+       FROM private_shelf_media
+      WHERE owner_id = $1`,
+    [user.id],
+  );
+  const privateShelfMediaCleanupIds = await enqueuePrivateShelfMediaCleanup(
+    client,
+    erasedPrivateShelfMedia.rows.flatMap((row) => [row.storage_name, row.thumbnail_storage_name]),
+  );
   await client.query('DELETE FROM notification_preferences WHERE user_id = $1', [user.id]);
   await client.query('DELETE FROM notifications WHERE user_id = $1', [user.id]);
   await client.query('DELETE FROM mission_needs WHERE owner_id = $1', [user.id]);
+  await client.query('DELETE FROM private_shelf_items WHERE owner_id = $1', [user.id]);
   await client.query('DELETE FROM rental_carts WHERE user_id = $1', [user.id]);
   await client.query('DELETE FROM listing_sets WHERE owner_id = $1', [user.id]);
   await client.query('DELETE FROM message_reads WHERE user_id = $1', [user.id]);
@@ -2127,6 +2155,7 @@ export async function eraseAccount(client, user, { actorRole = 'user', source = 
         'audit_log',
       ],
       erasedUploadCount: erasedUploads.rowCount,
+      erasedPrivateShelfMediaCount: erasedPrivateShelfMedia.rowCount,
     },
   });
   return {
@@ -2135,6 +2164,7 @@ export async function eraseAccount(client, user, { actorRole = 'user', source = 
       row.storage_name,
       row.thumbnail_storage_name,
     ]).filter(Boolean),
+    privateShelfMediaCleanupIds,
     firebaseIdentityDeletionIds,
     appleRevocationCleanup,
     crashlyticsReportDeletionIds,
@@ -4374,11 +4404,15 @@ export function createApp({
       source: 'app',
     }));
     await removeErasedUploadFiles(outcome.erasedUploadStorageNames);
+    const privateShelfCleanup = await attemptPrivateShelfMediaCleanup({
+      client: pool, uploadDir: config.uploadDir, ids: outcome.privateShelfMediaCleanupIds,
+    });
     await attemptFirebaseIdentityDeletion(outcome.firebaseIdentityDeletionIds);
     await attemptCrashlyticsReportDeletion(outcome.crashlyticsReportDeletionIds);
     await runIdentityVerificationRedactions(outcome.identityVerificationRedactionIds);
     res.json({
       deleted: true,
+      privateShelfMediaCleanup: privateShelfCleanup.failures.length ? 'queued' : 'complete',
       identityVerificationCleanup: outcome.identityVerificationRedactionIds.length ? 'queued' : 'not_required',
       appleRevocationCleanup: outcome.appleRevocationCleanup,
     });
@@ -4474,6 +4508,9 @@ export function createApp({
         return eraseAccount(client, user, { actorRole: user.role ?? 'user', source: 'web' });
       });
       await removeErasedUploadFiles(outcome.erasedUploadStorageNames);
+      await attemptPrivateShelfMediaCleanup({
+        client: pool, uploadDir: config.uploadDir, ids: outcome.privateShelfMediaCleanupIds,
+      });
       await attemptFirebaseIdentityDeletion(outcome.firebaseIdentityDeletionIds);
       await attemptCrashlyticsReportDeletion(outcome.crashlyticsReportDeletionIds);
       await runIdentityVerificationRedactions(outcome.identityVerificationRedactionIds);
@@ -5678,6 +5715,155 @@ export function createApp({
     res.status(result.replayed ? 200 : 201)
       .set('Cache-Control', 'private, no-store')
       .json(result);
+  }));
+
+  const privateShelfUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 8 * 1024 * 1024, files: 1 },
+  });
+
+  app.get('/v1/private-shelf', requireAuth, requireActiveAccount, asyncRoute(async (req, res) => {
+    assertPrivateShelfTechnicalAccess(config);
+    const result = await inTransaction((client) => listPrivateShelfItems(client, {
+      actorId: req.auth.userId,
+    }));
+    res.set('Cache-Control', 'private, no-store').json(result);
+  }));
+
+  app.get('/v1/private-shelf/:id', requireAuth, requireActiveAccount, asyncRoute(async (req, res) => {
+    assertPrivateShelfTechnicalAccess(config);
+    const result = await inTransaction((client) => getPrivateShelfItem(client, {
+      actorId: req.auth.userId,
+      shelfItemId: req.params.id,
+    }));
+    res.set('Cache-Control', 'private, no-store').json(result);
+  }));
+
+  app.post('/v1/private-shelf', requireAuth, requireActiveAccount, asyncRoute(async (req, res) => {
+    assertPrivateShelfTechnicalAccess(config);
+    const result = await inTransaction((client) => createPrivateShelfItem(client, {
+      actorId: req.auth.userId,
+      raw: req.body,
+      idempotencyKey: req.get('Idempotency-Key'),
+    }));
+    res.status(result.replayed ? 200 : 201)
+      .set('Cache-Control', 'private, no-store')
+      .json(result);
+  }));
+
+  app.delete('/v1/private-shelf/:id', requireAuth, requireActiveAccount, asyncRoute(async (req, res) => {
+    assertPrivateShelfTechnicalAccess(config);
+    const result = await inTransaction((client) => deletePrivateShelfItem(client, {
+      actorId: req.auth.userId,
+      shelfItemId: req.params.id,
+    }));
+    const cleanup = await attemptPrivateShelfMediaCleanup({
+      client: pool, uploadDir: config.uploadDir, ids: result.cleanupIds,
+    });
+    res.set({
+      'Cache-Control': 'private, no-store',
+      'X-SIT-Private-Shelf-Media-Cleanup': cleanup.failures.length ? 'queued' : 'complete',
+    }).status(204).end();
+  }));
+
+  app.post(
+    '/v1/private-shelf/:id/media',
+    requireAuth,
+    requireActiveAccount,
+    privateShelfUpload.single('file'),
+    requireVerifiedEmailForUpload,
+    asyncRoute(async (req, res) => {
+      assertPrivateShelfTechnicalAccess(config);
+      if (!req.file?.buffer) throw new HttpError(400, 'file_required');
+      const detected = await fileTypeFromBuffer(req.file.buffer);
+      if (!detected || !new Set(['image/jpeg', 'image/png', 'image/webp']).has(detected.mime)) {
+        throw new HttpError(415, 'unsupported_image_type');
+      }
+      await inTransaction((client) => getPrivateShelfItem(client, {
+        actorId: req.auth.userId,
+        shelfItemId: req.params.id,
+      }));
+      const processed = await sanitizeImage(req.file.buffer, { purpose: 'private_shelf_image' });
+      const mediaId = crypto.randomUUID();
+      const storageName = `${mediaId}-full.webp`;
+      const thumbnailStorageName = `${mediaId}-thumb.webp`;
+      const storageRoot = path.join(config.uploadDir, 'private-shelf');
+      const cleanupIds = await inTransaction((client) => enqueuePrivateShelfMediaCleanup(
+        client,
+        [storageName, thumbnailStorageName],
+        { status: 'reserved' },
+      ));
+      try {
+        await fs.mkdir(storageRoot, { recursive: true, mode: 0o750 });
+        await Promise.all([
+          fs.writeFile(path.join(storageRoot, storageName), processed.full, { flag: 'wx', mode: 0o640 }),
+          fs.writeFile(path.join(storageRoot, thumbnailStorageName), processed.thumbnail, { flag: 'wx', mode: 0o640 }),
+        ]);
+        const result = await inTransaction(async (client) => {
+          const stored = await addPrivateShelfMedia(client, {
+            actorId: req.auth.userId,
+            shelfItemId: req.params.id,
+            media: {
+              id: mediaId,
+              storageName,
+              thumbnailStorageName,
+              mimeType: processed.mimeType,
+              byteSize: processed.full.length,
+              thumbnailByteSize: processed.thumbnail.length,
+              width: processed.width,
+              height: processed.height,
+              contentSha256: processed.sha256,
+              thumbnailContentSha256: crypto.createHash('sha256').update(processed.thumbnail).digest('hex'),
+            },
+          });
+          await clearPrivateShelfMediaCleanup(client, cleanupIds);
+          return stored;
+        });
+        return res.status(201).set('Cache-Control', 'private, no-store').json(result);
+      } catch (error) {
+        await inTransaction((client) => activatePrivateShelfMediaCleanup(client, cleanupIds));
+        await attemptPrivateShelfMediaCleanup({
+          client: pool, uploadDir: config.uploadDir, ids: cleanupIds,
+        });
+        throw error;
+      }
+    }),
+  );
+
+  app.get('/v1/private-shelf/:id/media/:mediaId/:variant', requireAuth, requireActiveAccount, asyncRoute(async (req, res) => {
+    assertPrivateShelfTechnicalAccess(config);
+    if (!['full', 'thumbnail'].includes(req.params.variant)) {
+      throw new PrivateShelfError(404, 'private_shelf_media_not_found');
+    }
+    const media = await inTransaction((client) => getPrivateShelfMedia(client, {
+      actorId: req.auth.userId,
+      shelfItemId: req.params.id,
+      shelfMediaId: req.params.mediaId,
+    }));
+    const storageName = req.params.variant === 'full'
+      ? media.storage_name
+      : media.thumbnail_storage_name;
+    let contents;
+    try {
+      contents = await readPrivateShelfMediaFile({
+        uploadDir: config.uploadDir,
+        storageName,
+        expectedBytes: Number(req.params.variant === 'full'
+          ? media.byte_size
+          : media.thumbnail_byte_size),
+        expectedSha256: req.params.variant === 'full'
+          ? media.content_sha256
+          : media.thumbnail_content_sha256,
+      });
+    } catch {
+      throw new PrivateShelfError(404, 'private_shelf_media_not_found');
+    }
+    res.set({
+      'Content-Type': media.mime_type,
+      'Content-Length': String(contents.length),
+      'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff',
+    }).send(contents);
   }));
 
   app.get('/v1/planner/templates', requireAuth, requireActiveAccount, requireUnsuspendedScope('booking'), asyncRoute(async (_req, res) => {
@@ -7857,6 +8043,7 @@ export function createApp({
     const rentalCartError = error instanceof RentalCartError;
     const plannerInventoryError = error instanceof PlannerInventoryError;
     const missionNeedError = error instanceof MissionNeedError;
+    const privateShelfError = error instanceof PrivateShelfError;
     const listingSupplyEnrichmentError = error instanceof ListingSupplyEnrichmentError;
     const listingSetError = error instanceof ListingSetError;
     const blueOceanListingError = error instanceof BlueOceanListingWorkflowError
@@ -7882,7 +8069,7 @@ export function createApp({
           ? 413
           : (uploadFieldsExceeded
               ? 400
-              : (invalidProcessedImage ? 422 : ((error instanceof HttpError || workflowError || rentalCartError || plannerInventoryError || missionNeedError || listingSupplyEnrichmentError || listingSetError || blueOceanListingError || flowTimeError || messageWorkflowError || paymentWorkflowError || moderationWorkflowError || retentionInventoryError || supportCaseError || handoverExceptionError || mfaWorkflowError || pilotCockpitError || mapsProxyError || bookingConfirmationError || syntheticCloneBookingLaneError || v51WithdrawalError || v52ActualLossError || v52HandoverReturnError || error instanceof PhoneVerificationError || error instanceof ComplianceReviewError) ? error.status : (error?.status ?? 500)))));
+              : (invalidProcessedImage ? 422 : ((error instanceof HttpError || workflowError || rentalCartError || plannerInventoryError || missionNeedError || privateShelfError || listingSupplyEnrichmentError || listingSetError || blueOceanListingError || flowTimeError || messageWorkflowError || paymentWorkflowError || moderationWorkflowError || retentionInventoryError || supportCaseError || handoverExceptionError || mfaWorkflowError || pilotCockpitError || mapsProxyError || bookingConfirmationError || syntheticCloneBookingLaneError || v51WithdrawalError || v52ActualLossError || v52HandoverReturnError || error instanceof PhoneVerificationError || error instanceof ComplianceReviewError) ? error.status : (error?.status ?? 500)))));
     const code = uploadTooLarge
       ? 'image_too_large'
       : (uploadFieldsExceeded
@@ -7891,7 +8078,7 @@ export function createApp({
               ? error.code
               : (bookingConflict
               ? 'booking_period_unavailable'
-              : ((error instanceof HttpError || workflowError || rentalCartError || plannerInventoryError || missionNeedError || listingSupplyEnrichmentError || listingSetError || blueOceanListingError || flowTimeError || messageWorkflowError || paymentWorkflowError || moderationWorkflowError || retentionInventoryError || supportCaseError || handoverExceptionError || mfaWorkflowError || pilotCockpitError || mapsProxyError || bookingConfirmationError || syntheticCloneBookingLaneError || v51WithdrawalError || v52ActualLossError || v52HandoverReturnError || error instanceof PhoneVerificationError || error instanceof ComplianceReviewError) ? error.code : (status === 500 ? 'internal_error' : 'request_failed')))));
+              : ((error instanceof HttpError || workflowError || rentalCartError || plannerInventoryError || missionNeedError || privateShelfError || listingSupplyEnrichmentError || listingSetError || blueOceanListingError || flowTimeError || messageWorkflowError || paymentWorkflowError || moderationWorkflowError || retentionInventoryError || supportCaseError || handoverExceptionError || mfaWorkflowError || pilotCockpitError || mapsProxyError || bookingConfirmationError || syntheticCloneBookingLaneError || v51WithdrawalError || v52ActualLossError || v52HandoverReturnError || error instanceof PhoneVerificationError || error instanceof ComplianceReviewError) ? error.code : (status === 500 ? 'internal_error' : 'request_failed')))));
     if (status >= 500) console.error(safeErrorLog(req, status, code, error));
     res.status(status).json(errorPayload(req, code, error?.details));
   });

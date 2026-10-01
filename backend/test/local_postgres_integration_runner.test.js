@@ -107,6 +107,7 @@ test('runs readiness, isolated database and integration before guaranteed cleanu
     ],
     ['backend/test/staging_web_fixture_postgres.integration.test.js'],
     ['backend/test/mission_need_postgres.integration.test.js'],
+    ['backend/test/private_shelf_postgres.integration.test.js'],
     ['backend/test/staging_google_registration.integration.test.js'],
     [
       'backend/test/listing_ai_lifetime_budget_migration.integration.test.js',
@@ -194,6 +195,12 @@ test('focused web fixture mode is the real PG suite and retains failure cleanup'
 test('focused mission need mode selects only the P2-A PostgreSQL suite', () => {
   assert.deepEqual(integrationTestPlan({ focusedMissionNeed: true }), [
     ['backend/test/mission_need_postgres.integration.test.js'],
+  ]);
+});
+
+test('focused private shelf mode selects only the P3-A PostgreSQL suite', () => {
+  assert.deepEqual(integrationTestPlan({ focusedPrivateShelf: true }), [
+    ['backend/test/private_shelf_postgres.integration.test.js'],
   ]);
 });
 

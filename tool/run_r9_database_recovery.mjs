@@ -28,7 +28,7 @@ const requireFromBackend = createRequire(
   new URL('../backend/package.json', import.meta.url),
 );
 
-export const r9RequiredMigrationCount = 99;
+export const r9RequiredMigrationCount = 100;
 export const r9SyntheticAccountCount = 12;
 export const r9SyntheticListingCount = 6;
 export const r9ResultClassification = 'LOCAL_ISOLATED_DATABASE_RECOVERY_PROOF';
@@ -90,6 +90,10 @@ const rollbackGuardExpectations = Object.freeze([
   Object.freeze({
     filename: '099_mission_need_revisions.down.sql',
     message: 'mission_need_rows_active',
+  }),
+  Object.freeze({
+    filename: '100_private_shelf_items.down.sql',
+    message: 'private_shelf_rows_active',
   }),
 ]);
 
@@ -170,7 +174,7 @@ async function readMigrationPlan(root) {
   }
   if (plan.length !== r9RequiredMigrationCount
       || plan[0]?.filename !== '001_b3_foundation.up.sql'
-      || plan.at(-1)?.filename !== '099_mission_need_revisions.up.sql') {
+      || plan.at(-1)?.filename !== '100_private_shelf_items.up.sql') {
     fail('r9_migration_inventory_unexpected');
   }
   return Object.freeze(plan);
@@ -807,6 +811,17 @@ async function assertRollbackGuardRefusals(pool, root) {
            )`,
         );
       }
+      if (guard.filename === '100_private_shelf_items.down.sql') {
+        await client.query(
+          `INSERT INTO private_shelf_items (
+             id, owner_id, domain_version, title, category_key, condition
+           ) VALUES (
+             'shelf_item_00000000-0000-4000-8000-000000000100',
+             'r9-user-001', 'P3-A-2026-10-01.1', 'Synthetic shelf item',
+             'synthetic.test', 'good'
+           )`,
+        );
+      }
       try {
         await client.query(sql);
       } catch (error) {
@@ -878,7 +893,7 @@ async function closePools(pools) {
 
 export function validateR9Observation(value, {
   requiredMigrationCount = r9RequiredMigrationCount,
-  requiredLastMigration = '099_mission_need_revisions.up.sql',
+  requiredLastMigration = '100_private_shelf_items.up.sql',
   requiredRollbackGuards = rollbackGuardExpectations,
 } = {}) {
   if (value?.schemaVersion !== 1

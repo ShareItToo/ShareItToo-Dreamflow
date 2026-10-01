@@ -93,6 +93,7 @@ function portabilityProjection(raw) {
       },
       rentalCart: marketplace.rentalCart,
       missionNeeds: marketplace.missionNeeds,
+      privateShelf: marketplace.privateShelf,
       platformContracts: records(marketplace.platformContracts),
       platformContractDeclarations:
         records(marketplace.platformContractDeclarations),

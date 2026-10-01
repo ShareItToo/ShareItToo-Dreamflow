@@ -29,7 +29,7 @@ const imageDigest = `sha256:${'a'.repeat(64)}`;
 const mappingDigest = 'b'.repeat(64);
 const userId = 'synthetic_google_registration_user';
 const registrationAllowlistKey = 'SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST';
-const migrationLedgerDigest = '4d0530a169f9c7d375c18d4a5fc845319ac1d94f16e3671bd9feb2f925d5dcce';
+const migrationLedgerDigest = '1dd319ef1ecd4904e0b524568809e099e9e71fe565b04c7347ca21eb71f4b660';
 const originalAllowedIds = 'synthetic-owner,synthetic-renter,synthetic-sandbox';
 const primaryNetworkId = 'd'.repeat(64);
 const providerNetworkId = 'e'.repeat(64);
@@ -262,7 +262,7 @@ function statefulDockerExecutor(fx, {
         if (fx.cors && script.includes("SELECT count(*) || '|' || (SELECT count(*) FROM auth_identities")) return { stdout: '4|1\n', code: 0 };
         if (script.includes('WITH target AS')) return { stdout: '1|1|1\n', code: 0 };
         if (script.includes('SELECT count(*) FROM users')) return { stdout: `${occupiedTarget ? 1 : 0}\n`, code: 0 };
-        if (script.includes('ORDER BY applied_at')) return { stdout: `${wrongSchema ? '097_registration_consent_bundle.up.sql' : '099_mission_need_revisions.up.sql'}\n`, code: 0 };
+        if (script.includes('ORDER BY applied_at')) return { stdout: `${wrongSchema ? '097_registration_consent_bundle.up.sql' : '100_private_shelf_items.up.sql'}\n`, code: 0 };
         if (script.includes('string_agg')) return { stdout: `${migrationLedgerDigest}\n`, code: 0 };
         fail('unknown_database_exec', options.phase);
       }
@@ -799,7 +799,7 @@ test('CORS late evidence collision restores original; concurrent env ownership i
   }
 });
 
-test('default-off preflight validates schema 99 and does not mutate or expose mapping', async () => {
+test('default-off preflight validates schema 100 and does not mutate or expose mapping', async () => {
   const fx = await fixture();
   try {
     const fake = statefulDockerExecutor(fx);

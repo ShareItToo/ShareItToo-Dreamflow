@@ -100,6 +100,11 @@ discover a mechanically stale source hash.
 - Isolated Ops tests must not import config-bound runtime modules or require
   unrelated environment secrets merely to prove a local contract. Verify the
   required primitive or source contract without widening test prerequisites.
+- For database/filesystem sagas, model an active write reservation separately
+  from cleanup work that is safe to execute. User requests and cleanup workers
+  must never drain active reservations; every post-commit failure must leave a
+  later-processable state, and Down/rollback must refuse to drop a non-empty
+  cleanup outbox.
 - Safety-mode build flags must fail startup whenever their requested
   configuration is invalid; they must never silently downgrade to normal
   behavior. A package report may claim an allowed or rejected configuration

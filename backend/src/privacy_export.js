@@ -112,6 +112,9 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
     missionNeeds,
     missionNeedRevisions,
     missionNeedCommands,
+    privateShelfItems,
+    privateShelfMedia,
+    privateShelfCommands,
     platformContracts,
     platformContractDeclarations,
     platformContractReceipts,
@@ -389,6 +392,32 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
          FROM mission_need_commands
         WHERE owner_id = $1
         ORDER BY mission_need_id, result_revision, idempotency_key`, userId),
+    rows(client,
+      `SELECT id AS "shelfItemId", domain_version AS "domainVersion",
+              title, category_key AS "categoryKey", condition,
+              created_at AS "createdAt", updated_at AS "updatedAt"
+         FROM private_shelf_items
+        WHERE owner_id = $1
+        ORDER BY updated_at, id`, userId),
+    rows(client,
+      `SELECT media.id AS "mediaId", media.shelf_item_id AS "shelfItemId",
+              media.mime_type AS "mimeType", media.byte_size AS "byteSize",
+              media.thumbnail_byte_size AS "thumbnailByteSize",
+              media.image_width AS width, media.image_height AS height,
+              media.content_sha256 AS "contentDigest",
+              media.thumbnail_content_sha256 AS "thumbnailContentDigest",
+              media.created_at::text AS "createdAt"
+         FROM private_shelf_media AS media
+        WHERE media.owner_id = $1
+        ORDER BY media.shelf_item_id, media.created_at, media.id`, userId),
+    rows(client,
+      `SELECT idempotency_key AS "idempotencyKey",
+              request_sha256 AS "requestDigest",
+              shelf_item_id AS "shelfItemId",
+              created_at AS "createdAt"
+         FROM private_shelf_item_commands
+        WHERE owner_id = $1
+        ORDER BY shelf_item_id, created_at, idempotency_key`, userId),
     rows(client,
       `SELECT contract.id, contract.booking_id, contract.quote_id,
               contract.quote_hash, contract.contract_version, contract.locale,
@@ -1195,6 +1224,13 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
   ]);
 
   const privacySafeMessages = minimizeThirdPartyStructuredLocations(messages);
+  const privateShelfMediaExport = privateShelfMedia.map((entry) => ({
+    ...entry,
+    fullDownloadPath: `/v1/private-shelf/${entry.shelfItemId}/media/${entry.mediaId}/full`,
+    thumbnailDownloadPath: `/v1/private-shelf/${entry.shelfItemId}/media/${entry.mediaId}/thumbnail`,
+    downloadRequiresOwnerAuthentication: true,
+    binaryContentIncluded: false,
+  }));
 
   const raw = {
     account: { ...account, registrationBundles },
@@ -1237,6 +1273,15 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
         bookingCreated: false,
         contractCreated: false,
         paymentCreated: false,
+      },
+      privateShelf: {
+        items: privateShelfItems,
+        media: privateShelfMediaExport,
+        commands: privateShelfCommands,
+        visibility: 'private_owner_only',
+        publicSearchable: false,
+        automaticPublication: false,
+        mediaBinaryIncluded: false,
       },
       platformContracts,
       platformContractDeclarations,

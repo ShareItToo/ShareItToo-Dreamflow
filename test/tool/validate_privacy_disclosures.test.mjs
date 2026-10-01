@@ -271,7 +271,7 @@ test('rejects enabling non-image uploads without a new privacy classification', 
   const path = 'backend/src/app.js';
   const privacyManifest = clone(basePrivacyManifest);
   const changed = readFileSync(resolve(repositoryRoot, path), 'utf8')
-    .replace("new Set(['image/jpeg', 'image/png', 'image/webp'])",
+    .replaceAll("new Set(['image/jpeg', 'image/png', 'image/webp'])",
       "new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf'])");
   privacyManifest.sourceInventory.find((entry) => entry.path === path).sha256 = sha256(changed);
   assert.throws(

@@ -33,7 +33,7 @@
     },
     {
       "path": "backend/src/app.js",
-      "sha256": "f53baf3af7fce3a5a54b945b380f7d98477166e82b01e9276918c47fe206730b"
+      "sha256": "6bc420ad265da1cd227ac1f27ad0f300aac2f60e1bbb9cbdf132fd004deb2046"
     },
     {
       "path": "backend/src/rate_limit_policy.js",
@@ -81,15 +81,15 @@
     },
     {
       "path": "backend/src/retention_inventory.js",
-      "sha256": "bbb7f866415a13ed2e7cf61baf738857b9ad363a08bd0e5b065bc71ed3fb7bec"
+      "sha256": "fec11ff39c2e200e6d016d04d1c42f07134282736148823e5ec5e46d2d111940"
     },
     {
       "path": "backend/src/privacy_export.js",
-      "sha256": "701fa2d77c550dd7ad3b26813ef3495fba812fd3dd464b50911e5a173015422d"
+      "sha256": "fefcb6a9ca3f46143e8e65c8f31dc01dfc66a3f8a4ac7fd6da96b2ec92c1fe63"
     },
     {
       "path": "backend/src/privacy_export_policy.js",
-      "sha256": "7aab0f6ced7147637e10cba95a4cc647584314a1e8c464747959b57cc5da7fcf"
+      "sha256": "9725a0c047a8f89b8d62e03dec923ddfb8587626b8127bee084ad30ec02929dd"
     },
     {
       "path": "backend/src/observability.js",
@@ -390,6 +390,26 @@
     {
       "path": "backend/sql/migrations/099_mission_need_revisions.down.sql",
       "sha256": "0ce49439d7e61a0b7b46584d69692dd5b8614642390768bb746d6ca3a008f24b"
+    },
+    {
+      "path": "backend/sql/migrations/100_private_shelf_items.up.sql",
+      "sha256": "2c7e00dc3870c403a575867b2c68435473fe4ed82b3976a6f7712ac715b40c6a"
+    },
+    {
+      "path": "backend/sql/migrations/100_private_shelf_items.down.sql",
+      "sha256": "7ea82ff03f5d384e692ee487037d7fdc30446e8f8afa34c2d26cc655731b9e7b"
+    },
+    {
+      "path": "backend/src/private_shelf_workflow.js",
+      "sha256": "1bd4979d7232d01658eaa511b408b8cf212f062063151f9020c18ab3af544be5"
+    },
+    {
+      "path": "backend/src/private_shelf_media_files.js",
+      "sha256": "8dadc90edfe8c1cb6e04ae1f0ff20284f62557eb80acec7ba33fa8dc121c06d9"
+    },
+    {
+      "path": "backend/ops/private_shelf_media_cleanup.mjs",
+      "sha256": "b067a39a111d90e85f494005e6dea8e881c3f7bcfc28d7ff55343cc5e5ca53f5"
     },
     {
       "path": "backend/src/firebase_phone_verification.js",

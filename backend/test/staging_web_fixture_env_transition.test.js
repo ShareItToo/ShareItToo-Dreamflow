@@ -26,7 +26,7 @@ const opsCommit = 'f'.repeat(40);
 const bootstrapCommit = 'e'.repeat(40);
 const runtimeCommit = 'd'.repeat(40);
 const imageDigest = `sha256:${'c'.repeat(64)}`;
-const migrationLedger = '4d0530a169f9c7d375c18d4a5fc845319ac1d94f16e3671bd9feb2f925d5dcce';
+const migrationLedger = '1dd319ef1ecd4904e0b524568809e099e9e71fe565b04c7347ca21eb71f4b660';
 const primaryNetworkId = '7'.repeat(64);
 const providerNetworkId = '8'.repeat(64);
 
@@ -83,7 +83,7 @@ async function fixture() {
   const runId = 'web-fixture-bootstrap-private-run';
   const bootstrapManifest = {
     kind: 'sit-dedicated-web-fixture-bootstrap', schemaVersion: 2, operation: 'seed',
-    sourceCommit: bootstrapCommit, sourceHashes: { bootstrap: '1'.repeat(64) }, schemaCount: 99,
+    sourceCommit: bootstrapCommit, sourceHashes: { bootstrap: '1'.repeat(64) }, schemaCount: 100,
     ledgerDigest: migrationLedger, passwordDigests: [
       `scrypt$${'2'.repeat(32)}$${'3'.repeat(128)}`,
       `scrypt$${'4'.repeat(32)}$${'5'.repeat(128)}`,
@@ -216,7 +216,7 @@ function fakeExecutor(fx, {
       const script = scriptIndex >= 0 ? args[scriptIndex + 1] : args.at(-1);
       if (args[1] === fx.manifest.databaseContainer) {
         if (script === 'SELECT 1') return { stdout: '1\n', code: 0 };
-        if (String(script).includes('ORDER BY applied_at')) return { stdout: '099_mission_need_revisions.up.sql\n', code: 0 };
+        if (String(script).includes('ORDER BY applied_at')) return { stdout: '100_private_shelf_items.up.sql\n', code: 0 };
         if (String(script).includes('string_agg')) return { stdout: `${migrationLedger}\n`, code: 0 };
         if (String(script).includes('staging_web_fixture_seed.seeded')) return { stdout: `1|${fx.seedScopeDigest}|${fx.seedSnapshotDigest}|${hash(fx.runId)}|0|2|1|1\n`, code: 0 };
         throw Error(`unexpected_db_exec:${script}`);

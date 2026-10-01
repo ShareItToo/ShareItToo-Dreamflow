@@ -15,7 +15,13 @@ an unavoidable physical action. Gemini is reserved for narrow, named critical
 gates using current sources; it is not a routine execution prerequisite.
 This objective record grants no new live, provider, payment, Production or Play authority.
 
-## P2-A durable non-binding mission need — SOURCE PASS; CI successor pending
+## P2 durable non-binding mission need — EXACT-HEAD PASS
+
+P2-A and P2-B are accepted at exact source
+`a55c09fee75bd5939075e5aea5cfa194a016450b`. Regression `36855436663`
+passed Backend, PostgreSQL, Flutter and R10; CodeQL `36855436683` and the
+separate Advanced Security run `110347989320` also passed. P2 remains
+source-only: no Live, Green, Play, payment or provider state changed.
 
 The first additive P2 backend slice introduces schema migration `099` and an
 owner-bound mission-need API. A server-generated stable `mission_need_id`
@@ -54,7 +60,7 @@ a missing/false field for current contracts, accepts the unchanged schema-71
 record, and passes all 9 focused R9 tests. Exact-HEAD CI for the next reviewed
 commit remains pending before any image publication or Staging successor work.
 
-## P2-B accessible Mission UI — COMMIT `7b6741c7`; CI IN PROGRESS
+## P2-B accessible Mission UI — ACCEPTED IN EXACT-HEAD P2 PASS
 
 The smallest Flutter/Web vertical slice now exposes `Meine Missionen` only
 inside the existing internal Planner technical gate that also protects P2-A.
@@ -93,7 +99,49 @@ Exact source `90b62331` passed the normal CodeQL workflow, while Advanced
 Security check `110346084554` retained one test-only annotation because the
 negative fixture still derived a fast digest from test password data. The
 local successor now uses a deterministic non-secret 64-hex literal for that
-invalid-format case; exact-HEAD CI for this final annotation fix is pending.
+invalid-format case; it is included in the exact-head P2 PASS above.
+
+## P3-A private Shelf backend — LOCAL SOURCE PASS; SOL/CI PENDING
+
+The smallest additive P3 backend slice introduces migration `100` and an
+owner-only private Shelf API. An authenticated owner can idempotently create,
+list, load and delete a minimal private object with a stable server ID and no
+exact address. Photos use a dedicated private table, directory and authenticated
+route; they are never inserted into or served from the public listing-upload
+path. Foreign and missing item/media reads fail uniformly, private responses
+are `no-store`, and no Shelf row enters public search or creates a listing,
+reservation, booking, contract, payment or AI action.
+
+The same source package includes account export, account-erasure cascade and
+durable private-media cleanup. A database outbox is committed before any upload
+file mutation and before item/account cascades; failed unlinks remain as
+sanitized `retry` rows for the explicit bounded Ops retry rather than producing
+a post-commit `500` or an untraceable orphan. Active upload preparations remain
+`reserved` and cannot be consumed by that retry; an upload failure changes its
+exact reservation to `pending` before cleanup is attempted. Reserved, pending
+and retry counts remain separately visible in the retention inventory; an
+abrupt process abort is not misreported as automatically recovered. The
+migration rollback also refuses to drop any retained pending/retry cleanup
+evidence after its owner item is gone. Owner media reads are bound to a
+no-follow file descriptor, safe mode/link/size metadata and the exact database
+SHA-256, so symlinks and same-size path swaps return the same owner-scoped 404.
+The privacy export includes full media metadata and authenticated owner download
+paths while explicitly stating that binary image bytes are not embedded.
+
+PostgreSQL 16 acceptance proves owner/account isolation,
+restart persistence, idempotent replay/collision, foreign read/delete/media
+rejection with zero filesystem delta, public-upload and catalog non-leakage,
+descriptor/digest rejection, durable unlink retry, private file removal, export,
+account deletion, and byte-equivalent legacy cart/listing/upload state. Dynamic
+source-fixture and R9 consumers advance to schema 100; historical evidence and
+the exact live Green runner remain unchanged. Retention remains explicitly
+open: no Shelf TTL was invented. This is local source only; exact-head CI and
+any later runtime publication/promotion are separate packages.
+
+Sol's independent review passed 19 focused Node tests plus backend check and
+diff-check, the real PostgreSQL 16 P3 suite, 35 combined R9/privacy tests, and
+both privacy and retention validators. Exact-head CI remains pending until the
+reviewed source is committed.
 
 ## Closed prerequisite: Phase 0 Web/CORS and safe synthetic catalog QA
 
