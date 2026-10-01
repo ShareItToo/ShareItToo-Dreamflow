@@ -210,6 +210,27 @@ const isolatedPostgresImage = 'postgres:16-alpine@sha256:57c72fd2a128e416c7fcc49
 
 export const syntheticSandboxCredentialFilePath = '/docker/shareittoo/staging-secrets/synthetic-sandbox-user-password';
 
+// These are executable source inputs, not secrets.  Deployment must preserve
+// their tracked readable mode and exact bytes; the Docker daemon may traverse a
+// protected host parent, while the worker itself must read the mounted targets
+// as the image's fixed non-root UID/GID before Green is quiesced.
+export const greenProvisionerSourceContract = Object.freeze([
+  Object.freeze({
+    relativePath: 'backend/ops/provision_synthetic_sandbox_user.mjs',
+    targetPath: '/app/ops/provision_synthetic_sandbox_user.mjs',
+    mode: 0o644,
+    sha256: '4bedf1c1cb05d9bb55b6f185ef37d77294f98d7cf1830112f20a8420ff37b812',
+  }),
+  Object.freeze({
+    relativePath: 'backend/ops/stable_private_file.mjs',
+    targetPath: '/app/ops/stable_private_file.mjs',
+    mode: 0o644,
+    sha256: '23bcff24a371f41ba4ec35460fd91805276d2713912b5c5c55120d43863aa787',
+  }),
+]);
+
+const greenProvisionerSourceRuntimeMarker = 'green-provisioner-source-runtime-ok';
+
 // Green promotion never activates the optional technical Sandbox.  The
 // standalone technical-Sandbox lane remains separately gated; Green must
 // carry an explicit provider-off contract so an old authorization or secret
@@ -1033,6 +1054,30 @@ async function assertProtectedFile(filePath, mode, uid, gid, code) {
   return true;
 }
 
+export function assertGreenProvisionerSourceFiles({
+  sourceRoot = repositoryRoot,
+  expectedUid = typeof process.getuid === 'function' ? process.getuid() : undefined,
+} = {}) {
+  for (const source of greenProvisionerSourceContract) {
+    let bytes;
+    try {
+      bytes = readStablePrivateFile(resolve(sourceRoot, source.relativePath), {
+        encoding: null,
+        expectedMode: source.mode,
+        expectedUid,
+        minBytes: 1,
+        maxBytes: 2 * 1024 * 1024,
+        code: 'green_provisioner_source_metadata_invalid',
+      });
+    } catch (error) {
+      if (error?.code === 'green_provisioner_source_metadata_invalid') throw error;
+      fail('green_provisioner_source_metadata_invalid');
+    }
+    if (sha256(bytes) !== source.sha256) fail('green_provisioner_source_hash_invalid');
+  }
+  return true;
+}
+
 export async function assertGreenProtectedRuntimeFiles(config, protectedEnv) {
   await assertProtectedFile(config.mfaFile, 0o640, 0, 101, 'green_mfa_file');
   await assertProtectedFile(config.firebaseFile, 0o640, 0, 65532, 'green_firebase_file');
@@ -1473,6 +1518,29 @@ export function buildGreenPromotionPlan({
   });
 }
 
+function greenProvisionerSourceBindings(sourceRoot = repositoryRoot) {
+  return greenProvisionerSourceContract.map((source) => Object.freeze({
+    ...source,
+    sourcePath: resolve(sourceRoot, source.relativePath),
+  }));
+}
+
+function greenProvisionerSourceRuntimeGateCommand(runtime, sourceRoot = repositoryRoot) {
+  const sources = greenProvisionerSourceBindings(sourceRoot);
+  const script = `import crypto from 'node:crypto';import {readFileSync} from 'node:fs';import {spawnSync} from 'node:child_process';try{const files=${JSON.stringify(sources.map(({ targetPath, sha256: digest }) => ({ targetPath, digest })))};for(const file of files){const observed=crypto.createHash('sha256').update(readFileSync(file.targetPath)).digest('hex');if(observed!==file.digest)throw new Error('source-hash-invalid');const checked=spawnSync(process.execPath,['--check',file.targetPath],{stdio:'ignore'});if(checked.status!==0)throw new Error('source-syntax-invalid');}await import('file://${sources[0].targetPath}');await import('file://${sources[1].targetPath}');process.stdout.write('${greenProvisionerSourceRuntimeMarker}\\n');}catch{process.exitCode=70;}`;
+  return Object.freeze({
+    phase: 'provisioner_source_runtime_gate',
+    command: 'docker',
+    args: Object.freeze([
+      'run', '--rm', '--network', 'none', '--read-only', '--cap-drop', 'ALL',
+      '--security-opt', 'no-new-privileges', '--pids-limit', '64', '--user', '100:101',
+      ...sources.flatMap((source) => ['--mount', `type=bind,src=${source.sourcePath},dst=${source.targetPath},readonly`]),
+      '--entrypoint', 'node', `${runtime.image}@${runtime.digest}`, '--input-type=module', '-e', script,
+    ]),
+    redacted: true,
+  });
+}
+
 export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
   if (!plan || plan.kind !== 'sit-green-promotion-plan') fail('green_plan_required');
   assertRealGreenEnvFilePath(configFile, 'green_config_file_invalid');
@@ -1483,11 +1551,10 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
   if (!Array.isArray(target.retainedSealed) || JSON.stringify(target.retainedSealed) !== JSON.stringify(greenTarget.retainedSealed)) fail('green_sealed_target_invalid');
   assertGreenTargetManifest(plan.target);
   const inspect = (name) => ({ command: 'docker', args: ['inspect', '--format', '{{json .}}', name] });
-  const provisionerSource = resolve(repositoryRoot, 'backend/ops/provision_synthetic_sandbox_user.mjs');
-  const stablePrivateFileSource = resolve(repositoryRoot, 'backend/ops/stable_private_file.mjs');
+  const [provisionerSource, stablePrivateFileSource] = greenProvisionerSourceBindings();
   const provisionerMounts = [
-    '--mount', `type=bind,src=${provisionerSource},dst=/app/ops/provision_synthetic_sandbox_user.mjs,readonly`,
-    '--mount', `type=bind,src=${stablePrivateFileSource},dst=/app/ops/stable_private_file.mjs,readonly`,
+    '--mount', `type=bind,src=${provisionerSource.sourcePath},dst=${provisionerSource.targetPath},readonly`,
+    '--mount', `type=bind,src=${stablePrivateFileSource.sourcePath},dst=${stablePrivateFileSource.targetPath},readonly`,
     '--mount', `type=bind,src=${runtimeConfig.mfaFile},dst=/run/secrets/mfa-encryption-key,readonly`,
     '--mount', `type=bind,src=${runtimeConfig.firebaseFile},dst=/run/secrets/firebase-service-account.json,readonly`,
     '--mount', `type=bind,src=${syntheticSandboxCredentialFilePath},dst=/run/secrets/synthetic-sandbox-user-password,readonly`,
@@ -1512,6 +1579,7 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
     { phase: 'source_schema_readback', command: 'docker', args: ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', greenTarget.databaseUser, '-d', greenTarget.databaseName, '-Atc', "SELECT name FROM schema_migrations ORDER BY applied_at DESC LIMIT 1"] },
     { phase: 'source_migration_ledger_readback', command: 'docker', args: ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', greenTarget.databaseUser, '-d', greenTarget.databaseName, '-Atc', migrationLedgerReadbackSql] },
     { phase: 'source_database_state_readback_before', command: 'docker', args: ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', greenTarget.databaseUser, '-d', greenTarget.databaseName, '-Atc', greenDatabaseStateReadbackSql] },
+    greenProvisionerSourceRuntimeGateCommand(runtime),
     { phase: 'quiesce_green_api', command: 'docker', args: ['stop', target.apiContainer] },
     { phase: 'quiesce_green_api_verify', command: 'docker', args: ['inspect', '--format', '{{.State.Running}}', target.apiContainer] },
     { phase: 'seal_green_api', command: 'docker', args: ['rename', target.apiContainer, target.sealedApiContainer] },
@@ -2441,7 +2509,12 @@ export function greenReadOnlyPreflightCommands(commands, plan) {
     ...Object.fromEntries(Object.entries(sql).map(([phase, query]) => [phase, ['exec', plan.target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', greenTarget.databaseUser, '-d', greenTarget.databaseName, '-Atc', query]])),
   };
   const prefix = commands.slice(0, phases.length);
-  if (commands[phases.length]?.phase !== 'quiesce_green_api' || prefix.some((entry, index) =>
+  const runtimeGate = commands[phases.length];
+  if (runtimeGate?.phase !== 'provisioner_source_runtime_gate'
+      || runtimeGate.command !== 'docker'
+      || runtimeGate.redacted !== true
+      || JSON.stringify(runtimeGate.args) !== JSON.stringify(greenProvisionerSourceRuntimeGateCommand(plan.runtime).args)
+      || commands[phases.length + 1]?.phase !== 'quiesce_green_api' || prefix.some((entry, index) =>
     entry.phase !== phases[index] || entry.command !== 'docker' || entry.inputFile || entry.stdoutFile || entry.envFile || entry.runtimeEnv
     || JSON.stringify(entry.args) !== JSON.stringify(allowedArgs[entry.phase]))) {
     fail('green_read_only_preflight_command_invalid');
@@ -2454,14 +2527,16 @@ export function parseGreenPromotionArguments(args) {
   return Object.freeze({ runtimeCommit: args[0], execute: args[1] === '--execute' });
 }
 
-export async function runGreenPromotion({ plan, config, configFile, environment = process.env, execute = false, command = runGreenCommand, assertRuntimeFiles = assertGreenProtectedRuntimeFiles, executableAvailable = greenControlExecutableAvailable } = {}) {
+export async function runGreenPromotion({ plan, config, configFile, environment = process.env, execute = false, command = runGreenCommand, assertRuntimeFiles = assertGreenProtectedRuntimeFiles, assertWorkerSources = assertGreenProvisionerSourceFiles, executableAvailable = greenControlExecutableAvailable } = {}) {
   if (execute !== true && execute !== false) fail('explicit_green_execute_flag_required');
   if (execute) assertGreenPromotionExecutionAllowed({ environment, plan });
   assertGreenRuntimeConfig(config);
   if (typeof command !== 'function') fail('green_command_runner_required');
   if (typeof assertRuntimeFiles !== 'function') fail('green_runtime_file_assertion_required');
+  if (typeof assertWorkerSources !== 'function') fail('green_provisioner_source_assertion_required');
   const commands = buildGreenPromotionCommands({ plan, configFile, config });
   const preflightCommands = greenReadOnlyPreflightCommands(commands, plan);
+  await assertWorkerSources();
   await assertGreenEvidenceArtifactFamilyAvailable({ evidenceFile: plan?.evidenceFile, isolatedEnvFile: plan?.isolated?.envFile });
   await assertGreenControlExecutables({ commands: execute ? commands : preflightCommands, executableAvailable });
   const { values: protectedEnv, digest: protectedEnvDigest } = await readProtectedEnv(configFile);
@@ -2488,8 +2563,10 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
   let targetNetworkId;
   let providerNetworkId;
   try {
-    // Both modes execute the same ordered reads and validators. No preparation
-    // write (including isolated credentials) is allowed before they all pass.
+    // Both modes execute the same ordered pure reads. Execute mode additionally
+    // proves the exact non-root worker bind/import in a networkless disposable
+    // container before quiesce. No preparation write (including isolated
+    // credentials) is allowed before those gates pass.
     for (const entry of execute ? commands : preflightCommands) {
       if (entry.phase === 'quiesce_green_api') {
         assertGreenPromotionExecutionAllowed({ environment, plan });
@@ -2518,16 +2595,25 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
       // never be restarted after this point.
       if (entry.phase === 'canonical_idempotent_migration_98_to_98') schemaMutationStarted = true;
       let result;
-      if (boundEntry.inputFile) {
-        result = command === runGreenCommand
-          ? boundEntry.inputSource === 'fresh_protected_backup'
-            ? await runGreenCommandWithBufferInput(boundEntry.command, boundEntry.args, backupBytes, { phase: entry.phase, env })
-            : await runGreenCommandWithFileInput(boundEntry.command, boundEntry.args, boundEntry.inputFile, { phase: entry.phase, env })
-          : await command(boundEntry.command, boundEntry.args, { phase: entry.phase, env, inputFile: boundEntry.inputFile, inputBytes: boundEntry.inputSource === 'fresh_protected_backup' ? backupBytes : undefined, inputDigest: boundEntry.inputSource === 'fresh_protected_backup' ? backupDigest : undefined });
-      } else {
-        result = await command(boundEntry.command, boundEntry.args, { phase: entry.phase, env, binary: boundEntry.binary === true });
+      try {
+        if (boundEntry.inputFile) {
+          result = command === runGreenCommand
+            ? boundEntry.inputSource === 'fresh_protected_backup'
+              ? await runGreenCommandWithBufferInput(boundEntry.command, boundEntry.args, backupBytes, { phase: entry.phase, env })
+              : await runGreenCommandWithFileInput(boundEntry.command, boundEntry.args, boundEntry.inputFile, { phase: entry.phase, env })
+            : await command(boundEntry.command, boundEntry.args, { phase: entry.phase, env, inputFile: boundEntry.inputFile, inputBytes: boundEntry.inputSource === 'fresh_protected_backup' ? backupBytes : undefined, inputDigest: boundEntry.inputSource === 'fresh_protected_backup' ? backupDigest : undefined });
+        } else {
+          result = await command(boundEntry.command, boundEntry.args, { phase: entry.phase, env, binary: boundEntry.binary === true });
+        }
+      } catch (error) {
+        if (entry.phase === 'provisioner_source_runtime_gate') fail('green_provisioner_source_runtime_gate_failed');
+        throw error;
       }
       if (greenCommandResultFailed(result)) fail(`green_${entry.phase}_failed`);
+      if (entry.phase === 'provisioner_source_runtime_gate'
+          && String(result.stdout ?? '').trim() !== greenProvisionerSourceRuntimeMarker) {
+        fail('green_provisioner_source_runtime_gate_invalid');
+      }
       if (entry.phase === 'isolated_network_create') isolatedNetworkId = greenCapturedDockerId(result.stdout, 'green_isolated_network_id_invalid');
       if (entry.phase === 'isolated_postgres_create') isolatedDatabaseId = greenCapturedDockerId(result.stdout, 'green_isolated_database_id_invalid');
       if (entry.phase === 'candidate_acceptance_create') candidateId = greenCapturedDockerId(result.stdout, 'green_candidate_id_invalid');

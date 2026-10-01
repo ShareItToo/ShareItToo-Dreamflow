@@ -169,3 +169,27 @@ candidate/final catalog convergence with per-attempt timeouts, and compares the
 canonical public photo against trusted digest
 `bd3496b7850a0cd6e7e186e788e9d7fd7a7284832d4c3631b54cc67ee4a9b32e`.
 Publication and source proof remain distinct from live promotion acceptance.
+
+## Green promotion attempt-01 worker-source permission incident
+
+The exact `441d2860…` attempt-01 stopped at the fixed phase
+`synthetic_sandbox_provision_isolated_failed`. The protected deployment copy
+had installed the two non-secret bind-mounted worker files as root-owned
+`0600`, while the exact successor image launches that worker as UID/GID
+`100:101`. A netless readback in that image reported both mounted targets
+unreadable. The bytes still matched their tracked sources: provisioner SHA-256
+`4bedf1c1cb05d9bb55b6f185ef37d77294f98d7cf1830112f20a8420ff37b812`
+and stable-file helper SHA-256
+`23bcff24a371f41ba4ec35460fd91805276d2713912b5c5c55120d43863aa787`;
+Git tracks both with mode `0644`. The retained attempt-01 pgdump is root-owned
+`0600`, single-link, SHA-256
+`8b5fef161c61a461caa091ecff5b796426978a36cd94c05211ad99141ddc1346`.
+
+Changing only those two non-secret deployment copies to `0644` made the same
+netless UID/GID `100:101` target check pass; fresh preflight and the separately
+controlled attempt-02 then succeeded. No database reproduction was needed.
+The durable source guard now requires no-follow regular-file metadata, exact
+`0644` mode and tracked hashes before any command, then runs a no-network
+exact-image UID/GID `100:101` hash, Node syntax and import gate against the
+real bind targets before quiesce. Symlink, `0600`, permissive-mode and hash
+drift failures stop before mutation and return fixed sanitized codes.

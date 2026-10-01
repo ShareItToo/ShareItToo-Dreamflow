@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import { chmodSync, lstatSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
@@ -52,6 +52,8 @@ import {
   runGreenCommandWithBufferInput,
   runGreenPromotion,
   greenReadOnlyPreflightCommands,
+  assertGreenProvisionerSourceFiles,
+  greenProvisionerSourceContract,
   parseGreenPromotionArguments,
   syntheticSandboxCredentialFilePath,
   containsForbiddenGreenTargetIdentifier,
@@ -368,6 +370,57 @@ test('release identity overrides are rejected before runtime files or commands',
   }
 });
 
+test('Green provisioner source guard accepts exact 0644 tracked bytes and rejects unsafe metadata or drift', () => {
+  const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+  const root = mkdtempSync(path.join(os.tmpdir(), 'sit-green-provisioner-source-'));
+  try {
+    for (const source of greenProvisionerSourceContract) {
+      const destination = path.join(root, source.relativePath);
+      mkdirSync(path.dirname(destination), { recursive: true, mode: 0o755 });
+      writeFileSync(destination, readFileSync(path.join(repositoryRoot, source.relativePath)), { mode: 0o644 });
+      chmodSync(destination, 0o644);
+    }
+    const first = path.join(root, greenProvisionerSourceContract[0].relativePath);
+    const second = path.join(root, greenProvisionerSourceContract[1].relativePath);
+    assert.equal(assertGreenProvisionerSourceFiles({ sourceRoot: root }), true);
+
+    chmodSync(first, 0o600);
+    assert.throws(() => assertGreenProvisionerSourceFiles({ sourceRoot: root }), /green_provisioner_source_metadata_invalid/u);
+    chmodSync(first, 0o664);
+    assert.throws(() => assertGreenProvisionerSourceFiles({ sourceRoot: root }), /green_provisioner_source_metadata_invalid/u);
+    chmodSync(first, 0o644);
+
+    writeFileSync(first, `${readFileSync(first, 'utf8')}\n// drift\n`);
+    assert.throws(() => assertGreenProvisionerSourceFiles({ sourceRoot: root }), /green_provisioner_source_hash_invalid/u);
+    writeFileSync(first, readFileSync(path.join(repositoryRoot, greenProvisionerSourceContract[0].relativePath)));
+    chmodSync(first, 0o644);
+
+    rmSync(second);
+    symlinkSync(first, second);
+    assert.throws(() => assertGreenProvisionerSourceFiles({ sourceRoot: root }), /green_provisioner_source_metadata_invalid/u);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('Green provisioner source metadata failure stops execute before command execution', async () => {
+  const plan = buildGreenPromotionPlan({
+    targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit,
+    evidenceFile: '/docker/shareittoo/evidence/green-promotion.json',
+  });
+  let commandCalls = 0;
+  await assert.rejects(() => runGreenPromotion({
+    plan, config, configFile: config.envFile, execute: true,
+    environment: {
+      GREEN_STAGING_PROMOTION_EXECUTE: '1',
+      GREEN_STAGING_PROMOTION_CONFIRM: runtimeCommit,
+    },
+    command: async () => { commandCalls += 1; return { stdout: '' }; },
+    assertWorkerSources: () => { throw Object.assign(new Error('fixed'), { code: 'green_provisioner_source_metadata_invalid' }); },
+  }), (error) => error?.code === 'green_provisioner_source_metadata_invalid');
+  assert.equal(commandCalls, 0);
+});
+
 test('evidence artifact family preflight rejects retained backups and env files before commands', async () => {
   const root = mkdtempSync(path.join(os.tmpdir(), 'sit-green-artifact-family-'));
   try {
@@ -616,6 +669,23 @@ test('promotion plan keeps backup, isolated 98-to-98 idempotency, acceptance and
   assert.equal(commands.some((entry) => /isolated_.*volume/u.test(entry.phase)), false);
   const phaseIndex = (phase) => commands.findIndex((entry) => entry.phase === phase);
   assert.ok(phaseIndex('target_container_set_readback') < phaseIndex('quiesce_green_api'));
+  assert.ok(phaseIndex('source_database_state_readback_before') < phaseIndex('provisioner_source_runtime_gate'));
+  assert.ok(phaseIndex('provisioner_source_runtime_gate') < phaseIndex('quiesce_green_api'));
+  const sourceGate = commands.find((entry) => entry.phase === 'provisioner_source_runtime_gate');
+  assert.deepEqual(sourceGate.args.slice(0, 14), [
+    'run', '--rm', '--network', 'none', '--read-only', '--cap-drop', 'ALL',
+    '--security-opt', 'no-new-privileges', '--pids-limit', '64', '--user', '100:101',
+    '--mount',
+  ]);
+  assert.match(sourceGate.args[14], /src=.*provision_synthetic_sandbox_user\.mjs,dst=\/app\/ops\/provision_synthetic_sandbox_user\.mjs,readonly$/u);
+  assert.equal(sourceGate.args[15], '--mount');
+  assert.match(sourceGate.args[16], /src=.*stable_private_file\.mjs,dst=\/app\/ops\/stable_private_file\.mjs,readonly$/u);
+  assert.ok(sourceGate.args.includes(`${plan.runtime.image}@${plan.runtime.digest}`));
+  assert.match(sourceGate.args.at(-1), /spawnSync/u);
+  assert.match(sourceGate.args.at(-1), /\['--check',file\.targetPath\]/u);
+  assert.match(sourceGate.args.at(-1), /provision_synthetic_sandbox_user\.mjs.*stable_private_file\.mjs.*await import/u);
+  for (const source of greenProvisionerSourceContract) assert.match(sourceGate.args.at(-1), new RegExp(source.sha256, 'u'));
+  assert.equal(sourceGate.args.some((arg) => arg.includes('/run/secrets/')), false);
   assert.ok(phaseIndex('quiesce_green_api') < phaseIndex('quiesce_green_api_verify'));
   assert.ok(phaseIndex('quiesce_green_api_verify') < phaseIndex('source_foreign_writer_readback_before_backup'));
   assert.ok(phaseIndex('source_foreign_writer_readback_before_backup') < phaseIndex('fresh_protected_backup'));
@@ -740,6 +810,7 @@ test('default CLI is read-only and execution requires both explicit mode and exa
     (entries) => { entries[0].stdoutFile = '/tmp/forbidden'; },
     (entries) => { entries[1].args[3] = 'foreign-container'; },
     (entries) => { entries.find(({ phase }) => phase === 'source_database_state_readback_before').args.splice(3, 0, '--unsafe'); },
+    (entries) => { entries.find(({ phase }) => phase === 'provisioner_source_runtime_gate').args[3] = plan.target.network; },
     (entries) => { entries.find(({ phase }) => phase === 'source_database_state_readback_before').args[entries.find(({ phase }) => phase === 'source_database_state_readback_before').args.length - 1] = `${greenDatabaseStateReadbackSql}; DELETE FROM users`; },
     (entries) => { [entries[0], entries[1]] = [entries[1], entries[0]]; },
   ]) {
@@ -871,6 +942,7 @@ test('executor preserves required post-enrollment auth through candidate, recove
       const phase = options.phase;
       if (readOnly?.failPhase === phase) return { code: 1, stdout: '' };
       if (readOnly?.overrides?.[phase] !== undefined) return { stdout: readOnly.overrides[phase] };
+      if (phase === 'provisioner_source_runtime_gate') return { stdout: 'green-provisioner-source-runtime-ok\n' };
       if (phase.endsWith('_post_enrollment_identity_readback')) {
         if (phase === 'isolated_post_enrollment_identity_readback') assert.equal(args[1], isolatedDatabaseId);
         return { stdout: phase === missingEnrollmentPhase ? '0\n' : '1\n' };
@@ -1018,10 +1090,11 @@ test('executor preserves required post-enrollment auth through candidate, recove
     };
     let result;
     try {
+      const readOnlyMode = Boolean(readOnly) && readOnly.execute !== true;
       result = await runGreenPromotion({
-        plan, config: runtimeConfig, configFile, environment: readOnly?.environment ?? (readOnly ? {} : {
+        plan, config: runtimeConfig, configFile, environment: readOnly?.environment ?? (readOnlyMode ? {} : {
           GREEN_STAGING_PROMOTION_EXECUTE: '1', GREEN_STAGING_PROMOTION_CONFIRM: runtimeCommit,
-        }), ...(readOnly ? {} : { execute: true }), command: fake, executableAvailable: async (name) => !readOnly || name === 'docker', assertRuntimeFiles: async () => {},
+        }), ...(readOnlyMode ? {} : { execute: true }), command: fake, executableAvailable: async (name) => !readOnlyMode || name === 'docker', assertRuntimeFiles: async () => {},
       });
       if (!readOnly) assert.fail('promotion should stop before quiesce');
     } catch (error) {
@@ -1029,9 +1102,11 @@ test('executor preserves required post-enrollment auth through candidate, recove
     }
     return { calls, result };
   };
-  const expectedReversible = buildGreenPromotionCommands({ plan, configFile, config: runtimeConfig })
+  const builtCommands = buildGreenPromotionCommands({ plan, configFile, config: runtimeConfig });
+  const expectedReversible = builtCommands
     .slice(0, buildGreenPromotionCommands({ plan, configFile, config: runtimeConfig }).findIndex((entry) => entry.phase === 'quiesce_green_api'))
     .map((entry) => entry.phase);
+  const expectedReadOnly = greenReadOnlyPreflightCommands(builtCommands, plan).map((entry) => entry.phase);
   const preflight = (options = {}, image = prePromotionImageReference) => fakeRun(image, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, options);
   const beforeFiles = readdirSync(root);
   const beforeEnv = readFileSync(configFile);
@@ -1042,7 +1117,7 @@ test('executor preserves required post-enrollment auth through candidate, recove
     assert.deepEqual(Object.keys(readOnly.result).sort(), ['status', 'targetDigest', 'configDigest', 'inventoryDigest', 'runtimeCommit', 'runtimeImageDigest', 'runtimePublicationRunId', 'runtimePublicationManifestDigest', 'opsCommit', 'sourceLedgerDigest'].sort());
     assert.equal(readOnly.result.runtimePublicationRunId, greenSuccessorRuntime.publicationRunId);
     assert.equal(readOnly.result.runtimePublicationManifestDigest, greenSuccessorRuntime.publicationManifestDigest);
-    assert.deepEqual(readOnly.calls.map((entry) => entry.phase), expectedReversible);
+    assert.deepEqual(readOnly.calls.map((entry) => entry.phase), expectedReadOnly);
     assert.equal(readOnly.calls.length, 32);
     for (const [key, value] of Object.entries(readOnly.result)) {
       if (key !== 'status' && key !== 'runtimePublicationRunId') assert.match(value, /^(?:sha256:)?[0-9a-f]{40,64}$/u, key);
@@ -1050,11 +1125,11 @@ test('executor preserves required post-enrollment auth through candidate, recove
     assert.deepEqual(readdirSync(root), beforeFiles, 'no evidence, backup, or isolated env created');
     assert.deepEqual(readFileSync(configFile), beforeEnv);
   }
-  for (const failPhase of expectedReversible) {
+  for (const failPhase of expectedReadOnly) {
     const rejected = await preflight({ failPhase });
     assert.equal(rejected.result.code, `green_${failPhase}_failed`);
     assert.equal(rejected.result.cleanup, undefined);
-    assert.deepEqual(rejected.calls.map((entry) => entry.phase), expectedReversible.slice(0, expectedReversible.indexOf(failPhase) + 1));
+    assert.deepEqual(rejected.calls.map((entry) => entry.phase), expectedReadOnly.slice(0, expectedReadOnly.indexOf(failPhase) + 1));
     assert.deepEqual(readdirSync(root), beforeFiles);
   }
   for (const overrides of [
@@ -1069,7 +1144,7 @@ test('executor preserves required post-enrollment auth through candidate, recove
     const rejected = await preflight({ overrides });
     assert.ok(rejected.result.code, Object.keys(overrides).join(','));
     assert.equal(rejected.result.cleanup, undefined);
-    assert.equal(rejected.calls.some((entry) => !expectedReversible.includes(entry.phase)), false);
+    assert.equal(rejected.calls.some((entry) => !expectedReadOnly.includes(entry.phase)), false);
     assert.deepEqual(readdirSync(root), beforeFiles);
   }
   const stalePredecessor = await preflight({}, 'ghcr.io/shareittoo/shareittoo-api:5d3b42613da73451e9d9169a7b99ca1aba0c4227');
@@ -1079,6 +1154,15 @@ test('executor preserves required post-enrollment auth through candidate, recove
   assert.equal(good.result?.code, 'test_stop_before_quiesce', `${good.result?.message ?? 'no-error'} :: ${good.calls.map((entry) => entry.phase).join('|')}`);
   const quiesceIndex = good.calls.findIndex((entry) => entry.phase === 'quiesce_green_api');
   assert.ok(quiesceIndex > 0);
+  assert.ok(good.calls.findIndex((entry) => entry.phase === 'provisioner_source_runtime_gate') < quiesceIndex);
+  const sourceGateFailure = await fakeRun(
+    prePromotionImageReference, currentMigrationLedger, undefined, '1\n',
+    targetContainerSet, '[]\n', '[]\n', emptyFindingFingerprint,
+    'quiesce_green_api', undefined, {},
+    { execute: true, environment: { GREEN_STAGING_PROMOTION_EXECUTE: '1', GREEN_STAGING_PROMOTION_CONFIRM: runtimeCommit }, failPhase: 'provisioner_source_runtime_gate' },
+  );
+  assert.equal(sourceGateFailure.result.code, 'green_provisioner_source_runtime_gate_failed');
+  assert.equal(sourceGateFailure.calls.some((entry) => entry.phase === 'quiesce_green_api'), false);
   for (const [key, value] of postEnrollment ? [
     ['FIREBASE_AUTH_ENABLED', 'false'],
     ['SIT_STAGING_GOOGLE_REGISTRATION_ENABLED', 'true'],

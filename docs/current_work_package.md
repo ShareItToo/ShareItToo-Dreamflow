@@ -15,13 +15,12 @@ an unavoidable physical action. Gemini is reserved for narrow, named critical
 gates using current sources; it is not a routine execution prerequisite.
 This objective record grants no new live, provider, payment, Production or Play authority.
 
-## Active prerequisite: Phase 0 Web/CORS and safe synthetic catalog QA
+## Closed prerequisite: Phase 0 Web/CORS and safe synthetic catalog QA
 
-### Synthetic catalog browser projection — SOURCE FIX ACTIVE 2026-10-01
+### Synthetic catalog browser projection — PHASE 0 LIVE PASS 2026-10-01
 
-The reviewed D3 one-shot activation is live and its public endpoint returns
-HTTP 200 with exactly one synthetic, explicitly noncontractual listing. Browser
-acceptance exposed the next bounded defect: the Web UI displayed
+The reviewed D3 one-shot activation first made the public synthetic row
+available. Browser acceptance then exposed the next bounded defect: the Web UI displayed
 `Noch keine Anzeigen` with no console error because the strict Flutter
 `Item.fromJson` contract correctly rejected the incomplete synthetic server
 projection. The source successor does not weaken the client parser or ordinary
@@ -31,13 +30,15 @@ and the exact bound canonical image, and returns no row when required relational
 or media evidence is missing. Persisted payload cannot forge any canonical
 field; real-offer, owner-declaration, booking and payment capabilities remain
 false. One shared backend/Flutter fixture proves the exact visible card and
-disabled detail path. This is source evidence only: the live D3 runtime remains
-unchanged until exact-HEAD CI, later publication/promotion and authenticated
-browser acceptance complete.
+disabled detail path. Exact runtime `6c0ef70d…` is now live on Green; protected
+promotion evidence, independent runtime/database readback, exact-origin CORS,
+the public catalog/photo and direct browser acceptance all passed. Production
+`shareittoo.com` and Google Play remain unchanged. See the
+[Phase 0 closure](operations/STAGING_WEB_PHASE0_CLOSURE_2026-10-01.md).
 
-### Current D3 runtime and login prerequisite — LIVE PASS 2026-10-01
+### D3 predecessor and login prerequisite — SUPERSEDED LIVE BASELINE 2026-10-01
 
-Green now runs exact runtime `d3c2f5d7d7516d3bfaac4b61689c2c433924cc6e`
+Green previously ran exact runtime `d3c2f5d7d7516d3bfaac4b61689c2c433924cc6e`
 from image digest
 `sha256:31b8b015eb0635b9fbb7d6c5e54ef43fe089d5b953dba8fa446aae2122a5888a`.
 The one-shot promotion used reviewed Ops
@@ -63,9 +64,9 @@ refresh/audit relationships. Active auth state is zero; prior-history, identity
 and catalog digests are unchanged; all forbidden-effect counts remain zero.
 Registration remains closed; the public catalog is enabled only for the one
 bound synthetic noncontractual row, with booking and payment capabilities
-disabled. The source successor below must preserve this exact D3 baseline.
+disabled. The live successor below preserved this exact D3 baseline.
 
-### Catalog-preserving Green promotion successor — SOURCE-ONLY
+### Catalog-preserving Green promotion successor — LIVE PASS
 
 The successor runner binds D3 as the immutable predecessor, retains all 20
 stopped Green seals including the catalog rollback and prior 34194 seals, and keeps
@@ -89,14 +90,45 @@ Publication run `36834482750` produced manifest SHA-256
 The runtime plan, no-mutation result and sanitized execution evidence all carry
 and validate that exact publication pair; a changed run or manifest digest is
 rejected before promotion.
-This package is
-source-only: it does not publish an image, prepare a manifest, mutate Staging,
-or perform a live promotion.
+The separately published runtime and reviewed Ops were promoted exactly once
+after a fresh no-mutation preflight in attempt-02. The root-owned `0600`,
+single-link evidence is
+`/docker/shareittoo/evidence/green-promotion-d3c2f5d7-ops-441d2860-to-6c0ef70d-attempt-02.json`,
+SHA-256 `b74975dccf56616e7231d7e0697c2351988efd8af09030974066baf4b1b16cad`;
+its protected backup SHA-256 is
+`201eb969e478fcbe400fabb373741f223a7526051b63a04e3c6d3eb5ec071a6c`.
+Independent readback binds the exact runtime/image, schema `98`, unchanged
+ledger/auth/catalog digests, `6/6/6` retained auth/refresh/login-audit rows,
+zero active auth/refresh, zero booking/request/payment effects, zero rehearsal
+containers/networks and the stopped D3 seal. The Staging API returns the one
+strict synthetic row and its canonical WebP; the browser displays its notice,
+image disclaimer and disabled `Nicht buchbar – nur Katalogtest` action with no
+console warning/error. Exact-origin CORS returns `204` for the Staging origin.
 
-The active source package binds the catalog consumer to those exact bytes,
-runtime/image, marker and digests. It performs no manifest preparation or live
-activation. The older promotion, proof and failed activation sections below are
-retained as historical evidence and are not current-runtime prerequisites.
+### Green worker-source permission incident — durable source guard in review
+
+The first exact `441d2860…` promotion attempt failed at
+`synthetic_sandbox_provision_isolated_failed` because the two non-secret
+bind-mounted worker sources had been installed as root-owned `0600`; the fixed
+runtime worker runs as UID/GID `100:101` and could not read either target. Their
+bytes were exact and Git tracks both as `0644`. A mode-only normalization to
+`0644` made the netless UID `100:101` target read/import gate pass, after which
+the separately controlled attempt-02 promotion succeeded. The retained
+attempt-01 database backup remains protected; no database reproduction was
+needed to establish this cause.
+
+The source successor fails before quiesce on a symlink, non-`0644` mode or
+unexpected hash for either worker source. It then uses the exact successor
+image with no network as UID/GID `100:101` to read and hash the real bind
+targets and run Node syntax/import checks. Failures expose fixed codes only;
+the guard does not change product, catalog, provider or payment behavior.
+
+Phase 0 is technically closed by the separate closure record. After this
+durable incident-prevention successor passes exact-HEAD review/CI, work advances
+directly to Blue-Ocean **P2 — dauerhafter unverbindlicher Missionsbedarf**.
+
+The older promotion, proof and failed activation sections below are retained as
+historical evidence and are not current-runtime prerequisites.
 
 ### Historical Green runtime promotion — superseded 2026-10-01
 
