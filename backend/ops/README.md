@@ -128,12 +128,12 @@ legacy `shareittoo_staging` is never used by this lane.
 The source readback is exactly schema `98` with the manifest-bound ledger
 digest `796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196`.
 The pre-promotion image is exactly
-`ghcr.io/shareittoo/shareittoo-api:34194c42e5e477144b5db5a8eeb6c2d476c7aeef`
+`ghcr.io/shareittoo/shareittoo-api:d3c2f5d7d7516d3bfaac4b61689c2c433924cc6e`
 with digest
-`sha256:0403a5f60b94a8aa91d7cbf29ae503aea989d85aeb72fcf4cf6dc14a801670b9`.
+`sha256:31b8b015eb0635b9fbb7d6c5e54ef43fe089d5b953dba8fa446aae2122a5888a`.
 The new seal is
-`shareittoo-staging-api-alt-sealed-green-34194c42`. All 18 existing seals,
-including the retained 1ebc and bc86 witnesses,
+`shareittoo-staging-api-alt-sealed-green-d3c2f5d7`. All 19 retained seals,
+including the prior 34194, 1ebc and bc86 witnesses,
 remain separately read-only validated, stopped containers
 with the exact Green label, run ID and immutable image digest. The web-fixture
 rollback seal's Docker `Config.Image` is bound to the exact 1ebc tag-plus-digest
@@ -181,8 +181,8 @@ false. It also hard-pins `MAIL_TRANSPORT=memory`, `PUSH_TRANSPORT=memory`,
 `IDENTITY_VERIFICATION_TRANSPORT=memory`, `SIT_LISTING_AI_PROVIDER=on_device`,
 `SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED=0`, and
 `SIT_LISTING_AI_BUDGET_CENTS=0`. It also requires
-`SIT_STAGING_SYNTHETIC_CATALOG_ENABLED=false`; protected-env,
-candidate/final runtime and rollback readbacks reject a missing, true or
+`SIT_STAGING_SYNTHETIC_CATALOG_ENABLED=true`; protected-env,
+candidate/final runtime and rollback readbacks reject a missing, false or
 otherwise drifted value. The two public fixture selector keys must each exist
 exactly once. Their one-value counts and SHA-256 digests are preserved in
 readback/evidence without exposing either raw selector: listing digest
@@ -210,7 +210,15 @@ restarted; recovery is a forward candidate path.
 
 Only after live/ready `200`, MFA and Identity probes, successful run-scoped
 cleanup and an explicit public readback may the final API be created without a
-host port on both approved Green networks. The sealed old API is never booted
+host port on both approved Green networks. The candidate loopback and final
+public readbacks both call `/v1/listings?sort=newest&limit=100&offset=0` and
+require HTTP success plus exactly one complete strict Item-compatible row with
+the bound server-owned id, title, notice and photo, coarse location,
+`catalogClass=synthetic_noncontractual_catalog_only`, and false
+`realOffer`/`ownerDeclaration`/`bookingAllowed`/`paymentAllowed`; missing,
+extra, forged or partial rows fail closed. The source and final database
+readbacks also require unchanged auth/identity/listing/upload/booking/request/
+payment counts and unchanged ledger/auth/catalog digests. The sealed old API is never booted
 after migration. Evidence is external, mode `0600`, and contains only target,
 runtime/Ops/image, backup and configuration digests plus sanitized readbacks.
 The runner has no generic degraded-baseline exception and refuses to proceed
@@ -219,12 +227,12 @@ when cleanup or target/config preservation is uncertain.
 Preparation is local/read-only until the separately authorized operational
 gate is supplied; the target and config manifests stay outside Git:
 
-The 2026-10-01 VPS readback binds the live 34194 image, schema 98,
-and 18 stopped Green seals, including the retained 1ebc and bc86 witnesses. The protected
+The 2026-10-01 VPS readback binds the live D3 image, schema 98,
+and 19 stopped Green seals, including the retained 34194, 1ebc and bc86 witnesses. The protected
 target manifest must use schemaVersion `4`; schema `3`/provider-off promotion
 is rejected for this current target. Its required `authProfile` has kind
 `google-post-enrollment`, schemaVersion `1`, sourceImageDigest
-`sha256:0403a5f60b94a8aa91d7cbf29ae503aea989d85aeb72fcf4cf6dc14a801670b9`,
+`sha256:31b8b015eb0635b9fbb7d6c5e54ef43fe089d5b953dba8fa446aae2122a5888a`,
 allowedUserIdsDigest
 `94ea2a820e6a48d5776d3b3580e62df956a338a2c3dad2d47dd4b85dfbc746b0`,
 allowedUserIdsCount `6`, and googleUserIdDigest
@@ -232,22 +240,22 @@ allowedUserIdsCount `6`, and googleUserIdDigest
 The exact ordered access list must remain unchanged through candidate, final
 runtime and rollback; Firebase Auth stays enabled and registration stays closed.
 The separate finalized enrollment readback is `1|1|1`; never place raw user or
-provider identities in this contract. These live profile values, the new 34194
-seal name and all 18 retained descriptors produce the normalized target digest
-`7b1e790df0fa4f84c58d40100982c8a085607b2b859b2df09e23e41a569b9775`.
+provider identities in this contract. These live profile values, the new D3
+seal name and all 19 retained descriptors produce the normalized target digest
+`e41efa6d5cbfc932c10c438396865e363c770979bf8376af223eda68a86ddd4c`.
 Do not run the promotion against a stale manifest.
 
-The `34194c42e5e477144b5db5a8eeb6c2d476c7aeef` runtime and immutable API image
+The `d3c2f5d7d7516d3bfaac4b61689c2c433924cc6e` runtime and immutable API image
 digest above are now the exact source baseline. A successor runtime requires its
 own separately verified immutable digest, fresh owner-only target/config manifests
 and inventory. Keep `GREEN_STAGING_OPS_COMMIT` bound to the separately reviewed
-successor Ops commit. This update does not enable the synthetic catalog, provision
+successor Ops commit. This update preserves the enabled synthetic catalog, provision
 another role, publish an image or authorize a live promotion.
 
 Default mode is a read-only preflight, not a promotion. It validates the protected
-manifests/env/runtime files, the exact 34194 predecessor and all 18 retained seals,
+manifests/env/runtime files, the exact D3 predecessor and all 19 retained seals,
 auth/access/topology, the locally present immutable runtime image, schema/ledger
-and enrolled identity. Only the existing 29 Docker read commands before
+and enrolled identity. Only the existing 31 Docker read commands before
 `quiesce_green_api` run, in that exact order; only Docker needs to be available
 for this mode. No pull, curl, stop, rename, backup, evidence, isolated env,
 directory or resource creation occurs, including on failure. Output is only

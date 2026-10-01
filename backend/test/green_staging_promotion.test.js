@@ -25,6 +25,10 @@ import {
   greenWebCorsOrigins,
   greenBroadPromotionEnvironment,
   greenPublicFixtureProfile,
+  greenSyntheticCatalogItemKeys,
+  greenSyntheticCatalogProjection,
+  assertGreenSyntheticCatalogPublicReadback,
+  assertGreenDatabaseStateReadback,
   greenTechnicalSandboxEnvironment,
   greenTechnicalSandboxHealth,
   assertGreenTechnicalSandboxProviderOff,
@@ -210,9 +214,9 @@ function restoreFixture(options, running = true) {
 test('Green target accepts only the exact verified resource identities', () => {
   assert.deepEqual(assertGreenTargetManifest(targetManifest), targetManifest);
   assert.equal(targetManifest.schemaVersion, 4);
-  assert.equal(targetManifest.prePromotionImage, 'ghcr.io/shareittoo/shareittoo-api:34194c42e5e477144b5db5a8eeb6c2d476c7aeef');
-  assert.equal(targetManifest.prePromotionImageDigest, 'sha256:0403a5f60b94a8aa91d7cbf29ae503aea989d85aeb72fcf4cf6dc14a801670b9');
-  assert.equal(targetManifest.sealedApiContainer, 'shareittoo-staging-api-alt-sealed-green-34194c42');
+  assert.equal(targetManifest.prePromotionImage, 'ghcr.io/shareittoo/shareittoo-api:d3c2f5d7d7516d3bfaac4b61689c2c433924cc6e');
+  assert.equal(targetManifest.prePromotionImageDigest, 'sha256:31b8b015eb0635b9fbb7d6c5e54ef43fe089d5b953dba8fa446aae2122a5888a');
+  assert.equal(targetManifest.sealedApiContainer, 'shareittoo-staging-api-alt-sealed-green-d3c2f5d7');
   assert.deepEqual(targetManifest.retainedSealed.map((descriptor) => descriptor.name), [
     'shareittoo-staging-api-alt-sealed-green-bc86f831',
     'shareittoo-staging-api-alt-sealed-green',
@@ -232,6 +236,7 @@ test('Green target accepts only the exact verified resource identities', () => {
     'shareittoo-staging-api-alt-sealed-green-8a90ec61',
     'shareittoo-staging-api-web-fixture-env-rollback-13b02611f3b0',
     'shareittoo-staging-api-alt-sealed-green-1ebc6eaf',
+    'shareittoo-staging-api-alt-sealed-green-34194c42',
   ]);
   const retainedReadbacks = greenTarget.retainedSealed.map((descriptor) => ({
     Name: `/${descriptor.name}`,
@@ -416,7 +421,7 @@ test('protected Green runtime environment binds memory payment, pilot, paths and
     MAIL_TRANSPORT: 'memory', PUSH_TRANSPORT: 'memory', IDENTITY_VERIFICATION_TRANSPORT: 'memory', SIT_LISTING_AI_PROVIDER: 'on_device', SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '0', SIT_LISTING_AI_BUDGET_CENTS: '0',
     ...greenTechnicalSandboxEnvironment,
     ...greenFixtureEnvironment,
-    SIT_STAGING_SYNTHETIC_CATALOG_ENABLED: 'false',
+    SIT_STAGING_SYNTHETIC_CATALOG_ENABLED: 'true',
     SIT_STAGING_PILOT_ID: 'heilbronn_wave0', SIT_STAGING_COMPOSE_PROJECT: 'sit-green', SIT_STAGING_ALLOWED_USER_IDS: 'synthetic_sandbox_user_pilot_20260919',
     SYNTHETIC_SANDBOX_PASSWORD_FILE: syntheticSandboxCredentialFilePath,
   };
@@ -438,7 +443,7 @@ test('protected Green runtime environment binds memory payment, pilot, paths and
   ]) assert.throws(() => assertGreenProtectedEnvironment({ ...values, [name]: value }, config), /green_broad_promotion_provider_off_invalid/u);
   assert.throws(() => assertGreenProtectedEnvironment({ ...values, OPENAI_API_KEY: 'present' }, config));
   assert.throws(() => assertGreenProtectedEnvironment({ ...values, SYNTHETIC_SANDBOX_PASSWORD_FILE: '/run/secrets/synthetic-sandbox-user-password' }, config));
-  for (const value of [undefined, 'true', '1']) {
+  for (const value of [undefined, 'false', '1']) {
     assert.throws(() => assertGreenProtectedEnvironment({ ...values, SIT_STAGING_SYNTHETIC_CATALOG_ENABLED: value }, config), /green_broad_promotion_provider_off_invalid/u);
   }
   for (const name of ['SIT_STAGING_PUBLIC_LISTING_IDS', 'SIT_STAGING_PUBLIC_UPLOAD_NAMES']) {
@@ -484,7 +489,7 @@ test('Green promotion has an explicit provider-off technical Sandbox plan and re
     DEPLOYMENT_ENVIRONMENT: 'test', SIT_STAGING_ACCESS_GATE_ENABLED: 'true', SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'false',
     googleRegistrationAllowlistEmpty: true, ...greenBroadPromotionEnvironment, ...greenTechnicalSandboxEnvironment, ...greenFixtureEnvironment, [name]: value,
   }), /green_broad_promotion_provider_off_invalid/u);
-  for (const value of [undefined, 'true', '1']) assert.throws(() => assertGreenRuntimeEnvironmentReadback({
+  for (const value of [undefined, 'false', '1']) assert.throws(() => assertGreenRuntimeEnvironmentReadback({
     CORS_ORIGINS: greenWebCorsOrigins, DEPLOYMENT_ENVIRONMENT: 'test', SIT_STAGING_ACCESS_GATE_ENABLED: 'true',
     SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'false', googleRegistrationAllowlistEmpty: true,
     ...greenBroadPromotionEnvironment, ...greenTechnicalSandboxEnvironment, ...greenFixtureEnvironment,
@@ -710,7 +715,7 @@ test('default CLI is read-only and execution requires both explicit mode and exa
   }
   const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
   const prefix = greenReadOnlyPreflightCommands(commands, plan);
-  assert.equal(prefix.length, 29);
+  assert.equal(prefix.length, 31);
   assert.deepEqual(greenRequiredControlExecutables(prefix), ['docker']);
   assert.deepEqual(await assertGreenControlExecutables({ commands: prefix, executableAvailable: async (name) => name === 'docker' }), ['docker']);
   for (const change of [
@@ -792,6 +797,8 @@ test('executor preserves required post-enrollment auth through candidate, recove
   const configFile = path.join(root, 'green.env');
   const evidenceFile = path.join(root, 'green-promotion.json');
   const runtimeConfig = { ...config, envFile: configFile };
+  const databaseStateReadback = JSON.stringify({ authCount: 6, refreshCount: 6, loginAuditCount: 6, identityCount: 1, listingCount: 1, uploadCount: 1, bookingCount: 0, requestCount: 0, paymentCommandCount: 0, ledgerDigest: greenTarget.currentLedgerDigest, authDigest: 'a'.repeat(64), catalogDigest: 'b'.repeat(64) });
+  const catalogPublicReadback = JSON.stringify({ status: 200, count: 1, pageCount: 1, rowKeys: greenSyntheticCatalogItemKeys, idDigest: greenSyntheticCatalogProjection.idDigest, ownerIdDigest: greenSyntheticCatalogProjection.ownerIdDigest, titleDigest: greenSyntheticCatalogProjection.titleDigest, noticeDigest: greenSyntheticCatalogProjection.noticeDigest, photoCount: 1, photoDigest: 'c'.repeat(64), expectedPhotoDigest: 'c'.repeat(64), locationText: greenSyntheticCatalogProjection.locationText, city: greenSyntheticCatalogProjection.city, country: greenSyntheticCatalogProjection.country, lat: greenSyntheticCatalogProjection.lat, lng: greenSyntheticCatalogProjection.lng, catalogClass: greenSyntheticCatalogProjection.catalogClass, realOffer: false, ownerDeclaration: false, bookingAllowed: false, paymentAllowed: false, isActive: true, listingStatus: 'active', verificationStatus: 'unverified' });
   const envValues = {
     CORS_ORIGINS: greenWebCorsOrigins,
     NODE_ENV: 'production', DEPLOYMENT_ENVIRONMENT: 'test',
@@ -801,7 +808,7 @@ test('executor preserves required post-enrollment auth through candidate, recove
     SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '0', SIT_STAGING_ACCESS_GATE_ENABLED: 'true',
     SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'false',
     SIT_STAGING_ALLOWED_USER_IDS: 'synthetic_sandbox_user_pilot_20260919', SMTP_HOST: 'localhost',
-    ...greenFixtureEnvironment, SIT_STAGING_SYNTHETIC_CATALOG_ENABLED: 'false',
+    ...greenFixtureEnvironment, SIT_STAGING_SYNTHETIC_CATALOG_ENABLED: 'true',
     SMTP_PORT: '2525', SMTP_USER: 'synthetic', SMTP_PASSWORD: 'synthetic', MAIL_FROM: 'synthetic@example.invalid',
     FIREBASE_PROJECT_ID: 'synthetic', FIREBASE_AUTH_ENABLED: 'false', FIREBASE_PHONE_VERIFICATION_ENABLED: 'false',
     SIT_STAGING_COMPOSE_PROJECT: 'sit-green', SIT_LISTING_AI_BUDGET_CENTS: '0', ENABLE_STAGING_STRIPE: '0',
@@ -949,6 +956,7 @@ test('executor preserves required post-enrollment auth through candidate, recove
       if (phase === 'candidate_prestart_identity_readback') return { stdout: JSON.stringify(candidateRecord) };
       if (phase === 'source_schema_readback') return { stdout: '098_booking_checkout_declaration_constraints.up.sql\n' };
       if (phase === 'source_migration_ledger_readback') return { stdout: sourceMigrationLedger };
+      if (phase === 'source_database_state_readback_before' || phase === 'final_database_state_readback_after') return { stdout: databaseStateReadback };
       if (phase === 'canonical_schema_readback') return { stdout: '098_booking_checkout_declaration_constraints.up.sql\n' };
       if (phase === 'canonical_migration_ledger_readback') return { stdout: currentMigrationLedger };
       if (phase === 'source_foreign_writer_readback_before_backup') return { stdout: foreignBefore };
@@ -961,6 +969,7 @@ test('executor preserves required post-enrollment auth through candidate, recove
       if (phase === 'isolated_migration_ledger_readback') return { stdout: isolatedLedger };
       if (phase === 'isolated_finding_fingerprint_readback') return { stdout: emptyFindingFingerprint };
       if (phase === 'candidate_finding_fingerprint_readback') return { stdout: candidateFinding };
+      if (phase === 'candidate_public_catalog_readback' || phase === 'final_public_catalog_readback') return { stdout: catalogPublicReadback };
       if (phase === 'candidate_cleanup') assert.deepEqual(args, ['rm', '--force', '--volumes', candidateId]);
       if (phase === 'isolated_database_cleanup') assert.deepEqual(args, ['rm', '--force', '--volumes', isolatedDatabaseId]);
       if (phase === 'isolated_network_cleanup') assert.deepEqual(args, ['network', 'rm', isolatedNetworkId]);
@@ -1015,7 +1024,7 @@ test('executor preserves required post-enrollment auth through candidate, recove
     assert.equal(readOnly.result.configDigest, crypto.createHash('sha256').update(beforeEnv).digest('hex'));
     assert.deepEqual(Object.keys(readOnly.result).sort(), ['status', 'targetDigest', 'configDigest', 'inventoryDigest', 'runtimeCommit', 'runtimeImageDigest', 'opsCommit', 'sourceLedgerDigest'].sort());
     assert.deepEqual(readOnly.calls.map((entry) => entry.phase), expectedReversible);
-    assert.equal(readOnly.calls.length, 29);
+    assert.equal(readOnly.calls.length, 31);
     for (const [key, value] of Object.entries(readOnly.result)) if (key !== 'status') assert.match(value, /^(?:sha256:)?[0-9a-f]{40,64}$/u, key);
     assert.deepEqual(readdirSync(root), beforeFiles, 'no evidence, backup, or isolated env created');
     assert.deepEqual(readFileSync(configFile), beforeEnv);
@@ -1309,13 +1318,13 @@ test('final readback binds topology and required post-enrollment cohort', () => 
   }
   assert.equal(assertGreenFinalContainerReadback({ record, plan, expectedId: record.Id, expectedNetworkIds }), true);
   assert.deepEqual(summarizeGreenFinalContainerReadback(record, plan, expectedNetworkIds, record.Id).syntheticCatalog, {
-    enabled: false,
+    enabled: true,
     ...greenPublicFixtureProfile,
   });
   for (const environmentEntries of [
     record.Config.Env.filter((entry) => !entry.startsWith('SIT_STAGING_SYNTHETIC_CATALOG_ENABLED=')),
-    record.Config.Env.map((entry) => entry.startsWith('SIT_STAGING_SYNTHETIC_CATALOG_ENABLED=') ? 'SIT_STAGING_SYNTHETIC_CATALOG_ENABLED=true' : entry),
-    [...record.Config.Env, 'SIT_STAGING_SYNTHETIC_CATALOG_ENABLED=false'],
+    record.Config.Env.map((entry) => entry.startsWith('SIT_STAGING_SYNTHETIC_CATALOG_ENABLED=') ? 'SIT_STAGING_SYNTHETIC_CATALOG_ENABLED=false' : entry),
+    [...record.Config.Env, 'SIT_STAGING_SYNTHETIC_CATALOG_ENABLED=true'],
     record.Config.Env.filter((entry) => !entry.startsWith('SIT_STAGING_PUBLIC_LISTING_IDS=')),
     record.Config.Env.map((entry) => entry.startsWith('SIT_STAGING_PUBLIC_UPLOAD_NAMES=') ? 'SIT_STAGING_PUBLIC_UPLOAD_NAMES=drift' : entry),
   ]) {
@@ -1345,20 +1354,20 @@ test('final readback binds topology and required post-enrollment cohort', () => 
   assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Mounts: record.Mounts.map((mount) => mount.Destination === '/run/secrets/mfa-encryption-key' ? { ...mount, Type: 'volume', Name: 'foreign-secret-volume', Source: undefined } : mount) }, plan, expectedNetworkIds }), /green_final_mount_inventory_mismatch/u);
 });
 
-test('live 34194 baseline manifest binds all eighteen seals and the exact approved digests without raw IDs', () => {
+test('live D3 baseline manifest binds all nineteen seals and the exact approved digests without raw IDs', () => {
   const manifest = {
     ...targetManifest,
     authProfile: {
       kind: 'google-post-enrollment', schemaVersion: 1,
-      sourceImageDigest: 'sha256:0403a5f60b94a8aa91d7cbf29ae503aea989d85aeb72fcf4cf6dc14a801670b9',
+      sourceImageDigest: 'sha256:31b8b015eb0635b9fbb7d6c5e54ef43fe089d5b953dba8fa446aae2122a5888a',
       allowedUserIdsDigest: '94ea2a820e6a48d5776d3b3580e62df956a338a2c3dad2d47dd4b85dfbc746b0',
       allowedUserIdsCount: 6,
       googleUserIdDigest: '8009329bd0eec86d923640e8d878ae2bf9117948a64d0f82f9460b03fef44a16',
     },
   };
   manifest.targetDigest = normalizedGreenTargetDigest(manifest);
-  assert.equal(manifest.targetDigest, '7b1e790df0fa4f84c58d40100982c8a085607b2b859b2df09e23e41a569b9775');
-  assert.equal(assertGreenTargetManifest(manifest).retainedSealed.length, 18);
+  assert.equal(manifest.targetDigest, 'e41efa6d5cbfc932c10c438396865e363c770979bf8376af223eda68a86ddd4c');
+  assert.equal(assertGreenTargetManifest(manifest).retainedSealed.length, 19);
   const readme = readFileSync(new URL('../ops/README.md', import.meta.url), 'utf8');
   for (const value of [manifest.targetDigest, manifest.authProfile.sourceImageDigest,
     manifest.authProfile.allowedUserIdsDigest, manifest.authProfile.googleUserIdDigest]) assert.ok(readme.includes(value));
@@ -1408,12 +1417,12 @@ test('web-fixture successor rejects stale predecessor, omitted seals and changed
   assert.throws(() => assertGreenTargetManifest(previousLiveBaseline), /green_target_identity_mismatch/u);
 });
 
-test('current runtime 341 remains separate from the successor Ops commit', () => {
-  const runtime = '34194c42e5e477144b5db5a8eeb6c2d476c7aeef';
+test('current runtime D3 remains separate from the successor Ops commit', () => {
+  const runtime = 'd3c2f5d7d7516d3bfaac4b61689c2c433924cc6e';
   const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit: runtime,
-    runtimeImageDigest: 'sha256:0403a5f60b94a8aa91d7cbf29ae503aea989d85aeb72fcf4cf6dc14a801670b9', opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+    runtimeImageDigest: 'sha256:31b8b015eb0635b9fbb7d6c5e54ef43fe089d5b953dba8fa446aae2122a5888a', opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   assert.equal(plan.runtime.runtimeCommit, runtime);
-  assert.equal(plan.runtime.digest, 'sha256:0403a5f60b94a8aa91d7cbf29ae503aea989d85aeb72fcf4cf6dc14a801670b9');
+  assert.equal(plan.runtime.digest, 'sha256:31b8b015eb0635b9fbb7d6c5e54ef43fe089d5b953dba8fa446aae2122a5888a');
   assert.equal(plan.opsCommit, opsCommit);
   assert.notEqual(plan.opsCommit, plan.runtime.runtimeCommit);
   const readme = readFileSync(new URL('../ops/README.md', import.meta.url), 'utf8');
@@ -1438,7 +1447,7 @@ test('post-enrollment rollback refuses auth or allowed-ID drift before rename/st
   const plan = buildGreenPromotionPlan({ targetManifest: enrolledTargetManifest(), config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const original = renamedSealedApiIdentityRecord;
   const identity = { ...originalApiIdentity, config: JSON.stringify(stableIdentityValue(original.Config)) };
-  const driftedEnvironments = ['FIREBASE_AUTH_ENABLED=false', `SIT_STAGING_ALLOWED_USER_IDS=${enrolledAllowedIds},extra`, 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=true', 'SIT_STAGING_SYNTHETIC_CATALOG_ENABLED=true'].map((replacement) => {
+  const driftedEnvironments = ['FIREBASE_AUTH_ENABLED=false', `SIT_STAGING_ALLOWED_USER_IDS=${enrolledAllowedIds},extra`, 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=true'].map((replacement) => {
     const key = replacement.split('=')[0];
     return original.Config.Env.map((entry) => entry.startsWith(`${key}=`) ? replacement : entry);
   });
@@ -2063,6 +2072,60 @@ test('forward recovery fails closed before candidate continuation on migration r
   }
 });
 
+test('synthetic catalog public readback requires one complete exact Item-compatible row', () => {
+  const valid = {
+    status: 200,
+    count: 1,
+    pageCount: 1,
+    rowKeys: greenSyntheticCatalogItemKeys,
+    idDigest: greenSyntheticCatalogProjection.idDigest,
+    ownerIdDigest: greenSyntheticCatalogProjection.ownerIdDigest,
+    titleDigest: greenSyntheticCatalogProjection.titleDigest,
+    noticeDigest: greenSyntheticCatalogProjection.noticeDigest,
+    photoCount: 1,
+    photoDigest: 'c'.repeat(64),
+    locationText: greenSyntheticCatalogProjection.locationText,
+    city: greenSyntheticCatalogProjection.city,
+    country: greenSyntheticCatalogProjection.country,
+    lat: greenSyntheticCatalogProjection.lat,
+    lng: greenSyntheticCatalogProjection.lng,
+    catalogClass: greenSyntheticCatalogProjection.catalogClass,
+    realOffer: false,
+    ownerDeclaration: false,
+    bookingAllowed: false,
+    paymentAllowed: false,
+    isActive: true,
+    listingStatus: 'active',
+    verificationStatus: 'unverified',
+  };
+  assert.equal(assertGreenSyntheticCatalogPublicReadback(valid, valid.photoDigest), true);
+  for (const invalid of [
+    { ...valid, count: 2 },
+    { ...valid, rowKeys: valid.rowKeys.slice(0, -1) },
+    { ...valid, idDigest: 'f'.repeat(64) },
+    { ...valid, titleDigest: undefined },
+    { ...valid, photoCount: 0, photoDigest: null },
+    { ...valid, catalogClass: 'ordinary_catalog' },
+    { ...valid, bookingAllowed: true },
+  ]) assert.throws(() => assertGreenSyntheticCatalogPublicReadback(invalid, valid.photoDigest), /green_synthetic_catalog_public_readback_invalid/u);
+});
+
+test('database state readback requires exact before/after counts and digests', () => {
+  const state = {
+    authCount: 6, refreshCount: 6, loginAuditCount: 6, identityCount: 1,
+    listingCount: 1, uploadCount: 1, bookingCount: 0, requestCount: 0,
+    paymentCommandCount: 0, ledgerDigest: 'a'.repeat(64), authDigest: 'b'.repeat(64),
+    catalogDigest: 'c'.repeat(64),
+  };
+  assert.deepEqual(assertGreenDatabaseStateReadback(JSON.stringify(state)), state);
+  for (const drift of [
+    { ...state, listingCount: 2 },
+    { ...state, ledgerDigest: 'd'.repeat(64) },
+    { ...state, paymentCommandCount: 1 },
+  ]) assert.throws(() => assertGreenDatabaseStateReadback(JSON.stringify(drift), state), /green_database_state_changed/u);
+  assert.throws(() => assertGreenDatabaseStateReadback(JSON.stringify({ ...state, extra: true })), /green_database_state_readback_invalid/u);
+});
+
 test('sanitized evidence accepts approved secret mount paths but rejects secret-bearing fields', () => {
   const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   assert.doesNotThrow(() => sanitizeGreenEvidence({ plan, backupDigest: 'f'.repeat(64), configDigest: '1'.repeat(64), targetReadback: { finalInventory: { mountDestinations: [{ destination: '/run/secrets/mfa-encryption-key', readOnly: true }] } }, imageReadback: { commit: runtimeCommit } }));
@@ -2074,7 +2137,7 @@ test('sanitized evidence and cleanup never turn Green promotion into legacy/prod
   const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const evidence = sanitizeGreenEvidence({ plan, backupDigest: 'f'.repeat(64), configDigest: '1'.repeat(64), targetReadback: { schema: 98 }, imageReadback: { live: 200, ready: 200 } });
   assert.equal(evidence.redaction, 'sensitive values omitted');
-  assert.deepEqual(evidence.safety.syntheticCatalog, { enabled: false, ...greenPublicFixtureProfile });
+  assert.deepEqual(evidence.safety.syntheticCatalog, { enabled: true, ...greenPublicFixtureProfile });
   assert.deepEqual({ mail: evidence.safety.mailTransport, push: evidence.safety.pushTransport, identity: evidence.safety.identityTransport, listingProvider: evidence.safety.listingAiProvider, listingExternal: evidence.safety.listingAiExternalExecutionApproved, listingBudgetCents: evidence.safety.listingAiBudgetCents }, { mail: 'memory', push: 'memory', identity: 'memory', listingProvider: 'on_device', listingExternal: false, listingBudgetCents: 0 });
   assert.doesNotMatch(JSON.stringify(evidence), /DATABASE_URL|JWT_SECRET|password|token|whsec_|sk_live_|sk_test_/iu);
   assert.equal(assertGreenCleanup({ removed: ['sit-green-rehearsal-network-x'], verifiedAbsent: ['sit-green-rehearsal-network-x'], oldApiSealed: true, oldApiRunning: false }), true);

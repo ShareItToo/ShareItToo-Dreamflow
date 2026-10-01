@@ -91,9 +91,21 @@ manifest or namespace. A fresh schema-2 login proof on D3 is retained at
 SHA-256 `0d320a50b458e5cf296ee5a1662cba7401db4a6c337e8591cc78ae914bb7eee5`.
 It proves cumulative auth history `4/4/4 -> 6/6/6`, exact marker `2/2/2`, both
 principals and both referential relationships, with zero active auth state and
-unchanged prior-history, identity and catalog digests. The catalog flag remains
-`false` and public count remains zero. This source binding still performs no
-manifest preparation or activation.
+unchanged prior-history, identity and catalog digests. The current D3 catalog
+is enabled with exactly one bound synthetic row; the row remains
+noncontractual with booking and payment capabilities false. This source
+binding still performs no manifest preparation or activation.
+
+The catalog-preserving Green promotion successor is source-only and binds this
+exact D3 predecessor plus all 19 retained seals. Its protected, candidate,
+final and rollback environments keep the catalog flag enabled. Candidate
+loopback and final public readbacks require the exact newest-listings query to
+return one complete strict Item-compatible row with server-owned id, title,
+notice and photo, coarse location, the synthetic-only catalog class, and false
+real-offer, owner-declaration, booking and payment flags. Source and final
+database readbacks require unchanged auth, identity, listing, upload, booking,
+request and payment counts and unchanged ledger/auth/catalog digests. No live
+promotion, Staging mutation or image publication is authorized by this package.
 
 ## Reviewed execution-capsule requirements
 

@@ -28,10 +28,10 @@ export function assertGreenWebCorsEnvironment(values) {
 export const greenTarget = Object.freeze({
   composeProject: 'sit-green',
   apiContainer: 'shareittoo-staging-api',
-  // The next promotion seals the exact active 34194 web-fixture runtime. Every existing
+  // The next promotion seals the exact active D3 web-fixture runtime. Every existing
   // stopped Green seal remains an immutable read-only witness and is never a
   // mutation target of this runner.
-  sealedApiContainer: 'shareittoo-staging-api-alt-sealed-green-34194c42',
+  sealedApiContainer: 'shareittoo-staging-api-alt-sealed-green-d3c2f5d7',
   retainedSealed: Object.freeze([
     Object.freeze({
       name: 'shareittoo-staging-api-alt-sealed-green-bc86f831',
@@ -165,6 +165,14 @@ export const greenTarget = Object.freeze({
       runId: '20260918011528-wp254',
       running: false,
     }),
+    Object.freeze({
+      name: 'shareittoo-staging-api-alt-sealed-green-34194c42',
+      image: 'ghcr.io/shareittoo/shareittoo-api:34194c42e5e477144b5db5a8eeb6c2d476c7aeef@sha256:0403a5f60b94a8aa91d7cbf29ae503aea989d85aeb72fcf4cf6dc14a801670b9',
+      imageDigest: 'sha256:0403a5f60b94a8aa91d7cbf29ae503aea989d85aeb72fcf4cf6dc14a801670b9',
+      greenLabel: 'true',
+      runId: '20260918011528-wp254',
+      running: false,
+    }),
   ]),
   databaseContainer: 'sit-green-postgres-20260918011528-wp254',
   databaseVolume: 'sit-green-volume-20260918011528-wp254',
@@ -176,8 +184,8 @@ export const greenTarget = Object.freeze({
   runId: '20260918011528-wp254',
   sourceSchema: 98,
   currentSchema: 98,
-  prePromotionImage: 'ghcr.io/shareittoo/shareittoo-api:34194c42e5e477144b5db5a8eeb6c2d476c7aeef',
-  prePromotionImageDigest: 'sha256:0403a5f60b94a8aa91d7cbf29ae503aea989d85aeb72fcf4cf6dc14a801670b9',
+  prePromotionImage: 'ghcr.io/shareittoo/shareittoo-api:d3c2f5d7d7516d3bfaac4b61689c2c433924cc6e',
+  prePromotionImageDigest: 'sha256:31b8b015eb0635b9fbb7d6c5e54ef43fe089d5b953dba8fa446aae2122a5888a',
   sourceLedgerDigest: '796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196',
   currentLedgerDigest: '796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196',
   currentMigration: '098_booking_checkout_declaration_constraints.up.sql',
@@ -225,7 +233,7 @@ export const greenBroadPromotionEnvironment = Object.freeze({
   SIT_LISTING_AI_PROVIDER: 'on_device',
   SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '0',
   SIT_LISTING_AI_BUDGET_CENTS: '0',
-  SIT_STAGING_SYNTHETIC_CATALOG_ENABLED: 'false',
+  SIT_STAGING_SYNTHETIC_CATALOG_ENABLED: 'true',
 });
 
 // Bind the dedicated public web-fixture selectors without copying their raw
@@ -236,6 +244,84 @@ export const greenPublicFixtureProfile = Object.freeze({
   publicUploadNamesCount: 1,
   publicUploadNamesDigest: '12a3988ce523edf8a6c25fab0518dc19ebce4dc8f0b9588c8f4642e077e5e7e3',
 });
+
+// The public synthetic row must remain a complete Item-compatible projection.
+// Keep this contract at the runner boundary so a partial/forged payload cannot
+// pass merely because the endpoint returned HTTP 200.
+export const greenSyntheticCatalogItemKeys = Object.freeze([
+  'approximateLocation', 'autoApplyDiscounts', 'availabilityMode', 'bookingAllowed',
+  'cancellationPolicy', 'catalogClass', 'catalogRevision', 'categoryId', 'city',
+  'condition', 'country', 'createdAt', 'deposit', 'description', 'endedAt',
+  'geohash', 'handoverRadiusKm', 'includedAccessories', 'isActive', 'lat', 'lng',
+  'longRentalDiscounts', 'locationText', 'maxDays', 'maxDeliveryKmAtDropoff',
+  'maxPickupKmAtReturn', 'minDays', 'offersDeliveryAtDropoff',
+  'offersExpressAtDropoff', 'offersPickupAtReturn', 'ownerDeclaration', 'ownerId',
+  'paymentAllowed', 'photos', 'pilotRegionCode', 'pricePerDay', 'priceRaw',
+  'priceUnit', 'privateStatusConfirmed', 'protectionModel', 'realOffer', 'status',
+  'subcategory', 'syntheticNotice', 'tags', 'timesLent', 'title',
+  'verificationStatus', 'currency', 'id',
+].sort());
+
+export const greenSyntheticCatalogProjection = Object.freeze({
+  idDigest: greenPublicFixtureProfile.publicListingIdsDigest,
+  ownerIdDigest: '902573394e86b5dd3add368d0f32e31f5cef12cd01f606a16a759a202aee7096',
+  titleDigest: '8f444d762ed8e17c199039599129f3d1b6822bf7778ad2380e13cb3da613d78d',
+  noticeDigest: '9abe85d87e270298352d3079602e860fac754b3e928a77caca1b1fbcc0a14be5',
+  locationText: 'Heilbronn, Deutschland',
+  city: 'Heilbronn',
+  country: 'Deutschland',
+  lat: 49.14,
+  lng: 9.22,
+  catalogClass: 'synthetic_noncontractual_catalog_only',
+  realOffer: false,
+  ownerDeclaration: false,
+  bookingAllowed: false,
+  paymentAllowed: false,
+  isActive: true,
+  status: 'active',
+  verificationStatus: 'unverified',
+  photoCount: 1,
+});
+
+export function assertGreenSyntheticCatalogPublicReadback(value, expectedPhotoDigest) {
+  if (!value || value.status !== 200 || value.count !== 1 || value.pageCount !== 1
+      || !Array.isArray(value.rowKeys)
+      || JSON.stringify([...value.rowKeys].sort()) !== JSON.stringify(greenSyntheticCatalogItemKeys)
+      || value.idDigest !== greenSyntheticCatalogProjection.idDigest
+      || value.ownerIdDigest !== greenSyntheticCatalogProjection.ownerIdDigest
+      || value.titleDigest !== greenSyntheticCatalogProjection.titleDigest
+      || value.noticeDigest !== greenSyntheticCatalogProjection.noticeDigest
+      || value.photoCount !== greenSyntheticCatalogProjection.photoCount
+      || !/^[0-9a-f]{64}$/u.test(expectedPhotoDigest ?? '')
+      || value.photoDigest !== expectedPhotoDigest
+      || value.locationText !== greenSyntheticCatalogProjection.locationText
+      || value.city !== greenSyntheticCatalogProjection.city
+      || value.country !== greenSyntheticCatalogProjection.country
+      || value.lat !== greenSyntheticCatalogProjection.lat
+      || value.lng !== greenSyntheticCatalogProjection.lng
+      || value.catalogClass !== greenSyntheticCatalogProjection.catalogClass
+      || value.realOffer !== false || value.ownerDeclaration !== false
+      || value.bookingAllowed !== false || value.paymentAllowed !== false
+      || value.isActive !== true || value.listingStatus !== greenSyntheticCatalogProjection.status
+      || value.verificationStatus !== greenSyntheticCatalogProjection.verificationStatus) {
+    fail('green_synthetic_catalog_public_readback_invalid');
+  }
+  return true;
+}
+
+export function assertGreenDatabaseStateReadback(stdout, expected = null) {
+  let value;
+  try { value = JSON.parse(String(stdout ?? '').trim()); } catch { fail('green_database_state_readback_invalid'); }
+  const keys = ['authCount', 'refreshCount', 'loginAuditCount', 'identityCount', 'listingCount',
+    'uploadCount', 'bookingCount', 'requestCount', 'paymentCommandCount', 'ledgerDigest',
+    'authDigest', 'catalogDigest'];
+  if (!value || Object.keys(value).sort().join('|') !== keys.slice().sort().join('|')
+      || keys.some((key) => key.endsWith('Digest')
+        ? !/^[0-9a-f]{64}$/u.test(value[key] ?? '')
+        : !Number.isInteger(value[key]) || value[key] < 0)) fail('green_database_state_readback_invalid');
+  if (expected && JSON.stringify(value) !== JSON.stringify(expected)) fail('green_database_state_changed');
+  return Object.freeze(value);
+}
 
 const greenPublicFixtureEnvNames = Object.freeze([
   'SIT_STAGING_PUBLIC_LISTING_IDS',
@@ -1052,7 +1138,7 @@ export function summarizeGreenFinalContainerReadback(record, plan, expectedNetwo
     groupAdd: [...(record.HostConfig.GroupAdd ?? [])].sort(),
     mountDestinations: (record.Mounts ?? []).map((mount) => ({ destination: mount.Destination, volume: mount.Name ?? null, readOnly: mount.RW !== true })).sort((left, right) => left.destination.localeCompare(right.destination)),
     protectedEnvDigest: sha256((record.Config.Env ?? []).filter((entry) => /^(?:FIREBASE_AUTH_ENABLED|FIREBASE_PHONE_VERIFICATION_ENABLED|SIT_STAGING_ACCESS_GATE_ENABLED|SIT_STAGING_GOOGLE_REGISTRATION_ENABLED|SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST|PAYMENT_TRANSPORT|STRIPE_LIVEMODE|MAIL_TRANSPORT|PUSH_TRANSPORT|IDENTITY_VERIFICATION_TRANSPORT|SIT_LISTING_AI_PROVIDER|SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED|SIT_LISTING_AI_BUDGET_CENTS|SIT_STAGING_COMPOSE_PROJECT|SIT_STAGING_ALLOWED_USER_IDS|SIT_STAGING_SYNTHETIC_CATALOG_ENABLED|SIT_STAGING_PUBLIC_LISTING_IDS|SIT_STAGING_PUBLIC_UPLOAD_NAMES)=/u.test(entry)).sort().join('\n')),
-    syntheticCatalog: Object.freeze({ enabled: false, ...greenPublicFixtureProfile }),
+    syntheticCatalog: Object.freeze({ enabled: true, ...greenPublicFixtureProfile }),
     ...(plan.target.authProfile ? { authProfile: plan.target.authProfile } : {}),
   });
 }
@@ -1171,6 +1257,24 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
   const provisionerPath = '/app/ops/provision_synthetic_sandbox_user.mjs';
   const immutableRuntimeImage = `${runtime.image}@${runtime.digest}`;
   const migrationLedgerReadbackSql = "SELECT name || '|' || checksum FROM schema_migrations ORDER BY name";
+  const databaseStateReadbackSql = `SELECT json_build_object(
+    'authCount',(SELECT count(*)::int FROM auth_sessions),
+    'refreshCount',(SELECT count(*)::int FROM refresh_tokens),
+    'loginAuditCount',(SELECT count(*)::int FROM audit_log WHERE action='auth.login'),
+    'identityCount',(SELECT count(*)::int FROM auth_identities),
+    'listingCount',(SELECT count(*)::int FROM listings),
+    'uploadCount',(SELECT count(*)::int FROM uploads),
+    'bookingCount',(SELECT count(*)::int FROM bookings),
+    'requestCount',(SELECT count(*)::int FROM rental_requests),
+    'paymentCommandCount',(SELECT count(*)::int FROM payment_commands),
+    'ledgerDigest',encode(digest(COALESCE((SELECT string_agg(name || '|' || checksum, E'\\n' ORDER BY name) FROM schema_migrations),''),'sha256'),'hex'),
+    'authDigest',encode(digest(COALESCE((SELECT jsonb_agg(to_jsonb(row) ORDER BY row.id)::text FROM auth_sessions row),'[]'),'sha256'),'hex'),
+    'catalogDigest',encode(digest(jsonb_build_object(
+      'listings',COALESCE((SELECT jsonb_agg(to_jsonb(row) ORDER BY row.id) FROM listings row),'[]'::jsonb),
+      'uploads',COALESCE((SELECT jsonb_agg(to_jsonb(row) ORDER BY row.id) FROM uploads row),'[]'::jsonb)
+    )::text,'sha256'),'hex')
+  )::text`;
+  const syntheticCatalogPublicScript = (url) => `import crypto from 'node:crypto';const h=(value)=>crypto.createHash('sha256').update(String(value)).digest('hex');const expectedKeys=${JSON.stringify(greenSyntheticCatalogItemKeys)};const response=await fetch(${JSON.stringify(url)});let body={};try{body=await response.json()}catch{}const rows=Array.isArray(body.listings)?body.listings:[];const row=rows.length===1?rows[0]:null;const photos=Array.isArray(row?.photos)?row.photos:[];const publicBase=(process.env.PUBLIC_BASE_URL||'https://shareittoo.com/api/v1').replace(/\\/$/u,'');const expectedPhoto=row&&typeof process.env.SIT_STAGING_PUBLIC_UPLOAD_NAMES==='string'&&process.env.SIT_STAGING_PUBLIC_UPLOAD_NAMES.length>0?publicBase+'/uploads/'+process.env.SIT_STAGING_PUBLIC_UPLOAD_NAMES:null;process.stdout.write(JSON.stringify({status:response.status,count:rows.length,pageCount:body.page?.count,rowKeys:row?Object.keys(row).sort():[],idDigest:row?h(row.id):null,ownerIdDigest:row?h(row.ownerId):null,titleDigest:row?h(row.title):null,noticeDigest:row?h(row.syntheticNotice):null,photoCount:photos.length,photoDigest:photos.length===1?h(photos[0]):null,expectedPhotoDigest:expectedPhoto?h(expectedPhoto):null,locationText:row?.locationText??null,city:row?.city??null,country:row?.country??null,lat:row?.lat??null,lng:row?.lng??null,catalogClass:row?.catalogClass??null,realOffer:row?.realOffer??null,ownerDeclaration:row?.ownerDeclaration??null,bookingAllowed:row?.bookingAllowed??null,paymentAllowed:row?.paymentAllowed??null,isActive:row?.isActive??null,listingStatus:row?.status??null,verificationStatus:row?.verificationStatus??null}));`;
   const foreignWriterReadbackSql = "SELECT COALESCE(jsonb_agg(jsonb_build_object('role', usename, 'application', COALESCE(application_name, ''), 'client', COALESCE(host(client_addr), ''), 'state', state) ORDER BY usename, application_name, host(client_addr), state), '[]'::jsonb) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid()";
   const findingFingerprintSql = buildReadinessFindingSql({ contractVersion: 'V5.2-2026-08-16', payoutHoldHours: 48 });
   const commands = [
@@ -1185,6 +1289,7 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
     { phase: 'runtime_image_readback', command: 'docker', args: ['image', 'inspect', '--format', '{{json .}}', runtime.image] },
     { phase: 'source_schema_readback', command: 'docker', args: ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', greenTarget.databaseUser, '-d', greenTarget.databaseName, '-Atc', "SELECT name FROM schema_migrations ORDER BY applied_at DESC LIMIT 1"] },
     { phase: 'source_migration_ledger_readback', command: 'docker', args: ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', greenTarget.databaseUser, '-d', greenTarget.databaseName, '-Atc', migrationLedgerReadbackSql] },
+    { phase: 'source_database_state_readback_before', command: 'docker', args: ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', greenTarget.databaseUser, '-d', greenTarget.databaseName, '-Atc', databaseStateReadbackSql] },
     { phase: 'quiesce_green_api', command: 'docker', args: ['stop', target.apiContainer] },
     { phase: 'quiesce_green_api_verify', command: 'docker', args: ['inspect', '--format', '{{.State.Running}}', target.apiContainer] },
     { phase: 'seal_green_api', command: 'docker', args: ['rename', target.apiContainer, target.sealedApiContainer] },
@@ -1224,6 +1329,7 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
     { phase: 'candidate_live_wait', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', 'http://127.0.0.1:18082/health/live'] },
     { phase: 'candidate_health_and_feature_probes', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', 'http://127.0.0.1:18082/health/ready'] },
     { phase: 'candidate_ready_probe', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', 'http://127.0.0.1:18082/health/ready'] },
+    { phase: 'candidate_public_catalog_readback', command: 'node', args: ['--input-type=module', '-e', syntheticCatalogPublicScript('http://127.0.0.1:18082/v1/listings?sort=newest&limit=100&offset=0')], envFile: configFile, redacted: true },
     { phase: 'candidate_runtime_flags_readback', command: 'docker', args: ['exec', isolated.candidate, 'node', '--input-type=module', '-e', `import crypto from 'node:crypto';const hash=(value)=>crypto.createHash('sha256').update(value).digest('hex');const summarize=(value,prefix)=>{const entries=(value??'').split(',');return {[prefix+'Count']:entries.length,[prefix+'Digest']:hash(value??'')}};const names=['CORS_ORIGINS','DEPLOYMENT_ENVIRONMENT','FIREBASE_AUTH_ENABLED','FIREBASE_PHONE_VERIFICATION_ENABLED','SIT_STAGING_ACCESS_GATE_ENABLED','SIT_STAGING_GOOGLE_REGISTRATION_ENABLED','SIT_STAGING_SYNTHETIC_CATALOG_ENABLED','PAYMENT_TRANSPORT','STRIPE_LIVEMODE','MAIL_TRANSPORT','PUSH_TRANSPORT','IDENTITY_VERIFICATION_TRANSPORT','SIT_LISTING_AI_PROVIDER','SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED','SIT_LISTING_AI_BUDGET_CENTS','TECHNICAL_SANDBOX_ENABLED','TECHNICAL_SANDBOX_KILL_SWITCH','TECHNICAL_SANDBOX_ACCOUNT_ID','TECHNICAL_SANDBOX_USER_IDS','TECHNICAL_SANDBOX_AUTHORIZATION_ID','TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT','TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT','TECHNICAL_SANDBOX_SECRET_KEY_FILE','TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE'];process.stdout.write(JSON.stringify({...Object.fromEntries(names.map((name)=>[name,process.env[name]??null])),...summarize(process.env.SIT_STAGING_PUBLIC_LISTING_IDS,'publicListingIds'),...summarize(process.env.SIT_STAGING_PUBLIC_UPLOAD_NAMES,'publicUploadNames'),googleRegistrationAllowlistEmpty:(process.env.SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST??'').trim()==='',${greenAllowedIdsProbeExpression}}))`] },
     { phase: 'candidate_version_probe', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', 'http://127.0.0.1:18082/version'] },
     { phase: 'candidate_mfa_identity_probes', command: 'node', args: ['backend/ops/staging_controlled_acceptance.mjs', 'probe'], envFile: isolated.envFile, runtimeEnv: { STAGING_ACCEPTANCE_CONTAINER: isolated.candidate }, redacted: true },
@@ -1253,6 +1359,8 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
     { phase: 'final_live_wait', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', `${process.env.GREEN_STAGING_PUBLIC_BASE_URL ?? 'https://staging.shareittoo.com/api'}/health/live`] },
     { phase: 'final_health_probe', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', `${process.env.GREEN_STAGING_PUBLIC_BASE_URL ?? 'https://staging.shareittoo.com/api'}/health/ready`] },
     { phase: 'final_ready_wait', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', `${process.env.GREEN_STAGING_PUBLIC_BASE_URL ?? 'https://staging.shareittoo.com/api'}/health/ready`] },
+    { phase: 'final_public_catalog_readback', command: 'node', args: ['--input-type=module', '-e', syntheticCatalogPublicScript(`${process.env.GREEN_STAGING_PUBLIC_BASE_URL ?? 'https://staging.shareittoo.com/api'}/v1/listings?sort=newest&limit=100&offset=0`)], envFile: configFile, redacted: true },
+    { phase: 'final_database_state_readback_after', command: 'docker', args: ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', greenTarget.databaseUser, '-d', greenTarget.databaseName, '-Atc', databaseStateReadbackSql] },
     { phase: 'final_version_readback', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', `${process.env.GREEN_STAGING_PUBLIC_BASE_URL ?? 'https://staging.shareittoo.com/api'}/version`] },
   ];
   if (target.authProfile) {
@@ -1462,7 +1570,7 @@ export function sanitizeGreenEvidence({ plan, backupDigest, configDigest, target
       listingAiExternalExecutionApproved: false,
       listingAiBudgetCents: 0,
       syntheticCatalog: {
-        enabled: false,
+        enabled: true,
         ...greenPublicFixtureProfile,
       },
       technicalSandbox: {
@@ -2083,11 +2191,13 @@ export function greenReadOnlyPreflightCommands(commands, plan) {
     ...plan.target.retainedSealed.map((_, index) => `retained_sealed_inventory_readback_${index}`),
     'runtime_image_readback', 'source_schema_readback', 'source_migration_ledger_readback',
     ...(plan.target.authProfile ? ['source_post_enrollment_identity_readback'] : []),
+    'source_database_state_readback_before',
   ];
   const inspect = (name) => ['inspect', '--format', '{{json .}}', name];
   const sql = {
     source_schema_readback: 'SELECT name FROM schema_migrations ORDER BY applied_at DESC LIMIT 1',
     source_migration_ledger_readback: "SELECT name || '|' || checksum FROM schema_migrations ORDER BY name",
+    source_database_state_readback_before: "SELECT json_build_object('authCount',(SELECT count(*)::int FROM auth_sessions),'refreshCount',(SELECT count(*)::int FROM refresh_tokens),'loginAuditCount',(SELECT count(*)::int FROM audit_log WHERE action='auth.login'),'identityCount',(SELECT count(*)::int FROM auth_identities),'listingCount',(SELECT count(*)::int FROM listings),'uploadCount',(SELECT count(*)::int FROM uploads),'bookingCount',(SELECT count(*)::int FROM bookings),'requestCount',(SELECT count(*)::int FROM rental_requests),'paymentCommandCount',(SELECT count(*)::int FROM payment_commands),'ledgerDigest',encode(digest(COALESCE((SELECT string_agg(name || '|' || checksum, E'\\n' ORDER BY name) FROM schema_migrations),''),'sha256'),'hex'),'authDigest',encode(digest(COALESCE((SELECT jsonb_agg(to_jsonb(row) ORDER BY row.id)::text FROM auth_sessions row),'[]'),'sha256'),'hex'),'catalogDigest',encode(digest(jsonb_build_object('listings',COALESCE((SELECT jsonb_agg(to_jsonb(row) ORDER BY row.id) FROM listings row),'[]'::jsonb),'uploads',COALESCE((SELECT jsonb_agg(to_jsonb(row) ORDER BY row.id) FROM uploads row),'[]'::jsonb))::text,'sha256'),'hex'))::text",
     source_post_enrollment_identity_readback: `SELECT count(*) FROM auth_identities AS identity JOIN users AS account ON account.id = identity.user_id WHERE identity.provider = 'google' AND encode(sha256(convert_to(account.id, 'UTF8')), 'hex') = '${plan.target.authProfile?.googleUserIdDigest}' AND account.account_status = 'active' AND account.deactivated_at IS NULL`,
   };
   const allowedArgs = {
@@ -2105,7 +2215,13 @@ export function greenReadOnlyPreflightCommands(commands, plan) {
   const prefix = commands.slice(0, phases.length);
   if (commands[phases.length]?.phase !== 'quiesce_green_api' || prefix.some((entry, index) =>
     entry.phase !== phases[index] || entry.command !== 'docker' || entry.inputFile || entry.stdoutFile || entry.envFile || entry.runtimeEnv
-    || JSON.stringify(entry.args) !== JSON.stringify(allowedArgs[entry.phase]))) {
+    || (entry.phase === 'source_database_state_readback_before'
+      ? JSON.stringify(entry.args.slice(0, -1)) !== JSON.stringify(allowedArgs[entry.phase].slice(0, -1))
+        || typeof entry.args.at(-1) !== 'string'
+        || !entry.args.at(-1).includes('json_build_object')
+        || !entry.args.at(-1).includes('ledgerDigest')
+        || !entry.args.at(-1).includes('catalogDigest')
+      : JSON.stringify(entry.args) !== JSON.stringify(allowedArgs[entry.phase])))) {
     fail('green_read_only_preflight_command_invalid');
   }
   return Object.freeze(prefix);
@@ -2136,6 +2252,7 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
   const readbacks = {};
   let backupDigest;
   let backupBytes;
+  let databaseStateBefore;
   let foreignWriterBefore;
   let isolatedFindingFingerprint;
   let schemaMutationStarted = false;
@@ -2174,7 +2291,7 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
       const entryEnv = entry.envFile === configFile ? protectedEnv : entry.envFile === plan.isolated.envFile ? isolatedEnv : {};
       const env = { ...commandEnv, ...entryEnv, ...(boundEntry.runtimeEnv ?? {}) };
       // Starting this canonical command is the irreversible boundary even
-      // when runMigrations is idempotent at 98; the sealed bc86 image must
+      // when runMigrations is idempotent at 98; the sealed D3 image must
       // never be restarted after this point.
       if (entry.phase === 'canonical_idempotent_migration_98_to_98') schemaMutationStarted = true;
       let result;
@@ -2233,8 +2350,9 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
           || entry.phase === 'source_foreign_writer_readback_before_backup' || entry.phase === 'source_foreign_writer_readback_after_backup'
           || entry.phase === 'isolated_finding_fingerprint_readback' || entry.phase === 'candidate_finding_fingerprint_readback'
           || entry.phase === 'isolated_postgres_init_complete_log_readback' || entry.phase === 'isolated_postgres_stable_select_1' || entry.phase === 'isolated_postgres_stable_select_2'
-          || entry.phase === 'candidate_health_and_feature_probes' || entry.phase === 'candidate_ready_probe' || entry.phase === 'candidate_runtime_flags_readback' || entry.phase === 'candidate_version_probe'
-          || entry.phase === 'final_image_readback' || entry.phase === 'final_inventory_readback' || entry.phase === 'final_live_wait' || entry.phase === 'final_health_probe' || entry.phase === 'final_ready_wait' || entry.phase === 'final_version_readback'
+          || entry.phase === 'candidate_health_and_feature_probes' || entry.phase === 'candidate_ready_probe' || entry.phase === 'candidate_runtime_flags_readback' || entry.phase === 'candidate_version_probe' || entry.phase === 'candidate_public_catalog_readback'
+          || entry.phase === 'source_database_state_readback_before' || entry.phase === 'final_database_state_readback_after'
+          || entry.phase === 'final_image_readback' || entry.phase === 'final_inventory_readback' || entry.phase === 'final_live_wait' || entry.phase === 'final_health_probe' || entry.phase === 'final_ready_wait' || entry.phase === 'final_public_catalog_readback' || entry.phase === 'final_version_readback'
           || entry.phase.endsWith('_schema_readback') || entry.phase.endsWith('_migration_ledger_readback')) {
         readbacks[entry.phase] = entry.phase.endsWith('_migration_ledger_readback') ? (result.stdout ?? '')
           : entry.phase === 'target_container_set_readback' ? (result.stdout ?? '')
@@ -2298,6 +2416,17 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
       if (entry.phase === 'canonical_schema_readback') currentMigrationFromReadback(result.stdout, 'green_canonical_schema_readback_invalid');
       if (entry.phase === 'canonical_migration_ledger_readback') assertMigrationLedgerReadback(result.stdout, plan.target.currentSchema, greenTarget.currentLedgerDigest, 'green_canonical_migration_ledger_invalid');
       if (entry.phase === 'candidate_runtime_flags_readback') assertGreenRuntimeEnvironmentReadback(JSON.parse(readbacks.candidate_runtime_flags_readback), plan.target.authProfile);
+      if (entry.phase === 'candidate_public_catalog_readback' || entry.phase === 'final_public_catalog_readback') {
+        const publicReadback = JSON.parse(readbacks[entry.phase]);
+        assertGreenSyntheticCatalogPublicReadback(publicReadback, publicReadback.expectedPhotoDigest);
+      }
+      if (entry.phase === 'source_database_state_readback_before') {
+        databaseStateBefore = assertGreenDatabaseStateReadback(readbacks[entry.phase]);
+      }
+      if (entry.phase === 'final_database_state_readback_after') {
+        if (!databaseStateBefore) fail('green_database_state_before_missing');
+        assertGreenDatabaseStateReadback(readbacks[entry.phase], databaseStateBefore);
+      }
       if (entry.phase === 'candidate_version_probe') assertGreenRuntimeReadbacks({ version: JSON.parse(readbacks.candidate_version_probe), health: JSON.parse(readbacks.candidate_health_and_feature_probes), ready: JSON.parse(readbacks.candidate_ready_probe), runtimeCommit: plan.runtime.runtimeCommit });
       if (entry.phase === 'final_inventory_readback') assertGreenFinalContainerReadback({ record: JSON.parse(readbacks.final_inventory_readback), plan, expectedId: finalApiId, expectedNetworkIds: { [plan.target.network]: targetNetworkId, [plan.target.providerNetwork]: providerNetworkId } });
       if (entry.phase === 'final_image_readback') assertGreenImageReadback(JSON.parse(readbacks.final_image_readback), plan.runtime);
@@ -2315,7 +2444,7 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
       sourceLedgerDigest: greenTarget.sourceLedgerDigest,
     });
     if (!backupDigest || !readbacks.final_image_readback || !readbacks.final_version_readback || !readbacks.final_inventory_readback) fail('green_final_readback_missing');
-    const evidence = sanitizeGreenEvidence({ plan, status: 'executed', backupDigest, configDigest: sha256(await readFile(configFile)), targetReadback: { sourceSchemaReadback: schemaNumberFromName(readbacks.source_schema_readback, 'green_source_schema_readback_invalid'), sourceLedgerDigest: assertMigrationLedgerReadback(readbacks.source_migration_ledger_readback, plan.target.sourceSchema, greenTarget.sourceLedgerDigest, 'green_source_migration_ledger_invalid').digest, currentSchema: schemaNumberFromName(readbacks.canonical_schema_readback, 'green_canonical_schema_readback_invalid'), currentMigration: currentMigrationFromReadback(readbacks.canonical_schema_readback, 'green_canonical_schema_readback_invalid'), migrationLedgerDigest: assertMigrationLedgerReadback(readbacks.canonical_migration_ledger_readback, plan.target.currentSchema, greenTarget.currentLedgerDigest, 'green_canonical_migration_ledger_invalid').digest, cleanup: 'verified', finalInventory: summarizeGreenFinalContainerReadback(JSON.parse(readbacks.final_inventory_readback), plan, { [plan.target.network]: targetNetworkId, [plan.target.providerNetwork]: providerNetworkId }, finalApiId) }, imageReadback: JSON.parse(readbacks.final_version_readback) });
+    const evidence = sanitizeGreenEvidence({ plan, status: 'executed', backupDigest, configDigest: sha256(await readFile(configFile)), targetReadback: { sourceSchemaReadback: schemaNumberFromName(readbacks.source_schema_readback, 'green_source_schema_readback_invalid'), sourceLedgerDigest: assertMigrationLedgerReadback(readbacks.source_migration_ledger_readback, plan.target.sourceSchema, greenTarget.sourceLedgerDigest, 'green_source_migration_ledger_invalid').digest, currentSchema: schemaNumberFromName(readbacks.canonical_schema_readback, 'green_canonical_schema_readback_invalid'), currentMigration: currentMigrationFromReadback(readbacks.canonical_schema_readback, 'green_canonical_schema_readback_invalid'), migrationLedgerDigest: assertMigrationLedgerReadback(readbacks.canonical_migration_ledger_readback, plan.target.currentSchema, greenTarget.currentLedgerDigest, 'green_canonical_migration_ledger_invalid').digest, databaseStateBefore, databaseStateAfter: assertGreenDatabaseStateReadback(readbacks.final_database_state_readback_after, databaseStateBefore), catalogAcceptance: { candidate: JSON.parse(readbacks.candidate_public_catalog_readback), final: JSON.parse(readbacks.final_public_catalog_readback) }, cleanup: 'verified', finalInventory: summarizeGreenFinalContainerReadback(JSON.parse(readbacks.final_inventory_readback), plan, { [plan.target.network]: targetNetworkId, [plan.target.providerNetwork]: providerNetworkId }, finalApiId) }, imageReadback: JSON.parse(readbacks.final_version_readback) });
     const evidenceResult = await writeGreenEvidence(plan.evidenceFile, evidence);
     return Object.freeze({ status: 'executed', completedPhases: Object.freeze(completed), evidence: evidenceResult });
   } catch (error) {

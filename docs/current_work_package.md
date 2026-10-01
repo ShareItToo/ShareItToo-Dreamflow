@@ -47,8 +47,9 @@ SHA-256 `42dfcc4af68ff08dd6d7ad7e6066964a3b84929312221212a89614896bc12e00`.
 The retained backup SHA-256 is
 `e91cbe166bac7c0d860eb93e552bb55d7872047e337b233cc37b82837dc60eae`.
 Independent readback verified the exact image/user, three mounts, zero host
-ports, both network IDs, schema `98`, migration ledger, catalog flag `false`,
-public count zero and unchanged payment/provider boundaries. The prior
+ports, both network IDs, schema `98`, migration ledger, catalog flag `true`,
+exactly one complete synthetic public row and unchanged payment/provider
+boundaries. The prior
 `34194c42…` API is sealed and stopped; no promotion controller/candidate remains.
 
 The fresh protected schema-2 proof then executed exactly once against D3 from
@@ -60,7 +61,25 @@ token rejection. Cumulative sessions/refresh/login audits advanced `4/4/4` to
 `6/6/6`; this marker owns exactly `2/2/2`, both principals and both immutable
 refresh/audit relationships. Active auth state is zero; prior-history, identity
 and catalog digests are unchanged; all forbidden-effect counts remain zero.
-Catalog and registration remain disabled and the public catalog remains empty.
+Registration remains closed; the public catalog is enabled only for the one
+bound synthetic noncontractual row, with booking and payment capabilities
+disabled. The source successor below must preserve this exact D3 baseline.
+
+### Catalog-preserving Green promotion successor — SOURCE-ONLY
+
+The successor runner binds D3 as the immutable predecessor, retains all 19
+stopped Green seals including the prior 34194 seal, and keeps
+`SIT_STAGING_SYNTHETIC_CATALOG_ENABLED=true` in protected, candidate, final
+and rollback readbacks. Candidate loopback and final public acceptance call
+`/v1/listings?sort=newest&limit=100&offset=0` and require exactly one complete
+strict Item-compatible row with server-owned id/title/notice/photo, coarse
+Heilbronn location, `catalogClass=synthetic_noncontractual_catalog_only`, and
+false real-offer, owner-declaration, booking and payment capabilities.
+Missing, extra, forged or partial rows fail closed. Before/after database
+readbacks require unchanged auth, identity, listing, upload, booking, request
+and payment counts plus unchanged ledger/auth/catalog digests. This package is
+source-only: it does not publish an image, prepare a manifest, mutate Staging,
+or perform a live promotion.
 
 The active source package binds the catalog consumer to those exact bytes,
 runtime/image, marker and digests. It performs no manifest preparation or live

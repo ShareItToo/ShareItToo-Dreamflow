@@ -20,6 +20,11 @@ search before rereading large sources, avoid unchanged duplicate gates and
 retain all audit evidence. Efficiency must never weaken deterministic tests,
 exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
 
+Queued efficiency mentor rule: accept automatic exact-head PR checks when the
+head SHA and required job set match the source change. Never manually duplicate
+source-only Regression or CodeQL runs; use `workflow_dispatch` only for a
+capability absent from the automatic run, such as immutable GHCR publication.
+
 Before every SIT turn, read
 `docs/operations/SIT_PILOT_PHASE_CAPSULE_2026-09-23.md` as the compact entry
 point. Read larger status histories only when a concrete discrepancy requires
