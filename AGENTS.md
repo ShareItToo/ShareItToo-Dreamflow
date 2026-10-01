@@ -222,6 +222,13 @@ discover a mechanically stale source hash.
 - Idempotent startup/readiness polls must retry transient resets and empty
   replies as well as refused connections, with bounded retries; never broaden
   retry behavior onto mutating requests.
+- After a container stop/rename, prove the sealed original through a bounded
+  read-only inspect convergence by immutable ID. Require exact config, host,
+  mounts, image, environment and network-name-to-ID bindings; never retry the
+  stop, rename, create, attach or start mutation. Persist the sanitized primary
+  failure before secondary rollback checks, and validate a restarted rollback
+  with restart-stable identity plus separate running/health assertions rather
+  than a fingerprint containing volatile endpoint or IP fields.
 - Unauthenticated operational probes must target paths explicitly allowlisted by
   the access gate; focused tests must cover the enabled/valid gate matrix and
   reject nearby protected paths.

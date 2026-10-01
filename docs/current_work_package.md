@@ -57,23 +57,34 @@ to `4/4/4`, and prior-history, identity and catalog digests remained unchanged.
 Health/version, runtime fingerprints and provider-off boundaries match; no
 proof controllers or children remain and the public catalog is still empty.
 
-The current bounded package is the separate catalog consumer-binding source
-change, pinning only this actual schema-2 evidence SHA/Ops/runtime/image and
-requiring exact cumulative/current-marker counts plus prior-history equality.
-Refresh and login-audit rows must also bind to their marked session and the same
-principal, with both expected principals present; aggregate counts alone cannot
-pass ownership validation.
-It rejects schema 1 and all missing/extra fields, with no compatibility fallback.
-This package performs no manifest preparation or catalog activation. Only after
-the reviewed consumer commit passes its source and exact-HEAD gates may a fresh,
-exact-runtime catalog manifest and read-only preflight precede the one-key
-activation and independent readback. Historical activation manifests or evidence
-attempts must not be reused. See the
-[current post-promotion schema-2 flow](operations/STAGING_WEB_LOGIN_PROOF_SUCCESSOR_2026-10-01.md).
-Authenticated browser acceptance remains
-after the catalog transition. Phase 0 completion still advances automatically
-to **P2 — dauerhafter unverbindlicher Missionsbedarf** and does not complete
-the SIT Mission / Blue Ocean objective.
+The reviewed schema-2 consumer binding passed exact-HEAD Regression and CodeQL
+at `2df22dcdea4f671cb47ef251aab908560ab80412`. Its separately prepared one-shot
+catalog activation reached an exact enabled-config and public synthetic-catalog
+PASS on replacement `f538c430…`, then failed before the first final database
+readback and rolled back. The exact inner failure code was not preserved; event
+ordering only bounds it to the applied-environment/sealed-original read-only
+window, so no narrower cause is claimed. Independent closure verified the
+rollback **PASS-safe**: original API
+`cf0548721f2c4c0df061edc0ca8d5f42a4a4e4f6301779aed05ce81eb624ee2a`
+is running, `green.env` is restored to SHA-256
+`8b5cd415a6b2a06f93c7911d130d274fee9eca5af0634529ae5e6fd51dae9441`,
+the catalog flag is `false` and the public catalog count is zero. Schema `98`
+and its ledger are unchanged; active sessions/refresh, bookings, requests,
+payment/provider rows and notifications remain zero. Payment, mail, push and
+identity remain memory-only, Stripe live mode and external Listing AI remain
+off, and the technical Sandbox remains unavailable.
+
+The retained `web-catalog-activation-2df22dcd-20261001T023715Z` namespace and
+manifest are non-retriable. The source successor adds bounded immutable-ID,
+read-only seal convergence with exact config/host/mount/image/environment and
+network-ID checks, plus a fixed sanitized failure phase; it does not authorize
+a live retry. See the
+[catalog activation incident and successor contract](operations/STAGING_WEB_CATALOG_ACTIVATION_INCIDENT_2026-10-01.md).
+Next: commit and exact-HEAD CI, then prepare a fresh manifest/namespace and
+reviewed failure-preserving, restart-stable wrapper before a separately
+reviewed one-shot transition and authenticated browser acceptance. Phase 0
+completion still advances automatically to **P2 — dauerhafter unverbindlicher
+Missionsbedarf** and does not complete the SIT Mission / Blue Ocean objective.
 
 The dedicated two-role synthetic catalog scope is now seeded and bound to the
 canonical Green Staging environment. Its guarded database preparation and

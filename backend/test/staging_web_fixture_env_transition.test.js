@@ -127,11 +127,12 @@ function startupPayload() {
 
 function fakeExecutor(fx, {
   failPhase, lateEvidenceCollision = false, reorderReplacementEnv = false, mutateNetworkMetadata = false,
-  mutateBeforeFingerprint = false,
+  mutateBeforeFingerprint = false, sealReadbackFault = null,
 } = {}) {
   const containers = new Map([[fx.manifest.apiContainer, structuredClone(fx.api)]]);
   const calls = [];
   let networkMutation = 0;
+  let sealReadbacks = 0;
   const imageRecord = { Id: fx.api.Image, RepoTags: [fx.manifest.image], Config: { User: 'shareittoo',
     Labels: { 'org.opencontainers.image.revision': runtimeCommit } }, RepoDigests: [`${fx.manifest.image}@${imageDigest}`] };
   const fixed = new Map([
@@ -167,7 +168,15 @@ function fakeExecutor(fx, {
       if (!record && options.allowFailure) return { stdout: '', stderr: 'No such container', code: 1 };
       if (!record) throw Error('missing_inspect');
       if (mutateBeforeFingerprint && options.phase === 'fixture_env_pre_mutation_api_readback') mutateNetworks(record);
-      const result = json(record);
+      let observed = record;
+      if (options.phase === 'fixture_env_rollback_seal_readback') {
+        sealReadbacks += 1;
+        if (sealReadbackFault === 'permanent' || sealReadbackFault === 'transient' && sealReadbacks === 1) {
+          observed = structuredClone(record);
+          delete observed.NetworkSettings.Networks[fx.manifest.providerNetwork];
+        }
+      }
+      const result = json(observed);
       if (lateEvidenceCollision && options.phase === 'fixture_env_rollback_seal_readback') {
         await writeFile(fx.evidenceFile, 'external-owner\n', { mode: 0o600 });
       }
@@ -334,6 +343,47 @@ test('fixture env execution accepts reordered exact env and mutable network meta
   assert.equal(sealed.NetworkSettings.Networks[fx.manifest.network].NetworkID, primaryNetworkId);
   assert.equal(sealed.NetworkSettings.Networks[fx.manifest.providerNetwork].NetworkID, providerNetworkId);
   assert.equal(fake.containers.get(fx.manifest.apiContainer).Id, 'b'.repeat(64));
+});
+
+test('sealed-original readback converges read-only before final gates without replaying mutations', async (t) => {
+  const fx = await fixture(); t.after(() => rm(fx.root, { recursive: true, force: true }));
+  const fake = fakeExecutor(fx, { sealReadbackFault: 'transient' });
+  const result = await runStagingWebFixtureEnvTransition({ manifest: fx.manifest,
+    bootstrapManifestBytes: fx.bootstrapBytes, sourceCommit: opsCommit, evidenceFile: fx.evidenceFile,
+    execute: true, confirmSource: opsCommit, confirmRun: fx.runId, command: fake.command,
+    commandEnv: { STAGING_WEB_FIXTURE_ENV_EXECUTE: '1',
+      STAGING_WEB_FIXTURE_ENV_CONFIRM_SOURCE: opsCommit,
+      STAGING_WEB_FIXTURE_ENV_CONFIRM_RUN: fx.runId } });
+  assert.equal(result.status, 'staging-web-fixture-env-handoff-applied-catalog-disabled');
+  const phaseCount = (phase) => fake.calls.filter((call) => call.phase === phase).length;
+  for (const phase of ['fixture_env_stop_current_api', 'fixture_env_seal_current_api',
+    'fixture_env_create_replacement_api', 'fixture_env_attach_provider_network',
+    'fixture_env_start_replacement_api']) assert.equal(phaseCount(phase), 1, phase);
+  assert.equal(phaseCount('fixture_env_rollback_seal_readback'), 2);
+  const lastSeal = fake.calls.map((call) => call.phase).lastIndexOf('fixture_env_rollback_seal_readback');
+  assert.ok(lastSeal < fake.calls.findIndex((call) => call.phase === 'fixture_env_final_seed_readback'));
+});
+
+test('permanent sealed-original drift fails closed and rolls back without replaying forward mutations', async (t) => {
+  const fx = await fixture(); t.after(() => rm(fx.root, { recursive: true, force: true }));
+  const fake = fakeExecutor(fx, { sealReadbackFault: 'permanent' });
+  await assert.rejects(runStagingWebFixtureEnvTransition({ manifest: fx.manifest,
+    bootstrapManifestBytes: fx.bootstrapBytes, sourceCommit: opsCommit, evidenceFile: fx.evidenceFile,
+    execute: true, confirmSource: opsCommit, confirmRun: fx.runId, command: fake.command,
+    commandEnv: { STAGING_WEB_FIXTURE_ENV_EXECUTE: '1',
+      STAGING_WEB_FIXTURE_ENV_CONFIRM_SOURCE: opsCommit,
+      STAGING_WEB_FIXTURE_ENV_CONFIRM_RUN: fx.runId } }),
+  (error) => error.code === 'fixture_env_sealed_readback_not_converged'
+    && error.failurePhase === 'fixture_env_sealed_readback' && error.rollback?.restored === true);
+  const phaseCount = (phase) => fake.calls.filter((call) => call.phase === phase).length;
+  for (const phase of ['fixture_env_stop_current_api', 'fixture_env_seal_current_api',
+    'fixture_env_create_replacement_api', 'fixture_env_attach_provider_network',
+    'fixture_env_start_replacement_api']) assert.equal(phaseCount(phase), 1, phase);
+  assert.equal(phaseCount('fixture_env_rollback_seal_readback'), 8);
+  assert.equal(phaseCount('fixture_env_final_seed_readback'), 0);
+  assert.equal(fake.containers.get(fx.manifest.apiContainer).Id, fx.api.Id);
+  assert.equal(fake.containers.get(fx.manifest.apiContainer).State.Running, true);
+  await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
 });
 
 test('each stateful replacement fault restores exact old state despite reordered env and mutable network metadata', async (t) => {

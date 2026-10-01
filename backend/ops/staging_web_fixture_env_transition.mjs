@@ -30,6 +30,8 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '.
 const requiredTerminalMigration = '098_booking_checkout_declaration_constraints.up.sql';
 const requiredMigrationLedger = '796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196';
 const apiContainer = 'shareittoo-staging-api';
+const sealedReadbackAttempts = 8;
+const sealedReadbackDelayMs = 100;
 
 function exactKeys(value, expected, code) {
   if (!value || typeof value !== 'object' || Array.isArray(value)
@@ -585,6 +587,27 @@ async function safeDocker(command, args, phase, commandEnv) {
   } catch (error) { return { ok: false, phase, code: error?.code ?? `${phase}_failed` }; }
 }
 
+async function readConvergedSealedOriginal({ command, commandEnv, manifest, preflight }) {
+  for (let attempt = 1; attempt <= sealedReadbackAttempts; attempt += 1) {
+    try {
+      const sealed = await commandJson(command, ['inspect', '--format', '{{json .}}', preflight.api.Id],
+        'fixture_env_rollback_seal_readback', commandEnv, 'fixture_env_rollback_seal_readback_invalid');
+      assertOriginalRecord(sealed, manifest, preflight.api, preflight.networkIds,
+        { stopped: true, name: preflight.sealedName });
+      return sealed;
+    } catch {
+      if (attempt === sealedReadbackAttempts) {
+        const error = new Error('fixture_env_sealed_readback_not_converged');
+        error.code = 'fixture_env_sealed_readback_not_converged';
+        error.failurePhase = 'fixture_env_sealed_readback';
+        throw error;
+      }
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, sealedReadbackDelayMs));
+    }
+  }
+  throw new Error('fixture_env_sealed_readback_unreachable');
+}
+
 async function rollbackFixtureEnv({ manifest, preflight, appliedEnv, command, commandEnv, replacementId }) {
   const results = [];
   let safe = true;
@@ -710,10 +733,7 @@ export async function runFixtureEnvReplacement({
     }
     await replacementReadback({ replacementId, replacement, startup, preflight, manifest, command, commandEnv });
     if ((await readEnv(manifest)).content !== appliedEnv) fail('fixture_env_final_file_readback_invalid');
-    const seal = await commandJson(command, ['inspect', '--format', '{{json .}}', preflight.api.Id],
-      'fixture_env_rollback_seal_readback', commandEnv, 'fixture_env_rollback_seal_readback_invalid');
-    assertOriginalRecord(seal, manifest, preflight.api, preflight.networkIds,
-      { stopped: true, name: preflight.sealedName });
+    const seal = await readConvergedSealedOriginal({ command, commandEnv, manifest, preflight });
     await finalReadback({ replacementId, replacement, startup, seal, preflight, manifest, command, commandEnv });
     const result = Object.freeze(buildResult({ replacementId, appliedEnv, preflight, manifest, sourceCommit }));
     const evidence = buildEvidence({ result, replacementId, appliedEnv, preflight, manifest, sourceCommit });
@@ -818,7 +838,12 @@ export async function runStagingWebFixtureEnvTransition({
 }
 
 export function sanitizeFixtureEnvError(error) {
-  return Object.freeze({ status: 'failed', code: error?.code ?? 'fixture_env_transition_failed',
+  const safeCode = typeof error?.code === 'string' && /^[a-z][a-z0-9_]{0,95}$/u.test(error.code)
+    ? error.code : 'fixture_env_transition_failed';
+  const safePhase = error?.failurePhase === 'fixture_env_sealed_readback'
+    ? error.failurePhase : undefined;
+  return Object.freeze({ status: 'failed', code: safeCode,
+    ...(safePhase ? { failurePhase: safePhase } : {}),
     ...(error?.rollback ? { rollback: { restored: error.rollback.restored === true,
       results: (error.rollback.results ?? []).map((entry) => ({ phase: entry.phase, ok: entry.ok === true,
         ...(entry.code ? { code: entry.code } : {}) })) } } : {}) });

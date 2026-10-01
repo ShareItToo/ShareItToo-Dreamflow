@@ -22,6 +22,7 @@ import {
   requiredLoginProofMarkerSha256,
   requiredLoginProofHistoryDigest,
   runCatalogActivation,
+  sanitizeCatalogActivationError,
   validateCatalogActivationBootstrap,
   validateLoginProofEvidence,
 } from '../ops/staging_web_fixture_catalog_activation.mjs';
@@ -190,8 +191,10 @@ function startupPayload() {
       SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '0' } });
 }
 
-function fakeExecutor(fx, { failPhase, lateEvidenceCollision = false, publicPhotoFault = null } = {}) {
+function fakeExecutor(fx, { failPhase, lateEvidenceCollision = false, publicPhotoFault = null,
+  sealReadbackFault = null } = {}) {
   const containers = new Map([[fx.manifest.apiContainer, structuredClone(fx.api)]]); const calls = [];
+  let sealReadbacks = 0;
   const fixed = new Map([
     [fx.manifest.databaseContainer, { Name: `/${fx.manifest.databaseContainer}`, State: { Running: true } }],
     [fx.manifest.databaseVolume, { Name: fx.manifest.databaseVolume }],
@@ -217,7 +220,15 @@ function fakeExecutor(fx, { failPhase, lateEvidenceCollision = false, publicPhot
       if (lateEvidenceCollision && options.phase === 'fixture_env_rollback_seal_readback') {
         await writeFile(fx.evidenceFile, 'foreign-evidence\n', { mode: 0o600 });
       }
-      return { stdout: JSON.stringify(record), code: 0 };
+      let observed = record;
+      if (options.phase === 'fixture_env_rollback_seal_readback') {
+        sealReadbacks += 1;
+        if (sealReadbackFault === 'permanent' || sealReadbackFault === 'transient' && sealReadbacks === 1) {
+          observed = structuredClone(record);
+          delete observed.NetworkSettings.Networks[fx.manifest.providerNetwork];
+        }
+      }
+      return { stdout: JSON.stringify(observed), code: 0 };
     }
     if (args[0] === 'image') return { stdout: JSON.stringify(imageRecord), code: 0 };
     if (args[0] === 'ps') {
@@ -531,6 +542,67 @@ test('default preflight is read-only and execute changes only catalog flag with 
     assert.equal((await lstat(fx.evidenceFile)).mode & 0o777, 0o600);
     assert.doesNotMatch(await readFile(fx.evidenceFile, 'utf8'),
       /synthetic_web_catalog_owner_v1|synthetic_web_catalog_renter_v1|example\.invalid|DATABASE_URL/u);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('catalog final gates wait for converged sealed-original proof without replaying mutations', async () => {
+  const fx = await fixture();
+  try {
+    const fake = fakeExecutor(fx, { sealReadbackFault: 'transient' });
+    const result = await runCatalogActivation({ manifest: fx.manifest,
+      bootstrapManifestBytes: fx.bootstrapBytes, databaseEvidenceBytes: fx.dbBytes,
+      loginEvidenceBytes: fx.loginBytes, sourceCommit: opsCommit, evidenceFile: fx.evidenceFile,
+      execute: true, confirmSource: opsCommit, confirmRun: fx.runId, command: fake.command,
+      commandEnv: { STAGING_WEB_FIXTURE_CATALOG_EXECUTE: '1',
+        STAGING_WEB_FIXTURE_CATALOG_CONFIRM_SOURCE: opsCommit,
+        STAGING_WEB_FIXTURE_CATALOG_CONFIRM_RUN: fx.runId }, testOnlyEvidenceHash: evidenceHash });
+    assert.equal(result.status, 'staging-web-synthetic-catalog-activated-noncontractual');
+    const phaseCount = (phase) => fake.calls.filter((call) => call.phase === phase).length;
+    for (const phase of ['fixture_env_stop_current_api', 'fixture_env_seal_current_api',
+      'fixture_env_create_replacement_api', 'fixture_env_attach_provider_network',
+      'fixture_env_start_replacement_api']) assert.equal(phaseCount(phase), 1, phase);
+    assert.equal(phaseCount('fixture_env_rollback_seal_readback'), 2);
+    const phases = fake.calls.map((call) => call.phase);
+    assert.ok(phases.lastIndexOf('fixture_env_rollback_seal_readback')
+      < phases.indexOf('catalog_activation_final_database_integrity_schema'));
+    assert.ok(phases.indexOf('catalog_activation_final_database_integrity_schema')
+      < phases.indexOf('catalog_activation_final_database_readback'));
+    assert.ok(phases.indexOf('catalog_activation_final_database_readback')
+      < phases.indexOf('catalog_activation_final_public_readback'));
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('permanent catalog seal drift returns fixed sanitized diagnosis and exact rollback', async () => {
+  const fx = await fixture();
+  try {
+    const fake = fakeExecutor(fx, { sealReadbackFault: 'permanent' });
+    await assert.rejects(runCatalogActivation({ manifest: fx.manifest,
+      bootstrapManifestBytes: fx.bootstrapBytes, databaseEvidenceBytes: fx.dbBytes,
+      loginEvidenceBytes: fx.loginBytes, sourceCommit: opsCommit, evidenceFile: fx.evidenceFile,
+      execute: true, confirmSource: opsCommit, confirmRun: fx.runId, command: fake.command,
+      commandEnv: { STAGING_WEB_FIXTURE_CATALOG_EXECUTE: '1',
+        STAGING_WEB_FIXTURE_CATALOG_CONFIRM_SOURCE: opsCommit,
+        STAGING_WEB_FIXTURE_CATALOG_CONFIRM_RUN: fx.runId }, testOnlyEvidenceHash: evidenceHash }), (error) => {
+      const sanitized = sanitizeCatalogActivationError(error);
+      assert.equal(error.rollback?.restored, true);
+      assert.deepEqual(Object.keys(sanitized).sort(), ['code', 'failurePhase', 'rollback', 'status']);
+      assert.equal(sanitized.status, 'failed');
+      assert.equal(sanitized.code, 'fixture_env_sealed_readback_not_converged');
+      assert.equal(sanitized.failurePhase, 'fixture_env_sealed_readback');
+      assert.equal(sanitized.rollback.restored, true);
+      assert.doesNotMatch(JSON.stringify(sanitized), /DATABASE_URL|synthetic_web_catalog_owner|private-run/u);
+      return true;
+    });
+    const phaseCount = (phase) => fake.calls.filter((call) => call.phase === phase).length;
+    for (const phase of ['fixture_env_stop_current_api', 'fixture_env_seal_current_api',
+      'fixture_env_create_replacement_api', 'fixture_env_attach_provider_network',
+      'fixture_env_start_replacement_api']) assert.equal(phaseCount(phase), 1, phase);
+    assert.equal(phaseCount('fixture_env_rollback_seal_readback'), 8);
+    assert.equal(phaseCount('catalog_activation_final_database_integrity_schema'), 0);
+    assert.equal(fake.containers.get(fx.manifest.apiContainer).Id, fx.api.Id);
+    assert.equal(fake.containers.get(fx.manifest.apiContainer).State.Running, true);
+    assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+    await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
   } finally { await rm(fx.root, { recursive: true, force: true }); }
 });
 
