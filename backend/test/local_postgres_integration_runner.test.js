@@ -108,6 +108,7 @@ test('runs readiness, isolated database and integration before guaranteed cleanu
     ['backend/test/staging_web_fixture_postgres.integration.test.js'],
     ['backend/test/mission_need_postgres.integration.test.js'],
     ['backend/test/private_shelf_postgres.integration.test.js'],
+    ['backend/test/mission_fit_check_postgres.integration.test.js'],
     ['backend/test/staging_google_registration.integration.test.js'],
     [
       'backend/test/listing_ai_lifetime_budget_migration.integration.test.js',

@@ -93,6 +93,9 @@ discover a mechanically stale source hash.
 - Append-only migration and source ledgers extend ordered expectations. When
   advancing the terminal schema, append the new terminal entry and never
   replace or omit the previously accepted terminal entry.
+- Every runner, registry or plan-inventory change must update all structural
+  expectation fixtures and pass CI's unchanged full standard test command
+  locally before commit; focused tests alone are not closure evidence.
 - Shared validators must continue to accept explicit immutable historical
   contract variants without rewriting their evidence. Gate newly added fields
   by the applicable version or terminal schema, and test both the current
