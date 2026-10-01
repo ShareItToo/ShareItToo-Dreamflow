@@ -1089,7 +1089,21 @@ export function assertGreenRuntimeConfig(config) {
   return Object.freeze({ ...config, envNames: [...config.envNames], mounts: config.mounts.map((mount) => Object.freeze({ ...mount })) });
 }
 
-export function assertGreenRuntimeImage({ image, digest, runtimeCommit } = {}) {
+function assertGreenRuntimePublication({ runId, manifestDigest } = {}) {
+  if (runId !== greenSuccessorRuntime.publicationRunId
+      || manifestDigest !== greenSuccessorRuntime.publicationManifestDigest) {
+    fail('green_successor_publication_identity_mismatch');
+  }
+  return Object.freeze({ runId, manifestDigest });
+}
+
+export function assertGreenRuntimeImage({
+  image,
+  digest,
+  runtimeCommit,
+  publicationRunId = greenSuccessorRuntime.publicationRunId,
+  publicationManifestDigest = greenSuccessorRuntime.publicationManifestDigest,
+} = {}) {
   fullCommit(runtimeCommit, 'runtime_commit');
   if (image !== `ghcr.io/shareittoo/shareittoo-api:${runtimeCommit}`) fail('runtime_image_tag_mismatch');
   if (typeof digest !== 'string' || !/^sha256:[0-9a-f]{64}$/u.test(digest)) fail('runtime_image_digest_required');
@@ -1097,7 +1111,11 @@ export function assertGreenRuntimeImage({ image, digest, runtimeCommit } = {}) {
     fail('green_successor_runtime_identity_mismatch');
   }
   if (/latest|local/iu.test(image) || containsForbiddenGreenTargetIdentifier(image)) fail('runtime_image_unsafe');
-  return Object.freeze({ image, digest, runtimeCommit });
+  const publication = assertGreenRuntimePublication({
+    runId: publicationRunId,
+    manifestDigest: publicationManifestDigest,
+  });
+  return Object.freeze({ image, digest, runtimeCommit, publication });
 }
 
 export function assertGreenImageReadback(readback, runtime) {
@@ -1744,6 +1762,7 @@ export function sanitizeGreenEvidence({ plan, backupDigest, configDigest, target
   safeDigest(backupDigest, 'green_backup_digest_invalid');
   safeDigest(configDigest, 'green_config_digest_invalid');
   if (typeof targetReadback !== 'object' || typeof imageReadback !== 'object') fail('green_readback_required');
+  const runtimePublication = assertGreenRuntimePublication(plan.runtime.publication);
   const evidence = {
     kind: 'sit-green-promotion',
     status,
@@ -1761,7 +1780,12 @@ export function sanitizeGreenEvidence({ plan, backupDigest, configDigest, target
       targetDigest: plan.target.targetDigest,
       ...(plan.target.authProfile ? { authProfile: plan.target.authProfile } : {}),
     },
-    runtime: { commit: plan.runtime.runtimeCommit, image: plan.runtime.image, digest: plan.runtime.digest },
+    runtime: {
+      commit: plan.runtime.runtimeCommit,
+      image: plan.runtime.image,
+      digest: plan.runtime.digest,
+      publication: runtimePublication,
+    },
     safety: {
       paymentTransport: 'memory',
       stripeLiveMode: false,
@@ -2643,6 +2667,8 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
       inventoryDigest: sha256(JSON.stringify(readbacks)),
       runtimeCommit: plan.runtime.runtimeCommit,
       runtimeImageDigest: plan.runtime.digest,
+      runtimePublicationRunId: plan.runtime.publication.runId,
+      runtimePublicationManifestDigest: plan.runtime.publication.manifestDigest,
       opsCommit: plan.opsCommit,
       sourceLedgerDigest: greenTarget.sourceLedgerDigest,
     });

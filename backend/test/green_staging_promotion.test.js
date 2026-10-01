@@ -520,11 +520,18 @@ test('promotion executor contract rejects external provider selections before ca
 });
 
 test('runtime image must be immutable GHCR commit plus digest', () => {
-  assert.equal(assertGreenRuntimeImage({ image: `ghcr.io/shareittoo/shareittoo-api:${runtimeCommit}`, digest: runtimeImageDigest, runtimeCommit }).runtimeCommit, runtimeCommit);
+  const runtime = assertGreenRuntimeImage({ image: `ghcr.io/shareittoo/shareittoo-api:${runtimeCommit}`, digest: runtimeImageDigest, runtimeCommit });
+  assert.equal(runtime.runtimeCommit, runtimeCommit);
+  assert.deepEqual(runtime.publication, {
+    runId: greenSuccessorRuntime.publicationRunId,
+    manifestDigest: greenSuccessorRuntime.publicationManifestDigest,
+  });
   assert.throws(() => assertGreenRuntimeImage({ image: 'shareittoo-api:latest', digest: runtimeImageDigest, runtimeCommit }), /runtime_image_tag_mismatch/u);
   assert.throws(() => assertGreenRuntimeImage({ image: `ghcr.io/shareittoo/shareittoo-api:${runtimeCommit}`, digest: 'sha256:short', runtimeCommit }), /runtime_image_digest_required/u);
   assert.throws(() => assertGreenRuntimeImage({ image: `ghcr.io/shareittoo/shareittoo-api:${runtimeCommit}`, digest: `sha256:${'d'.repeat(64)}`, runtimeCommit }), /green_successor_runtime_identity_mismatch/u);
   assert.throws(() => assertGreenRuntimeImage({ image: `ghcr.io/shareittoo/shareittoo-api:${'f'.repeat(40)}`, digest: runtimeImageDigest, runtimeCommit: 'f'.repeat(40) }), /green_successor_runtime_identity_mismatch/u);
+  assert.throws(() => assertGreenRuntimeImage({ image: `ghcr.io/shareittoo/shareittoo-api:${runtimeCommit}`, digest: runtimeImageDigest, runtimeCommit, publicationRunId: greenSuccessorRuntime.publicationRunId + 1 }), /green_successor_publication_identity_mismatch/u);
+  assert.throws(() => assertGreenRuntimeImage({ image: `ghcr.io/shareittoo/shareittoo-api:${runtimeCommit}`, digest: runtimeImageDigest, runtimeCommit, publicationManifestDigest: 'f'.repeat(64) }), /green_successor_publication_identity_mismatch/u);
 });
 
 test('runtime readback binds version and capability safety surface', () => {
@@ -1032,10 +1039,14 @@ test('executor preserves required post-enrollment auth through candidate, recove
     const readOnly = await preflight({ environment });
     assert.equal(readOnly.result.status, 'preflight-passed-no-mutation');
     assert.equal(readOnly.result.configDigest, crypto.createHash('sha256').update(beforeEnv).digest('hex'));
-    assert.deepEqual(Object.keys(readOnly.result).sort(), ['status', 'targetDigest', 'configDigest', 'inventoryDigest', 'runtimeCommit', 'runtimeImageDigest', 'opsCommit', 'sourceLedgerDigest'].sort());
+    assert.deepEqual(Object.keys(readOnly.result).sort(), ['status', 'targetDigest', 'configDigest', 'inventoryDigest', 'runtimeCommit', 'runtimeImageDigest', 'runtimePublicationRunId', 'runtimePublicationManifestDigest', 'opsCommit', 'sourceLedgerDigest'].sort());
+    assert.equal(readOnly.result.runtimePublicationRunId, greenSuccessorRuntime.publicationRunId);
+    assert.equal(readOnly.result.runtimePublicationManifestDigest, greenSuccessorRuntime.publicationManifestDigest);
     assert.deepEqual(readOnly.calls.map((entry) => entry.phase), expectedReversible);
     assert.equal(readOnly.calls.length, 32);
-    for (const [key, value] of Object.entries(readOnly.result)) if (key !== 'status') assert.match(value, /^(?:sha256:)?[0-9a-f]{40,64}$/u, key);
+    for (const [key, value] of Object.entries(readOnly.result)) {
+      if (key !== 'status' && key !== 'runtimePublicationRunId') assert.match(value, /^(?:sha256:)?[0-9a-f]{40,64}$/u, key);
+    }
     assert.deepEqual(readdirSync(root), beforeFiles, 'no evidence, backup, or isolated env created');
     assert.deepEqual(readFileSync(configFile), beforeEnv);
   }
@@ -2209,7 +2220,13 @@ test('database state readback requires exact scoped counts and full auth/catalog
 
 test('sanitized evidence accepts approved secret mount paths but rejects secret-bearing fields', () => {
   const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
-  assert.doesNotThrow(() => sanitizeGreenEvidence({ plan, backupDigest: 'f'.repeat(64), configDigest: '1'.repeat(64), targetReadback: { finalInventory: { mountDestinations: [{ destination: '/run/secrets/mfa-encryption-key', readOnly: true }] } }, imageReadback: { commit: runtimeCommit } }));
+  const evidence = sanitizeGreenEvidence({ plan, backupDigest: 'f'.repeat(64), configDigest: '1'.repeat(64), targetReadback: { finalInventory: { mountDestinations: [{ destination: '/run/secrets/mfa-encryption-key', readOnly: true }] } }, imageReadback: { commit: runtimeCommit } });
+  assert.deepEqual(evidence.runtime.publication, {
+    runId: greenSuccessorRuntime.publicationRunId,
+    manifestDigest: greenSuccessorRuntime.publicationManifestDigest,
+  });
+  const tamperedPlan = { ...plan, runtime: { ...plan.runtime, publication: { ...plan.runtime.publication, runId: greenSuccessorRuntime.publicationRunId + 1 } } };
+  assert.throws(() => sanitizeGreenEvidence({ plan: tamperedPlan, backupDigest: 'f'.repeat(64), configDigest: '1'.repeat(64), targetReadback: {}, imageReadback: {} }), /green_successor_publication_identity_mismatch/u);
   const forbidden = 'pass' + 'word';
   assert.throws(() => sanitizeGreenEvidence({ plan, backupDigest: 'f'.repeat(64), configDigest: '1'.repeat(64), targetReadback: { [forbidden]: 'synthetic-value' }, imageReadback: { commit: runtimeCommit } }), /green_evidence_secret_leak/u);
 });

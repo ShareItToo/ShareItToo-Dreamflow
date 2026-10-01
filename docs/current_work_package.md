@@ -86,6 +86,9 @@ The exact successor runtime is
 `sha256:16a90e4fbc3710e37c9e319fe5db545d6da6348448848c94c6bfc661eac47357`.
 Publication run `36834482750` produced manifest SHA-256
 `50074f2a9d3c43d30714ac9992854d9766a271f256ae169cb926b91bb24ad61b`.
+The runtime plan, no-mutation result and sanitized execution evidence all carry
+and validate that exact publication pair; a changed run or manifest digest is
+rejected before promotion.
 This package is
 source-only: it does not publish an image, prepare a manifest, mutate Staging,
 or perform a live promotion.
