@@ -222,7 +222,7 @@ R10; publication was skipped. CodeQL workflow `36879307906` and separate
 CodeQL check `110428152131` also passed. P4-A therefore remains source-only and
 made no Live, Green, Play, provider or payment change.
 
-## P4-B private dimensional FitCheck UI — LOCAL SOURCE PASS
+## P4-B private dimensional FitCheck UI — EXACT-HEAD PASS
 
 The smallest internal Flutter/Web slice adds one owner-bound FitCheck entry to
 the existing Mission detail for the exact need type
@@ -258,7 +258,48 @@ mandatory enabled-backend command in the standard technical regression runner.
 The change is additive: existing search, public listings, navigation, booking,
 reservation, contract, payment and provider flows are not reworked. No public
 surface, AI/photo analysis, Live, Green, Play or deployment state is changed.
-Exact-head CI remains pending after Sol review.
+Exact successor `0627cce52c53a62f080eefcf5ce48a4e906d405a` passed
+Regression `36885464117`, including Backend, PostgreSQL, Flutter and R10;
+publication was skipped. CodeQL workflow `36885464014` and separate CodeQL
+check `110448911667` also passed. P4-B remains source-only and made no Live,
+Green, Play, provider or payment change.
+
+## P5-A honest Mission inventory resolution — LOCAL SOURCE PASS
+
+The smallest additive P5 backend slice stores one owner-bound, revisioned
+resolution per Mission. Every revision binds the exact Mission revision and
+digest, dates, an owner-confirmed search-origin digest and radius, and a
+historical bounded inventory snapshot. Required quantities are assigned before
+optional quantities; one physical listing can be used only once per revision.
+Unsupported needs, empty inventory and quantity shortfalls remain visible gaps.
+Search deterministically inspects at most 25 rows, retains at most 24, and says
+`searchLimited=true` only when that bound overflowed. It reuses the authoritative
+non-persisting booking quote and performs no new price calculation.
+
+Owner-only, no-store Planner routes create, list, load and correct immutable
+resolution revisions with stable server IDs, idempotent commands and fail-closed
+revision/key collisions. Current applicability is computed separately from the
+stored historical snapshot: Mission, listing, catalog, owner eligibility,
+availability, listing location and authoritative quote drift becomes
+explicit stale/unknown truth without rewriting or silently requoting history.
+Exact coordinates are not stored or returned. Internal handover-location drift
+keys are removed by a config-free privacy shaper. The displayed location-snapshot
+digest binds that displayed snapshot; the separately named coordinate digest
+only binds the owner's search-origin input. Reservation, booking, contract, payment, public
+Shelf/listing, automatic publication and external-AI effects remain false.
+
+Migration `102` adds owner-composite roots, immutable revisions, globally
+unique per-revision listing assignments and idempotent commands. Account
+export, deletion cascades, retention inventory, down guards, R9 and append-only
+schema consumers advance additively; existing G4B output and legacy cart rows
+remain unchanged. Local acceptance passes 14 focused domain/adapter tests, the
+real PostgreSQL 16 P5 suite with restart, concurrency, owner/privacy/drift and
+deletion proofs, 82 privacy/retention/R9 validator tests, current-consumer
+closure, isolated privacy-export import without app secrets, and the real local
+R9 backup/restore/legacy-upgrade/down-guard proof at all 102 migrations. Backend
+checks and diff checks also pass. This package adds no UI and changes no existing search, listing,
+navigation, booking, payment or provider flow. No Live, Green, Play or runtime
+state changed; Sol review and exact-head CI remain pending.
 
 ## Closed prerequisite: Phase 0 Web/CORS and safe synthetic catalog QA
 

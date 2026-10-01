@@ -4,6 +4,7 @@ import { parseRentalDates } from './booking_domain.js';
 import { BookingWorkflowError, quoteBooking } from './booking_workflow.js';
 import {
   createDeterministicFirstPlan,
+  plannerItemDefinition,
   plannerCoreVersion,
   PlannerCoreError,
 } from './planner_core.js';
@@ -17,6 +18,7 @@ import {
 export const plannerInventoryVersion = 'G4B-2026-08-21.1';
 
 const MAX_CANDIDATES_PER_ITEM = 24;
+export const missionInventoryCandidateLimit = MAX_CANDIDATES_PER_ITEM;
 const variantIds = Object.freeze(['one_stop', 'price_efficient', 'top_rated']);
 const funnelStages = new Set(['inventory_resolved', 'project_added_to_cart']);
 
@@ -272,6 +274,168 @@ async function candidatesForItem(client, item, context) {
     inspectedCount: result.rows.length,
     rejectedByServerTruth,
   };
+}
+
+function missionCandidateQuery(item, {
+  actorId,
+  latitude,
+  longitude,
+  radiusKm,
+  privatePilot,
+  privatePilotAllowedRegions,
+}) {
+  const catalogKeys = item.catalogTargets.map((target) => target.catalogKey);
+  const publicLatitude = 'round(listing.latitude::numeric, 2)::double precision';
+  const publicLongitude = 'round(listing.longitude::numeric, 2)::double precision';
+  const distanceExpression = `(6371 * acos(least(1, greatest(-1,
+    cos(radians($3)) * cos(radians(${publicLatitude}))
+    * cos(radians(${publicLongitude}) - radians($4))
+    + sin(radians($3)) * sin(radians(${publicLatitude}))
+  ))))`;
+  return {
+    text: `SELECT listing.id, listing.owner_id, listing.title,
+                  listing.category_id, listing.subcategory, listing.condition,
+                  listing.city, listing.country, listing.catalog_revision,
+                  listing.availability_revision,
+                  ${distanceExpression} AS distance_km,
+                  encode(digest(concat_ws(E'\\n',
+                    COALESCE(listing.location_text, ''),
+                    COALESCE(listing.latitude::text, ''),
+                    COALESCE(listing.longitude::text, ''),
+                    COALESCE(listing.handover_radius_km::text, '')
+                  ), 'sha256'), 'hex') AS handover_location_key
+             FROM listings AS listing
+             JOIN users AS owner ON owner.id = listing.owner_id
+             JOIN LATERAL (
+               SELECT count(*)::int AS image_count
+                 FROM uploads AS upload
+                WHERE upload.listing_id = listing.id
+                  AND upload.purpose = 'listing_image'
+                  AND upload.visibility = 'public'
+                  AND upload.content_scan_status = 'passed'
+             ) AS media ON media.image_count > 0
+            WHERE listing.catalog_version = 1
+              AND listing.is_active = true
+              AND listing.status = 'active'
+              AND listing.moderation_status = 'active'
+              AND listing.owner_id <> $1
+              AND owner.deactivated_at IS NULL
+              AND owner.account_status = 'active'
+              AND concat(listing.category_id, E'\\x1f', listing.subcategory) = ANY($2::text[])
+              AND listing.latitude IS NOT NULL
+              AND listing.longitude IS NOT NULL
+              AND ${distanceExpression} <= $5
+              AND ($6::boolean = false OR (
+                listing.private_status_confirmed_at IS NOT NULL
+                AND listing.private_pilot_region_code = ANY($7::text[])
+                AND owner.private_use_confirmed_at IS NOT NULL
+                AND owner.private_marketplace_review_status = 'clear'
+              ))
+            ORDER BY distance_km, listing.id
+            LIMIT $8`,
+    values: [
+      actorId,
+      catalogKeys,
+      latitude,
+      longitude,
+      radiusKm,
+      privatePilot,
+      privatePilotAllowedRegions,
+      MAX_CANDIDATES_PER_ITEM + 1,
+    ],
+  };
+}
+
+function missionCandidate(row, quoteResult) {
+  const candidate = currentCandidate(row, quoteResult);
+  const catalogRevision = safeInteger(
+    row.catalog_revision,
+    'mission_inventory_catalog_revision_invalid',
+  );
+  const availabilityRevision = safeInteger(
+    row.availability_revision,
+    'mission_inventory_availability_revision_invalid',
+  );
+  const distanceKm = Number(row.distance_km);
+  const handoverLocationKey = text(row.handover_location_key, 64).toLowerCase();
+  if (candidate.quote.availabilityRevision !== availabilityRevision
+      || !Number.isFinite(distanceKm)
+      || distanceKm < 0
+      || !/^[0-9a-f]{64}$/u.test(handoverLocationKey)) {
+    throw new PlannerInventoryError(500, 'mission_inventory_candidate_contract_invalid');
+  }
+  return deepFreeze({
+    listingId: candidate.listingId,
+    title: candidate.title,
+    categoryId: candidate.categoryId,
+    subcategory: candidate.subcategory,
+    condition: candidate.condition,
+    city: candidate.city,
+    country: candidate.country,
+    distanceKm: Math.round(distanceKm * 10) / 10,
+    catalogRevision,
+    availabilityRevision,
+    handoverLocationKey,
+    quote: candidate.quote,
+  });
+}
+
+export async function resolveBoundedMissionCandidates(client, {
+  actorId,
+  itemType,
+  startDate,
+  endDate,
+  latitude,
+  longitude,
+  radiusKm,
+  privatePilot = false,
+  privatePilotAllowedRegions = [],
+  quoteCandidate = quoteBooking,
+}) {
+  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90
+      || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+    throw new PlannerInventoryError(400, 'invalid_mission_inventory_location');
+  }
+  if (!Number.isFinite(radiusKm) || radiusKm <= 0 || radiusKm > 500) {
+    throw new PlannerInventoryError(400, 'invalid_mission_inventory_radius');
+  }
+  const item = plannerItemDefinition(itemType);
+  if (!item) return deepFreeze({ supported: false, candidates: [], searchLimited: false });
+  const dates = dateInput({ startDate, endDate });
+  const query = missionCandidateQuery(item, {
+    actorId,
+    latitude,
+    longitude,
+    radiusKm,
+    privatePilot,
+    privatePilotAllowedRegions,
+  });
+  const result = await client.query(query.text, query.values);
+  const searchLimited = result.rows.length > MAX_CANDIDATES_PER_ITEM;
+  const candidates = [];
+  let rejectedByServerTruth = 0;
+  for (const row of result.rows.slice(0, MAX_CANDIDATES_PER_ITEM)) {
+    try {
+      const quote = await quoteCandidate(client, {
+        actorId,
+        raw: { listingId: row.id, startDate: dates.startDate, endDate: dates.endDate },
+        privatePilot,
+        privatePilotAllowedRegions,
+        persist: false,
+      });
+      candidates.push(missionCandidate(row, quote));
+    } catch (error) {
+      if (!expectedCandidateFailure(error)) throw error;
+      rejectedByServerTruth += 1;
+    }
+  }
+  return deepFreeze({
+    supported: true,
+    candidates,
+    inspectedCount: Math.min(result.rows.length, MAX_CANDIDATES_PER_ITEM),
+    rejectedByServerTruth,
+    searchLimited,
+  });
 }
 
 function priceOrder(left, right) {

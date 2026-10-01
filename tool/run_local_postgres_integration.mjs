@@ -33,6 +33,9 @@ export const integrationTestGroups = Object.freeze({
   missionFitCheck: Object.freeze([
     'backend/test/mission_fit_check_postgres.integration.test.js',
   ]),
+  missionInventoryResolution: Object.freeze([
+    'backend/test/mission_inventory_resolution_postgres.integration.test.js',
+  ]),
   privateShelf: Object.freeze([
     'backend/test/private_shelf_postgres.integration.test.js',
   ]),
@@ -64,8 +67,12 @@ export function integrationTestPlan({
   focusedWebFixture = false,
   focusedMissionNeed = false,
   focusedMissionFitCheck = false,
+  focusedMissionInventoryResolution = false,
   focusedPrivateShelf = false,
 } = {}) {
+  if (focusedMissionInventoryResolution) {
+    return [integrationTestGroups.missionInventoryResolution];
+  }
   if (focusedMissionFitCheck) return [integrationTestGroups.missionFitCheck];
   if (focusedPrivateShelf) return [integrationTestGroups.privateShelf];
   if (focusedMissionNeed) return [integrationTestGroups.missionNeed];
@@ -95,6 +102,7 @@ export function integrationTestPlan({
     integrationTestGroups.missionNeed,
     integrationTestGroups.privateShelf,
     integrationTestGroups.missionFitCheck,
+    integrationTestGroups.missionInventoryResolution,
     integrationTestGroups.stagingGoogleRegistration,
     integrationTestGroups.listingAi,
     integrationTestGroups.identity,
@@ -291,6 +299,8 @@ export async function runLocalPostgresIntegration({
   const focusedWebFixture = environment.SIT_POSTGRES_FOCUSED_WEB_FIXTURE === '1';
   const focusedMissionNeed = environment.SIT_POSTGRES_FOCUSED_MISSION_NEED === '1';
   const focusedMissionFitCheck = environment.SIT_POSTGRES_FOCUSED_MISSION_FIT_CHECK === '1';
+  const focusedMissionInventoryResolution =
+    environment.SIT_POSTGRES_FOCUSED_MISSION_INVENTORY_RESOLUTION === '1';
   const focusedPrivateShelf = environment.SIT_POSTGRES_FOCUSED_PRIVATE_SHELF === '1';
   const integrationGroups = integrationTestPlan({
     focusedGoogleRegistration,
@@ -301,6 +311,7 @@ export async function runLocalPostgresIntegration({
     focusedWebFixture,
     focusedMissionNeed,
     focusedMissionFitCheck,
+    focusedMissionInventoryResolution,
     focusedPrivateShelf,
   });
 

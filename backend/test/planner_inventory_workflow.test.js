@@ -9,6 +9,7 @@ import {
   plannerFunnelEvent,
   PlannerInventoryError,
   plannerInventoryVersion,
+  resolveBoundedMissionCandidates,
   resolvePlannerInventory,
 } from '../src/planner_inventory_workflow.js';
 import { plannerTemplateCatalog } from '../src/planner_core.js';
@@ -349,6 +350,56 @@ test('technical access and data-minimized funnel events stay fail-closed', () =>
   for (const omitted of ['actor', 'listingIds', 'ownerIds', 'quoteHashes', 'prices']) {
     assert.ok(event.omitted.includes(omitted));
   }
+});
+
+test('P5 candidate adapter validates location and uses public-coordinate privacy parity', async () => {
+  for (const input of [
+    { latitude: Number.NaN, longitude: 9.22, radiusKm: 20, code: 'invalid_mission_inventory_location' },
+    { latitude: 91, longitude: 9.22, radiusKm: 20, code: 'invalid_mission_inventory_location' },
+    { latitude: 49.14, longitude: 181, radiusKm: 20, code: 'invalid_mission_inventory_location' },
+    { latitude: 49.14, longitude: 9.22, radiusKm: 0, code: 'invalid_mission_inventory_radius' },
+    { latitude: 49.14, longitude: 9.22, radiusKm: 501, code: 'invalid_mission_inventory_radius' },
+  ]) {
+    await assert.rejects(
+      resolveBoundedMissionCandidates({ query: async () => assert.fail('query not allowed') }, {
+        actorId: 'renter-1', itemType: 'plant_container_equipment',
+        startDate: '2026-10-10', endDate: '2026-10-11',
+        ...input,
+      }),
+      (error) => error instanceof PlannerInventoryError && error.code === input.code,
+    );
+  }
+
+  let observedSql = '';
+  const candidateRows = Array.from({ length: 25 }, (_, index) => ({
+    ...row(`listing-p5-${String(index).padStart(2, '0')}`, `owner-${index}`, 0, null),
+    catalog_revision: 3,
+    availability_revision: 1,
+    distance_km: index === 0 ? 1.24 : 2 + index,
+    handover_location_key: 'a'.repeat(64),
+  }));
+  const client = {
+    async query(statement, values) {
+      observedSql = statement;
+      assert.deepEqual(values.slice(2), [49.14, 9.22, 500, false, [], 25]);
+      return { rowCount: candidateRows.length, rows: candidateRows };
+    },
+  };
+  const result = await resolveBoundedMissionCandidates(client, {
+    actorId: 'renter-1', itemType: 'plant_container_equipment',
+    startDate: '2026-10-10', endDate: '2026-10-11',
+    latitude: 49.14, longitude: 9.22, radiusKm: 500,
+    quoteCandidate: quoteCandidateWith(Object.fromEntries(
+      candidateRows.map((entry, index) => [entry.id, 1000 + index]),
+    )),
+  });
+  assert.equal(result.supported, true);
+  assert.equal(result.searchLimited, true);
+  assert.equal(result.candidates.length, 24);
+  assert.equal(result.candidates[0].distanceKm, 1.2);
+  assert.match(observedSql, /round\(listing\.latitude::numeric, 2\)/u);
+  assert.match(observedSql, /round\(listing\.longitude::numeric, 2\)/u);
+  assert.doesNotMatch(JSON.stringify(result), /latitude|longitude/u);
 });
 
 test('deployment and route wiring keep G4B disabled, internal, and non-reserving', () => {

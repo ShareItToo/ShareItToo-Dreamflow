@@ -33,7 +33,7 @@
     },
     {
       "path": "backend/src/app.js",
-      "sha256": "16d9709722418305007e028da97e3c77128be4b3ba2ac63dba261d2116e2b80a"
+      "sha256": "24fea203131f80c17e7bbe47d0079c8df98d5e9e6c427b23094e64fbc12ede9c"
     },
     {
       "path": "backend/src/rate_limit_policy.js",
@@ -81,11 +81,11 @@
     },
     {
       "path": "backend/src/retention_inventory.js",
-      "sha256": "429f24d0ee61cea52f09cc6d6e487576bd41a35176b5d6ce25a59a8d3f169d44"
+      "sha256": "fa1cf8cf0927f925633e31b2d4db18ee8a7f0c0f166dca2770bed1404547819e"
     },
     {
       "path": "backend/src/privacy_export.js",
-      "sha256": "ed3dbb9e9d5eed8ea70bb0305cfaa0b68f39809da0d821b57e06e66a274f22a3"
+      "sha256": "fc096e9c202849881dc1c26cda65ec46975787da8d91ce662f4f90878df76573"
     },
     {
       "path": "backend/src/privacy_export_policy.js",
@@ -245,7 +245,7 @@
     },
     {
       "path": "backend/src/planner_inventory_workflow.js",
-      "sha256": "94da6e209f757bce5f732d21b68d3ed7a85e65acf374b0f04eddb60decaf688b"
+      "sha256": "26b90b10261d1da996f4acfe58456a2d4c37c6654a290888057544c4365b7883"
     },
     {
       "path": "backend/src/listing_supply_enrichment.js",
@@ -410,6 +410,22 @@
     {
       "path": "backend/sql/migrations/101_mission_fit_checks.down.sql",
       "sha256": "d2442cefb930c1c51beb9c72d30731f3d3187601c55ad96e20474a4aaf85162b"
+    },
+    {
+      "path": "backend/src/mission_inventory_resolution_workflow.js",
+      "sha256": "4f5f75166513e842ddd162533c7bfa3dd9636a02e01b379640e84b310a21d26b"
+    },
+    {
+      "path": "backend/src/mission_inventory_resolution_privacy.js",
+      "sha256": "31322cc24ff71376fefe212a1b1cc744a2f1c65f600d5a50c5dfdd9ec3d6002d"
+    },
+    {
+      "path": "backend/sql/migrations/102_mission_inventory_resolutions.up.sql",
+      "sha256": "b71a009ad50729d6f423759fb74bee1cafbc8a900e0555f62b4e89f31281c22a"
+    },
+    {
+      "path": "backend/sql/migrations/102_mission_inventory_resolutions.down.sql",
+      "sha256": "6ccb63515e848e1c41e95752c1073574a4b213ed0925c7e6e004d3a13a06f8c0"
     },
     {
       "path": "backend/src/private_shelf_workflow.js",

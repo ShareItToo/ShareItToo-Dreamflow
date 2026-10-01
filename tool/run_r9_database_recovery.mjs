@@ -28,7 +28,7 @@ const requireFromBackend = createRequire(
   new URL('../backend/package.json', import.meta.url),
 );
 
-export const r9RequiredMigrationCount = 101;
+export const r9RequiredMigrationCount = 102;
 export const r9SyntheticAccountCount = 12;
 export const r9SyntheticListingCount = 6;
 export const r9ResultClassification = 'LOCAL_ISOLATED_DATABASE_RECOVERY_PROOF';
@@ -98,6 +98,10 @@ const rollbackGuardExpectations = Object.freeze([
   Object.freeze({
     filename: '101_mission_fit_checks.down.sql',
     message: 'mission_fit_check_rows_active',
+  }),
+  Object.freeze({
+    filename: '102_mission_inventory_resolutions.down.sql',
+    message: 'mission_inventory_resolution_rows_active',
   }),
 ]);
 
@@ -178,7 +182,7 @@ async function readMigrationPlan(root) {
   }
   if (plan.length !== r9RequiredMigrationCount
       || plan[0]?.filename !== '001_b3_foundation.up.sql'
-      || plan.at(-1)?.filename !== '101_mission_fit_checks.up.sql') {
+      || plan.at(-1)?.filename !== '102_mission_inventory_resolutions.up.sql') {
     fail('r9_migration_inventory_unexpected');
   }
   return Object.freeze(plan);
@@ -859,6 +863,27 @@ async function assertRollbackGuardRefusals(pool, root) {
            )`,
         );
       }
+      if (guard.filename === '102_mission_inventory_resolutions.down.sql') {
+        await client.query(
+          `INSERT INTO mission_needs (
+             id, owner_id, domain_version, status
+           ) VALUES (
+             'mission_need_00000000-0000-4000-8000-000000000102',
+             'r9-user-001', 'P2-A-2026-10-01.1', 'draft'
+           )`,
+        );
+        await client.query(
+          `INSERT INTO mission_inventory_resolutions (
+             id, owner_id, mission_need_id, domain_version,
+             planner_core_version, planner_inventory_version
+           ) VALUES (
+             'mission_inventory_00000000-0000-4000-8000-000000000102',
+             'r9-user-001',
+             'mission_need_00000000-0000-4000-8000-000000000102',
+             'P5-A-2026-10-01.1', 'G4A-2026-08-21.1', 'G4B-2026-08-21.1'
+           )`,
+        );
+      }
       try {
         await client.query(sql);
       } catch (error) {
@@ -930,7 +955,7 @@ async function closePools(pools) {
 
 export function validateR9Observation(value, {
   requiredMigrationCount = r9RequiredMigrationCount,
-  requiredLastMigration = '101_mission_fit_checks.up.sql',
+  requiredLastMigration = '102_mission_inventory_resolutions.up.sql',
   requiredRollbackGuards = rollbackGuardExpectations,
 } = {}) {
   if (value?.schemaVersion !== 1

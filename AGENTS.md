@@ -74,6 +74,11 @@ discover a mechanically stale source hash.
 
 ## Sol, Luna and Gemini review loop
 
+- Blue-Ocean/Mission work is additive by default. Implement only the currently
+  authorized bounded mission slice; do not restructure, replace or silently
+  change existing search, listing, navigation, booking, payment or provider
+  flows. Each package must prove those legacy paths stay compatible unless
+  Walid explicitly authorizes a separately scoped change.
 - Luna executes one bounded package and returns useful evidence, not a claim of
   perfect completeness. Sol performs a targeted review and records exactly one
   decision: `PASS`, `FIX` or `GEMINI_GATE_REQUIRED:<gate-id>`.
@@ -109,6 +114,13 @@ discover a mechanically stale source hash.
 - Isolated Ops tests must not import config-bound runtime modules or require
   unrelated environment secrets merely to prove a local contract. Verify the
   required primitive or source contract without widening test prerequisites.
+- Privacy/export modules must remain importable without application secrets.
+  Put shared redaction or shaping helpers in a pure config-free module; never
+  make export generation depend on a workflow module that loads runtime config.
+- A digest shown beside a redacted or sanitized payload must bind those exact
+  visible bytes. Recompute it, label it explicitly as an internal-snapshot
+  digest, or omit it; never imply that a hidden-field digest verifies the
+  displayed payload.
 - For database/filesystem sagas, model an active write reservation separately
   from cleanup work that is safe to execute. User requests and cleanup workers
   must never drain active reservations; every post-commit failure must leave a

@@ -479,6 +479,22 @@ export function plannerTemplateCatalog() {
   });
 }
 
+export function plannerItemDefinition(itemType) {
+  const candidate = typeof itemType === 'string' ? itemType.trim() : '';
+  const matches = plannerTemplates.flatMap((entry) => entry.items)
+    .filter((entry) => entry.itemType === candidate);
+  if (matches.length !== 1) return null;
+  const [entry] = matches;
+  return deepFreeze({
+    itemType: entry.itemType,
+    catalogTargets: entry.catalogTargets.map(({ categoryId, subcategory, catalogKey }) => ({
+      categoryId,
+      subcategory,
+      catalogKey,
+    })),
+  });
+}
+
 export function createDeterministicFirstPlan(templateId, rawAnswers) {
   const selectedTemplate = templateById(templateId);
   const answers = validatedAnswers(rawAnswers, selectedTemplate);

@@ -1,5 +1,9 @@
 import { trustedRefundProviderModel } from './payment_domain.js';
 import { applyAccountExportPolicy } from './privacy_export_policy.js';
+import {
+  sanitizeMissionInventoryListingSnapshot,
+  sanitizeMissionInventoryResolutionSnapshot,
+} from './mission_inventory_resolution_privacy.js';
 
 function rows(client, sql, userId, parameters = []) {
   return async () => {
@@ -115,6 +119,10 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
     missionFitChecks,
     missionFitCheckRevisions,
     missionFitCheckCommands,
+    missionInventoryResolutions,
+    missionInventoryResolutionRevisions,
+    missionInventoryResolutionAssignments,
+    missionInventoryResolutionCommands,
     privateShelfItems,
     privateShelfMedia,
     privateShelfCommands,
@@ -432,6 +440,53 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
          FROM mission_fit_check_commands
         WHERE owner_id = $1
         ORDER BY fit_check_id, result_revision, idempotency_key`, userId),
+    rows(client,
+      `SELECT id AS "resolutionId", mission_need_id AS "missionNeedId",
+              domain_version AS "domainVersion", planner_core_version AS "plannerCoreVersion",
+              planner_inventory_version AS "plannerInventoryVersion",
+              current_revision AS "currentRevision",
+              created_at AS "createdAt", updated_at AS "updatedAt"
+         FROM mission_inventory_resolutions
+        WHERE owner_id = $1
+        ORDER BY updated_at, id`, userId),
+    rows(client,
+      `SELECT revision.resolution_id AS "resolutionId", revision.revision,
+              revision.mission_need_id AS "missionNeedId",
+              revision.mission_need_revision AS "missionRevision",
+              revision.mission_payload_sha256 AS "missionPayloadDigest",
+              revision.start_date::text AS "startDate",
+              revision.end_date::text AS "endDate",
+              revision.location_snapshot AS "locationSnapshot",
+              revision.location_snapshot_sha256 AS "locationSnapshotDigest",
+              revision.resolution_snapshot AS "resolutionSnapshot",
+              revision.created_at AS "createdAt"
+         FROM mission_inventory_resolution_revisions AS revision
+         JOIN mission_inventory_resolutions AS resolution
+           ON resolution.id = revision.resolution_id
+        WHERE resolution.owner_id = $1
+        ORDER BY revision.resolution_id, revision.revision`, userId),
+    rows(client,
+      `SELECT assignment.resolution_id AS "resolutionId",
+              assignment.resolution_revision AS "resolutionRevision",
+              assignment.slot_key AS "slotKey", assignment.need_key AS "needKey",
+              assignment.necessity, assignment.slot_ordinal AS "slotOrdinal",
+              assignment.listing_id AS "listingId",
+              assignment.listing_snapshot AS "listingSnapshot",
+              assignment.quote_snapshot AS "quoteSnapshot",
+              assignment.gap_reason AS "gapReason", assignment.created_at AS "createdAt"
+         FROM mission_inventory_resolution_assignments AS assignment
+         JOIN mission_inventory_resolutions AS resolution
+           ON resolution.id = assignment.resolution_id
+        WHERE resolution.owner_id = $1
+        ORDER BY assignment.resolution_id, assignment.resolution_revision, assignment.slot_key`, userId),
+    rows(client,
+      `SELECT idempotency_key AS "idempotencyKey",
+              command_type AS "commandType", request_sha256 AS "requestDigest",
+              resolution_id AS "resolutionId", result_revision AS "resultRevision",
+              created_at AS "createdAt"
+         FROM mission_inventory_resolution_commands
+        WHERE owner_id = $1
+        ORDER BY resolution_id, result_revision, idempotency_key`, userId),
     rows(client,
       `SELECT id AS "shelfItemId", domain_version AS "domainVersion",
               title, category_key AS "categoryKey", condition,
@@ -1271,6 +1326,16 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
     downloadRequiresOwnerAuthentication: true,
     binaryContentIncluded: false,
   }));
+  const missionInventoryResolutionRevisionsExport = missionInventoryResolutionRevisions
+    .map((entry) => ({
+      ...entry,
+      resolutionSnapshot: sanitizeMissionInventoryResolutionSnapshot(entry.resolutionSnapshot),
+    }));
+  const missionInventoryResolutionAssignmentsExport = missionInventoryResolutionAssignments
+    .map((entry) => ({
+      ...entry,
+      listingSnapshot: sanitizeMissionInventoryListingSnapshot(entry.listingSnapshot),
+    }));
 
   const raw = {
     account: { ...account, registrationBundles },
@@ -1328,6 +1393,21 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
         paymentCreated: false,
         externalGenerativeAiUsed: false,
         automaticPhotoAnalysisUsed: false,
+      },
+      missionInventoryResolutions: {
+        resolutions: missionInventoryResolutions,
+        revisions: missionInventoryResolutionRevisionsExport,
+        assignments: missionInventoryResolutionAssignmentsExport,
+        commands: missionInventoryResolutionCommands,
+        exactSearchCoordinatesStored: false,
+        bindingStatus: 'non_binding',
+        globallyCompleteOrOptimal: false,
+        publicShelfCreated: false,
+        publicListingCreated: false,
+        reservationCreated: false,
+        bookingCreated: false,
+        contractCreated: false,
+        paymentCreated: false,
       },
       privateShelf: {
         items: privateShelfItems,
