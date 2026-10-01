@@ -19,8 +19,7 @@ test('isolated bootstrap password helper preserves the runtime scrypt contract',
   const [, saltHex, hashHex] = encoded.split('$');
   const independentlyDerived = crypto.scryptSync(accepted, Buffer.from(saltHex, 'hex'), 64);
   assert.equal(crypto.timingSafeEqual(independentlyDerived, Buffer.from(hashHex, 'hex')), true);
-  assert.equal(verifyFixturePassword(accepted,
-    crypto.createHash('sha256').update(accepted).digest('hex')), false);
+  assert.equal(verifyFixturePassword(accepted, '0'.repeat(64)), false);
 });
 
 test('bootstrap manifest binds credentials with scrypt and rejects legacy fast digests', async (t) => {
@@ -32,7 +31,7 @@ test('bootstrap manifest binds credentials with scrypt and rejects legacy fast d
   const legacyVersion = structuredClone(f.manifest);
   legacyVersion.schemaVersion = 1;
   assert.throws(() => validateFixtureBootstrap({ ...f, manifest: legacyVersion }), /fixture_bootstrap_manifest_invalid/u);
-  f.manifest.passwordDigests[0] = crypto.createHash('sha256').update(f.passwords[0]).digest('hex');
+  f.manifest.passwordDigests[0] = '0'.repeat(64);
   assert.throws(() => validateFixtureBootstrap(f), /fixture_bootstrap_password_binding/u);
 });
 

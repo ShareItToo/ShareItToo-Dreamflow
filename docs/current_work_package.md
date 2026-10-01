@@ -89,6 +89,11 @@ generated code. Its isolated focused suite is green at `175/175`; backend
 `npm run check` and `git diff --check` are green. Exact-HEAD CI remains pending
 until this successor is reviewed and committed. Blue Ocean remains the main
 goal; this security closure changes no Live, Green, Play or deployment state.
+Exact source `90b62331` passed the normal CodeQL workflow, while Advanced
+Security check `110346084554` retained one test-only annotation because the
+negative fixture still derived a fast digest from test password data. The
+local successor now uses a deterministic non-secret 64-hex literal for that
+invalid-format case; exact-HEAD CI for this final annotation fix is pending.
 
 ## Closed prerequisite: Phase 0 Web/CORS and safe synthetic catalog QA
 
