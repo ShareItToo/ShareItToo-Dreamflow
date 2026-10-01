@@ -27,7 +27,12 @@ import {
   greenPublicFixtureProfile,
   greenSyntheticCatalogItemKeys,
   greenSyntheticCatalogProjection,
+  greenSuccessorRuntime,
   assertGreenSyntheticCatalogPublicReadback,
+  summarizeGreenSyntheticCatalogPayload,
+  runGreenSyntheticCatalogProbe,
+  greenDatabaseStateBaseline,
+  greenDatabaseStateReadbackSql,
   assertGreenDatabaseStateReadback,
   greenTechnicalSandboxEnvironment,
   greenTechnicalSandboxHealth,
@@ -57,7 +62,8 @@ import { isMfaProbeContainer, runMfaProbe } from '../ops/staging_controlled_acce
 import { summarizeGreenAllowedIds } from '../ops/green_auth_profile.mjs';
 import { dedicatedFixture } from '../ops/staging_web_fixture_bootstrap.mjs';
 
-const runtimeCommit = '266f69c21dd61bfcdb212c24a0c8788b172bed9e';
+const runtimeCommit = greenSuccessorRuntime.commit;
+const runtimeImageDigest = greenSuccessorRuntime.imageDigest;
 const opsCommit = '8fecd57018ab10a0c6733531539472e6179a02db';
 const targetNetworkId = '4'.repeat(64);
 const providerNetworkId = '5'.repeat(64);
@@ -237,6 +243,7 @@ test('Green target accepts only the exact verified resource identities', () => {
     'shareittoo-staging-api-web-fixture-env-rollback-13b02611f3b0',
     'shareittoo-staging-api-alt-sealed-green-1ebc6eaf',
     'shareittoo-staging-api-alt-sealed-green-34194c42',
+    'shareittoo-staging-api-web-catalog-rollback-ca6c2b44138e',
   ]);
   const retainedReadbacks = greenTarget.retainedSealed.map((descriptor) => ({
     Name: `/${descriptor.name}`,
@@ -324,7 +331,7 @@ test('Green runtime config fails closed for external/mock/legacy or secret-beari
     ['listingAiProvider', 'openai'], ['listingAiExternalAllowed', true], ['listingAiBudgetCents', 1],
   ]) assert.throws(() => buildGreenPromotionPlan({
     targetManifest, config: { ...config, [name]: value }, runtimeCommit,
-    runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit,
+    runtimeImageDigest, opsCommit,
     evidenceFile: '/docker/shareittoo/evidence/green-promotion.json',
   }), /green_config_safety_boundary_invalid/u);
   assert.throws(() => assertGreenRuntimeConfig({ ...config, envNames: [...config.envNames, 'STRIPE_SECRET_KEY'] }), /green_config_env_allowlist_invalid/u);
@@ -336,7 +343,7 @@ test('Green runtime config fails closed for external/mock/legacy or secret-beari
 
 test('release identity overrides are rejected before runtime files or commands', async () => {
   const plan = buildGreenPromotionPlan({
-    targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit,
+    targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit,
     evidenceFile: '/docker/shareittoo/evidence/green-promotion.json',
   });
   for (const releaseName of ['APP_VERSION', 'APP_COMMIT', 'APP_BUILD_TIME']) {
@@ -367,7 +374,7 @@ test('evidence artifact family preflight rejects retained backups and env files 
     for (const suffix of ['.json', '.pgdump', '.isolated.env']) {
       const evidenceFile = path.join(root, `green-promotion-${suffix.slice(1)}.json`);
       const plan = buildGreenPromotionPlan({
-        targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile,
+        targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile,
         ownershipNonce: 'c'.repeat(32),
       });
       const retainedPath = suffix === '.json' ? evidenceFile : suffix === '.pgdump' ? `${evidenceFile}.pgdump` : plan.isolated.envFile;
@@ -392,7 +399,7 @@ test('evidence artifact family preflight rejects retained backups and env files 
     }
     const absentEvidenceFile = path.join(root, 'green-promotion-absent.json');
     const absentPlan = buildGreenPromotionPlan({
-      targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: absentEvidenceFile,
+      targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: absentEvidenceFile,
       ownershipNonce: 'd'.repeat(32),
     });
     assert.equal(await assertGreenEvidenceArtifactFamilyAvailable({ evidenceFile: absentPlan.evidenceFile, isolatedEnvFile: absentPlan.isolated.envFile }), true);
@@ -454,7 +461,7 @@ test('protected Green runtime environment binds memory payment, pilot, paths and
 
 test('Green promotion has an explicit provider-off technical Sandbox plan and readback', () => {
   const plan = buildGreenPromotionPlan({
-    targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`,
+    targetManifest, config, runtimeCommit, runtimeImageDigest,
     opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json',
   });
   assert.deepEqual(plan.technicalSandbox, {
@@ -499,7 +506,7 @@ test('Green promotion has an explicit provider-off technical Sandbox plan and re
 
 test('promotion executor contract rejects external provider selections before candidate or final commands exist', () => {
   const plan = buildGreenPromotionPlan({
-    targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`,
+    targetManifest, config, runtimeCommit, runtimeImageDigest,
     opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json',
   });
   for (const [name, value] of [
@@ -513,9 +520,11 @@ test('promotion executor contract rejects external provider selections before ca
 });
 
 test('runtime image must be immutable GHCR commit plus digest', () => {
-  assert.equal(assertGreenRuntimeImage({ image: `ghcr.io/shareittoo/shareittoo-api:${runtimeCommit}`, digest: `sha256:${'d'.repeat(64)}`, runtimeCommit }).runtimeCommit, runtimeCommit);
-  assert.throws(() => assertGreenRuntimeImage({ image: 'shareittoo-api:latest', digest: `sha256:${'d'.repeat(64)}`, runtimeCommit }), /runtime_image_tag_mismatch/u);
+  assert.equal(assertGreenRuntimeImage({ image: `ghcr.io/shareittoo/shareittoo-api:${runtimeCommit}`, digest: runtimeImageDigest, runtimeCommit }).runtimeCommit, runtimeCommit);
+  assert.throws(() => assertGreenRuntimeImage({ image: 'shareittoo-api:latest', digest: runtimeImageDigest, runtimeCommit }), /runtime_image_tag_mismatch/u);
   assert.throws(() => assertGreenRuntimeImage({ image: `ghcr.io/shareittoo/shareittoo-api:${runtimeCommit}`, digest: 'sha256:short', runtimeCommit }), /runtime_image_digest_required/u);
+  assert.throws(() => assertGreenRuntimeImage({ image: `ghcr.io/shareittoo/shareittoo-api:${runtimeCommit}`, digest: `sha256:${'d'.repeat(64)}`, runtimeCommit }), /green_successor_runtime_identity_mismatch/u);
+  assert.throws(() => assertGreenRuntimeImage({ image: `ghcr.io/shareittoo/shareittoo-api:${'f'.repeat(40)}`, digest: runtimeImageDigest, runtimeCommit: 'f'.repeat(40) }), /green_successor_runtime_identity_mismatch/u);
 });
 
 test('runtime readback binds version and capability safety surface', () => {
@@ -528,7 +537,7 @@ test('runtime readback binds version and capability safety surface', () => {
 });
 
 test('production-shaped image inspect readback may omit Config.Image but must bind digest and revision', () => {
-  const runtime = { image: `ghcr.io/shareittoo/shareittoo-api:${runtimeCommit}`, digest: `sha256:${'d'.repeat(64)}`, runtimeCommit };
+  const runtime = { image: `ghcr.io/shareittoo/shareittoo-api:${runtimeCommit}`, digest: runtimeImageDigest, runtimeCommit };
   const readback = { Config: { Labels: { 'org.opencontainers.image.revision': runtimeCommit }, User: 'shareittoo' }, RepoDigests: [`${runtime.image}@${runtime.digest}`] };
   assert.equal(assertGreenImageReadback(readback, runtime), true);
   assert.throws(() => assertGreenImageReadback({ ...readback, RepoDigests: [`${runtime.image}@sha256:${'e'.repeat(64)}`] }, runtime), /green_image_readback_mismatch/u);
@@ -551,7 +560,7 @@ test('inventory rejects wrong schema, host ports and non-Green labels', () => {
 
 test('promotion plan keeps backup, isolated 98-to-98 idempotency, acceptance and final no-port promotion ordered', () => {
   const plan = buildGreenPromotionPlan({
-    targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`,
+    targetManifest, config, runtimeCommit, runtimeImageDigest,
     opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json',
   });
   assert.deepEqual(plan.commandPolicy.finalNetworks, [greenTarget.network, greenTarget.providerNetwork]);
@@ -616,7 +625,7 @@ test('promotion plan keeps backup, isolated 98-to-98 idempotency, acceptance and
 });
 
 test('isolated lifecycle is create, inspect-by-ID, then start-by-ID with execution-bound final successor', () => {
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: '7'.repeat(32) });
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: '7'.repeat(32) });
   const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
   const phase = (name) => commands.findIndex((entry) => entry.phase === name);
   const postgresCreate = commands.find((entry) => entry.phase === 'isolated_postgres_create');
@@ -633,12 +642,12 @@ test('isolated lifecycle is create, inspect-by-ID, then start-by-ID with executi
 });
 
 test('isolated resource names and labels carry a fresh per-execution ownership nonce', () => {
-  const first = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: 'a'.repeat(32) });
-  const second = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: 'b'.repeat(32) });
+  const first = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: 'a'.repeat(32) });
+  const second = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: 'b'.repeat(32) });
   assert.match(first.isolated.candidate, new RegExp(first.isolated.ownershipNonce, 'u'));
   assert.match(first.isolated.rehearsalId, new RegExp(first.isolated.ownershipNonce, 'u'));
   assert.notEqual(first.isolated.ownershipNonce, second.isolated.ownershipNonce);
-  assert.throws(() => buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: 'not-a-nonce' }), /green_ownership_nonce_invalid/u);
+  assert.throws(() => buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: 'not-a-nonce' }), /green_ownership_nonce_invalid/u);
   const commands = buildGreenPromotionCommands({ plan: first, configFile: config.envFile, config });
   const candidate = commands.find((entry) => entry.phase === 'candidate_acceptance_create');
   assert.equal(candidate.args[candidate.args.indexOf('--name') + 1], first.isolated.candidate);
@@ -647,7 +656,7 @@ test('isolated resource names and labels carry a fresh per-execution ownership n
 
 test('every promotion command has an executable command and argv, including target inventory', () => {
   const plan = buildGreenPromotionPlan({
-    targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`,
+    targetManifest, config, runtimeCommit, runtimeImageDigest,
     opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json',
   });
   const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
@@ -668,7 +677,7 @@ test('every promotion command has an executable command and argv, including targ
 });
 
 test('promotion plan resolves the exact sealed API before emitting mutation commands', () => {
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   assert.equal(plan.target.sealedApiContainer, greenTarget.sealedApiContainer);
   const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
   for (const entry of commands) {
@@ -685,7 +694,7 @@ test('promotion plan resolves the exact sealed API before emitting mutation comm
 });
 
 test('Docker env-file bindings reject JSON manifests and accept only real protected env files', () => {
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   assert.throws(() => buildGreenPromotionCommands({ plan, configFile: '/docker/shareittoo/ops/green-config.json', config }), /green_config_file_invalid/u);
   const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
   const mutated = commands.map((entry) => ({ ...entry, args: entry.args?.map((arg) => arg === plan.isolated.envFile ? '/docker/shareittoo/ops/green-config.json' : arg) }));
@@ -693,7 +702,7 @@ test('Docker env-file bindings reject JSON manifests and accept only real protec
 });
 
 test('retained historical seal is read-only and the new seal is the only rename target', () => {
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
   for (const descriptor of plan.target.retainedSealed) {
     const mutatingOldName = commands.filter((entry) => ['rename', 'rm', 'start', 'stop', 'network'].includes(entry.args?.[0]) && entry.args.includes(descriptor.name));
@@ -707,7 +716,7 @@ test('default CLI is read-only and execution requires both explicit mode and exa
   assert.deepEqual(parseGreenPromotionArguments([runtimeCommit]), { runtimeCommit, execute: false });
   assert.deepEqual(parseGreenPromotionArguments([runtimeCommit, '--execute']), { runtimeCommit, execute: true });
   for (const args of [[], [runtimeCommit, '--unknown'], [runtimeCommit, '--execute', 'extra']]) assert.throws(() => parseGreenPromotionArguments(args), /green_cli_arguments_invalid/u);
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   for (const environment of [{}, { GREEN_STAGING_PROMOTION_EXECUTE: '1' }, { GREEN_STAGING_PROMOTION_EXECUTE: '1', GREEN_STAGING_PROMOTION_CONFIRM: 'f'.repeat(40) }]) {
     let calls = 0;
     await assert.rejects(runGreenPromotion({ plan, config, configFile: config.envFile, execute: true, environment, command: async () => { calls++; } }));
@@ -715,7 +724,7 @@ test('default CLI is read-only and execution requires both explicit mode and exa
   }
   const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
   const prefix = greenReadOnlyPreflightCommands(commands, plan);
-  assert.equal(prefix.length, 31);
+  assert.equal(prefix.length, 32);
   assert.deepEqual(greenRequiredControlExecutables(prefix), ['docker']);
   assert.deepEqual(await assertGreenControlExecutables({ commands: prefix, executableAvailable: async (name) => name === 'docker' }), ['docker']);
   for (const change of [
@@ -723,8 +732,8 @@ test('default CLI is read-only and execution requires both explicit mode and exa
     (entries) => { entries[0].args = ['stop', plan.target.apiContainer]; },
     (entries) => { entries[0].stdoutFile = '/tmp/forbidden'; },
     (entries) => { entries[1].args[3] = 'foreign-container'; },
-    (entries) => { entries[26].args.splice(3, 0, '--unsafe'); },
-    (entries) => { entries[26].args[entries[26].args.length - 1] = 'DELETE FROM users'; },
+    (entries) => { entries.find(({ phase }) => phase === 'source_database_state_readback_before').args.splice(3, 0, '--unsafe'); },
+    (entries) => { entries.find(({ phase }) => phase === 'source_database_state_readback_before').args[entries.find(({ phase }) => phase === 'source_database_state_readback_before').args.length - 1] = `${greenDatabaseStateReadbackSql}; DELETE FROM users`; },
     (entries) => { [entries[0], entries[1]] = [entries[1], entries[0]]; },
   ]) {
     const altered = structuredClone(commands); change(altered);
@@ -738,7 +747,7 @@ test('default CLI is read-only and execution requires both explicit mode and exa
 });
 
 test('control executable preflight fails before any mutating executor command and accepts modeled prerequisites', async () => {
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
   assert.deepEqual(greenRequiredControlExecutables(commands), ['bash', 'curl', 'docker', 'node']);
   const calls = [];
@@ -760,7 +769,7 @@ test('control executable preflight fails before any mutating executor command an
 });
 
 test('isolated Postgres init-marker readback retries past an early readiness-only log', () => {
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const marker = buildGreenPromotionCommands({ plan, configFile: config.envFile, config }).find((entry) => entry.phase === 'isolated_postgres_init_complete_log_readback');
   assert.equal(marker.command, 'bash');
   assert.match(marker.args[1], /seq 1 60/u);
@@ -797,8 +806,8 @@ test('executor preserves required post-enrollment auth through candidate, recove
   const configFile = path.join(root, 'green.env');
   const evidenceFile = path.join(root, 'green-promotion.json');
   const runtimeConfig = { ...config, envFile: configFile };
-  const databaseStateReadback = JSON.stringify({ authCount: 6, refreshCount: 6, loginAuditCount: 6, identityCount: 1, listingCount: 1, uploadCount: 1, bookingCount: 0, requestCount: 0, paymentCommandCount: 0, ledgerDigest: greenTarget.currentLedgerDigest, authDigest: 'a'.repeat(64), catalogDigest: 'b'.repeat(64) });
-  const catalogPublicReadback = JSON.stringify({ status: 200, count: 1, pageCount: 1, rowKeys: greenSyntheticCatalogItemKeys, idDigest: greenSyntheticCatalogProjection.idDigest, ownerIdDigest: greenSyntheticCatalogProjection.ownerIdDigest, titleDigest: greenSyntheticCatalogProjection.titleDigest, noticeDigest: greenSyntheticCatalogProjection.noticeDigest, photoCount: 1, photoDigest: 'c'.repeat(64), expectedPhotoDigest: 'c'.repeat(64), locationText: greenSyntheticCatalogProjection.locationText, city: greenSyntheticCatalogProjection.city, country: greenSyntheticCatalogProjection.country, lat: greenSyntheticCatalogProjection.lat, lng: greenSyntheticCatalogProjection.lng, catalogClass: greenSyntheticCatalogProjection.catalogClass, realOffer: false, ownerDeclaration: false, bookingAllowed: false, paymentAllowed: false, isActive: true, listingStatus: 'active', verificationStatus: 'unverified' });
+  const databaseStateReadback = JSON.stringify(greenDatabaseStateBaseline);
+  const catalogPublicReadback = (photoReachable) => JSON.stringify({ status: 200, count: 1, pageCount: 1, rowKeys: greenSyntheticCatalogItemKeys, idDigest: greenSyntheticCatalogProjection.idDigest, ownerIdDigest: greenSyntheticCatalogProjection.ownerIdDigest, titleDigest: greenSyntheticCatalogProjection.titleDigest, noticeDigest: greenSyntheticCatalogProjection.noticeDigest, photoCount: 1, photoDigest: greenSyntheticCatalogProjection.photoDigest, locationText: greenSyntheticCatalogProjection.locationText, city: greenSyntheticCatalogProjection.city, country: greenSyntheticCatalogProjection.country, lat: greenSyntheticCatalogProjection.lat, lng: greenSyntheticCatalogProjection.lng, catalogClass: greenSyntheticCatalogProjection.catalogClass, realOffer: false, ownerDeclaration: false, bookingAllowed: false, paymentAllowed: false, isActive: true, listingStatus: 'active', verificationStatus: 'unverified', strictItemCompatible: true, canonicalValues: true, attempts: 1, converged: true, photoReachable });
   const envValues = {
     CORS_ORIGINS: greenWebCorsOrigins,
     NODE_ENV: 'production', DEPLOYMENT_ENVIRONMENT: 'test',
@@ -819,7 +828,7 @@ test('executor preserves required post-enrollment auth through candidate, recove
   writeFileSync(configFile, `${Object.entries(envValues).map(([key, value]) => `${key}=${value}`).join('\n')}\n`, { mode: 0o600 });
   chmodSync(configFile, 0o600);
   const plan = buildGreenPromotionPlan({
-    targetManifest: postEnrollment ? enrolledTargetManifest() : targetManifest, config: runtimeConfig, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`,
+    targetManifest: postEnrollment ? enrolledTargetManifest() : targetManifest, config: runtimeConfig, runtimeCommit, runtimeImageDigest,
     opsCommit, evidenceFile,
   });
   const imageReadback = { Config: { Labels: { 'org.opencontainers.image.revision': runtimeCommit }, User: 'shareittoo' }, RepoDigests: [`${plan.runtime.image}@${plan.runtime.digest}`] };
@@ -969,7 +978,8 @@ test('executor preserves required post-enrollment auth through candidate, recove
       if (phase === 'isolated_migration_ledger_readback') return { stdout: isolatedLedger };
       if (phase === 'isolated_finding_fingerprint_readback') return { stdout: emptyFindingFingerprint };
       if (phase === 'candidate_finding_fingerprint_readback') return { stdout: candidateFinding };
-      if (phase === 'candidate_public_catalog_readback' || phase === 'final_public_catalog_readback') return { stdout: catalogPublicReadback };
+      if (phase === 'candidate_public_catalog_readback') return { stdout: catalogPublicReadback(null) };
+      if (phase === 'final_public_catalog_readback') return { stdout: catalogPublicReadback(true) };
       if (phase === 'candidate_cleanup') assert.deepEqual(args, ['rm', '--force', '--volumes', candidateId]);
       if (phase === 'isolated_database_cleanup') assert.deepEqual(args, ['rm', '--force', '--volumes', isolatedDatabaseId]);
       if (phase === 'isolated_network_cleanup') assert.deepEqual(args, ['network', 'rm', isolatedNetworkId]);
@@ -1024,7 +1034,7 @@ test('executor preserves required post-enrollment auth through candidate, recove
     assert.equal(readOnly.result.configDigest, crypto.createHash('sha256').update(beforeEnv).digest('hex'));
     assert.deepEqual(Object.keys(readOnly.result).sort(), ['status', 'targetDigest', 'configDigest', 'inventoryDigest', 'runtimeCommit', 'runtimeImageDigest', 'opsCommit', 'sourceLedgerDigest'].sort());
     assert.deepEqual(readOnly.calls.map((entry) => entry.phase), expectedReversible);
-    assert.equal(readOnly.calls.length, 31);
+    assert.equal(readOnly.calls.length, 32);
     for (const [key, value] of Object.entries(readOnly.result)) if (key !== 'status') assert.match(value, /^(?:sha256:)?[0-9a-f]{40,64}$/u, key);
     assert.deepEqual(readdirSync(root), beforeFiles, 'no evidence, backup, or isolated env created');
     assert.deepEqual(readFileSync(configFile), beforeEnv);
@@ -1227,7 +1237,7 @@ test('executor preserves required post-enrollment auth through candidate, recove
 });
 
 test('command executor bindings keep isolated probes and canonical runtime distinct', () => {
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
   assert.equal(assertGreenCommandBindings(commands, plan, config.envFile), true);
   const isolated = commands.find((entry) => entry.phase === 'isolated_integrity_and_functional_probes');
@@ -1290,14 +1300,14 @@ test('repeat-promotion inventory requires the exact Green DB host and retained f
   assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, mounts: [...base.api.mounts, { destination: '/run/secrets/technical-sandbox-key', type: 'bind', source: config.technicalSandboxKeyFile, volume: null, readOnly: true }, { destination: '/run/secrets/technical-sandbox-webhook', type: 'bind', source: config.technicalSandboxWebhookFile, volume: null, readOnly: true }] } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_prepromotion_tuple_mismatch/u);
   assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, mounts: base.api.mounts.map((mount) => mount.destination === '/run/secrets/mfa-encryption-key' ? { ...mount, type: 'volume', volume: greenTarget.uploadsVolume, source: null } : mount) } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_prepromotion_tuple_mismatch/u);
   assert.equal(assertGreenRuntimeConfig(config).mounts.length, 5);
-  assert.equal(buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' }).finalMounts.length, 3);
+  assert.equal(buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' }).finalMounts.length, 3);
   assert.throws(() => assertGreenRuntimeConfig({ ...config, mounts: [...config.mounts, { source: '/foreign/provider-key', destination: '/run/secrets/extra', readOnly: true }] }), /green_mount_inventory_invalid/u);
   assert.throws(() => assertGreenContainerInventory({ ...base, api: { ...base.api, prePromotionTuple: true, greenLabel: true, image: 'ghcr.io/shareittoo/shareittoo-api:wrong' } }, greenTarget.sourceSchema, targetManifest.prePromotionImage, config), /green_prepromotion_tuple_mismatch/u);
 });
 
 test('final readback binds topology and required post-enrollment cohort', () => {
   const postEnrollment = true;
-  const plan = buildGreenPromotionPlan({ targetManifest: postEnrollment ? enrolledTargetManifest() : targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const plan = buildGreenPromotionPlan({ targetManifest: postEnrollment ? enrolledTargetManifest() : targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const record = {
     Id: 'a'.repeat(64), Name: `/${greenTarget.apiContainer}`, State: { Running: true }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: targetNetworkId }, [greenTarget.providerNetwork]: { NetworkID: providerNetworkId } } },
     Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId, 'com.shareittoo.green.execution_id': plan.isolated.executionId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919', ...greenRuntimeEnvEntries] },
@@ -1354,7 +1364,7 @@ test('final readback binds topology and required post-enrollment cohort', () => 
   assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Mounts: record.Mounts.map((mount) => mount.Destination === '/run/secrets/mfa-encryption-key' ? { ...mount, Type: 'volume', Name: 'foreign-secret-volume', Source: undefined } : mount) }, plan, expectedNetworkIds }), /green_final_mount_inventory_mismatch/u);
 });
 
-test('live D3 baseline manifest binds all nineteen seals and the exact approved digests without raw IDs', () => {
+test('live D3 baseline manifest binds all twenty seals and the exact approved digests without raw IDs', () => {
   const manifest = {
     ...targetManifest,
     authProfile: {
@@ -1366,8 +1376,8 @@ test('live D3 baseline manifest binds all nineteen seals and the exact approved 
     },
   };
   manifest.targetDigest = normalizedGreenTargetDigest(manifest);
-  assert.equal(manifest.targetDigest, 'e41efa6d5cbfc932c10c438396865e363c770979bf8376af223eda68a86ddd4c');
-  assert.equal(assertGreenTargetManifest(manifest).retainedSealed.length, 19);
+  assert.equal(manifest.targetDigest, '0efaffbb334b6e4f4ed7df170fa8997c1eb202afe44c2a0dabb5cc3ebf76a57a');
+  assert.equal(assertGreenTargetManifest(manifest).retainedSealed.length, 20);
   const readme = readFileSync(new URL('../ops/README.md', import.meta.url), 'utf8');
   for (const value of [manifest.targetDigest, manifest.authProfile.sourceImageDigest,
     manifest.authProfile.allowedUserIdsDigest, manifest.authProfile.googleUserIdDigest]) assert.ok(readme.includes(value));
@@ -1417,17 +1427,19 @@ test('web-fixture successor rejects stale predecessor, omitted seals and changed
   assert.throws(() => assertGreenTargetManifest(previousLiveBaseline), /green_target_identity_mismatch/u);
 });
 
-test('current runtime D3 remains separate from the successor Ops commit', () => {
-  const runtime = 'd3c2f5d7d7516d3bfaac4b61689c2c433924cc6e';
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit: runtime,
-    runtimeImageDigest: 'sha256:31b8b015eb0635b9fbb7d6c5e54ef43fe089d5b953dba8fa446aae2122a5888a', opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
-  assert.equal(plan.runtime.runtimeCommit, runtime);
-  assert.equal(plan.runtime.digest, 'sha256:31b8b015eb0635b9fbb7d6c5e54ef43fe089d5b953dba8fa446aae2122a5888a');
+test('D3 predecessor remains separate from the exact 6c0 successor runtime', () => {
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit,
+    runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  assert.equal(plan.runtime.runtimeCommit, greenSuccessorRuntime.commit);
+  assert.equal(plan.runtime.digest, greenSuccessorRuntime.imageDigest);
+  assert.equal(plan.target.prePromotionImage, `ghcr.io/shareittoo/shareittoo-api:d3c2f5d7d7516d3bfaac4b61689c2c433924cc6e`);
   assert.equal(plan.opsCommit, opsCommit);
   assert.notEqual(plan.opsCommit, plan.runtime.runtimeCommit);
   const readme = readFileSync(new URL('../ops/README.md', import.meta.url), 'utf8');
-  assert.ok(readme.includes(runtime));
+  assert.ok(readme.includes(greenSuccessorRuntime.commit));
   assert.ok(readme.includes(plan.runtime.digest));
+  assert.ok(readme.includes(String(greenSuccessorRuntime.publicationRunId)));
+  assert.ok(readme.includes(greenSuccessorRuntime.publicationManifestDigest));
 });
 
 test('post-enrollment target profile is required, digest-bound and rejects stale source binding', () => {
@@ -1444,7 +1456,7 @@ test('post-enrollment target profile is required, digest-bound and rejects stale
 });
 
 test('post-enrollment rollback refuses auth or allowed-ID drift before rename/start', async () => {
-  const plan = buildGreenPromotionPlan({ targetManifest: enrolledTargetManifest(), config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const plan = buildGreenPromotionPlan({ targetManifest: enrolledTargetManifest(), config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const original = renamedSealedApiIdentityRecord;
   const identity = { ...originalApiIdentity, config: JSON.stringify(stableIdentityValue(original.Config)) };
   const driftedEnvironments = ['FIREBASE_AUTH_ENABLED=false', `SIT_STAGING_ALLOWED_USER_IDS=${enrolledAllowedIds},extra`, 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=true'].map((replacement) => {
@@ -1468,7 +1480,7 @@ test('post-enrollment rollback refuses auth or allowed-ID drift before rename/st
 });
 
 test('post-enrollment forward recovery refuses missing or ambiguous Google identity before successor creation', async () => {
-  const plan = buildGreenPromotionPlan({ targetManifest: enrolledTargetManifest(), config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const plan = buildGreenPromotionPlan({ targetManifest: enrolledTargetManifest(), config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
   for (const count of ['0', '2', '']) {
     const phases = [];
@@ -1485,7 +1497,7 @@ test('post-enrollment forward recovery refuses missing or ambiguous Google ident
 });
 
 test('emergency cleanup is bounded and never restores sealed Green after schema mutation', async () => {
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const calls = [];
   const fake = async (command, args, options) => { calls.push({ command, args, options }); return { stdout: '' }; };
   const result = await runGreenEmergencyCleanup({ plan, command: fake, completed: ['quiesce_green_api', 'seal_green_api'], schemaMutationStarted: true });
@@ -1495,7 +1507,7 @@ test('emergency cleanup is bounded and never restores sealed Green after schema 
 });
 
 test('emergency cleanup with no completed creation phases issues zero deletion commands', async () => {
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const calls = [];
   const fake = async (command, args, options) => { calls.push({ command, args, options }); return { stdout: '' }; };
   const result = await runGreenEmergencyCleanup({ plan, command: fake, completed: [] });
@@ -1505,7 +1517,7 @@ test('emergency cleanup with no completed creation phases issues zero deletion c
 });
 
 test('emergency cleanup rejects same-name foreign resources without deleting them', async () => {
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const calls = [];
   const foreign = { Config: { Labels: { 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': 'different-run', 'com.shareittoo.sit.green': 'true' } }, Labels: { 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': 'different-run' } };
   const fake = async (command, args, options) => {
@@ -1525,7 +1537,7 @@ test('emergency cleanup rejects same-name foreign resources without deleting the
 });
 
 test('emergency cleanup never deletes a prior same-name resource when create response is unknown', async () => {
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const calls = [];
   const fake = async (command, args, options) => {
     calls.push({ command, args, options });
@@ -1539,7 +1551,7 @@ test('emergency cleanup never deletes a prior same-name resource when create res
 });
 
 test('emergency cleanup removes anonymous volumes only with the owned container ID', async () => {
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const calls = [];
   const databaseId = 'd'.repeat(64);
   const identity = { Id: databaseId, Name: `/${plan.isolated.database}`, Config: { Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } } };
@@ -1557,7 +1569,7 @@ test('emergency cleanup removes anonymous volumes only with the owned container 
 });
 
 test('emergency cleanup removes a container by the inspected immutable ID', async () => {
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: 'c'.repeat(32) });
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: 'c'.repeat(32) });
   const calls = [];
   const identity = { Id: 'c'.repeat(64), Name: `/${plan.isolated.candidate}`, Config: { Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.green.candidate': plan.target.runId, 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } } };
   const fake = async (command, args, options) => {
@@ -1575,7 +1587,7 @@ test('emergency cleanup removes a container by the inspected immutable ID', asyn
 });
 
 test('emergency cleanup does not classify a transport error as already absent', async () => {
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const candidateId = 'c'.repeat(64);
   const calls = [];
   const fake = async (command, args, options) => {
@@ -1594,7 +1606,7 @@ test('emergency cleanup does not classify a transport error as already absent', 
 });
 
 test('emergency cleanup refuses a container ID rebind before deletion', async () => {
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: 'e'.repeat(32) });
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: 'e'.repeat(32) });
   const calls = [];
   let inspectCount = 0;
   const owned = { Id: '1'.repeat(64), Name: `/${plan.isolated.candidate}`, Config: { Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.green.candidate': plan.target.runId, 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } } };
@@ -1610,7 +1622,7 @@ test('emergency cleanup refuses a container ID rebind before deletion', async ()
 });
 
 test('pre-schema failure restores and verifies the sealed API', async () => {
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const calls = [];
   const fake = async (command, args, options) => { calls.push({ command, args, options }); return restoreFixture(options) ?? { stdout: '' }; };
   const result = await runGreenEmergencyCleanup({ plan, command: fake, completed: ['quiesce_green_api', 'seal_green_api'], phaseStarted: 'seal_green_api', schemaMutationStarted: false, originalApiIdentity });
@@ -1620,7 +1632,7 @@ test('pre-schema failure restores and verifies the sealed API', async () => {
 });
 
 test('restore refuses a changed network set or NetworkID before rename/start', async () => {
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const cases = [
     ['network set', { Networks: { [greenTarget.network]: renamedSealedApiIdentityRecord.NetworkSettings.Networks[greenTarget.network] } }],
     ['NetworkID', { Networks: Object.fromEntries(Object.entries(renamedSealedApiIdentityRecord.NetworkSettings.Networks).map(([name, endpoint]) => [name, {
@@ -1647,7 +1659,7 @@ test('restore refuses a changed network set or NetworkID before rename/start', a
 });
 
 test('restore rejects malformed network identity before rename/start', async () => {
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const cases = [
     ['missing NetworkID', { Networks: { [greenTarget.network]: { Aliases: ['sealed-api'] } } }],
     ['invalid network key', { Networks: { 'sealed network': { NetworkID: targetNetworkId } } }],
@@ -1672,7 +1684,7 @@ test('restore rejects malformed network identity before rename/start', async () 
 });
 
 test('quiesce response loss with failed restore is not reported clean', async () => {
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const fake = async (command, args, options) => restoreFixture(options, false) ?? { stdout: '' };
   const result = await runGreenEmergencyCleanup({ plan, command: fake, phaseStarted: 'quiesce_green_api', schemaMutationStarted: false, originalApiIdentity });
   assert.equal(result.restored, false);
@@ -1681,7 +1693,7 @@ test('quiesce response loss with failed restore is not reported clean', async ()
 });
 
 test('restore refuses a same-name rebound container after rename', async () => {
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const calls = [];
   const rebound = { ...restoredApiIdentityRecord, Id: 'foreign-rebound-id' };
   const fake = async (command, args, options) => {
@@ -1698,7 +1710,7 @@ test('restore refuses a same-name rebound container after rename', async () => {
 });
 
 test('restore refuses a foreign sealed-name collision even when current name is exact', async () => {
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const foreignSealed = { ...renamedSealedApiIdentityRecord, Id: 'foreign-sealed-id' };
   const calls = [];
   const fake = async (command, args, options) => {
@@ -1713,7 +1725,7 @@ test('restore refuses a foreign sealed-name collision even when current name is 
 });
 
 test('restore reconciles a lost rename response before starting the exact original', async () => {
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const calls = [];
   const fake = async (command, args, options) => {
     calls.push({ command, args, options });
@@ -1739,7 +1751,7 @@ test('restore reconciles a lost rename response before starting the exact origin
 });
 
 test('post-schema forward recovery creates only the successor and verifies its public contract', async () => {
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
   const payload = { checks: { technicalSandbox: greenTechnicalSandboxHealth, identityVerification: { provider: 'memory' }, listingAi: { provider: 'on_device' } } };
   const record = {
@@ -1749,7 +1761,7 @@ test('post-schema forward recovery creates only the successor and verifies its p
   };
   const preStartRecord = { ...record, State: { Running: false }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: '' } } } };
   const attachedPreStartRecord = { ...record, State: { Running: false }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: '' }, [greenTarget.providerNetwork]: { NetworkID: '' } } } };
-  const image = { Config: { Labels: { 'org.opencontainers.image.revision': runtimeCommit }, User: 'shareittoo' }, RepoDigests: [`ghcr.io/shareittoo/shareittoo-api@sha256:${'e'.repeat(64)}`] };
+  const image = { Config: { Labels: { 'org.opencontainers.image.revision': runtimeCommit }, User: 'shareittoo' }, RepoDigests: [`ghcr.io/shareittoo/shareittoo-api@${runtimeImageDigest}`] };
   const calls = [];
   let failProviderAttach = false;
   let currentRecord = null;
@@ -1839,7 +1851,7 @@ test('post-schema forward recovery creates only the successor and verifies its p
 });
 
 test('stateful successor lifecycle reconciles lost attach/start responses and retries once when state remains stopped', async () => {
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: 'e'.repeat(32) });
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: 'e'.repeat(32) });
   const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
   const image = { Config: { Labels: { 'org.opencontainers.image.revision': runtimeCommit }, User: 'shareittoo' }, RepoDigests: [`${plan.runtime.image}@${plan.runtime.digest}`] };
   const payload = { checks: { technicalSandbox: greenTechnicalSandboxHealth, identityVerification: { provider: 'memory' }, listingAi: { provider: 'on_device' } } };
@@ -1950,7 +1962,7 @@ test('stateful successor lifecycle reconciles lost attach/start responses and re
 });
 
 test('forward recovery stops on a foreign final-name conflict before network attach or start', async () => {
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: 'd'.repeat(32) });
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: 'd'.repeat(32) });
   const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
   const calls = [];
   const foreign = {
@@ -1989,7 +2001,7 @@ test('forward recovery stops on a foreign final-name conflict before network att
 });
 
 test('successor pre-start validation rejects wrong User, Env and mounts', () => {
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: 'f'.repeat(32) });
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json', ownershipNonce: 'f'.repeat(32) });
   const record = {
     Id: '9'.repeat(64), Name: `/${greenTarget.apiContainer}`, State: { Running: false }, NetworkSettings: { Ports: {}, Networks: { [greenTarget.network]: { NetworkID: targetNetworkId } } },
     Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId, 'com.shareittoo.green.execution_id': plan.isolated.executionId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919', ...greenRuntimeEnvEntries] },
@@ -2042,7 +2054,7 @@ test('successor pre-start validation rejects wrong User, Env and mounts', () => 
 });
 
 test('forward recovery fails closed before candidate continuation on migration readback gaps', async () => {
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
   const payload = { checks: { technicalSandbox: greenTechnicalSandboxHealth, identityVerification: { provider: 'memory' }, listingAi: { provider: 'on_device' } } };
   const record = {
@@ -2050,7 +2062,7 @@ test('forward recovery fails closed before candidate continuation on migration r
     Config: { Image: `${plan.runtime.image}@${plan.runtime.digest}`, User: 'shareittoo', Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.sit.green.run_id': greenTarget.runId, 'com.shareittoo.green.execution_id': plan.isolated.executionId }, Env: ['DEPLOYMENT_ENVIRONMENT=test', 'FIREBASE_AUTH_ENABLED=false', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false', 'SIT_STAGING_ACCESS_GATE_ENABLED=true', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false', 'SIT_STAGING_COMPOSE_PROJECT=sit-green', 'SIT_STAGING_ALLOWED_USER_IDS=synthetic_sandbox_user_pilot_20260919', ...greenRuntimeEnvEntries] },
     HostConfig: { GroupAdd: ['65532'] }, Mounts: finalMounts,
   };
-  const image = { Config: { Labels: { 'org.opencontainers.image.revision': runtimeCommit }, User: 'shareittoo' }, RepoDigests: [`ghcr.io/shareittoo/shareittoo-api@sha256:${'e'.repeat(64)}`] };
+  const image = { Config: { Labels: { 'org.opencontainers.image.revision': runtimeCommit }, User: 'shareittoo' }, RepoDigests: [`ghcr.io/shareittoo/shareittoo-api@${runtimeImageDigest}`] };
   for (const invalid of [
     { migration: '', ledger: currentMigrationLedger, code: 'green_forward_recovery_schema_readback_invalid' },
     { migration: '094_apple_refresh_material_only.up.sql', ledger: currentMigrationLedger, code: 'green_forward_recovery_schema_readback_invalid' },
@@ -2074,16 +2086,12 @@ test('forward recovery fails closed before candidate continuation on migration r
 
 test('synthetic catalog public readback requires one complete exact Item-compatible row', () => {
   const valid = {
-    status: 200,
-    count: 1,
-    pageCount: 1,
-    rowKeys: greenSyntheticCatalogItemKeys,
+    status: 200, count: 1, pageCount: 1, rowKeys: greenSyntheticCatalogItemKeys,
     idDigest: greenSyntheticCatalogProjection.idDigest,
     ownerIdDigest: greenSyntheticCatalogProjection.ownerIdDigest,
     titleDigest: greenSyntheticCatalogProjection.titleDigest,
     noticeDigest: greenSyntheticCatalogProjection.noticeDigest,
-    photoCount: 1,
-    photoDigest: 'c'.repeat(64),
+    photoCount: 1, photoDigest: greenSyntheticCatalogProjection.photoDigest,
     locationText: greenSyntheticCatalogProjection.locationText,
     city: greenSyntheticCatalogProjection.city,
     country: greenSyntheticCatalogProjection.country,
@@ -2097,8 +2105,14 @@ test('synthetic catalog public readback requires one complete exact Item-compati
     isActive: true,
     listingStatus: 'active',
     verificationStatus: 'unverified',
+    strictItemCompatible: true,
+    canonicalValues: true,
+    attempts: 1,
+    converged: true,
+    photoReachable: null,
   };
-  assert.equal(assertGreenSyntheticCatalogPublicReadback(valid, valid.photoDigest), true);
+  assert.equal(assertGreenSyntheticCatalogPublicReadback(valid), true);
+  assert.equal(assertGreenSyntheticCatalogPublicReadback({ ...valid, photoReachable: true }, { requirePhotoReachable: true }), true);
   for (const invalid of [
     { ...valid, count: 2 },
     { ...valid, rowKeys: valid.rowKeys.slice(0, -1) },
@@ -2107,34 +2121,101 @@ test('synthetic catalog public readback requires one complete exact Item-compati
     { ...valid, photoCount: 0, photoDigest: null },
     { ...valid, catalogClass: 'ordinary_catalog' },
     { ...valid, bookingAllowed: true },
-  ]) assert.throws(() => assertGreenSyntheticCatalogPublicReadback(invalid, valid.photoDigest), /green_synthetic_catalog_public_readback_invalid/u);
+    { ...valid, attempts: 9 },
+    { ...valid, canonicalValues: false },
+    { ...valid, photoReachable: true },
+  ]) assert.throws(() => assertGreenSyntheticCatalogPublicReadback(invalid), /green_synthetic_catalog_public_readback_invalid/u);
 });
 
-test('database state readback requires exact before/after counts and digests', () => {
-  const state = {
-    authCount: 6, refreshCount: 6, loginAuditCount: 6, identityCount: 1,
-    listingCount: 1, uploadCount: 1, bookingCount: 0, requestCount: 0,
-    paymentCommandCount: 0, ledgerDigest: 'a'.repeat(64), authDigest: 'b'.repeat(64),
-    catalogDigest: 'c'.repeat(64),
+test('strict Item matrix rejects missing or forged synthetic public fields before canonical acceptance', () => {
+  const row = { ...JSON.parse(readFileSync(new URL('../../test/fixtures/staging_synthetic_catalog_public_listing.json', import.meta.url), 'utf8')),
+    id: dedicatedFixture.listing, ownerId: dedicatedFixture.owner,
+    createdAt: '2026-09-30T19:57:14.044Z',
+    photos: [`https://staging.shareittoo.com/api/v1/uploads/${dedicatedFixture.upload}`],
   };
+  const base = summarizeGreenSyntheticCatalogPayload({ status: 200, body: { listings: [row], page: { count: 1 } }, expectedPhotoUrl: row.photos[0] });
+  assert.equal(base.strictItemCompatible, true);
+  assert.equal(base.canonicalValues, true);
+  for (const mutation of [
+    ({ ...row, ownerId: undefined }),
+    ({ ...row, pricePerDay: '1' }),
+    ({ ...row, bookingAllowed: 'false' }),
+    ({ ...row, createdAt: 'not-a-date' }),
+    ({ ...row, photos: 'forged' }),
+  ]) {
+    assert.equal(summarizeGreenSyntheticCatalogPayload({ status: 200, body: { listings: [mutation], page: { count: 1 } }, expectedPhotoUrl: row.photos[0] }).strictItemCompatible, false);
+  }
+});
+
+test('catalog probe converges after one transient invalid readback without replaying mutations', async () => {
+  const row = { ...JSON.parse(readFileSync(new URL('../../test/fixtures/staging_synthetic_catalog_public_listing.json', import.meta.url), 'utf8')),
+    id: dedicatedFixture.listing, ownerId: dedicatedFixture.owner,
+    createdAt: '2026-09-30T19:57:14.044Z',
+    photos: [`https://staging.shareittoo.com/api/v1/uploads/${dedicatedFixture.upload}`],
+  };
+  let calls = 0;
+  const result = await runGreenSyntheticCatalogProbe({
+    url: 'http://127.0.0.1:18082/v1/listings?sort=newest&limit=100&offset=0',
+    environment: { PUBLIC_BASE_URL: 'https://staging.shareittoo.com/api/v1', SIT_STAGING_PUBLIC_UPLOAD_NAMES: dedicatedFixture.upload },
+    fetchImpl: async (_url, options) => {
+      calls += 1;
+      assert.ok(options.signal);
+      return calls === 1
+        ? { status: 200, json: async () => ({ listings: [], page: { count: 0 } }) }
+        : { status: 200, json: async () => ({ listings: [row], page: { count: 1 } }) };
+    },
+    delay: async (milliseconds) => assert.equal(milliseconds, 100),
+  });
+  assert.equal(result.converged, true);
+  assert.equal(result.attempts, 2);
+  assert.equal(calls, 2);
+  assert.equal(result.photoReachable, null);
+});
+
+test('catalog probe bounds persistent invalid readback to eight read-only timed attempts', async () => {
+  let calls = 0;
+  let delays = 0;
+  const result = await runGreenSyntheticCatalogProbe({
+    url: 'http://127.0.0.1:18082/v1/listings?sort=newest&limit=100&offset=0',
+    environment: { PUBLIC_BASE_URL: 'https://shareittoo.com/api/v1', SIT_STAGING_PUBLIC_UPLOAD_NAMES: dedicatedFixture.upload },
+    fetchImpl: async (_url, options) => {
+      calls += 1;
+      assert.ok(options.signal);
+      return { status: 200, json: async () => ({ listings: [], page: { count: 0 } }) };
+    },
+    delay: async (milliseconds) => { assert.equal(milliseconds, 100); delays += 1; },
+  });
+  assert.equal(result.converged, false);
+  assert.equal(result.attempts, 8);
+  assert.equal(calls, 8);
+  assert.equal(delays, 7);
+});
+
+test('database state readback requires exact scoped counts and full auth/catalog/ledger digests', () => {
+  const state = { ...greenDatabaseStateBaseline };
   assert.deepEqual(assertGreenDatabaseStateReadback(JSON.stringify(state)), state);
   for (const drift of [
     { ...state, listingCount: 2 },
     { ...state, ledgerDigest: 'd'.repeat(64) },
+    { ...state, authDigest: 'd'.repeat(64) },
+    { ...state, activeAuthCount: 1 },
     { ...state, paymentCommandCount: 1 },
-  ]) assert.throws(() => assertGreenDatabaseStateReadback(JSON.stringify(drift), state), /green_database_state_changed/u);
+  ]) assert.throws(() => assertGreenDatabaseStateReadback(JSON.stringify(drift)), /green_database_state_changed/u);
   assert.throws(() => assertGreenDatabaseStateReadback(JSON.stringify({ ...state, extra: true })), /green_database_state_readback_invalid/u);
+  assert.match(greenDatabaseStateReadbackSql, /auth_sessions/u);
+  assert.match(greenDatabaseStateReadbackSql, /refresh_tokens/u);
+  assert.match(greenDatabaseStateReadbackSql, /audit_log/u);
 });
 
 test('sanitized evidence accepts approved secret mount paths but rejects secret-bearing fields', () => {
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   assert.doesNotThrow(() => sanitizeGreenEvidence({ plan, backupDigest: 'f'.repeat(64), configDigest: '1'.repeat(64), targetReadback: { finalInventory: { mountDestinations: [{ destination: '/run/secrets/mfa-encryption-key', readOnly: true }] } }, imageReadback: { commit: runtimeCommit } }));
   const forbidden = 'pass' + 'word';
   assert.throws(() => sanitizeGreenEvidence({ plan, backupDigest: 'f'.repeat(64), configDigest: '1'.repeat(64), targetReadback: { [forbidden]: 'synthetic-value' }, imageReadback: { commit: runtimeCommit } }), /green_evidence_secret_leak/u);
 });
 
 test('sanitized evidence and cleanup never turn Green promotion into legacy/prod mutation', () => {
-  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest: `sha256:${'e'.repeat(64)}`, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
+  const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
   const evidence = sanitizeGreenEvidence({ plan, backupDigest: 'f'.repeat(64), configDigest: '1'.repeat(64), targetReadback: { schema: 98 }, imageReadback: { live: 200, ready: 200 } });
   assert.equal(evidence.redaction, 'sensitive values omitted');
   assert.deepEqual(evidence.safety.syntheticCatalog, { enabled: true, ...greenPublicFixtureProfile });

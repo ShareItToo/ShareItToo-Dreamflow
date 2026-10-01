@@ -97,14 +97,16 @@ noncontractual with booking and payment capabilities false. This source
 binding still performs no manifest preparation or activation.
 
 The catalog-preserving Green promotion successor is source-only and binds this
-exact D3 predecessor plus all 19 retained seals. Its protected, candidate,
+exact D3 predecessor plus all 20 retained seals, including the stopped catalog
+rollback seal. Its protected, candidate,
 final and rollback environments keep the catalog flag enabled. Candidate
 loopback and final public readbacks require the exact newest-listings query to
 return one complete strict Item-compatible row with server-owned id, title,
 notice and photo, coarse location, the synthetic-only catalog class, and false
 real-offer, owner-declaration, booking and payment flags. Source and final
-database readbacks require unchanged auth, identity, listing, upload, booking,
-request and payment counts and unchanged ledger/auth/catalog digests. No live
+database readbacks bind retained scoped auth history `6/6/6`, active auth
+`0/0`, identity `1`, listing/upload `1/1`, zero booking/request/payment effects
+and unchanged full auth/ledger/catalog digests. No live
 promotion, Staging mutation or image publication is authorized by this package.
 
 ## Reviewed execution-capsule requirements
@@ -117,7 +119,7 @@ A future fresh capsule must, before any secondary checks:
    records or stderr other than the sanitized fixed-schema object;
 3. validate a restored API with immutable container ID, exact normalized
    config/host/mount/image/environment, exact network inventory and IDs, plus
-   separate running, health, version and disabled-catalog assertions;
+   separate running, health, version and the exact manifest-bound catalog-state assertions;
 4. exclude volatile endpoint IDs, IP/MAC addresses and runtime DNS attachment
    fields from the restart-stable comparison; and
 5. keep the activation mutation non-retriable and require a fresh manifest and
@@ -154,3 +156,14 @@ real-offer claims remain false. This record is not deployment or browser PASS.
 
 This source successor is not live activation evidence and does not authorize a
 remote run.
+
+The reviewed runtime successor for that projection is exact source
+`6c0ef70db2656df3e378add858d5f5157388127e`, immutable image digest
+`sha256:16a90e4fbc3710e37c9e319fe5db545d6da6348448848c94c6bfc661eac47357`.
+Publication run `36834482750` produced manifest SHA-256
+`50074f2a9d3c43d30714ac9992854d9766a271f256ae169cb926b91bb24ad61b`.
+The promotion source successor binds that exact runtime, uses bounded read-only
+candidate/final catalog convergence with per-attempt timeouts, and compares the
+canonical public photo against trusted digest
+`bd3496b7850a0cd6e7e186e788e9d7fd7a7284832d4c3631b54cc67ee4a9b32e`.
+Publication and source proof remain distinct from live promotion acceptance.

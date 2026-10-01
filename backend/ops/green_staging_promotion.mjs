@@ -173,6 +173,14 @@ export const greenTarget = Object.freeze({
       runId: '20260918011528-wp254',
       running: false,
     }),
+    Object.freeze({
+      name: 'shareittoo-staging-api-web-catalog-rollback-ca6c2b44138e',
+      image: 'ghcr.io/shareittoo/shareittoo-api:d3c2f5d7d7516d3bfaac4b61689c2c433924cc6e@sha256:31b8b015eb0635b9fbb7d6c5e54ef43fe089d5b953dba8fa446aae2122a5888a',
+      imageDigest: 'sha256:31b8b015eb0635b9fbb7d6c5e54ef43fe089d5b953dba8fa446aae2122a5888a',
+      greenLabel: 'true',
+      runId: '20260918011528-wp254',
+      running: false,
+    }),
   ]),
   databaseContainer: 'sit-green-postgres-20260918011528-wp254',
   databaseVolume: 'sit-green-volume-20260918011528-wp254',
@@ -189,6 +197,13 @@ export const greenTarget = Object.freeze({
   sourceLedgerDigest: '796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196',
   currentLedgerDigest: '796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196',
   currentMigration: '098_booking_checkout_declaration_constraints.up.sql',
+});
+
+export const greenSuccessorRuntime = Object.freeze({
+  commit: '6c0ef70db2656df3e378add858d5f5157388127e',
+  imageDigest: 'sha256:16a90e4fbc3710e37c9e319fe5db545d6da6348448848c94c6bfc661eac47357',
+  publicationRunId: 36834482750,
+  publicationManifestDigest: '50074f2a9d3c43d30714ac9992854d9766a271f256ae169cb926b91bb24ad61b',
 });
 
 const isolatedPostgresImage = 'postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777';
@@ -267,6 +282,9 @@ export const greenSyntheticCatalogProjection = Object.freeze({
   ownerIdDigest: '902573394e86b5dd3add368d0f32e31f5cef12cd01f606a16a759a202aee7096',
   titleDigest: '8f444d762ed8e17c199039599129f3d1b6822bf7778ad2380e13cb3da613d78d',
   noticeDigest: '9abe85d87e270298352d3079602e860fac754b3e928a77caca1b1fbcc0a14be5',
+  descriptionDigest: '9abe85d87e270298352d3079602e860fac754b3e928a77caca1b1fbcc0a14be5',
+  createdAtDigest: '64e0657fbf20996dbef679d5ce71e42ff3de0f916070e2faa1ccd15a8d7a193e',
+  photoDigest: 'bd3496b7850a0cd6e7e186e788e9d7fd7a7284832d4c3631b54cc67ee4a9b32e',
   locationText: 'Heilbronn, Deutschland',
   city: 'Heilbronn',
   country: 'Deutschland',
@@ -283,8 +301,153 @@ export const greenSyntheticCatalogProjection = Object.freeze({
   photoCount: 1,
 });
 
-export function assertGreenSyntheticCatalogPublicReadback(value, expectedPhotoDigest) {
+export function summarizeGreenSyntheticCatalogPayload({ status, body, expectedPhotoUrl } = {}) {
+  const rows = Array.isArray(body?.listings) ? body.listings : [];
+  const row = rows.length === 1 && body?.page?.count === 1 ? rows[0] : null;
+  const photos = Array.isArray(row?.photos) ? row.photos : [];
+  const digestString = (value) => typeof value === 'string' ? sha256(value) : null;
+  const stringKeys = ['id', 'ownerId', 'title', 'description', 'categoryId', 'subcategory',
+    'currency', 'priceUnit', 'locationText', 'geohash', 'condition', 'createdAt', 'city',
+    'country', 'status', 'verificationStatus', 'pilotRegionCode', 'cancellationPolicy',
+    'protectionModel', 'availabilityMode', 'catalogClass', 'syntheticNotice'];
+  const numberKeys = ['pricePerDay', 'priceRaw', 'lat', 'lng', 'minDays', 'maxDays',
+    'timesLent', 'catalogRevision'];
+  const booleanKeys = ['isActive', 'autoApplyDiscounts', 'approximateLocation',
+    'privateStatusConfirmed', 'offersDeliveryAtDropoff', 'offersPickupAtReturn',
+    'offersExpressAtDropoff', 'realOffer', 'ownerDeclaration', 'bookingAllowed',
+    'paymentAllowed'];
+  const arrayKeys = ['tags', 'photos', 'longRentalDiscounts', 'includedAccessories'];
+  const strictItemCompatible = Boolean(row)
+    && stringKeys.every((key) => typeof row[key] === 'string')
+    && numberKeys.every((key) => typeof row[key] === 'number' && Number.isFinite(row[key]))
+    && booleanKeys.every((key) => typeof row[key] === 'boolean')
+    && arrayKeys.every((key) => Array.isArray(row[key]))
+    && row.deposit === null && row.endedAt === null
+    && row.maxDeliveryKmAtDropoff === null && row.maxPickupKmAtReturn === null
+    && row.handoverRadiusKm === null && Number.isFinite(Date.parse(row.createdAt));
+  const canonicalValues = strictItemCompatible
+    && digestString(row.id) === greenSyntheticCatalogProjection.idDigest
+    && digestString(row.ownerId) === greenSyntheticCatalogProjection.ownerIdDigest
+    && digestString(row.title) === greenSyntheticCatalogProjection.titleDigest
+    && digestString(row.description) === greenSyntheticCatalogProjection.descriptionDigest
+    && digestString(row.syntheticNotice) === greenSyntheticCatalogProjection.noticeDigest
+    && digestString(row.createdAt) === greenSyntheticCatalogProjection.createdAtDigest
+    && photos.length === 1 && photos[0] === expectedPhotoUrl
+    && digestString(photos[0]) === greenSyntheticCatalogProjection.photoDigest
+    && row.categoryId === 'cat3' && row.subcategory === 'Sonstiges'
+    && row.tags.length === 0 && row.pricePerDay === 1 && row.currency === 'EUR'
+    && row.priceUnit === 'day' && row.priceRaw === 1 && row.deposit === null
+    && row.autoApplyDiscounts === false && row.longRentalDiscounts.length === 0
+    && row.locationText === greenSyntheticCatalogProjection.locationText
+    && row.lat === greenSyntheticCatalogProjection.lat && row.lng === greenSyntheticCatalogProjection.lng
+    && row.geohash === '' && row.condition === 'good' && row.minDays === 1 && row.maxDays === 30
+    && row.isActive === true && row.verificationStatus === greenSyntheticCatalogProjection.verificationStatus
+    && row.city === greenSyntheticCatalogProjection.city && row.country === greenSyntheticCatalogProjection.country
+    && row.status === greenSyntheticCatalogProjection.status && row.endedAt === null
+    && row.timesLent === 0 && row.offersDeliveryAtDropoff === false
+    && row.offersPickupAtReturn === false && row.offersExpressAtDropoff === false
+    && row.maxDeliveryKmAtDropoff === null && row.maxPickupKmAtReturn === null
+    && row.handoverRadiusKm === null && row.privateStatusConfirmed === false
+    && row.pilotRegionCode === '' && row.cancellationPolicy === 'unified'
+    && row.protectionModel === 'none' && row.availabilityMode === 'calendar'
+    && row.catalogRevision === 1 && row.includedAccessories.length === 0
+    && row.approximateLocation === true
+    && row.catalogClass === greenSyntheticCatalogProjection.catalogClass
+    && row.realOffer === false && row.ownerDeclaration === false
+    && row.bookingAllowed === false && row.paymentAllowed === false;
+  return Object.freeze({
+    status, count: rows.length, pageCount: body?.page?.count ?? null,
+    rowKeys: row ? Object.keys(row).sort() : [],
+    idDigest: digestString(row?.id), ownerIdDigest: digestString(row?.ownerId),
+    titleDigest: digestString(row?.title), noticeDigest: digestString(row?.syntheticNotice),
+    photoCount: photos.length, photoDigest: photos.length === 1 ? digestString(photos[0]) : null,
+    locationText: row?.locationText ?? null, city: row?.city ?? null, country: row?.country ?? null,
+    lat: row?.lat ?? null, lng: row?.lng ?? null, catalogClass: row?.catalogClass ?? null,
+    realOffer: row?.realOffer ?? null, ownerDeclaration: row?.ownerDeclaration ?? null,
+    bookingAllowed: row?.bookingAllowed ?? null, paymentAllowed: row?.paymentAllowed ?? null,
+    isActive: row?.isActive ?? null, listingStatus: row?.status ?? null,
+    verificationStatus: row?.verificationStatus ?? null,
+    strictItemCompatible, canonicalValues,
+  });
+}
+
+function greenSyntheticCatalogSummaryMatches(value) {
+  return value?.status === 200 && value.count === 1 && value.pageCount === 1
+    && JSON.stringify(value.rowKeys) === JSON.stringify(greenSyntheticCatalogItemKeys)
+    && value.idDigest === greenSyntheticCatalogProjection.idDigest
+    && value.ownerIdDigest === greenSyntheticCatalogProjection.ownerIdDigest
+    && value.titleDigest === greenSyntheticCatalogProjection.titleDigest
+    && value.noticeDigest === greenSyntheticCatalogProjection.noticeDigest
+    && value.photoCount === 1 && value.photoDigest === greenSyntheticCatalogProjection.photoDigest
+    && value.locationText === greenSyntheticCatalogProjection.locationText
+    && value.city === greenSyntheticCatalogProjection.city
+    && value.country === greenSyntheticCatalogProjection.country
+    && value.lat === greenSyntheticCatalogProjection.lat && value.lng === greenSyntheticCatalogProjection.lng
+    && value.catalogClass === greenSyntheticCatalogProjection.catalogClass
+    && value.realOffer === false && value.ownerDeclaration === false
+    && value.bookingAllowed === false && value.paymentAllowed === false
+    && value.isActive === true && value.listingStatus === greenSyntheticCatalogProjection.status
+    && value.verificationStatus === greenSyntheticCatalogProjection.verificationStatus
+    && value.strictItemCompatible === true && value.canonicalValues === true;
+}
+
+export async function runGreenSyntheticCatalogProbe({
+  url,
+  environment = process.env,
+  fetchImpl = globalThis.fetch,
+  requirePhotoReachable = false,
+  delay = (milliseconds) => new Promise((resolveDelay) => setTimeout(resolveDelay, milliseconds)),
+  signalFactory = (milliseconds) => AbortSignal.timeout(milliseconds),
+} = {}) {
+  if (typeof url !== 'string' || !/^https?:\/\//u.test(url) || typeof fetchImpl !== 'function') {
+    fail('green_synthetic_catalog_probe_configuration_invalid');
+  }
+  const publicBase = String(environment.PUBLIC_BASE_URL ?? 'https://shareittoo.com/api/v1').replace(/\/$/u, '');
+  const uploadName = environment.SIT_STAGING_PUBLIC_UPLOAD_NAMES;
+  const expectedPhotoUrl = typeof uploadName === 'string' && uploadName.length > 0
+    ? `${publicBase}/uploads/${uploadName}` : null;
+  let summary = summarizeGreenSyntheticCatalogPayload({ status: null, body: {}, expectedPhotoUrl });
+  let photoReachable = requirePhotoReachable ? false : null;
+  let attempts = 0;
+  let converged = false;
+  for (let attempt = 1; attempt <= 8; attempt += 1) {
+    attempts = attempt;
+    try {
+      const response = await fetchImpl(url, { signal: signalFactory(2_000) });
+      let body = {};
+      try { body = await response.json(); } catch { body = {}; }
+      summary = summarizeGreenSyntheticCatalogPayload({ status: response.status, body, expectedPhotoUrl });
+      if (greenSyntheticCatalogSummaryMatches(summary)) {
+        if (requirePhotoReachable) {
+          const photoResponse = await fetchImpl(expectedPhotoUrl, { headers: { Range: 'bytes=0-0' }, signal: signalFactory(2_000) });
+          photoReachable = [200, 206].includes(photoResponse.status)
+            && String(photoResponse.headers?.get?.('content-type') ?? '').toLowerCase().startsWith('image/');
+          await photoResponse.body?.cancel?.();
+        }
+        if (!requirePhotoReachable || photoReachable) { converged = true; break; }
+      }
+    } catch {
+      summary = summarizeGreenSyntheticCatalogPayload({ status: null, body: {}, expectedPhotoUrl });
+      photoReachable = requirePhotoReachable ? false : null;
+    }
+    if (attempt < 8) await delay(100);
+  }
+  return Object.freeze({ ...summary, attempts, converged, photoReachable });
+}
+
+const greenSyntheticCatalogReadbackKeys = Object.freeze([
+  'attempts', 'bookingAllowed', 'canonicalValues', 'catalogClass', 'city', 'converged',
+  'count', 'country', 'idDigest', 'isActive', 'lat', 'listingStatus', 'lng',
+  'locationText', 'noticeDigest', 'ownerDeclaration', 'ownerIdDigest', 'pageCount',
+  'paymentAllowed', 'photoCount', 'photoDigest', 'photoReachable', 'realOffer', 'rowKeys',
+  'status', 'strictItemCompatible', 'titleDigest', 'verificationStatus',
+].sort());
+
+export function assertGreenSyntheticCatalogPublicReadback(value, { requirePhotoReachable = false } = {}) {
   if (!value || value.status !== 200 || value.count !== 1 || value.pageCount !== 1
+      || Object.keys(value).sort().join('|') !== greenSyntheticCatalogReadbackKeys.join('|')
+      || value.converged !== true || !Number.isInteger(value.attempts)
+      || value.attempts < 1 || value.attempts > 8
       || !Array.isArray(value.rowKeys)
       || JSON.stringify([...value.rowKeys].sort()) !== JSON.stringify(greenSyntheticCatalogItemKeys)
       || value.idDigest !== greenSyntheticCatalogProjection.idDigest
@@ -292,8 +455,7 @@ export function assertGreenSyntheticCatalogPublicReadback(value, expectedPhotoDi
       || value.titleDigest !== greenSyntheticCatalogProjection.titleDigest
       || value.noticeDigest !== greenSyntheticCatalogProjection.noticeDigest
       || value.photoCount !== greenSyntheticCatalogProjection.photoCount
-      || !/^[0-9a-f]{64}$/u.test(expectedPhotoDigest ?? '')
-      || value.photoDigest !== expectedPhotoDigest
+      || value.photoDigest !== greenSyntheticCatalogProjection.photoDigest
       || value.locationText !== greenSyntheticCatalogProjection.locationText
       || value.city !== greenSyntheticCatalogProjection.city
       || value.country !== greenSyntheticCatalogProjection.country
@@ -303,23 +465,78 @@ export function assertGreenSyntheticCatalogPublicReadback(value, expectedPhotoDi
       || value.realOffer !== false || value.ownerDeclaration !== false
       || value.bookingAllowed !== false || value.paymentAllowed !== false
       || value.isActive !== true || value.listingStatus !== greenSyntheticCatalogProjection.status
-      || value.verificationStatus !== greenSyntheticCatalogProjection.verificationStatus) {
+      || value.verificationStatus !== greenSyntheticCatalogProjection.verificationStatus
+      || value.strictItemCompatible !== true || value.canonicalValues !== true
+      || value.photoReachable !== (requirePhotoReachable ? true : null)) {
     fail('green_synthetic_catalog_public_readback_invalid');
   }
   return true;
 }
 
-export function assertGreenDatabaseStateReadback(stdout, expected = null) {
+const greenFixtureUserDigests = Object.freeze([
+  greenSyntheticCatalogProjection.ownerIdDigest,
+  '27fe3e5bc5ff28f40a2beb05ec28a534b5fb88c2cd8c77ff5e1c163feb5dee46',
+]);
+
+export const greenDatabaseStateBaseline = Object.freeze({
+  fixtureUserCount: 2,
+  authCount: 6,
+  refreshCount: 6,
+  loginAuditCount: 6,
+  activeAuthCount: 0,
+  activeRefreshCount: 0,
+  identityCount: 1,
+  listingCount: 1,
+  uploadCount: 1,
+  bookingCount: 0,
+  requestCount: 0,
+  paymentCommandCount: 0,
+  ledgerDigest: greenTarget.currentLedgerDigest,
+  authDigest: '7954076826c7df6cfdba5bdb88af8de7766b933f3df1aad27f355c8a36b74a65',
+  catalogDigest: '92b6f79addcdc79db0280d21c034d7e1395249aaf631fba2314385e86e1da671',
+});
+
+export const greenDatabaseStateReadbackSql = `WITH fixture_users AS (
+  SELECT id FROM users WHERE encode(sha256(convert_to(id,'UTF8')),'hex') IN ('${greenFixtureUserDigests.join("','")}')
+), fixture_listing AS (
+  SELECT * FROM listings WHERE encode(sha256(convert_to(id,'UTF8')),'hex')='${greenPublicFixtureProfile.publicListingIdsDigest}'
+), fixture_upload AS (
+  SELECT * FROM uploads WHERE encode(sha256(convert_to(storage_name,'UTF8')),'hex')='${greenPublicFixtureProfile.publicUploadNamesDigest}'
+)
+SELECT json_build_object(
+  'fixtureUserCount',(SELECT count(*)::int FROM fixture_users),
+  'authCount',(SELECT count(*)::int FROM auth_sessions WHERE user_id IN (SELECT id FROM fixture_users)),
+  'refreshCount',(SELECT count(*)::int FROM refresh_tokens WHERE user_id IN (SELECT id FROM fixture_users)),
+  'loginAuditCount',(SELECT count(*)::int FROM audit_log WHERE actor_id IN (SELECT id FROM fixture_users) AND action='auth.login'),
+  'activeAuthCount',(SELECT count(*)::int FROM auth_sessions WHERE user_id IN (SELECT id FROM fixture_users) AND revoked_at IS NULL),
+  'activeRefreshCount',(SELECT count(*)::int FROM refresh_tokens WHERE user_id IN (SELECT id FROM fixture_users) AND revoked_at IS NULL),
+  'identityCount',(SELECT count(*)::int FROM auth_identities),
+  'listingCount',(SELECT count(*)::int FROM fixture_listing),
+  'uploadCount',(SELECT count(*)::int FROM fixture_upload),
+  'bookingCount',(SELECT count(*)::int FROM bookings WHERE listing_id IN (SELECT id FROM fixture_listing) OR owner_id IN (SELECT id FROM fixture_users) OR renter_id IN (SELECT id FROM fixture_users)),
+  'requestCount',(SELECT count(*)::int FROM rental_requests WHERE item_id IN (SELECT id FROM fixture_listing) OR owner_id IN (SELECT id FROM fixture_users) OR renter_id IN (SELECT id FROM fixture_users)),
+  'paymentCommandCount',(SELECT count(*)::int FROM payment_commands WHERE actor_id IN (SELECT id FROM fixture_users)),
+  'ledgerDigest',encode(digest(COALESCE((SELECT string_agg(name || '|' || checksum, E'\\n' ORDER BY name) || E'\\n' FROM schema_migrations),''),'sha256'),'hex'),
+  'authDigest',encode(digest(jsonb_build_object(
+    'sessions',COALESCE((SELECT jsonb_agg(to_jsonb(row) ORDER BY row.id) FROM auth_sessions row WHERE row.user_id IN (SELECT id FROM fixture_users)),'[]'::jsonb),
+    'refresh',COALESCE((SELECT jsonb_agg(to_jsonb(row) ORDER BY row.id) FROM refresh_tokens row WHERE row.user_id IN (SELECT id FROM fixture_users)),'[]'::jsonb),
+    'loginAudits',COALESCE((SELECT jsonb_agg(to_jsonb(row) ORDER BY row.id) FROM audit_log row WHERE row.actor_id IN (SELECT id FROM fixture_users) AND row.action='auth.login'),'[]'::jsonb)
+  )::text,'sha256'),'hex'),
+  'catalogDigest',encode(digest(jsonb_build_object(
+    'listings',COALESCE((SELECT jsonb_agg(to_jsonb(row) ORDER BY row.id) FROM fixture_listing row),'[]'::jsonb),
+    'uploads',COALESCE((SELECT jsonb_agg(to_jsonb(row) ORDER BY row.id) FROM fixture_upload row),'[]'::jsonb)
+  )::text,'sha256'),'hex')
+)::text`;
+
+export function assertGreenDatabaseStateReadback(stdout, expected = greenDatabaseStateBaseline) {
   let value;
   try { value = JSON.parse(String(stdout ?? '').trim()); } catch { fail('green_database_state_readback_invalid'); }
-  const keys = ['authCount', 'refreshCount', 'loginAuditCount', 'identityCount', 'listingCount',
-    'uploadCount', 'bookingCount', 'requestCount', 'paymentCommandCount', 'ledgerDigest',
-    'authDigest', 'catalogDigest'];
+  const keys = Object.keys(greenDatabaseStateBaseline);
   if (!value || Object.keys(value).sort().join('|') !== keys.slice().sort().join('|')
       || keys.some((key) => key.endsWith('Digest')
         ? !/^[0-9a-f]{64}$/u.test(value[key] ?? '')
         : !Number.isInteger(value[key]) || value[key] < 0)) fail('green_database_state_readback_invalid');
-  if (expected && JSON.stringify(value) !== JSON.stringify(expected)) fail('green_database_state_changed');
+  if (!expected || JSON.stringify(value) !== JSON.stringify(expected)) fail('green_database_state_changed');
   return Object.freeze(value);
 }
 
@@ -876,6 +1093,9 @@ export function assertGreenRuntimeImage({ image, digest, runtimeCommit } = {}) {
   fullCommit(runtimeCommit, 'runtime_commit');
   if (image !== `ghcr.io/shareittoo/shareittoo-api:${runtimeCommit}`) fail('runtime_image_tag_mismatch');
   if (typeof digest !== 'string' || !/^sha256:[0-9a-f]{64}$/u.test(digest)) fail('runtime_image_digest_required');
+  if (runtimeCommit !== greenSuccessorRuntime.commit || digest !== greenSuccessorRuntime.imageDigest) {
+    fail('green_successor_runtime_identity_mismatch');
+  }
   if (/latest|local/iu.test(image) || containsForbiddenGreenTargetIdentifier(image)) fail('runtime_image_unsafe');
   return Object.freeze({ image, digest, runtimeCommit });
 }
@@ -1257,24 +1477,8 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
   const provisionerPath = '/app/ops/provision_synthetic_sandbox_user.mjs';
   const immutableRuntimeImage = `${runtime.image}@${runtime.digest}`;
   const migrationLedgerReadbackSql = "SELECT name || '|' || checksum FROM schema_migrations ORDER BY name";
-  const databaseStateReadbackSql = `SELECT json_build_object(
-    'authCount',(SELECT count(*)::int FROM auth_sessions),
-    'refreshCount',(SELECT count(*)::int FROM refresh_tokens),
-    'loginAuditCount',(SELECT count(*)::int FROM audit_log WHERE action='auth.login'),
-    'identityCount',(SELECT count(*)::int FROM auth_identities),
-    'listingCount',(SELECT count(*)::int FROM listings),
-    'uploadCount',(SELECT count(*)::int FROM uploads),
-    'bookingCount',(SELECT count(*)::int FROM bookings),
-    'requestCount',(SELECT count(*)::int FROM rental_requests),
-    'paymentCommandCount',(SELECT count(*)::int FROM payment_commands),
-    'ledgerDigest',encode(digest(COALESCE((SELECT string_agg(name || '|' || checksum, E'\\n' ORDER BY name) FROM schema_migrations),''),'sha256'),'hex'),
-    'authDigest',encode(digest(COALESCE((SELECT jsonb_agg(to_jsonb(row) ORDER BY row.id)::text FROM auth_sessions row),'[]'),'sha256'),'hex'),
-    'catalogDigest',encode(digest(jsonb_build_object(
-      'listings',COALESCE((SELECT jsonb_agg(to_jsonb(row) ORDER BY row.id) FROM listings row),'[]'::jsonb),
-      'uploads',COALESCE((SELECT jsonb_agg(to_jsonb(row) ORDER BY row.id) FROM uploads row),'[]'::jsonb)
-    )::text,'sha256'),'hex')
-  )::text`;
-  const syntheticCatalogPublicScript = (url) => `import crypto from 'node:crypto';const h=(value)=>crypto.createHash('sha256').update(String(value)).digest('hex');const expectedKeys=${JSON.stringify(greenSyntheticCatalogItemKeys)};const response=await fetch(${JSON.stringify(url)});let body={};try{body=await response.json()}catch{}const rows=Array.isArray(body.listings)?body.listings:[];const row=rows.length===1?rows[0]:null;const photos=Array.isArray(row?.photos)?row.photos:[];const publicBase=(process.env.PUBLIC_BASE_URL||'https://shareittoo.com/api/v1').replace(/\\/$/u,'');const expectedPhoto=row&&typeof process.env.SIT_STAGING_PUBLIC_UPLOAD_NAMES==='string'&&process.env.SIT_STAGING_PUBLIC_UPLOAD_NAMES.length>0?publicBase+'/uploads/'+process.env.SIT_STAGING_PUBLIC_UPLOAD_NAMES:null;process.stdout.write(JSON.stringify({status:response.status,count:rows.length,pageCount:body.page?.count,rowKeys:row?Object.keys(row).sort():[],idDigest:row?h(row.id):null,ownerIdDigest:row?h(row.ownerId):null,titleDigest:row?h(row.title):null,noticeDigest:row?h(row.syntheticNotice):null,photoCount:photos.length,photoDigest:photos.length===1?h(photos[0]):null,expectedPhotoDigest:expectedPhoto?h(expectedPhoto):null,locationText:row?.locationText??null,city:row?.city??null,country:row?.country??null,lat:row?.lat??null,lng:row?.lng??null,catalogClass:row?.catalogClass??null,realOffer:row?.realOffer??null,ownerDeclaration:row?.ownerDeclaration??null,bookingAllowed:row?.bookingAllowed??null,paymentAllowed:row?.paymentAllowed??null,isActive:row?.isActive??null,listingStatus:row?.status??null,verificationStatus:row?.verificationStatus??null}));`;
+  const catalogProbeSource = resolve(repositoryRoot, 'backend/ops/green_staging_promotion.mjs');
+  const syntheticCatalogPublicScript = (url, requirePhotoReachable) => `const {runGreenSyntheticCatalogProbe}=await import(${JSON.stringify(catalogProbeSource)});const result=await runGreenSyntheticCatalogProbe({url:${JSON.stringify(url)},requirePhotoReachable:${requirePhotoReachable ? 'true' : 'false'}});process.stdout.write(JSON.stringify(result));`;
   const foreignWriterReadbackSql = "SELECT COALESCE(jsonb_agg(jsonb_build_object('role', usename, 'application', COALESCE(application_name, ''), 'client', COALESCE(host(client_addr), ''), 'state', state) ORDER BY usename, application_name, host(client_addr), state), '[]'::jsonb) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid()";
   const findingFingerprintSql = buildReadinessFindingSql({ contractVersion: 'V5.2-2026-08-16', payoutHoldHours: 48 });
   const commands = [
@@ -1289,7 +1493,7 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
     { phase: 'runtime_image_readback', command: 'docker', args: ['image', 'inspect', '--format', '{{json .}}', runtime.image] },
     { phase: 'source_schema_readback', command: 'docker', args: ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', greenTarget.databaseUser, '-d', greenTarget.databaseName, '-Atc', "SELECT name FROM schema_migrations ORDER BY applied_at DESC LIMIT 1"] },
     { phase: 'source_migration_ledger_readback', command: 'docker', args: ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', greenTarget.databaseUser, '-d', greenTarget.databaseName, '-Atc', migrationLedgerReadbackSql] },
-    { phase: 'source_database_state_readback_before', command: 'docker', args: ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', greenTarget.databaseUser, '-d', greenTarget.databaseName, '-Atc', databaseStateReadbackSql] },
+    { phase: 'source_database_state_readback_before', command: 'docker', args: ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', greenTarget.databaseUser, '-d', greenTarget.databaseName, '-Atc', greenDatabaseStateReadbackSql] },
     { phase: 'quiesce_green_api', command: 'docker', args: ['stop', target.apiContainer] },
     { phase: 'quiesce_green_api_verify', command: 'docker', args: ['inspect', '--format', '{{.State.Running}}', target.apiContainer] },
     { phase: 'seal_green_api', command: 'docker', args: ['rename', target.apiContainer, target.sealedApiContainer] },
@@ -1329,7 +1533,7 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
     { phase: 'candidate_live_wait', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', 'http://127.0.0.1:18082/health/live'] },
     { phase: 'candidate_health_and_feature_probes', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', 'http://127.0.0.1:18082/health/ready'] },
     { phase: 'candidate_ready_probe', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', 'http://127.0.0.1:18082/health/ready'] },
-    { phase: 'candidate_public_catalog_readback', command: 'node', args: ['--input-type=module', '-e', syntheticCatalogPublicScript('http://127.0.0.1:18082/v1/listings?sort=newest&limit=100&offset=0')], envFile: configFile, redacted: true },
+    { phase: 'candidate_public_catalog_readback', command: 'node', args: ['--input-type=module', '-e', syntheticCatalogPublicScript('http://127.0.0.1:18082/v1/listings?sort=newest&limit=100&offset=0', false)], envFile: configFile, redacted: true },
     { phase: 'candidate_runtime_flags_readback', command: 'docker', args: ['exec', isolated.candidate, 'node', '--input-type=module', '-e', `import crypto from 'node:crypto';const hash=(value)=>crypto.createHash('sha256').update(value).digest('hex');const summarize=(value,prefix)=>{const entries=(value??'').split(',');return {[prefix+'Count']:entries.length,[prefix+'Digest']:hash(value??'')}};const names=['CORS_ORIGINS','DEPLOYMENT_ENVIRONMENT','FIREBASE_AUTH_ENABLED','FIREBASE_PHONE_VERIFICATION_ENABLED','SIT_STAGING_ACCESS_GATE_ENABLED','SIT_STAGING_GOOGLE_REGISTRATION_ENABLED','SIT_STAGING_SYNTHETIC_CATALOG_ENABLED','PAYMENT_TRANSPORT','STRIPE_LIVEMODE','MAIL_TRANSPORT','PUSH_TRANSPORT','IDENTITY_VERIFICATION_TRANSPORT','SIT_LISTING_AI_PROVIDER','SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED','SIT_LISTING_AI_BUDGET_CENTS','TECHNICAL_SANDBOX_ENABLED','TECHNICAL_SANDBOX_KILL_SWITCH','TECHNICAL_SANDBOX_ACCOUNT_ID','TECHNICAL_SANDBOX_USER_IDS','TECHNICAL_SANDBOX_AUTHORIZATION_ID','TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT','TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT','TECHNICAL_SANDBOX_SECRET_KEY_FILE','TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE'];process.stdout.write(JSON.stringify({...Object.fromEntries(names.map((name)=>[name,process.env[name]??null])),...summarize(process.env.SIT_STAGING_PUBLIC_LISTING_IDS,'publicListingIds'),...summarize(process.env.SIT_STAGING_PUBLIC_UPLOAD_NAMES,'publicUploadNames'),googleRegistrationAllowlistEmpty:(process.env.SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST??'').trim()==='',${greenAllowedIdsProbeExpression}}))`] },
     { phase: 'candidate_version_probe', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', 'http://127.0.0.1:18082/version'] },
     { phase: 'candidate_mfa_identity_probes', command: 'node', args: ['backend/ops/staging_controlled_acceptance.mjs', 'probe'], envFile: isolated.envFile, runtimeEnv: { STAGING_ACCEPTANCE_CONTAINER: isolated.candidate }, redacted: true },
@@ -1359,8 +1563,8 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
     { phase: 'final_live_wait', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', `${process.env.GREEN_STAGING_PUBLIC_BASE_URL ?? 'https://staging.shareittoo.com/api'}/health/live`] },
     { phase: 'final_health_probe', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', `${process.env.GREEN_STAGING_PUBLIC_BASE_URL ?? 'https://staging.shareittoo.com/api'}/health/ready`] },
     { phase: 'final_ready_wait', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', `${process.env.GREEN_STAGING_PUBLIC_BASE_URL ?? 'https://staging.shareittoo.com/api'}/health/ready`] },
-    { phase: 'final_public_catalog_readback', command: 'node', args: ['--input-type=module', '-e', syntheticCatalogPublicScript(`${process.env.GREEN_STAGING_PUBLIC_BASE_URL ?? 'https://staging.shareittoo.com/api'}/v1/listings?sort=newest&limit=100&offset=0`)], envFile: configFile, redacted: true },
-    { phase: 'final_database_state_readback_after', command: 'docker', args: ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', greenTarget.databaseUser, '-d', greenTarget.databaseName, '-Atc', databaseStateReadbackSql] },
+    { phase: 'final_public_catalog_readback', command: 'node', args: ['--input-type=module', '-e', syntheticCatalogPublicScript(`${process.env.GREEN_STAGING_PUBLIC_BASE_URL ?? 'https://staging.shareittoo.com/api'}/v1/listings?sort=newest&limit=100&offset=0`, true)], envFile: configFile, redacted: true },
+    { phase: 'final_database_state_readback_after', command: 'docker', args: ['exec', target.databaseContainer, 'psql', '-X', '--set', 'ON_ERROR_STOP=1', '-U', greenTarget.databaseUser, '-d', greenTarget.databaseName, '-Atc', greenDatabaseStateReadbackSql] },
     { phase: 'final_version_readback', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', `${process.env.GREEN_STAGING_PUBLIC_BASE_URL ?? 'https://staging.shareittoo.com/api'}/version`] },
   ];
   if (target.authProfile) {
@@ -2197,7 +2401,7 @@ export function greenReadOnlyPreflightCommands(commands, plan) {
   const sql = {
     source_schema_readback: 'SELECT name FROM schema_migrations ORDER BY applied_at DESC LIMIT 1',
     source_migration_ledger_readback: "SELECT name || '|' || checksum FROM schema_migrations ORDER BY name",
-    source_database_state_readback_before: "SELECT json_build_object('authCount',(SELECT count(*)::int FROM auth_sessions),'refreshCount',(SELECT count(*)::int FROM refresh_tokens),'loginAuditCount',(SELECT count(*)::int FROM audit_log WHERE action='auth.login'),'identityCount',(SELECT count(*)::int FROM auth_identities),'listingCount',(SELECT count(*)::int FROM listings),'uploadCount',(SELECT count(*)::int FROM uploads),'bookingCount',(SELECT count(*)::int FROM bookings),'requestCount',(SELECT count(*)::int FROM rental_requests),'paymentCommandCount',(SELECT count(*)::int FROM payment_commands),'ledgerDigest',encode(digest(COALESCE((SELECT string_agg(name || '|' || checksum, E'\\n' ORDER BY name) FROM schema_migrations),''),'sha256'),'hex'),'authDigest',encode(digest(COALESCE((SELECT jsonb_agg(to_jsonb(row) ORDER BY row.id)::text FROM auth_sessions row),'[]'),'sha256'),'hex'),'catalogDigest',encode(digest(jsonb_build_object('listings',COALESCE((SELECT jsonb_agg(to_jsonb(row) ORDER BY row.id) FROM listings row),'[]'::jsonb),'uploads',COALESCE((SELECT jsonb_agg(to_jsonb(row) ORDER BY row.id) FROM uploads row),'[]'::jsonb))::text,'sha256'),'hex'))::text",
+    source_database_state_readback_before: greenDatabaseStateReadbackSql,
     source_post_enrollment_identity_readback: `SELECT count(*) FROM auth_identities AS identity JOIN users AS account ON account.id = identity.user_id WHERE identity.provider = 'google' AND encode(sha256(convert_to(account.id, 'UTF8')), 'hex') = '${plan.target.authProfile?.googleUserIdDigest}' AND account.account_status = 'active' AND account.deactivated_at IS NULL`,
   };
   const allowedArgs = {
@@ -2215,13 +2419,7 @@ export function greenReadOnlyPreflightCommands(commands, plan) {
   const prefix = commands.slice(0, phases.length);
   if (commands[phases.length]?.phase !== 'quiesce_green_api' || prefix.some((entry, index) =>
     entry.phase !== phases[index] || entry.command !== 'docker' || entry.inputFile || entry.stdoutFile || entry.envFile || entry.runtimeEnv
-    || (entry.phase === 'source_database_state_readback_before'
-      ? JSON.stringify(entry.args.slice(0, -1)) !== JSON.stringify(allowedArgs[entry.phase].slice(0, -1))
-        || typeof entry.args.at(-1) !== 'string'
-        || !entry.args.at(-1).includes('json_build_object')
-        || !entry.args.at(-1).includes('ledgerDigest')
-        || !entry.args.at(-1).includes('catalogDigest')
-      : JSON.stringify(entry.args) !== JSON.stringify(allowedArgs[entry.phase])))) {
+    || JSON.stringify(entry.args) !== JSON.stringify(allowedArgs[entry.phase]))) {
     fail('green_read_only_preflight_command_invalid');
   }
   return Object.freeze(prefix);
@@ -2253,6 +2451,7 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
   let backupDigest;
   let backupBytes;
   let databaseStateBefore;
+  let databaseStateBeforeRaw;
   let foreignWriterBefore;
   let isolatedFindingFingerprint;
   let schemaMutationStarted = false;
@@ -2418,13 +2617,17 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
       if (entry.phase === 'candidate_runtime_flags_readback') assertGreenRuntimeEnvironmentReadback(JSON.parse(readbacks.candidate_runtime_flags_readback), plan.target.authProfile);
       if (entry.phase === 'candidate_public_catalog_readback' || entry.phase === 'final_public_catalog_readback') {
         const publicReadback = JSON.parse(readbacks[entry.phase]);
-        assertGreenSyntheticCatalogPublicReadback(publicReadback, publicReadback.expectedPhotoDigest);
+        assertGreenSyntheticCatalogPublicReadback(publicReadback, {
+          requirePhotoReachable: entry.phase === 'final_public_catalog_readback',
+        });
       }
       if (entry.phase === 'source_database_state_readback_before') {
+        databaseStateBeforeRaw = readbacks[entry.phase];
         databaseStateBefore = assertGreenDatabaseStateReadback(readbacks[entry.phase]);
       }
       if (entry.phase === 'final_database_state_readback_after') {
-        if (!databaseStateBefore) fail('green_database_state_before_missing');
+        if (!databaseStateBefore || !databaseStateBeforeRaw) fail('green_database_state_before_missing');
+        if (readbacks[entry.phase] !== databaseStateBeforeRaw) fail('green_database_state_changed');
         assertGreenDatabaseStateReadback(readbacks[entry.phase], databaseStateBefore);
       }
       if (entry.phase === 'candidate_version_probe') assertGreenRuntimeReadbacks({ version: JSON.parse(readbacks.candidate_version_probe), health: JSON.parse(readbacks.candidate_health_and_feature_probes), ready: JSON.parse(readbacks.candidate_ready_probe), runtimeCommit: plan.runtime.runtimeCommit });

@@ -67,8 +67,8 @@ disabled. The source successor below must preserve this exact D3 baseline.
 
 ### Catalog-preserving Green promotion successor — SOURCE-ONLY
 
-The successor runner binds D3 as the immutable predecessor, retains all 19
-stopped Green seals including the prior 34194 seal, and keeps
+The successor runner binds D3 as the immutable predecessor, retains all 20
+stopped Green seals including the catalog rollback and prior 34194 seals, and keeps
 `SIT_STAGING_SYNTHETIC_CATALOG_ENABLED=true` in protected, candidate, final
 and rollback readbacks. Candidate loopback and final public acceptance call
 `/v1/listings?sort=newest&limit=100&offset=0` and require exactly one complete
@@ -76,8 +76,17 @@ strict Item-compatible row with server-owned id/title/notice/photo, coarse
 Heilbronn location, `catalogClass=synthetic_noncontractual_catalog_only`, and
 false real-offer, owner-declaration, booking and payment capabilities.
 Missing, extra, forged or partial rows fail closed. Before/after database
-readbacks require unchanged auth, identity, listing, upload, booking, request
-and payment counts plus unchanged ledger/auth/catalog digests. This package is
+readbacks bind scoped retained sessions/refresh/login audits `6/6/6`, active
+sessions/refresh `0/0`, identity `1`, listing/upload `1/1` and zero booking,
+request and payment effects, plus byte-identical full auth, ledger and catalog
+digests. Public candidate/final reads converge only through eight bounded
+read-only attempts; the final gate also proves the trusted canonical image URL.
+The exact successor runtime is
+`6c0ef70db2656df3e378add858d5f5157388127e` at image digest
+`sha256:16a90e4fbc3710e37c9e319fe5db545d6da6348448848c94c6bfc661eac47357`.
+Publication run `36834482750` produced manifest SHA-256
+`50074f2a9d3c43d30714ac9992854d9766a271f256ae169cb926b91bb24ad61b`.
+This package is
 source-only: it does not publish an image, prepare a manifest, mutate Staging,
 or perform a live promotion.
 

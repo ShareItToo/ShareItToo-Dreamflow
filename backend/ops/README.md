@@ -132,8 +132,8 @@ The pre-promotion image is exactly
 with digest
 `sha256:31b8b015eb0635b9fbb7d6c5e54ef43fe089d5b953dba8fa446aae2122a5888a`.
 The new seal is
-`shareittoo-staging-api-alt-sealed-green-d3c2f5d7`. All 19 retained seals,
-including the prior 34194, 1ebc and bc86 witnesses,
+`shareittoo-staging-api-alt-sealed-green-d3c2f5d7`. All 20 retained seals,
+including the prior catalog rollback, 34194, 1ebc and bc86 witnesses,
 remain separately read-only validated, stopped containers
 with the exact Green label, run ID and immutable image digest. The web-fixture
 rollback seal's Docker `Config.Image` is bound to the exact 1ebc tag-plus-digest
@@ -211,14 +211,20 @@ restarted; recovery is a forward candidate path.
 Only after live/ready `200`, MFA and Identity probes, successful run-scoped
 cleanup and an explicit public readback may the final API be created without a
 host port on both approved Green networks. The candidate loopback and final
-public readbacks both call `/v1/listings?sort=newest&limit=100&offset=0` and
+public readbacks both call `/v1/listings?sort=newest&limit=100&offset=0` with
+at most eight read-only attempts, 100 ms spacing and a two-second timeout per
+attempt, and
 require HTTP success plus exactly one complete strict Item-compatible row with
 the bound server-owned id, title, notice and photo, coarse location,
 `catalogClass=synthetic_noncontractual_catalog_only`, and false
 `realOffer`/`ownerDeclaration`/`bookingAllowed`/`paymentAllowed`; missing,
-extra, forged or partial rows fail closed. The source and final database
-readbacks also require unchanged auth/identity/listing/upload/booking/request/
-payment counts and unchanged ledger/auth/catalog digests. The sealed old API is never booted
+extra, forged or partial rows fail closed. The trusted canonical photo URL
+digest is `bd3496b7850a0cd6e7e186e788e9d7fd7a7284832d4c3631b54cc67ee4a9b32e`;
+the final public gate additionally requires the image URL to answer as an image.
+The source and final database readbacks require exact scoped retained
+sessions/refresh/login audits `6/6/6`, active sessions/refresh `0/0`, identity
+`1`, listing/upload `1/1`, booking/request/payment `0/0/0`, and byte-identical
+full auth, catalog and ledger snapshots after promotion. The sealed old API is never booted
 after migration. Evidence is external, mode `0600`, and contains only target,
 runtime/Ops/image, backup and configuration digests plus sanitized readbacks.
 The runner has no generic degraded-baseline exception and refuses to proceed
@@ -228,7 +234,7 @@ Preparation is local/read-only until the separately authorized operational
 gate is supplied; the target and config manifests stay outside Git:
 
 The 2026-10-01 VPS readback binds the live D3 image, schema 98,
-and 19 stopped Green seals, including the retained 34194, 1ebc and bc86 witnesses. The protected
+and 20 stopped Green seals, including the retained catalog rollback, 34194, 1ebc and bc86 witnesses. The protected
 target manifest must use schemaVersion `4`; schema `3`/provider-off promotion
 is rejected for this current target. Its required `authProfile` has kind
 `google-post-enrollment`, schemaVersion `1`, sourceImageDigest
@@ -241,21 +247,25 @@ The exact ordered access list must remain unchanged through candidate, final
 runtime and rollback; Firebase Auth stays enabled and registration stays closed.
 The separate finalized enrollment readback is `1|1|1`; never place raw user or
 provider identities in this contract. These live profile values, the new D3
-seal name and all 19 retained descriptors produce the normalized target digest
-`e41efa6d5cbfc932c10c438396865e363c770979bf8376af223eda68a86ddd4c`.
+seal name and all 20 retained descriptors produce the normalized target digest
+`0efaffbb334b6e4f4ed7df170fa8997c1eb202afe44c2a0dabb5cc3ebf76a57a`.
 Do not run the promotion against a stale manifest.
 
 The `d3c2f5d7d7516d3bfaac4b61689c2c433924cc6e` runtime and immutable API image
-digest above are now the exact source baseline. A successor runtime requires its
-own separately verified immutable digest, fresh owner-only target/config manifests
-and inventory. Keep `GREEN_STAGING_OPS_COMMIT` bound to the separately reviewed
-successor Ops commit. This update preserves the enabled synthetic catalog, provision
-another role, publish an image or authorize a live promotion.
+digest above are the exact source baseline. The exact reviewed successor is
+`6c0ef70db2656df3e378add858d5f5157388127e` at
+`sha256:16a90e4fbc3710e37c9e319fe5db545d6da6348448848c94c6bfc661eac47357`;
+publication run `36834482750` produced manifest SHA-256
+`50074f2a9d3c43d30714ac9992854d9766a271f256ae169cb926b91bb24ad61b`.
+Fresh owner-only target/config manifests and exact inventory are still required.
+Keep `GREEN_STAGING_OPS_COMMIT` bound to the separately reviewed successor Ops
+commit. This update preserves the enabled synthetic catalog; it does not
+provision another role or authorize a live promotion.
 
 Default mode is a read-only preflight, not a promotion. It validates the protected
-manifests/env/runtime files, the exact D3 predecessor and all 19 retained seals,
+manifests/env/runtime files, the exact D3 predecessor and all 20 retained seals,
 auth/access/topology, the locally present immutable runtime image, schema/ledger
-and enrolled identity. Only the existing 31 Docker read commands before
+and enrolled identity. Only the existing 32 Docker read commands before
 `quiesce_green_api` run, in that exact order; only Docker needs to be available
 for this mode. No pull, curl, stop, rename, backup, evidence, isolated env,
 directory or resource creation occurs, including on failure. Output is only
