@@ -28,10 +28,10 @@ export function assertGreenWebCorsEnvironment(values) {
 export const greenTarget = Object.freeze({
   composeProject: 'sit-green',
   apiContainer: 'shareittoo-staging-api',
-  // The next promotion seals the exact active 1ebc web-fixture runtime. Every existing
+  // The next promotion seals the exact active 34194 web-fixture runtime. Every existing
   // stopped Green seal remains an immutable read-only witness and is never a
   // mutation target of this runner.
-  sealedApiContainer: 'shareittoo-staging-api-alt-sealed-green-1ebc6eaf',
+  sealedApiContainer: 'shareittoo-staging-api-alt-sealed-green-34194c42',
   retainedSealed: Object.freeze([
     Object.freeze({
       name: 'shareittoo-staging-api-alt-sealed-green-bc86f831',
@@ -157,6 +157,14 @@ export const greenTarget = Object.freeze({
       runId: '20260918011528-wp254',
       running: false,
     }),
+    Object.freeze({
+      name: 'shareittoo-staging-api-alt-sealed-green-1ebc6eaf',
+      image: 'ghcr.io/shareittoo/shareittoo-api:1ebc6eaf695e0cd9365680cdecd711b3edbb5586@sha256:22f609f21e04ddeb633186727b72c12158c473822dfef2859d3fa357e00647a2',
+      imageDigest: 'sha256:22f609f21e04ddeb633186727b72c12158c473822dfef2859d3fa357e00647a2',
+      greenLabel: 'true',
+      runId: '20260918011528-wp254',
+      running: false,
+    }),
   ]),
   databaseContainer: 'sit-green-postgres-20260918011528-wp254',
   databaseVolume: 'sit-green-volume-20260918011528-wp254',
@@ -168,8 +176,8 @@ export const greenTarget = Object.freeze({
   runId: '20260918011528-wp254',
   sourceSchema: 98,
   currentSchema: 98,
-  prePromotionImage: 'ghcr.io/shareittoo/shareittoo-api:1ebc6eaf695e0cd9365680cdecd711b3edbb5586',
-  prePromotionImageDigest: 'sha256:22f609f21e04ddeb633186727b72c12158c473822dfef2859d3fa357e00647a2',
+  prePromotionImage: 'ghcr.io/shareittoo/shareittoo-api:34194c42e5e477144b5db5a8eeb6c2d476c7aeef',
+  prePromotionImageDigest: 'sha256:0403a5f60b94a8aa91d7cbf29ae503aea989d85aeb72fcf4cf6dc14a801670b9',
   sourceLedgerDigest: '796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196',
   currentLedgerDigest: '796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196',
   currentMigration: '098_booking_checkout_declaration_constraints.up.sql',

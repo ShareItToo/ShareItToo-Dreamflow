@@ -128,13 +128,12 @@ legacy `shareittoo_staging` is never used by this lane.
 The source readback is exactly schema `98` with the manifest-bound ledger
 digest `796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196`.
 The pre-promotion image is exactly
-`ghcr.io/shareittoo/shareittoo-api:1ebc6eaf695e0cd9365680cdecd711b3edbb5586`
+`ghcr.io/shareittoo/shareittoo-api:34194c42e5e477144b5db5a8eeb6c2d476c7aeef`
 with digest
-`sha256:22f609f21e04ddeb633186727b72c12158c473822dfef2859d3fa357e00647a2`.
+`sha256:0403a5f60b94a8aa91d7cbf29ae503aea989d85aeb72fcf4cf6dc14a801670b9`.
 The new seal is
-`shareittoo-staging-api-alt-sealed-green-1ebc6eaf`. All 17 existing seals
-(the previous fifteen, `shareittoo-staging-api-alt-sealed-green-8a90ec61`
-and `shareittoo-staging-api-web-fixture-env-rollback-13b02611f3b0`)
+`shareittoo-staging-api-alt-sealed-green-34194c42`. All 18 existing seals,
+including the retained 1ebc and bc86 witnesses,
 remain separately read-only validated, stopped containers
 with the exact Green label, run ID and immutable image digest. The web-fixture
 rollback seal's Docker `Config.Image` is bound to the exact 1ebc tag-plus-digest
@@ -220,12 +219,12 @@ when cleanup or target/config preservation is uncertain.
 Preparation is local/read-only until the separately authorized operational
 gate is supplied; the target and config manifests stay outside Git:
 
-The 2026-10-01 web-fixture VPS readback binds the live 1ebc image, schema 98,
-and 17 stopped Green seals, including the retained bc86 witness. The protected
+The 2026-10-01 VPS readback binds the live 34194 image, schema 98,
+and 18 stopped Green seals, including the retained 1ebc and bc86 witnesses. The protected
 target manifest must use schemaVersion `4`; schema `3`/provider-off promotion
 is rejected for this current target. Its required `authProfile` has kind
 `google-post-enrollment`, schemaVersion `1`, sourceImageDigest
-`sha256:22f609f21e04ddeb633186727b72c12158c473822dfef2859d3fa357e00647a2`,
+`sha256:0403a5f60b94a8aa91d7cbf29ae503aea989d85aeb72fcf4cf6dc14a801670b9`,
 allowedUserIdsDigest
 `94ea2a820e6a48d5776d3b3580e62df956a338a2c3dad2d47dd4b85dfbc746b0`,
 allowedUserIdsCount `6`, and googleUserIdDigest
@@ -233,23 +232,22 @@ allowedUserIdsCount `6`, and googleUserIdDigest
 The exact ordered access list must remain unchanged through candidate, final
 runtime and rollback; Firebase Auth stays enabled and registration stays closed.
 The separate finalized enrollment readback is `1|1|1`; never place raw user or
-provider identities in this contract. These live profile values, the new 1ebc
-seal name and all 17 retained descriptors produce the normalized target digest
-`9c41fb4aa7c47eeb1225d86514b5a349cc26fef075e997a807b67301d51b2fb4`.
+provider identities in this contract. These live profile values, the new 34194
+seal name and all 18 retained descriptors produce the normalized target digest
+`7b1e790df0fa4f84c58d40100982c8a085607b2b859b2df09e23e41a569b9775`.
 Do not run the promotion against a stale manifest.
 
-This Ops-only target refresh can promote the separately published runtime source
-`34194c42e5e477144b5db5a8eeb6c2d476c7aeef` with immutable API image digest
-`sha256:0403a5f60b94a8aa91d7cbf29ae503aea989d85aeb72fcf4cf6dc14a801670b9`. Keep
-`GREEN_STAGING_OPS_COMMIT` bound to the separately reviewed successor Ops commit,
-not to that runtime SHA. Fresh owner-only target/config manifests and inventory
-remain required. This update preserves the synthetic catalog flag disabled,
-provision another role, publish an image or authorize a live promotion.
+The `34194c42e5e477144b5db5a8eeb6c2d476c7aeef` runtime and immutable API image
+digest above are now the exact source baseline. A successor runtime requires its
+own separately verified immutable digest, fresh owner-only target/config manifests
+and inventory. Keep `GREEN_STAGING_OPS_COMMIT` bound to the separately reviewed
+successor Ops commit. This update does not enable the synthetic catalog, provision
+another role, publish an image or authorize a live promotion.
 
 Default mode is a read-only preflight, not a promotion. It validates the protected
-manifests/env/runtime files, the exact 1ebc predecessor and all 17 retained seals,
+manifests/env/runtime files, the exact 34194 predecessor and all 18 retained seals,
 auth/access/topology, the locally present immutable runtime image, schema/ledger
-and enrolled identity. Only the existing 28 Docker read commands before
+and enrolled identity. Only the existing 29 Docker read commands before
 `quiesce_green_api` run, in that exact order; only Docker needs to be available
 for this mode. No pull, curl, stop, rename, backup, evidence, isolated env,
 directory or resource creation occurs, including on failure. Output is only

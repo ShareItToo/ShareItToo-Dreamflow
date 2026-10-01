@@ -210,9 +210,9 @@ function restoreFixture(options, running = true) {
 test('Green target accepts only the exact verified resource identities', () => {
   assert.deepEqual(assertGreenTargetManifest(targetManifest), targetManifest);
   assert.equal(targetManifest.schemaVersion, 4);
-  assert.equal(targetManifest.prePromotionImage, 'ghcr.io/shareittoo/shareittoo-api:1ebc6eaf695e0cd9365680cdecd711b3edbb5586');
-  assert.equal(targetManifest.prePromotionImageDigest, 'sha256:22f609f21e04ddeb633186727b72c12158c473822dfef2859d3fa357e00647a2');
-  assert.equal(targetManifest.sealedApiContainer, 'shareittoo-staging-api-alt-sealed-green-1ebc6eaf');
+  assert.equal(targetManifest.prePromotionImage, 'ghcr.io/shareittoo/shareittoo-api:34194c42e5e477144b5db5a8eeb6c2d476c7aeef');
+  assert.equal(targetManifest.prePromotionImageDigest, 'sha256:0403a5f60b94a8aa91d7cbf29ae503aea989d85aeb72fcf4cf6dc14a801670b9');
+  assert.equal(targetManifest.sealedApiContainer, 'shareittoo-staging-api-alt-sealed-green-34194c42');
   assert.deepEqual(targetManifest.retainedSealed.map((descriptor) => descriptor.name), [
     'shareittoo-staging-api-alt-sealed-green-bc86f831',
     'shareittoo-staging-api-alt-sealed-green',
@@ -231,6 +231,7 @@ test('Green target accepts only the exact verified resource identities', () => {
     'shareittoo-staging-api-web-cors-rollback-aa1a4ef1e065',
     'shareittoo-staging-api-alt-sealed-green-8a90ec61',
     'shareittoo-staging-api-web-fixture-env-rollback-13b02611f3b0',
+    'shareittoo-staging-api-alt-sealed-green-1ebc6eaf',
   ]);
   const retainedReadbacks = greenTarget.retainedSealed.map((descriptor) => ({
     Name: `/${descriptor.name}`,
@@ -709,7 +710,7 @@ test('default CLI is read-only and execution requires both explicit mode and exa
   }
   const commands = buildGreenPromotionCommands({ plan, configFile: config.envFile, config });
   const prefix = greenReadOnlyPreflightCommands(commands, plan);
-  assert.equal(prefix.length, 28);
+  assert.equal(prefix.length, 29);
   assert.deepEqual(greenRequiredControlExecutables(prefix), ['docker']);
   assert.deepEqual(await assertGreenControlExecutables({ commands: prefix, executableAvailable: async (name) => name === 'docker' }), ['docker']);
   for (const change of [
@@ -1014,7 +1015,7 @@ test('executor preserves required post-enrollment auth through candidate, recove
     assert.equal(readOnly.result.configDigest, crypto.createHash('sha256').update(beforeEnv).digest('hex'));
     assert.deepEqual(Object.keys(readOnly.result).sort(), ['status', 'targetDigest', 'configDigest', 'inventoryDigest', 'runtimeCommit', 'runtimeImageDigest', 'opsCommit', 'sourceLedgerDigest'].sort());
     assert.deepEqual(readOnly.calls.map((entry) => entry.phase), expectedReversible);
-    assert.equal(readOnly.calls.length, 28);
+    assert.equal(readOnly.calls.length, 29);
     for (const [key, value] of Object.entries(readOnly.result)) if (key !== 'status') assert.match(value, /^(?:sha256:)?[0-9a-f]{40,64}$/u, key);
     assert.deepEqual(readdirSync(root), beforeFiles, 'no evidence, backup, or isolated env created');
     assert.deepEqual(readFileSync(configFile), beforeEnv);
@@ -1344,20 +1345,20 @@ test('final readback binds topology and required post-enrollment cohort', () => 
   assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Mounts: record.Mounts.map((mount) => mount.Destination === '/run/secrets/mfa-encryption-key' ? { ...mount, Type: 'volume', Name: 'foreign-secret-volume', Source: undefined } : mount) }, plan, expectedNetworkIds }), /green_final_mount_inventory_mismatch/u);
 });
 
-test('live web-fixture manifest binds all seventeen seals and the exact approved digests without raw IDs', () => {
+test('live 34194 baseline manifest binds all eighteen seals and the exact approved digests without raw IDs', () => {
   const manifest = {
     ...targetManifest,
     authProfile: {
       kind: 'google-post-enrollment', schemaVersion: 1,
-      sourceImageDigest: 'sha256:22f609f21e04ddeb633186727b72c12158c473822dfef2859d3fa357e00647a2',
+      sourceImageDigest: 'sha256:0403a5f60b94a8aa91d7cbf29ae503aea989d85aeb72fcf4cf6dc14a801670b9',
       allowedUserIdsDigest: '94ea2a820e6a48d5776d3b3580e62df956a338a2c3dad2d47dd4b85dfbc746b0',
       allowedUserIdsCount: 6,
       googleUserIdDigest: '8009329bd0eec86d923640e8d878ae2bf9117948a64d0f82f9460b03fef44a16',
     },
   };
   manifest.targetDigest = normalizedGreenTargetDigest(manifest);
-  assert.equal(manifest.targetDigest, '9c41fb4aa7c47eeb1225d86514b5a349cc26fef075e997a807b67301d51b2fb4');
-  assert.equal(assertGreenTargetManifest(manifest).retainedSealed.length, 17);
+  assert.equal(manifest.targetDigest, '7b1e790df0fa4f84c58d40100982c8a085607b2b859b2df09e23e41a569b9775');
+  assert.equal(assertGreenTargetManifest(manifest).retainedSealed.length, 18);
   const readme = readFileSync(new URL('../ops/README.md', import.meta.url), 'utf8');
   for (const value of [manifest.targetDigest, manifest.authProfile.sourceImageDigest,
     manifest.authProfile.allowedUserIdsDigest, manifest.authProfile.googleUserIdDigest]) assert.ok(readme.includes(value));
@@ -1374,10 +1375,10 @@ test('web-fixture successor rejects stale predecessor, omitted seals and changed
     prePromotionImage: 'ghcr.io/shareittoo/shareittoo-api:5d3b42613da73451e9d9169a7b99ca1aba0c4227',
     prePromotionImageDigest: 'sha256:4c4ed030e23563c99caf9781e5fa1ace41d4d72987570dc318e260b217ba3d90',
     sealedApiContainer: 'shareittoo-staging-api-alt-sealed-green-5d3b4261',
-    retainedSealed: targetManifest.retainedSealed.slice(0, 15) };
+    retainedSealed: targetManifest.retainedSealed.slice(0, -1) };
   stale.targetDigest = normalizedGreenTargetDigest(stale);
   assert.throws(() => assertGreenTargetManifest(stale), /green_retained_sealed_descriptor_shape_invalid/u);
-  for (const index of [15, 16]) {
+  for (const index of [15, 16, 17]) {
     const expected = targetManifest.retainedSealed[index];
     assert.equal(expected.running, false); assert.equal(expected.greenLabel, 'true');
     assert.equal(expected.runId, '20260918011528-wp254');
@@ -1393,9 +1394,21 @@ test('web-fixture successor rejects stale predecessor, omitted seals and changed
     prePromotionImageDigest: stale.prePromotionImageDigest };
   oldImageOnly.targetDigest = normalizedGreenTargetDigest(oldImageOnly);
   assert.throws(() => assertGreenTargetManifest(oldImageOnly), /green_target_identity_mismatch/u);
+  const previousLiveBaseline = {
+    ...targetManifest,
+    prePromotionImage: 'ghcr.io/shareittoo/shareittoo-api:1ebc6eaf695e0cd9365680cdecd711b3edbb5586',
+    prePromotionImageDigest: 'sha256:22f609f21e04ddeb633186727b72c12158c473822dfef2859d3fa357e00647a2',
+    sealedApiContainer: 'shareittoo-staging-api-alt-sealed-green-1ebc6eaf',
+    authProfile: {
+      ...targetManifest.authProfile,
+      sourceImageDigest: 'sha256:22f609f21e04ddeb633186727b72c12158c473822dfef2859d3fa357e00647a2',
+    },
+  };
+  previousLiveBaseline.targetDigest = normalizedGreenTargetDigest(previousLiveBaseline);
+  assert.throws(() => assertGreenTargetManifest(previousLiveBaseline), /green_target_identity_mismatch/u);
 });
 
-test('published runtime 341 remains separate from the successor Ops commit', () => {
+test('current runtime 341 remains separate from the successor Ops commit', () => {
   const runtime = '34194c42e5e477144b5db5a8eeb6c2d476c7aeef';
   const plan = buildGreenPromotionPlan({ targetManifest, config, runtimeCommit: runtime,
     runtimeImageDigest: 'sha256:0403a5f60b94a8aa91d7cbf29ae503aea989d85aeb72fcf4cf6dc14a801670b9', opsCommit, evidenceFile: '/docker/shareittoo/evidence/green-promotion.json' });
