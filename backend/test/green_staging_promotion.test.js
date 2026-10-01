@@ -270,6 +270,37 @@ test('forbidden production identifiers use token boundaries, not arbitrary path 
   }
 });
 
+test('web-fixture rollback seal binds the literal production-shaped Docker image tuple', () => {
+  const literalDescriptor = {
+    name: 'shareittoo-staging-api-web-fixture-env-rollback-13b02611f3b0',
+    image: 'ghcr.io/shareittoo/shareittoo-api:1ebc6eaf695e0cd9365680cdecd711b3edbb5586@sha256:22f609f21e04ddeb633186727b72c12158c473822dfef2859d3fa357e00647a2',
+    imageDigest: 'sha256:22f609f21e04ddeb633186727b72c12158c473822dfef2859d3fa357e00647a2',
+    greenLabel: 'true',
+    runId: '20260918011528-wp254',
+    running: false,
+  };
+  const descriptor = greenTarget.retainedSealed.find(({ name }) => name === literalDescriptor.name);
+  assert.deepEqual(descriptor, literalDescriptor);
+  const observedReadback = {
+    Name: '/shareittoo-staging-api-web-fixture-env-rollback-13b02611f3b0',
+    Image: 'sha256:22f609f21e04ddeb633186727b72c12158c473822dfef2859d3fa357e00647a2',
+    State: { Running: false },
+    Config: {
+      Image: 'ghcr.io/shareittoo/shareittoo-api:1ebc6eaf695e0cd9365680cdecd711b3edbb5586@sha256:22f609f21e04ddeb633186727b72c12158c473822dfef2859d3fa357e00647a2',
+      Labels: {
+        'com.shareittoo.sit.green': 'true',
+        'com.shareittoo.sit.green.run_id': '20260918011528-wp254',
+      },
+    },
+  };
+  assert.equal(assertGreenRetainedSealedInventory(observedReadback, descriptor), true);
+  for (const drifted of [
+    { ...observedReadback, Config: { ...observedReadback.Config, Image: 'ghcr.io/shareittoo/shareittoo-api:1ebc6eaf695e0cd9365680cdecd711b3edbb5586' } },
+    { ...observedReadback, Config: { ...observedReadback.Config, Image: 'ghcr.io/shareittoo/shareittoo-api:1ebc6eaf695e0cd9365680cdecd711b3edbb5586@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' } },
+    { ...observedReadback, Image: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' },
+  ]) assert.throws(() => assertGreenRetainedSealedInventory(drifted, descriptor), /green_retained_sealed_inventory_mismatch/u);
+});
+
 test('Green runtime config fails closed for external/mock/legacy or secret-bearing variants', () => {
   assert.equal(assertGreenRuntimeConfig(config).listingAiProvider, 'on_device');
   assert.equal(assertGreenRuntimeConfig({ ...config, envNames: [...config.envNames, 'APP_FEATURE_FLAG'] }).environment, 'test');
@@ -1325,7 +1356,7 @@ test('live web-fixture manifest binds all seventeen seals and the exact approved
     },
   };
   manifest.targetDigest = normalizedGreenTargetDigest(manifest);
-  assert.equal(manifest.targetDigest, '582d1693c7987b40f028080152d0cf88385da58aef30d546ee5631445144737f');
+  assert.equal(manifest.targetDigest, '9c41fb4aa7c47eeb1225d86514b5a349cc26fef075e997a807b67301d51b2fb4');
   assert.equal(assertGreenTargetManifest(manifest).retainedSealed.length, 17);
   const readme = readFileSync(new URL('../ops/README.md', import.meta.url), 'utf8');
   for (const value of [manifest.targetDigest, manifest.authProfile.sourceImageDigest,

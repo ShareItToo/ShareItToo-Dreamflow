@@ -151,7 +151,7 @@ export const greenTarget = Object.freeze({
     }),
     Object.freeze({
       name: 'shareittoo-staging-api-web-fixture-env-rollback-13b02611f3b0',
-      image: 'ghcr.io/shareittoo/shareittoo-api:1ebc6eaf695e0cd9365680cdecd711b3edbb5586',
+      image: 'ghcr.io/shareittoo/shareittoo-api:1ebc6eaf695e0cd9365680cdecd711b3edbb5586@sha256:22f609f21e04ddeb633186727b72c12158c473822dfef2859d3fa357e00647a2',
       imageDigest: 'sha256:22f609f21e04ddeb633186727b72c12158c473822dfef2859d3fa357e00647a2',
       greenLabel: 'true',
       runId: '20260918011528-wp254',

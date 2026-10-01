@@ -136,7 +136,9 @@ The new seal is
 (the previous fifteen, `shareittoo-staging-api-alt-sealed-green-8a90ec61`
 and `shareittoo-staging-api-web-fixture-env-rollback-13b02611f3b0`)
 remain separately read-only validated, stopped containers
-with the exact Green label, run ID and immutable image digest; none is ever
+with the exact Green label, run ID and immutable image digest. The web-fixture
+rollback seal's Docker `Config.Image` is bound to the exact 1ebc tag-plus-digest
+reference, not the tag alone; none of the retained seals is ever
 renamed, removed, restarted or network-targeted.
 Unknown extra Green containers fail the all-containers inventory gate. The
 observed source API tuple includes user `shareittoo`, group `65532`, no host
@@ -233,7 +235,7 @@ runtime and rollback; Firebase Auth stays enabled and registration stays closed.
 The separate finalized enrollment readback is `1|1|1`; never place raw user or
 provider identities in this contract. These live profile values, the new 1ebc
 seal name and all 17 retained descriptors produce the normalized target digest
-`582d1693c7987b40f028080152d0cf88385da58aef30d546ee5631445144737f`.
+`9c41fb4aa7c47eeb1225d86514b5a349cc26fef075e997a807b67301d51b2fb4`.
 Do not run the promotion against a stale manifest.
 
 This Ops-only target refresh can promote the separately published runtime source
