@@ -6,7 +6,6 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { lstatSync, readFileSync, realpathSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { promisify } from 'node:util';
 
 import { readStablePrivateFile, writeExclusivePrivateFile } from './stable_private_file.mjs';
 
@@ -29,7 +28,7 @@ const listingId = 'synthetic_web_catalog_listing_v1';
 const uploadName = 'synthetic_web_catalog_placeholder_v1.webp';
 const digestPattern = /^[a-f0-9]{64}$/u;
 const commitPattern = /^[a-f0-9]{40}$/u;
-const scrypt = promisify(crypto.scrypt);
+const passwordBindingPattern = /^scrypt\$([a-f0-9]{32})\$([a-f0-9]{128})$/u;
 const cleanupQuietWindowMs = 5000;
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const fail = (code) => { throw Object.assign(new Error(code), { code }); };
@@ -39,14 +38,14 @@ const canonical = (value) => Array.isArray(value) ? value.map(canonical)
     ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])])) : value;
 export const fixtureLoginProofDigest = (value) => hash(JSON.stringify(canonical(value)));
 
-export async function verifyFixtureLoginProofPassword(secret, encoded) {
+export function verifyFixtureLoginProofPassword(secret, encoded) {
   if (typeof secret !== 'string' || typeof encoded !== 'string') return false;
-  const match = /^scrypt\$([a-f0-9]{32})\$([a-f0-9]{128})$/u.exec(encoded);
+  const match = passwordBindingPattern.exec(encoded);
   if (!match) return false;
   const [, saltHex, hashHex] = match;
   try {
     const expected = Buffer.from(hashHex, 'hex');
-    const actual = Buffer.from(await scrypt(secret, Buffer.from(saltHex, 'hex'), expected.length));
+    const actual = Buffer.from(crypto.scryptSync(secret, Buffer.from(saltHex, 'hex'), expected.length));
     return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
   } catch {
     return false;
@@ -120,7 +119,7 @@ function parseBootstrapBytes(manifestBytes, credentialsBytes) {
   catch { fail('fixture_login_proof_private_json_invalid'); }
   exact(credentials, ['kind', 'sourceCommit', 'runId', 'manifestSha256', 'accounts'],
     'fixture_login_proof_credentials_invalid');
-  check(manifest?.kind === 'sit-dedicated-web-fixture-bootstrap' && manifest.schemaVersion === 1
+  check(manifest?.kind === 'sit-dedicated-web-fixture-bootstrap' && manifest.schemaVersion === 2
     && manifest.operation === 'seed' && commitPattern.test(manifest.sourceCommit ?? '')
     && manifest.schemaCount === 99 && digestPattern.test(manifest.ledgerDigest ?? '')
     && credentials.kind === 'sit-private-dedicated-fixture-credentials'
@@ -128,7 +127,7 @@ function parseBootstrapBytes(manifestBytes, credentialsBytes) {
     && credentials.manifestSha256 === hash(manifestBytes)
     && /^web-fixture-[A-Za-z0-9-]{16,120}$/u.test(credentials.runId ?? '')
     && Array.isArray(manifest.passwordDigests) && manifest.passwordDigests.length === 2
-    && manifest.passwordDigests.every((value) => digestPattern.test(value ?? ''))
+    && manifest.passwordDigests.every((value) => passwordBindingPattern.test(value ?? ''))
     && manifest.preflight?.runtimeCommit && commitPattern.test(manifest.preflight.runtimeCommit)
     && manifest.preflight?.listingId === listingId && manifest.preflight?.uploadName === uploadName,
   'fixture_login_proof_bootstrap_invalid');
@@ -144,7 +143,7 @@ function parseBootstrapBytes(manifestBytes, credentialsBytes) {
     check(account.id === ids[index] && account.email === `${ids[index]}@example.invalid`
       && typeof secret === 'string' && secret.length >= 32 && secret.length <= 200
       && !/\s/u.test(secret) && /[A-Za-z]/u.test(secret) && /[0-9]/u.test(secret)
-      && hash(secret) === manifest.passwordDigests[index], 'fixture_login_proof_credentials_invalid');
+      && verifyFixtureLoginProofPassword(secret, manifest.passwordDigests[index]), 'fixture_login_proof_credentials_invalid');
   }
   return Object.freeze({ manifest, credentials, manifestBytes, credentialsBytes });
 }

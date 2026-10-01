@@ -54,7 +54,7 @@ a missing/false field for current contracts, accepts the unchanged schema-71
 record, and passes all 9 focused R9 tests. Exact-HEAD CI for the next reviewed
 commit remains pending before any image publication or Staging successor work.
 
-## P2-B accessible Mission UI — LOCAL SOURCE PASS; exact-HEAD CI pending
+## P2-B accessible Mission UI — COMMIT `7b6741c7`; CI IN PROGRESS
 
 The smallest Flutter/Web vertical slice now exposes `Meine Missionen` only
 inside the existing internal Planner technical gate that also protects P2-A.
@@ -76,7 +76,19 @@ truth. Six focused Flutter model/widget/state tests, one principal-bound wiring
 test, the full Flutter analyzer, privacy/retention validators, current-consumer
 closure and diff checks pass locally. This package adds no AI, photo analysis,
 inventory resolution, public/listing/cart/booking/payment/provider behavior and
-makes no Live, Green, Play or deployment change. Exact-HEAD CI remains pending.
+makes no Live, Green, Play or deployment change. Exact-HEAD Regression
+`36852506409` currently has Backend, PostgreSQL and Flutter green while R10 is
+still running; CodeQL workflow `36852506393` is green.
+
+The separate Advanced Security check `110338281180` reported six findings in
+the Ops bootstrap, stable-file reads and environment readback path. The local
+security successor now uses a versioned schema-2 Scrypt bootstrap contract,
+retains the immutable historical schema-1 catalog reader, binds reads to
+no-follow file descriptors and passes runtime values as data instead of
+generated code. Its isolated focused suite is green at `175/175`; backend
+`npm run check` and `git diff --check` are green. Exact-HEAD CI remains pending
+until this successor is reviewed and committed. Blue Ocean remains the main
+goal; this security closure changes no Live, Green, Play or deployment state.
 
 ## Closed prerequisite: Phase 0 Web/CORS and safe synthetic catalog QA
 

@@ -2,7 +2,6 @@
 import crypto from 'node:crypto';
 import { constants, openSync, closeSync, fstatSync, writeFileSync, fsyncSync, lstatSync, readFileSync, unlinkSync, realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { promisify } from 'node:util';
 import { readPasswordFile } from './provision_synthetic_sandbox_user.mjs';
 import { readStablePrivateFile, writeExclusivePrivateFile } from './stable_private_file.mjs';
 import { fixtureDigest, fixtureEnvironmentDigest, fixtureNotice, fixtureTarget, validateFixtureManifest,
@@ -16,29 +15,30 @@ export const dedicatedFixture = Object.freeze({
   listing: 'synthetic_web_catalog_listing_v1', upload: 'synthetic_web_catalog_placeholder_v1.webp',
   uploadId: '6b61b134-9576-44b4-a503-1e1707d633af', purpose: 'noncontractual_web_catalog_only_v1',
 });
-const scrypt = promisify(crypto.scrypt);
 const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
+const passwordBindingPattern = /^scrypt\$([a-f0-9]{32})\$([a-f0-9]{128})$/u;
 const check = (v, code) => { if (!v) throw Object.assign(Error(code), { code }); };
 const ids = [dedicatedFixture.owner, dedicatedFixture.renter];
 const emails = ids.map((id) => `${id}@example.invalid`);
 const digest = (manifest) => fixtureDigest({ sourceCommit: manifest.sourceCommit, sourceHashes: manifest.sourceHashes,
   runId: manifest.preflight.runId, photo: manifest.preflight.photo, scope: dedicatedFixture });
 
-export async function hashFixturePassword(password) {
+export function hashFixturePassword(password) {
   if (typeof password !== 'string' || password.length < 10 || password.length > 200
     || !/\p{L}/u.test(password) || !/\d/u.test(password)) throw new Error('Invalid password');
   const salt = crypto.randomBytes(16);
-  const derived = await scrypt(password, salt, 64);
+  const derived = crypto.scryptSync(password, salt, 64);
   return `scrypt$${salt.toString('hex')}$${Buffer.from(derived).toString('hex')}`;
 }
 
-export async function verifyFixturePassword(password, encoded) {
+export function verifyFixturePassword(password, encoded) {
   if (typeof password !== 'string' || typeof encoded !== 'string') return false;
-  const [scheme, saltHex, hashHex] = encoded.split('$');
-  if (scheme !== 'scrypt' || !saltHex || !hashHex) return false;
+  const match = passwordBindingPattern.exec(encoded);
+  if (!match) return false;
+  const [, saltHex, hashHex] = match;
   try {
     const expected = Buffer.from(hashHex, 'hex');
-    const actual = Buffer.from(await scrypt(password, Buffer.from(saltHex, 'hex'), expected.length));
+    const actual = Buffer.from(crypto.scryptSync(password, Buffer.from(saltHex, 'hex'), expected.length));
     return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
   } catch {
     return false;
@@ -47,9 +47,9 @@ export async function verifyFixturePassword(password, encoded) {
 
 export function buildFixtureBootstrapManifest({ source, environment, photo, passwords, runId, now = new Date() }) {
   const url = new URL(environment.DATABASE_URL);
-  return { kind: 'sit-dedicated-web-fixture-bootstrap', schemaVersion: 1, operation: 'seed',
+  return { kind: 'sit-dedicated-web-fixture-bootstrap', schemaVersion: 2, operation: 'seed',
     sourceCommit: source.commit, sourceHashes: source.hashes, schemaCount: 99, ledgerDigest: source.ledgerDigest,
-    passwordDigests: passwords.map(hash), preflight: { kind: 'sit-staging-web-two-role-preflight', schemaVersion: 1,
+    passwordDigests: passwords.map(hashFixturePassword), preflight: { kind: 'sit-staging-web-two-role-preflight', schemaVersion: 1,
       target: fixtureTarget, createdAt: now.toISOString(), runId, runtimeCommit: environment.APP_COMMIT,
       environmentDigest: fixtureEnvironmentDigest(environment), snapshotDigest: '0'.repeat(64),
       availabilityDigest: fixtureDigest({ rules: [], blocks: [] }),
@@ -67,7 +67,7 @@ export function readBootstrapPasswords(directory, options) {
 
 export function validateFixtureBootstrap({ manifest: m, source, environment, passwords, execute = false,
   confirmSource, confirmRun, now, rehearsal }) {
-  check(m?.kind === 'sit-dedicated-web-fixture-bootstrap' && m.schemaVersion === 1
+  check(m?.kind === 'sit-dedicated-web-fixture-bootstrap' && m.schemaVersion === 2
     && ['seed', 'cleanup'].includes(m.operation), 'fixture_bootstrap_manifest_invalid');
   check(m.sourceCommit === source.commit && fixtureDigest(m.sourceHashes) === fixtureDigest(source.hashes)
     && source.schemaCount === 99 && m.schemaCount === 99 && m.ledgerDigest === source.ledgerDigest, 'fixture_bootstrap_source_drift');
@@ -84,7 +84,9 @@ export function validateFixtureBootstrap({ manifest: m, source, environment, pas
     && m.preflight.photo.file === '/run/sit-fixture-input/photo.webp', 'fixture_bootstrap_scope_invalid');
   check(passwords?.length === 2 && passwords[0] !== passwords[1] && passwords.every((p) => typeof p === 'string'
     && p.length >= 32 && p.length <= 200 && !/\s/u.test(p) && /[A-Za-z]/u.test(p) && /[0-9]/u.test(p))
-    && fixtureDigest(passwords.map(hash)) === fixtureDigest(m.passwordDigests), 'fixture_bootstrap_password_binding');
+    && m.passwordDigests?.length === 2
+    && passwords.every((password, index) => verifyFixturePassword(password, m.passwordDigests[index])),
+  'fixture_bootstrap_password_binding');
   check(!environment.SIT_WEB_FIXTURE_EXECUTE && !environment.SIT_WEB_FIXTURE_CONFIRM
     && (execute === false ? confirmSource === undefined && confirmRun === undefined
       : execute === true && confirmSource === source.commit && confirmRun === m.preflight.runId), 'fixture_bootstrap_confirmation');

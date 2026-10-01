@@ -1,14 +1,31 @@
 import assert from 'node:assert/strict';
-import { chmodSync, mkdtempSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, closeSync, mkdtempSync, readFileSync, renameSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
 import {
   createStablePrivateReadStream,
+  openStablePrivateFile,
   readStablePrivateFile,
   writeExclusivePrivateFile,
 } from '../ops/stable_private_file.mjs';
+
+test('opened descriptor remains bound to approved bytes across a path swap', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'sit-stable-private-file-'));
+  const file = path.join(root, 'fixture');
+  const moved = path.join(root, 'approved');
+  writeFileSync(file, 'approved-bytes\n', { mode: 0o600 });
+  const opened = openStablePrivateFile(file, { expectedMode: 0o600 });
+  try {
+    renameSync(file, moved);
+    writeFileSync(file, 'replacement-bytes\n', { mode: 0o600 });
+    assert.equal(readFileSync(opened.descriptor, 'utf8'), 'approved-bytes\n');
+    assert.equal(readFileSync(file, 'utf8'), 'replacement-bytes\n');
+  } finally {
+    closeSync(opened.descriptor);
+  }
+});
 
 test('stable private reader validates the opened descriptor and reads its bytes', async () => {
   const root = mkdtempSync(path.join(os.tmpdir(), 'sit-stable-private-file-'));

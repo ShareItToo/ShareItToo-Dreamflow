@@ -94,6 +94,12 @@ discover a mechanically stale source hash.
   contract variants without rewriting their evidence. Gate newly added fields
   by the applicable version or terminal schema, and test both the current
   required-field path and the historical field-absent path.
+- Security hardening that changes a persisted or evidence-manifest contract
+  must introduce an explicitly versioned successor and leave historical reader
+  contracts unchanged. Never silently redefine an existing `schemaVersion`.
+- Isolated Ops tests must not import config-bound runtime modules or require
+  unrelated environment secrets merely to prove a local contract. Verify the
+  required primitive or source contract without widening test prerequisites.
 - Safety-mode build flags must fail startup whenever their requested
   configuration is invalid; they must never silently downgrade to normal
   behavior. A package report may claim an allowed or rejected configuration

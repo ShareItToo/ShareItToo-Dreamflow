@@ -2,7 +2,7 @@
 // Host Git/Docker authority; never a manifest/env replacement for Git verification.
 import { spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
-import { lstatSync, readdirSync, readFileSync, realpathSync, mkdirSync, chownSync } from 'node:fs';
+import { lstatSync, readdirSync, realpathSync, mkdirSync, chownSync } from 'node:fs';
 import { dirname, basename, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { adapterSources, readAdapterSource, parseAdapterArguments } from './staging_web_fixture_adapter.mjs';
@@ -43,7 +43,12 @@ export function fixtureRunnerTree(directory) {
       const path = resolve(base, name); const meta = lstatSync(path);
       check(!meta.isSymbolicLink(), 'fixture_runner_source_path');
       if (meta.isDirectory()) visit(path, `${prefix}${name}/`);
-      else { check(meta.isFile(), 'fixture_runner_source_path'); entries.push([`${prefix}${name}`, hash(readFileSync(path))]); }
+      else {
+        check(meta.isFile(), 'fixture_runner_source_path');
+        entries.push([`${prefix}${name}`, hash(readStablePrivateFile(path, {
+          encoding: null, mode: 0, code: 'fixture_runner_source_path',
+        }))]);
+      }
     }
   };
   visit(directory, ''); return fixtureDigest(entries);
@@ -52,10 +57,14 @@ export function fixtureRunnerTree(directory) {
 export function verifyFixtureRunnerSourceFiles({ source, sourceRoot, runtimeBackend, runtimeTreeDigest }) {
   check(fixtureRunnerTree(resolve(runtimeBackend, 'src')) === runtimeTreeDigest
     && fixtureRunnerTree(resolve(sourceRoot, 'backend/src')) === runtimeTreeDigest, 'fixture_runner_runtime_source_drift');
-  for (const [path, digest] of Object.entries(source.hashes)) check(hash(readFileSync(resolve(sourceRoot, path))) === digest, 'fixture_runner_source_bytes_drift');
+  for (const [path, digest] of Object.entries(source.hashes)) check(hash(readStablePrivateFile(resolve(sourceRoot, path), {
+    encoding: null, mode: 0, code: 'fixture_runner_source_path',
+  })) === digest, 'fixture_runner_source_bytes_drift');
   const directory = resolve(runtimeBackend, 'sql/migrations');
   const ledger = readdirSync(directory).filter((name) => name.endsWith('.up.sql')).sort()
-    .map((name) => ({ name, checksum: hash(readFileSync(resolve(directory, name))) }));
+    .map((name) => ({ name, checksum: hash(readStablePrivateFile(resolve(directory, name), {
+      encoding: null, mode: 0, code: 'fixture_runner_source_path',
+    })) }));
   check(ledger.length === 99 && source.schemaCount === 99 && fixtureDigest(ledger) === source.ledgerDigest, 'fixture_runner_ledger_drift');
 }
 
@@ -366,6 +375,7 @@ export function buildFixtureRunnerBinding({ source, api, database, network, volu
   check(match, 'fixture_runner_current_image');
   const manifest = draftPhoto ? null : JSON.parse(adapterBytes);
   const bootstrap = manifest?.kind === 'sit-dedicated-web-fixture-bootstrap';
+  if (bootstrap) check(manifest.schemaVersion === 2, 'fixture_runner_mode_binding');
   const binding = { kind: draftPhoto ? 'sit-green-web-fixture-draft' : bootstrap ? 'sit-green-web-fixture-bootstrap' : 'sit-green-web-fixture-runner', schemaVersion: 1, createdAt: new Date().toISOString(),
     opsCommit: source.commit, runtimeCommit: match[1], imageDigest: match[2], apiId: api.Id,
     apiFingerprint: fixtureRunnerFingerprint(api), databaseId: database.Id, databaseFingerprint: fixtureRunnerFingerprint(database),
@@ -460,7 +470,8 @@ async function main() {
     let photo; let photoBytes; let previous;
     if (refresh) {
       const bytes = privateRuntimeInput(`${argv[1]}/adapter.json`); const manifest = JSON.parse(bytes);
-      check(manifest.kind === 'sit-dedicated-web-fixture-bootstrap', 'fixture_runner_mode_binding');
+      check(manifest.kind === 'sit-dedicated-web-fixture-bootstrap' && manifest.schemaVersion === 2,
+        'fixture_runner_mode_binding');
       const passwords = readBootstrapPasswords(argv[1]);
       check(fixtureDigest(JSON.parse(privateRuntimeInput(`${argv[1]}/credentials.json`))) === fixtureDigest(bootstrapCredentials(bytes, passwords)),
         'fixture_runner_credential_evidence_drift');
@@ -521,6 +532,7 @@ async function main() {
     const image = JSON.parse(docker(['image', 'inspect', '--format', '{{json .}}', api.Config.Image]));
     const adapterBytes = privateRuntimeInput(`${argv[1]}/adapter.json`);
     const manifest = JSON.parse(adapterBytes); const bootstrap = manifest.kind === 'sit-dedicated-web-fixture-bootstrap';
+    if (bootstrap) check(manifest.schemaVersion === 2, 'fixture_runner_mode_binding');
     const passwords = bootstrap ? readBootstrapPasswords(argv[1]) : undefined;
     const binding = buildFixtureRunnerBinding({ source, api, database, network, volume, image, passwords,
       envBytes: readStablePrivateFile(envFile, { encoding: null, expectedMode: 0o600, expectedUid: 0 }),

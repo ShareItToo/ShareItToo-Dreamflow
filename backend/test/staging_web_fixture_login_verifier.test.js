@@ -38,10 +38,9 @@ const networkName = 'sit-green-network-20260918011528-wp254';
 const dbName = 'sit-green-postgres-20260918011528-wp254';
 const credentialField = ['pass', 'word'].join('');
 
-async function encodedSecret(secret) {
+function encodedSecret(secret) {
   const salt = crypto.randomBytes(16);
-  const derived = await new Promise((resolve, reject) => crypto.scrypt(secret, salt, 64,
-    (error, value) => error ? reject(error) : resolve(value)));
+  const derived = crypto.scryptSync(secret, salt, 64);
   return `scrypt$${salt.toString('hex')}$${Buffer.from(derived).toString('hex')}`;
 }
 
@@ -52,9 +51,9 @@ function privateInput(bootstrapRuntimeCommit = runtimeCommit) {
     role: index ? 'renter' : 'owner', userId, syntheticMarker: runId,
   }));
   const manifest = {
-    kind: 'sit-dedicated-web-fixture-bootstrap', schemaVersion: 1, operation: 'seed',
+    kind: 'sit-dedicated-web-fixture-bootstrap', schemaVersion: 2, operation: 'seed',
     sourceCommit: 'e'.repeat(40), sourceHashes: { bootstrap: 'f'.repeat(64) },
-    schemaCount: 99, ledgerDigest, passwordDigests: secrets.map(sha),
+    schemaCount: 99, ledgerDigest, passwordDigests: secrets.map(encodedSecret),
     preflight: { runId, runtimeCommit: bootstrapRuntimeCommit, roles, listingId, uploadName,
       database: { host: dbName, name: 'shareittoo_green', user: 'shareittoo_green' } },
   };
@@ -222,6 +221,16 @@ test('protected bootstrap reader requires exact runner-owned file contract witho
     }), /input_parent_invalid/u);
   }
   assert.throws(() => readProtectedFixtureLoginInput('/run/other', { read, checkParent: false }), /input_path_invalid/u);
+  const legacyManifest = { ...input.manifest, schemaVersion: 1,
+    passwordDigests: input.secrets.map(sha) };
+  const legacyManifestBytes = Buffer.from(`${JSON.stringify(legacyManifest)}\n`);
+  const legacyCredentialsBytes = Buffer.from(`${JSON.stringify({ ...input.credentials,
+    manifestSha256: sha(legacyManifestBytes) })}\n`);
+  assert.throws(() => readProtectedFixtureLoginInput('/docker/shareittoo/evidence/proof/input', {
+    read: (path) => path.endsWith('/adapter.json') ? legacyManifestBytes : legacyCredentialsBytes,
+    stat: () => ({ isDirectory: () => true, isSymbolicLink: () => false, uid: 100, gid: 101, mode: 0o40700 }),
+    realpath: (value) => value,
+  }), /fixture_login_proof_bootstrap_invalid/u);
 });
 
 test('environment gate binds registration, catalog, payment and every external provider off boundary', () => {

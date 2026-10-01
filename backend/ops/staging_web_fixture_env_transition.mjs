@@ -22,6 +22,7 @@ export const fixtureEnvKeys = Object.freeze([
 ]);
 
 const digestPattern = /^[a-f0-9]{64}$/u;
+const passwordBindingPattern = /^scrypt\$[a-f0-9]{32}\$[a-f0-9]{128}$/u;
 const commitPattern = /^[a-f0-9]{40}$/u;
 const identifierPattern = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,119}$/u;
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
@@ -72,10 +73,10 @@ export function parseFixtureBootstrapBinding(bytes, binding) {
   if (!Buffer.isBuffer(bytes) || hash(bytes) !== exactBinding.bootstrapManifestSha256) fail('fixture_env_bootstrap_digest_invalid');
   let manifest;
   try { manifest = JSON.parse(bytes); } catch { fail('fixture_env_bootstrap_json_invalid'); }
-  if (manifest?.kind !== 'sit-dedicated-web-fixture-bootstrap' || manifest.schemaVersion !== 1
+  if (manifest?.kind !== 'sit-dedicated-web-fixture-bootstrap' || manifest.schemaVersion !== 2
       || manifest.operation !== 'seed' || manifest.sourceCommit !== exactBinding.bootstrapSourceCommit
       || !Array.isArray(manifest.passwordDigests) || manifest.passwordDigests.length !== 2
-      || !manifest.passwordDigests.every((value) => digestPattern.test(value ?? ''))
+      || !manifest.passwordDigests.every((value) => passwordBindingPattern.test(value ?? ''))
       || hash(String(manifest.preflight?.runId ?? '')) !== exactBinding.bootstrapRunIdSha256
       || manifest.preflight?.listingId !== dedicatedFixture.listing
       || manifest.preflight?.uploadName !== dedicatedFixture.upload
@@ -157,15 +158,21 @@ export function assertFixtureSeedReadback(stdout, binding) {
   });
 }
 
-export function fixtureEnvReadbackScript(expected) {
-  return `import crypto from 'node:crypto';const h=(v)=>crypto.createHash('sha256').update(v).digest('hex');const csv=(n)=>(process.env[n]??'').split(',').filter(Boolean);const {config}=await import('./src/config.js');const allowed=process.env.SIT_STAGING_ALLOWED_USER_IDS??'';const listings=process.env.SIT_STAGING_PUBLIC_LISTING_IDS??'';const uploads=process.env.SIT_STAGING_PUBLIC_UPLOAD_NAMES??'';process.stdout.write(JSON.stringify({accessGateEnabled:config.stagingAccess.enabled,accessGateValid:config.stagingAccess.valid,allowedCount:csv('SIT_STAGING_ALLOWED_USER_IDS').length,allowedDigest:h(allowed),listingCount:csv('SIT_STAGING_PUBLIC_LISTING_IDS').length,listingDigest:h(listings),uploadCount:csv('SIT_STAGING_PUBLIC_UPLOAD_NAMES').length,uploadDigest:h(uploads),syntheticCatalogEnabled:config.syntheticCatalog.enabled,registrationEnabled:config.stagingGoogleRegistration.enabled,expected:${JSON.stringify(expected)}}));`;
+export function fixtureEnvReadbackArgument(values) {
+  exactKeys(values, fixtureEnvKeys, 'fixture_env_readback_argument_invalid');
+  if (Object.values(values).some((value) => typeof value !== 'string')) fail('fixture_env_readback_argument_invalid');
+  return Buffer.from(JSON.stringify(values), 'utf8').toString('base64url');
+}
+
+export function fixtureEnvReadbackScript() {
+  return `import crypto from 'node:crypto';const names=${JSON.stringify(fixtureEnvKeys)};const encoded=process.argv[1]??'';if(encoded){let values;try{values=JSON.parse(Buffer.from(encoded,'base64url').toString('utf8'));}catch{throw Error('fixture_env_readback_argument_invalid');}if(!values||Array.isArray(values)||JSON.stringify(Object.keys(values).sort())!==JSON.stringify([...names].sort())||Object.values(values).some((value)=>typeof value!=='string'))throw Error('fixture_env_readback_argument_invalid');Object.assign(process.env,values);}const h=(v)=>crypto.createHash('sha256').update(v).digest('hex');const csv=(n)=>(process.env[n]??'').split(',').filter(Boolean);const {config}=await import('./src/config.js');const allowed=process.env.SIT_STAGING_ALLOWED_USER_IDS??'';const listings=process.env.SIT_STAGING_PUBLIC_LISTING_IDS??'';const uploads=process.env.SIT_STAGING_PUBLIC_UPLOAD_NAMES??'';process.stdout.write(JSON.stringify({accessGateEnabled:config.stagingAccess.enabled,accessGateValid:config.stagingAccess.valid,allowedCount:csv('SIT_STAGING_ALLOWED_USER_IDS').length,allowedDigest:h(allowed),listingCount:csv('SIT_STAGING_PUBLIC_LISTING_IDS').length,listingDigest:h(listings),uploadCount:csv('SIT_STAGING_PUBLIC_UPLOAD_NAMES').length,uploadDigest:h(uploads),syntheticCatalogEnabled:config.syntheticCatalog.enabled,registrationEnabled:config.stagingGoogleRegistration.enabled}));`;
 }
 
 export function assertFixtureEnvReadback(stdout, proposal) {
   let value;
   try { value = JSON.parse(String(stdout ?? '').trim()); } catch { fail('fixture_env_runtime_readback_invalid'); }
   exactKeys(value, ['accessGateEnabled', 'accessGateValid', 'allowedCount', 'allowedDigest', 'listingCount',
-    'listingDigest', 'uploadCount', 'uploadDigest', 'syntheticCatalogEnabled', 'registrationEnabled', 'expected'],
+    'listingDigest', 'uploadCount', 'uploadDigest', 'syntheticCatalogEnabled', 'registrationEnabled'],
   'fixture_env_runtime_readback_invalid');
   const expected = {
     allowedCount: proposal.afterAllowedCount, allowedDigest: proposal.afterAllowedDigest,
@@ -174,7 +181,6 @@ export function assertFixtureEnvReadback(stdout, proposal) {
   };
   if (value.accessGateEnabled !== true || value.accessGateValid !== true
       || value.syntheticCatalogEnabled !== false || value.registrationEnabled !== false
-      || JSON.stringify(value.expected) !== JSON.stringify(expected)
       || Object.entries(expected).some(([key, expectedValue]) => value[key] !== expectedValue)) {
     fail('fixture_env_runtime_readback_invalid');
   }
@@ -334,10 +340,10 @@ function bootstrapForPreparation(bytes, expectedSha256) {
   }
   let manifest;
   try { manifest = JSON.parse(bytes); } catch { fail('fixture_env_prepare_bootstrap_json_invalid'); }
-  if (manifest?.kind !== 'sit-dedicated-web-fixture-bootstrap' || manifest.schemaVersion !== 1
+  if (manifest?.kind !== 'sit-dedicated-web-fixture-bootstrap' || manifest.schemaVersion !== 2
       || manifest.operation !== 'seed' || !commitPattern.test(manifest.sourceCommit ?? '')
       || !Array.isArray(manifest.passwordDigests) || manifest.passwordDigests.length !== 2
-      || !manifest.passwordDigests.every((value) => digestPattern.test(value ?? ''))
+      || !manifest.passwordDigests.every((value) => passwordBindingPattern.test(value ?? ''))
       || typeof manifest.preflight?.runId !== 'string' || !manifest.preflight.runId
       || manifest.preflight?.listingId !== dedicatedFixture.listing
       || manifest.preflight?.uploadName !== dedicatedFixture.upload
@@ -551,11 +557,8 @@ async function collectPreflight({ manifest, bootstrap, sourceCommit, evidenceFil
   const live = await command('docker', ['exec', manifest.apiContainerId, 'node', '--input-type=module', '-e', "const l=await fetch('http://127.0.0.1:8080/health/live');const r=await fetch('http://127.0.0.1:8080/health/ready');const v=await fetch('http://127.0.0.1:8080/version');process.stdout.write(JSON.stringify({live:l.status,ready:r.status,version:await v.json()}));"], { phase: 'fixture_env_current_runtime_readback', env: commandEnv });
   const runtime = parseJson(live.stdout, 'fixture_env_current_runtime_readback_invalid');
   if (runtime.live !== 200 || runtime.ready !== 200 || runtime.version?.commit !== manifest.runtimeRevision || runtime.version?.environment !== 'test') fail('fixture_env_current_runtime_readback_invalid');
-  const expected = { allowedCount: proposal.afterAllowedCount, allowedDigest: proposal.afterAllowedDigest,
-    listingCount: 1, listingDigest: proposal.publicListingDigest,
-    uploadCount: 1, uploadDigest: proposal.publicUploadDigest };
   const candidate = await command('docker', ['exec', manifest.apiContainerId, 'node', '--input-type=module', '-e',
-    `Object.assign(process.env,${JSON.stringify(proposal.values)});${fixtureEnvReadbackScript(expected)}`],
+    fixtureEnvReadbackScript(), fixtureEnvReadbackArgument(proposal.values)],
   { phase: 'fixture_env_candidate_config_import', env: commandEnv });
   assertFixtureEnvReadback(candidate.stdout, proposal);
   const primaryNetworkMode = api.HostConfig?.NetworkMode;
@@ -798,10 +801,7 @@ export async function runStagingWebFixtureEnvTransition({
       },
       replacementReadback: async ({ replacementId }) => {
         const config = await command('docker', ['exec', replacementId, 'node', '--input-type=module', '-e',
-          fixtureEnvReadbackScript({ allowedCount: preflight.proposal.afterAllowedCount,
-            allowedDigest: preflight.proposal.afterAllowedDigest, listingCount: 1,
-            listingDigest: preflight.proposal.publicListingDigest, uploadCount: 1,
-            uploadDigest: preflight.proposal.publicUploadDigest })],
+          fixtureEnvReadbackScript()],
         { phase: 'fixture_env_replacement_config_readback', env: commandEnv });
         assertFixtureEnvReadback(config.stdout, preflight.proposal);
       },

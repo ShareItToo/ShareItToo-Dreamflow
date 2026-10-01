@@ -10,12 +10,16 @@ import {
   assertFixtureEnvRuntimeManifest,
   fixtureEnvDigest,
   fixtureEnvKeys,
+  fixtureEnvReadbackArgument,
+  fixtureEnvReadbackScript,
+  parseFixtureBootstrapBinding,
   prepareFixtureEnvRuntimeManifest,
   runStagingWebFixtureEnvTransition,
 } from '../ops/staging_web_fixture_env_transition.mjs';
 import { fixtureEnvironmentDigest } from '../ops/staging_web_fixture_preflight.mjs';
 import { corsContainerFingerprint } from '../ops/staging_web_cors_transition.mjs';
 import { readFixtureEnvBootstrapManifest } from '../ops/promote_staging_web_fixture_env.mjs';
+import { readStablePrivateFile } from '../ops/stable_private_file.mjs';
 
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const opsCommit = 'f'.repeat(40);
@@ -25,6 +29,23 @@ const imageDigest = `sha256:${'c'.repeat(64)}`;
 const migrationLedger = '4d0530a169f9c7d375c18d4a5fc845319ac1d94f16e3671bd9feb2f925d5dcce';
 const primaryNetworkId = '7'.repeat(64);
 const providerNetworkId = '8'.repeat(64);
+
+test('runtime readback transports hostile values as data, never generated source', () => {
+  const injection = `old-owner\"});globalThis.compromised=true;//`;
+  const values = {
+    SIT_STAGING_ALLOWED_USER_IDS: injection,
+    SIT_STAGING_PUBLIC_LISTING_IDS: dedicatedFixture.listing,
+    SIT_STAGING_PUBLIC_UPLOAD_NAMES: dedicatedFixture.upload,
+    SIT_STAGING_SYNTHETIC_CATALOG_ENABLED: 'false',
+  };
+  const script = fixtureEnvReadbackScript();
+  const argument = fixtureEnvReadbackArgument(values);
+  assert.equal(script, fixtureEnvReadbackScript());
+  assert.doesNotMatch(script, /compromised|old-owner/u);
+  assert.deepEqual(JSON.parse(Buffer.from(argument, 'base64url').toString('utf8')), values);
+  assert.throws(() => fixtureEnvReadbackArgument({ ...values, extra: 'not-allowed' }),
+    /fixture_env_readback_argument_invalid/u);
+});
 
 function envEntries() {
   return {
@@ -61,9 +82,12 @@ async function fixture() {
   await writeFile(envFile, originalEnv, { mode: 0o600 });
   const runId = 'web-fixture-bootstrap-private-run';
   const bootstrapManifest = {
-    kind: 'sit-dedicated-web-fixture-bootstrap', schemaVersion: 1, operation: 'seed',
+    kind: 'sit-dedicated-web-fixture-bootstrap', schemaVersion: 2, operation: 'seed',
     sourceCommit: bootstrapCommit, sourceHashes: { bootstrap: '1'.repeat(64) }, schemaCount: 99,
-    ledgerDigest: migrationLedger, passwordDigests: ['2'.repeat(64), '3'.repeat(64)],
+    ledgerDigest: migrationLedger, passwordDigests: [
+      `scrypt$${'2'.repeat(32)}$${'3'.repeat(128)}`,
+      `scrypt$${'4'.repeat(32)}$${'5'.repeat(128)}`,
+    ],
     preflight: {
       runId, environmentDigest: fixtureEnvironmentDigest(environment),
       roles: [{ role: 'owner', userId: dedicatedFixture.owner }, { role: 'renter', userId: dedicatedFixture.renter }],
@@ -158,7 +182,7 @@ function fakeExecutor(fx, {
     const expected = { allowedCount: allowed.split(',').length, allowedDigest: hash(allowed), listingCount: 1,
       listingDigest: hash(dedicatedFixture.listing), uploadCount: 1, uploadDigest: hash(dedicatedFixture.upload) };
     return { accessGateEnabled: true, accessGateValid: true, ...expected, syntheticCatalogEnabled: false,
-      registrationEnabled: false, expected };
+      registrationEnabled: false };
   };
   const command = async (program, args, options = {}) => {
     assert.equal(program, 'docker'); calls.push({ phase: options.phase, args: [...args] });
@@ -188,7 +212,8 @@ function fakeExecutor(fx, {
       return { stdout: name && containers.has(name) ? `${name}\n` : '', code: 0 };
     }
     if (args[0] === 'exec') {
-      const script = args.at(-1);
+      const scriptIndex = args.indexOf('-e');
+      const script = scriptIndex >= 0 ? args[scriptIndex + 1] : args.at(-1);
       if (args[1] === fx.manifest.databaseContainer) {
         if (script === 'SELECT 1') return { stdout: '1\n', code: 0 };
         if (String(script).includes('ORDER BY applied_at')) return { stdout: '099_mission_need_revisions.up.sql\n', code: 0 };
@@ -266,6 +291,17 @@ test('host reader accepts only the runner-owned 0600 UID100:GID101 bootstrap con
   });
 });
 
+test('fixture env consumer accepts only schema-2 scrypt bootstrap bindings', async (t) => {
+  const fx = await fixture(); t.after(() => rm(fx.root, { recursive: true, force: true }));
+  assert.equal(parseFixtureBootstrapBinding(fx.bootstrapBytes, fx.manifest.fixtureBinding).manifest.schemaVersion, 2);
+  const legacy = { ...fx.bootstrapManifest, schemaVersion: 1,
+    passwordDigests: ['2'.repeat(64), '3'.repeat(64)] };
+  const bytes = Buffer.from(`${JSON.stringify(legacy)}\n`);
+  assert.throws(() => parseFixtureBootstrapBinding(bytes, {
+    ...fx.manifest.fixtureBinding, bootstrapManifestSha256: hash(bytes),
+  }), /fixture_env_bootstrap_binding_invalid/u);
+});
+
 test('read-only prepare derives and exclusively writes the protected 0600 runtime manifest', async (t) => {
   const fx = await fixture(); t.after(() => rm(fx.root, { recursive: true, force: true }));
   const preparedFile = join(fx.root, 'prepared-runtime.json');
@@ -275,8 +311,9 @@ test('read-only prepare derives and exclusively writes the protected 0600 runtim
     bootstrapManifestSha256: hash(fx.bootstrapBytes), backupFile: preparedBackup, outputFile: preparedFile,
     sourceCommit: opsCommit, command: fake.command, commandEnv: {}, envFile: fx.envFile });
   assert.equal(result.status, 'fixture-env-runtime-manifest-prepared-read-only');
-  assert.equal((await lstat(preparedFile)).mode & 0o777, 0o600);
-  const prepared = JSON.parse(await readFile(preparedFile, 'utf8'));
+  const prepared = JSON.parse(readStablePrivateFile(preparedFile, {
+    expectedMode: 0o600, expectedUid: process.getuid(), expectedGid: process.getgid(),
+  }));
   assertFixtureEnvRuntimeManifest(prepared);
   assert.equal(prepared.fixtureBinding.apiFingerprint, corsContainerFingerprint(fx.api));
   assert.equal(prepared.fixtureBinding.backupFile, preparedBackup);

@@ -138,12 +138,16 @@ async function bootstrapFixture() {
 
 test('bootstrap preparation creates new distinct cryptographic secrets only in dedicated protected inputs', async () => {
   const f = await bootstrapFixture(); assert.notEqual(f.passwords[0], f.passwords[1]);
+  assert.equal(f.manifest.schemaVersion, 2);
   assert.ok(f.passwords.every((p) => /^Sit9-[A-Za-z0-9_-]{54}$/u.test(p)));
   const evidence = JSON.parse(f.files['credentials.json']);
   assert.deepEqual(evidence.accounts.map((a) => a.password), f.passwords);
   assert.ok(evidence.accounts.every((a) => a.email === `${a.id}@example.invalid`));
   const privateText = f.files['adapter.json'].toString() + f.files['credentials.json'].toString();
   for (const old of f.environment.SIT_STAGING_ALLOWED_USER_IDS.split(',')) assert.ok(!privateText.includes(old));
+  const legacy = structuredClone(f.manifest); legacy.schemaVersion = 1;
+  assert.throws(() => buildFixtureRunnerBinding({ ...f, inputDirectory: f.binding.inputDirectory,
+    adapterBytes: Buffer.from(JSON.stringify(legacy)), passwords: f.passwords }), /fixture_runner_mode_binding/u);
   const refreshed = await prepareBootstrapRunnerInput({ source: f.source, inventory: f, photo: f.manifest.preflight.photo,
     photoBytes: f.files['photo.webp'], inputDirectory: f.binding.inputDirectory + '-fresh',
     previous: { manifest: f.manifest, passwords: f.passwords }, operation: 'cleanup' });

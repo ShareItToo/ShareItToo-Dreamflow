@@ -30,6 +30,7 @@ import {
   validateLoginProofEvidence,
 } from '../ops/staging_web_fixture_catalog_activation.mjs';
 import { fixtureNotice } from '../ops/staging_web_fixture_preflight.mjs';
+import { readStablePrivateFile } from '../ops/stable_private_file.mjs';
 import { corsContainerFingerprint } from '../ops/staging_web_cors_transition.mjs';
 import { assertCatalogActivationHost,
   assertCatalogActivationPreparePaths } from '../ops/activate_staging_web_fixture_catalog.mjs';
@@ -356,6 +357,23 @@ test('bootstrap binds the real canonical-row ledger, not the current DB text led
   } finally { await rm(fx.root, { recursive: true, force: true }); }
 });
 
+test('historical schema-1 bootstrap accepts exact SHA contract and rejects mixed password formats', async () => {
+  const fx = await fixture();
+  try {
+    assert.doesNotThrow(() => validateCatalogActivationBootstrap(fx.bootstrapBytes, fx.bootstrapSha));
+    const manifest = JSON.parse(fx.bootstrapBytes);
+    manifest.passwordDigests[1] = `scrypt$${'6'.repeat(32)}$${'7'.repeat(128)}`;
+    const mixed = Buffer.from(`${JSON.stringify(manifest)}\n`);
+    assert.throws(() => validateCatalogActivationBootstrap(mixed, hash(mixed)),
+      /catalog_activation_bootstrap_invalid/u);
+    manifest.schemaVersion = 2;
+    manifest.passwordDigests[1] = '5'.repeat(64);
+    const successor = Buffer.from(`${JSON.stringify(manifest)}\n`);
+    assert.throws(() => validateCatalogActivationBootstrap(successor, hash(successor)),
+      /catalog_activation_bootstrap_invalid/u);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
 test('schema-2 proof rejects every missing field, unknown fields and cumulative/history drift', async () => {
   const fx = await fixture();
   try {
@@ -571,8 +589,9 @@ test('default preflight is read-only and execute changes only catalog flag with 
     assert.deepEqual(Object.fromEntries(Object.entries(after).filter(([key]) => key !== catalogActivationKey)),
       Object.fromEntries(Object.entries(fx.envFileValues).filter(([key]) => key !== catalogActivationKey)));
     assert.equal(await readFile(fx.backupFile, 'utf8'), fx.originalEnv);
-    assert.equal((await lstat(fx.evidenceFile)).mode & 0o777, 0o600);
-    assert.doesNotMatch(await readFile(fx.evidenceFile, 'utf8'),
+    assert.doesNotMatch(readStablePrivateFile(fx.evidenceFile, {
+      expectedMode: 0o600, expectedUid: process.getuid(), expectedGid: process.getgid(),
+    }),
       /synthetic_web_catalog_owner_v1|synthetic_web_catalog_renter_v1|example\.invalid|DATABASE_URL/u);
   } finally { await rm(fx.root, { recursive: true, force: true }); }
 });

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import { mkdtempSync, rmSync, readdirSync, readFileSync, writeFileSync, symlinkSync, chmodSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -15,6 +16,24 @@ test('isolated bootstrap password helper preserves the runtime scrypt contract',
   assert.match(encoded, /^scrypt\$[0-9a-f]{32}\$[0-9a-f]{128}$/u);
   assert.equal(await verifyFixturePassword(accepted, encoded), true);
   assert.equal(await verifyFixturePassword(`${accepted}-incorrect`, encoded), false);
+  const [, saltHex, hashHex] = encoded.split('$');
+  const independentlyDerived = crypto.scryptSync(accepted, Buffer.from(saltHex, 'hex'), 64);
+  assert.equal(crypto.timingSafeEqual(independentlyDerived, Buffer.from(hashHex, 'hex')), true);
+  assert.equal(verifyFixturePassword(accepted,
+    crypto.createHash('sha256').update(accepted).digest('hex')), false);
+});
+
+test('bootstrap manifest binds credentials with scrypt and rejects legacy fast digests', async (t) => {
+  const f = await fixture(t);
+  assert.equal(f.manifest.schemaVersion, 2);
+  assert.ok(f.manifest.passwordDigests.every((value) => /^scrypt\$[0-9a-f]{32}\$[0-9a-f]{128}$/u.test(value)));
+  assert.ok(f.manifest.passwordDigests.every((value) => !f.passwords.some((password) => value.includes(password))));
+  validateFixtureBootstrap(f);
+  const legacyVersion = structuredClone(f.manifest);
+  legacyVersion.schemaVersion = 1;
+  assert.throws(() => validateFixtureBootstrap({ ...f, manifest: legacyVersion }), /fixture_bootstrap_manifest_invalid/u);
+  f.manifest.passwordDigests[0] = crypto.createHash('sha256').update(f.passwords[0]).digest('hex');
+  assert.throws(() => validateFixtureBootstrap(f), /fixture_bootstrap_password_binding/u);
 });
 
 test('bootstrap source does not import the config-bound runtime security module', () => {
