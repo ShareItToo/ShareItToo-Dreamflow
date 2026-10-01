@@ -86,6 +86,14 @@ import {
 } from './planner_inventory_workflow.js';
 import { plannerTemplateCatalog } from './planner_core.js';
 import {
+  assertMissionNeedTechnicalAccess,
+  correctMissionNeed,
+  createMissionNeed,
+  getMissionNeed,
+  listMissionNeeds,
+  MissionNeedError,
+} from './mission_need_workflow.js';
+import {
   BookingFlowTimeError,
   getBookingFlowTime,
   updateBookingFlowTime,
@@ -2044,6 +2052,7 @@ export async function eraseAccount(client, user, { actorRole = 'user', source = 
   );
   await client.query('DELETE FROM notification_preferences WHERE user_id = $1', [user.id]);
   await client.query('DELETE FROM notifications WHERE user_id = $1', [user.id]);
+  await client.query('DELETE FROM mission_needs WHERE owner_id = $1', [user.id]);
   await client.query('DELETE FROM rental_carts WHERE user_id = $1', [user.id]);
   await client.query('DELETE FROM listing_sets WHERE owner_id = $1', [user.id]);
   await client.query('DELETE FROM message_reads WHERE user_id = $1', [user.id]);
@@ -5629,6 +5638,48 @@ export function createApp({
     res.set('Cache-Control', 'private, no-store').json({ cart });
   }));
 
+  app.get('/v1/mission-needs', requireAuth, requireActiveAccount, requireUnsuspendedScope('booking'), asyncRoute(async (req, res) => {
+    assertMissionNeedTechnicalAccess(config);
+    const result = await inTransaction((client) => listMissionNeeds(client, {
+      actorId: req.auth.userId,
+    }));
+    res.set('Cache-Control', 'private, no-store').json(result);
+  }));
+
+  app.get('/v1/mission-needs/:id', requireAuth, requireActiveAccount, requireUnsuspendedScope('booking'), asyncRoute(async (req, res) => {
+    assertMissionNeedTechnicalAccess(config);
+    const result = await inTransaction((client) => getMissionNeed(client, {
+      actorId: req.auth.userId,
+      missionNeedId: safeText(req.params.id, 160),
+    }));
+    res.set('Cache-Control', 'private, no-store').json(result);
+  }));
+
+  app.post('/v1/mission-needs', requireAuth, requireActiveAccount, requireUnsuspendedScope('booking'), asyncRoute(async (req, res) => {
+    assertMissionNeedTechnicalAccess(config);
+    const result = await inTransaction((client) => createMissionNeed(client, {
+      actorId: req.auth.userId,
+      raw: req.body,
+      idempotencyKey: req.get('Idempotency-Key'),
+    }));
+    res.status(result.replayed ? 200 : 201)
+      .set('Cache-Control', 'private, no-store')
+      .json(result);
+  }));
+
+  app.post('/v1/mission-needs/:id/revisions', requireAuth, requireActiveAccount, requireUnsuspendedScope('booking'), asyncRoute(async (req, res) => {
+    assertMissionNeedTechnicalAccess(config);
+    const result = await inTransaction((client) => correctMissionNeed(client, {
+      actorId: req.auth.userId,
+      missionNeedId: safeText(req.params.id, 160),
+      raw: req.body,
+      idempotencyKey: req.get('Idempotency-Key'),
+    }));
+    res.status(result.replayed ? 200 : 201)
+      .set('Cache-Control', 'private, no-store')
+      .json(result);
+  }));
+
   app.get('/v1/planner/templates', requireAuth, requireActiveAccount, requireUnsuspendedScope('booking'), asyncRoute(async (_req, res) => {
     assertPlannerInventoryTechnicalAccess(config);
     res.set('Cache-Control', 'private, no-store').json({
@@ -7805,6 +7856,7 @@ export function createApp({
     const workflowError = error instanceof BookingWorkflowError || error instanceof SyntheticCatalogError;
     const rentalCartError = error instanceof RentalCartError;
     const plannerInventoryError = error instanceof PlannerInventoryError;
+    const missionNeedError = error instanceof MissionNeedError;
     const listingSupplyEnrichmentError = error instanceof ListingSupplyEnrichmentError;
     const listingSetError = error instanceof ListingSetError;
     const blueOceanListingError = error instanceof BlueOceanListingWorkflowError
@@ -7830,7 +7882,7 @@ export function createApp({
           ? 413
           : (uploadFieldsExceeded
               ? 400
-              : (invalidProcessedImage ? 422 : ((error instanceof HttpError || workflowError || rentalCartError || plannerInventoryError || listingSupplyEnrichmentError || listingSetError || blueOceanListingError || flowTimeError || messageWorkflowError || paymentWorkflowError || moderationWorkflowError || retentionInventoryError || supportCaseError || handoverExceptionError || mfaWorkflowError || pilotCockpitError || mapsProxyError || bookingConfirmationError || syntheticCloneBookingLaneError || v51WithdrawalError || v52ActualLossError || v52HandoverReturnError || error instanceof PhoneVerificationError || error instanceof ComplianceReviewError) ? error.status : (error?.status ?? 500)))));
+              : (invalidProcessedImage ? 422 : ((error instanceof HttpError || workflowError || rentalCartError || plannerInventoryError || missionNeedError || listingSupplyEnrichmentError || listingSetError || blueOceanListingError || flowTimeError || messageWorkflowError || paymentWorkflowError || moderationWorkflowError || retentionInventoryError || supportCaseError || handoverExceptionError || mfaWorkflowError || pilotCockpitError || mapsProxyError || bookingConfirmationError || syntheticCloneBookingLaneError || v51WithdrawalError || v52ActualLossError || v52HandoverReturnError || error instanceof PhoneVerificationError || error instanceof ComplianceReviewError) ? error.status : (error?.status ?? 500)))));
     const code = uploadTooLarge
       ? 'image_too_large'
       : (uploadFieldsExceeded
@@ -7839,7 +7891,7 @@ export function createApp({
               ? error.code
               : (bookingConflict
               ? 'booking_period_unavailable'
-              : ((error instanceof HttpError || workflowError || rentalCartError || plannerInventoryError || listingSupplyEnrichmentError || listingSetError || blueOceanListingError || flowTimeError || messageWorkflowError || paymentWorkflowError || moderationWorkflowError || retentionInventoryError || supportCaseError || handoverExceptionError || mfaWorkflowError || pilotCockpitError || mapsProxyError || bookingConfirmationError || syntheticCloneBookingLaneError || v51WithdrawalError || v52ActualLossError || v52HandoverReturnError || error instanceof PhoneVerificationError || error instanceof ComplianceReviewError) ? error.code : (status === 500 ? 'internal_error' : 'request_failed')))));
+              : ((error instanceof HttpError || workflowError || rentalCartError || plannerInventoryError || missionNeedError || listingSupplyEnrichmentError || listingSetError || blueOceanListingError || flowTimeError || messageWorkflowError || paymentWorkflowError || moderationWorkflowError || retentionInventoryError || supportCaseError || handoverExceptionError || mfaWorkflowError || pilotCockpitError || mapsProxyError || bookingConfirmationError || syntheticCloneBookingLaneError || v51WithdrawalError || v52ActualLossError || v52HandoverReturnError || error instanceof PhoneVerificationError || error instanceof ComplianceReviewError) ? error.code : (status === 500 ? 'internal_error' : 'request_failed')))));
     if (status >= 500) console.error(safeErrorLog(req, status, code, error));
     res.status(status).json(errorPayload(req, code, error?.details));
   });

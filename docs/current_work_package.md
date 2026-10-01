@@ -15,6 +15,37 @@ an unavoidable physical action. Gemini is reserved for narrow, named critical
 gates using current sources; it is not a routine execution prerequisite.
 This objective record grants no new live, provider, payment, Production or Play authority.
 
+## P2-A durable non-binding mission need — SOURCE PASS; exact-HEAD CI pending
+
+The first additive P2 backend slice introduces schema migration `099` and an
+owner-bound mission-need API. A server-generated stable `mission_need_id`
+points to immutable, digest-bound revisions. Create and correction commands
+are idempotent per owner; changed request bytes under the same key and stale
+`expectedRevision` values fail closed. Each need is explicitly `required` or
+`optional` with a positive quantity, while the only states are honest
+`draft`/`planned` states. Responses explicitly record that no reservation,
+booking, contract, payment, external generative AI or automatic photo analysis
+was created.
+
+Focused PostgreSQL acceptance covers create/load/list/correct, owner/account
+switch isolation, replay and collision behavior, restart persistence, immutable
+revision history, privacy export and account erasure. It also compares the
+pre-existing rental-cart rows byte-for-byte before and after P2 operations and
+proves booking/request/contract/payment counts unchanged. Generic migrations,
+R9 and dynamic source-fixture consumers advance to schema 99; historical
+Phase-0 evidence remains unchanged. The exact published `6c0ef70d…` Green
+runtime and its promotion runner stay bound to live schema 98 because that
+image does not contain migration 099. This is a source-only package: no live
+database, provider, release or public surface has been changed. A later Green
+promotion may bind schema 99 only after this P2 successor passes CI and an
+immutable image digest plus publication manifest are independently verified.
+
+Sol review accepted the bounded source package after the real PostgreSQL 16
+mission-need run, focused schema/fixture tests, privacy/retention validators,
+backend syntax checks and a clean diff check passed. Exact-HEAD Regression and
+CodeQL remain the separate final source gate before any image publication or
+Staging successor work.
+
 ## Closed prerequisite: Phase 0 Web/CORS and safe synthetic catalog QA
 
 ### Synthetic catalog browser projection — PHASE 0 LIVE PASS 2026-10-01
@@ -105,7 +136,7 @@ strict synthetic row and its canonical WebP; the browser displays its notice,
 image disclaimer and disabled `Nicht buchbar – nur Katalogtest` action with no
 console warning/error. Exact-origin CORS returns `204` for the Staging origin.
 
-### Green worker-source permission incident — durable source guard in review
+### Green worker-source permission incident — exact-HEAD SOURCE PASS
 
 The first exact `441d2860…` promotion attempt failed at
 `synthetic_sandbox_provision_isolated_failed` because the two non-secret
@@ -123,8 +154,13 @@ image with no network as UID/GID `100:101` to read and hash the real bind
 targets and run Node syntax/import checks. Failures expose fixed codes only;
 the guard does not change product, catalog, provider or payment behavior.
 
+The durable guard is accepted at exact source HEAD
+`8b93f45f0b320edd58eb004971ebe1676e77a4af`; GitHub Regression
+`36847118104` and CodeQL `36847117995` passed. P2-A remains separately in
+review and does not alter this accepted live schema-98 runner.
+
 Phase 0 is technically closed by the separate closure record. After this
-durable incident-prevention successor passes exact-HEAD review/CI, work advances
+durable incident-prevention successor passed exact-HEAD review/CI, work advanced
 directly to Blue-Ocean **P2 — dauerhafter unverbindlicher Missionsbedarf**.
 
 The older promotion, proof and failed activation sections below are retained as

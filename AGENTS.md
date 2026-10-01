@@ -83,6 +83,10 @@ discover a mechanically stale source hash.
   Repeat-promotion pre-state contracts must derive from the last verified final
   runtime shape, not a stale first-promotion source shape; deterministic tests
   must assert the exact live tuple and reject extra, missing or changed mounts.
+- An image- and manifest-bound promotion runner may raise its terminal schema
+  only when that exact published image contains the new migration. A source-only
+  product package leaves the accepted live runner unchanged; create its schema
+  successor only after exact-HEAD CI and independent image/manifest binding.
 - Safety-mode build flags must fail startup whenever their requested
   configuration is invalid; they must never silently downgrade to normal
   behavior. A package report may claim an allowed or rejected configuration

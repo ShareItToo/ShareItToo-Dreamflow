@@ -22,7 +22,7 @@ const opsCommit = 'f'.repeat(40);
 const bootstrapCommit = 'e'.repeat(40);
 const runtimeCommit = 'd'.repeat(40);
 const imageDigest = `sha256:${'c'.repeat(64)}`;
-const migrationLedger = '796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196';
+const migrationLedger = '4d0530a169f9c7d375c18d4a5fc845319ac1d94f16e3671bd9feb2f925d5dcce';
 const primaryNetworkId = '7'.repeat(64);
 const providerNetworkId = '8'.repeat(64);
 
@@ -62,7 +62,7 @@ async function fixture() {
   const runId = 'web-fixture-bootstrap-private-run';
   const bootstrapManifest = {
     kind: 'sit-dedicated-web-fixture-bootstrap', schemaVersion: 1, operation: 'seed',
-    sourceCommit: bootstrapCommit, sourceHashes: { bootstrap: '1'.repeat(64) }, schemaCount: 98,
+    sourceCommit: bootstrapCommit, sourceHashes: { bootstrap: '1'.repeat(64) }, schemaCount: 99,
     ledgerDigest: migrationLedger, passwordDigests: ['2'.repeat(64), '3'.repeat(64)],
     preflight: {
       runId, environmentDigest: fixtureEnvironmentDigest(environment),
@@ -191,7 +191,7 @@ function fakeExecutor(fx, {
       const script = args.at(-1);
       if (args[1] === fx.manifest.databaseContainer) {
         if (script === 'SELECT 1') return { stdout: '1\n', code: 0 };
-        if (String(script).includes('ORDER BY applied_at')) return { stdout: '098_booking_checkout_declaration_constraints.up.sql\n', code: 0 };
+        if (String(script).includes('ORDER BY applied_at')) return { stdout: '099_mission_need_revisions.up.sql\n', code: 0 };
         if (String(script).includes('string_agg')) return { stdout: `${migrationLedger}\n`, code: 0 };
         if (String(script).includes('staging_web_fixture_seed.seeded')) return { stdout: `1|${fx.seedScopeDigest}|${fx.seedSnapshotDigest}|${hash(fx.runId)}|0|2|1|1\n`, code: 0 };
         throw Error(`unexpected_db_exec:${script}`);

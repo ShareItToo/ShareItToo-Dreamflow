@@ -106,6 +106,7 @@ test('runs readiness, isolated database and integration before guaranteed cleanu
       'backend/test/foreign_key_integrity.integration.test.js',
     ],
     ['backend/test/staging_web_fixture_postgres.integration.test.js'],
+    ['backend/test/mission_need_postgres.integration.test.js'],
     ['backend/test/staging_google_registration.integration.test.js'],
     [
       'backend/test/listing_ai_lifetime_budget_migration.integration.test.js',
@@ -188,6 +189,12 @@ test('focused web fixture mode is the real PG suite and retains failure cleanup'
   assert.match(log, /--test backend\/test\/staging_web_fixture_postgres.integration.test.js/u);
   assert.match(log, /pg_ctl\|.* -m fast stop\|/u);
   assert.deepEqual(await readdir(fixture.temporaryBase), []);
+});
+
+test('focused mission need mode selects only the P2-A PostgreSQL suite', () => {
+  assert.deepEqual(integrationTestPlan({ focusedMissionNeed: true }), [
+    ['backend/test/mission_need_postgres.integration.test.js'],
+  ]);
 });
 
 test('cleans the cluster and stops PostgreSQL when the integration fails', async (t) => {

@@ -28,7 +28,7 @@ const requireFromBackend = createRequire(
   new URL('../backend/package.json', import.meta.url),
 );
 
-export const r9RequiredMigrationCount = 98;
+export const r9RequiredMigrationCount = 99;
 export const r9SyntheticAccountCount = 12;
 export const r9SyntheticListingCount = 6;
 export const r9ResultClassification = 'LOCAL_ISOLATED_DATABASE_RECOVERY_PROOF';
@@ -86,6 +86,10 @@ const rollbackGuardExpectations = Object.freeze([
   Object.freeze({
     filename: '098_booking_checkout_declaration_constraints.down.sql',
     message: 'v52_booking_declaration_rows_active',
+  }),
+  Object.freeze({
+    filename: '099_mission_need_revisions.down.sql',
+    message: 'mission_need_rows_active',
   }),
 ]);
 
@@ -166,7 +170,7 @@ async function readMigrationPlan(root) {
   }
   if (plan.length !== r9RequiredMigrationCount
       || plan[0]?.filename !== '001_b3_foundation.up.sql'
-      || plan.at(-1)?.filename !== '098_booking_checkout_declaration_constraints.up.sql') {
+      || plan.at(-1)?.filename !== '099_mission_need_revisions.up.sql') {
     fail('r9_migration_inventory_unexpected');
   }
   return Object.freeze(plan);
@@ -577,13 +581,21 @@ async function insertLegacyDataset(pool) {
     `INSERT INTO rental_carts (user_id)
      VALUES ('r9-legacy-user-004') RETURNING id`,
   );
+  const project = await pool.query(
+    `INSERT INTO rental_cart_projects (
+       cart_id, client_project_id, title, answers, sort_order
+     ) VALUES ($1, 'r9.legacy.project.0001', 'R9 legacy project',
+               '{"fixture":"r9_legacy","synthetic":true}'::jsonb, 7)
+     RETURNING id`,
+    [cart.rows[0].id],
+  );
   await pool.query(
     `INSERT INTO rental_cart_items (
-       cart_id, client_item_id, listing_id, rental_start_date,
+       cart_id, client_item_id, listing_id, project_id, rental_start_date,
        rental_end_date, quote_status
-     ) VALUES ($1, 'r9.legacy.item.0001', 'r9-legacy-listing-001',
+     ) VALUES ($1, 'r9.legacy.item.0001', 'r9-legacy-listing-001', $2,
                '2026-09-01', '2026-09-03', 'needs_recheck')`,
-    [cart.rows[0].id],
+    [cart.rows[0].id, project.rows[0].id],
   );
 }
 
@@ -598,6 +610,22 @@ async function legacyCounts(pool) {
          WHERE cart.user_id = 'r9-legacy-user-004') AS cart_items`,
   );
   return result.rows[0];
+}
+
+async function legacyCartSnapshot(pool) {
+  const result = await pool.query(
+    `SELECT jsonb_build_object(
+       'cart', to_jsonb(cart),
+       'projects', (SELECT COALESCE(jsonb_agg(to_jsonb(project) ORDER BY project.id), '[]'::jsonb)
+                      FROM rental_cart_projects AS project WHERE project.cart_id = cart.id),
+       'items', (SELECT COALESCE(jsonb_agg(to_jsonb(item) ORDER BY item.id), '[]'::jsonb)
+                   FROM rental_cart_items AS item WHERE item.cart_id = cart.id)
+     )::text AS snapshot
+       FROM rental_carts AS cart
+      WHERE cart.user_id = 'r9-legacy-user-004'`,
+  );
+  if (result.rowCount !== 1) fail('r9_legacy_cart_snapshot_invalid');
+  return result.rows[0].snapshot;
 }
 
 async function insertRefundTransferReversalRollbackFixture(client) {
@@ -769,6 +797,16 @@ async function assertRollbackGuardRefusals(pool, root) {
       if (guard.filename === '098_booking_checkout_declaration_constraints.down.sql') {
         await insertBookingDeclarationRollbackFixture(client);
       }
+      if (guard.filename === '099_mission_need_revisions.down.sql') {
+        await client.query(
+          `INSERT INTO mission_needs (
+             id, owner_id, domain_version, status
+           ) VALUES (
+             'mission_need_00000000-0000-4000-8000-000000000099',
+             'r9-user-001', 'P2-A-2026-10-01.1', 'draft'
+           )`,
+        );
+      }
       try {
         await client.query(sql);
       } catch (error) {
@@ -840,7 +878,7 @@ async function closePools(pools) {
 
 export function validateR9Observation(value, {
   requiredMigrationCount = r9RequiredMigrationCount,
-  requiredLastMigration = '098_booking_checkout_declaration_constraints.up.sql',
+  requiredLastMigration = '099_mission_need_revisions.up.sql',
   requiredRollbackGuards = rollbackGuardExpectations,
 } = {}) {
   if (value?.schemaVersion !== 1
@@ -903,6 +941,7 @@ export function validateR9Observation(value, {
     legacyUsersPreserved: 4,
     legacyListingsPreserved: 2,
     legacyCartItemsPreserved: 1,
+    legacyCartRowsByteEquivalent: true,
     schemaFingerprintMatch: true,
   })) fail('R9 older-schema upgrade proof is invalid.');
   if (!exact(value.rollback, {
@@ -1092,11 +1131,14 @@ export async function executeR9DatabaseRecovery({
     await applyMigrationPrefix(legacyPool, plan, 27);
     await insertLegacyDataset(legacyPool);
     const beforeLegacy = await legacyCounts(legacyPool);
+    const beforeLegacyCart = await legacyCartSnapshot(legacyPool);
     await runMigrations(legacyPool);
     const legacySecondRun = await verifySecondMigrationRun(legacyPool, plan);
     const afterLegacy = await legacyCounts(legacyPool);
+    const afterLegacyCart = await legacyCartSnapshot(legacyPool);
     if (!exact(beforeLegacy, afterLegacy)
-        || !exact(afterLegacy, { users: 4, listings: 2, cart_items: 1 })) {
+        || !exact(afterLegacy, { users: 4, listings: 2, cart_items: 1 })
+        || beforeLegacyCart !== afterLegacyCart) {
       fail('r9_legacy_data_not_preserved');
     }
     const legacySchema = await schemaFingerprint(legacyPool);
@@ -1166,6 +1208,7 @@ export async function executeR9DatabaseRecovery({
         legacyUsersPreserved: afterLegacy.users,
         legacyListingsPreserved: afterLegacy.listings,
         legacyCartItemsPreserved: afterLegacy.cart_items,
+        legacyCartRowsByteEquivalent: beforeLegacyCart === afterLegacyCart,
         schemaFingerprintMatch: legacySchemaMatches,
       },
       rollback: {

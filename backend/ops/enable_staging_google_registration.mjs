@@ -16,8 +16,8 @@ import { readStablePrivateFile } from './stable_private_file.mjs';
 import { assertCorsBinding, assertCorsPreState, corsAfter, corsBefore, corsManifestKind, isCorsTransition, readCorsUserCounts, readCorsWitnesses, withCorsTransitionLock } from './staging_web_cors_transition.mjs';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const requiredTerminalMigration = '098_booking_checkout_declaration_constraints.up.sql';
-const requiredMigrationLedger = '796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196';
+const requiredTerminalMigration = '099_mission_need_revisions.up.sql';
+const requiredMigrationLedger = '4d0530a169f9c7d375c18d4a5fc845319ac1d94f16e3671bd9feb2f925d5dcce';
 const registrationEnabledKey = 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED';
 const registrationAllowlistKey = 'SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST';
 const allowedUserIdsKey = 'SIT_STAGING_ALLOWED_USER_IDS';

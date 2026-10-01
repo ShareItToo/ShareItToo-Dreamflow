@@ -109,6 +109,9 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
     rentalCarts,
     rentalCartProjects,
     rentalCartItems,
+    missionNeeds,
+    missionNeedRevisions,
+    missionNeedCommands,
     platformContracts,
     platformContractDeclarations,
     platformContractReceipts,
@@ -363,6 +366,29 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
          LEFT JOIN rental_cart_projects AS project ON project.id = item.project_id
         WHERE cart.user_id = $1
         ORDER BY item.sort_order, item.created_at`, userId),
+    rows(client,
+      `SELECT id, domain_version, status, current_revision, created_at, updated_at
+         FROM mission_needs
+        WHERE owner_id = $1
+        ORDER BY updated_at, id`, userId),
+    rows(client,
+      `SELECT revision.id, revision.mission_need_id, revision.revision,
+              revision.status, revision.payload, revision.payload_sha256,
+              revision.created_at
+         FROM mission_need_revisions AS revision
+         JOIN mission_needs AS need ON need.id = revision.mission_need_id
+        WHERE need.owner_id = $1
+        ORDER BY revision.mission_need_id, revision.revision`, userId),
+    rows(client,
+      `SELECT idempotency_key AS "idempotencyKey",
+              command_type AS "commandType",
+              request_sha256 AS "requestDigest",
+              mission_need_id AS "missionNeedId",
+              result_revision AS "resultRevision",
+              created_at AS "createdAt"
+         FROM mission_need_commands
+        WHERE owner_id = $1
+        ORDER BY mission_need_id, result_revision, idempotency_key`, userId),
     rows(client,
       `SELECT contract.id, contract.booking_id, contract.quote_id,
               contract.quote_hash, contract.contract_version, contract.locale,
@@ -1201,6 +1227,16 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
         projects: rentalCartProjects,
         items: rentalCartItems,
         reservationCreated: false,
+      },
+      missionNeeds: {
+        needs: missionNeeds,
+        revisions: missionNeedRevisions,
+        commands: missionNeedCommands,
+        bindingStatus: 'non_binding',
+        reservationCreated: false,
+        bookingCreated: false,
+        contractCreated: false,
+        paymentCreated: false,
       },
       platformContracts,
       platformContractDeclarations,

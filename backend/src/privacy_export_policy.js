@@ -92,6 +92,7 @@ function portabilityProjection(raw) {
         itemEvidenceRemainsInV52BookingRecords: true,
       },
       rentalCart: marketplace.rentalCart,
+      missionNeeds: marketplace.missionNeeds,
       platformContracts: records(marketplace.platformContracts),
       platformContractDeclarations:
         records(marketplace.platformContractDeclarations),

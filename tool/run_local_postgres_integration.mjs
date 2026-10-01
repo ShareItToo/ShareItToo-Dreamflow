@@ -27,6 +27,9 @@ export const integrationTestGroups = Object.freeze({
   profileAvatar: Object.freeze([
     'backend/test/profile_avatar_postgres.integration.test.js',
   ]),
+  missionNeed: Object.freeze([
+    'backend/test/mission_need_postgres.integration.test.js',
+  ]),
   foundation: Object.freeze([
     'backend/test/postgres_foundation.integration.test.js',
     'backend/test/foreign_key_integrity.integration.test.js',
@@ -53,7 +56,9 @@ export function integrationTestPlan({
   focusedPrivateListing = false,
   focusedProfileAvatar = false,
   focusedWebFixture = false,
+  focusedMissionNeed = false,
 } = {}) {
+  if (focusedMissionNeed) return [integrationTestGroups.missionNeed];
   if (focusedWebFixture) return [integrationTestGroups.stagingWebFixture];
   if (focusedPrivateListing) {
     return [Object.freeze([
@@ -77,6 +82,7 @@ export function integrationTestPlan({
   return [
     integrationTestGroups.foundation,
     integrationTestGroups.stagingWebFixture,
+    integrationTestGroups.missionNeed,
     integrationTestGroups.stagingGoogleRegistration,
     integrationTestGroups.listingAi,
     integrationTestGroups.identity,
@@ -271,6 +277,7 @@ export async function runLocalPostgresIntegration({
   const focusedGoogleRegistration = environment.SIT_POSTGRES_FOCUSED_GOOGLE === '1';
   const focusedLegacySchema = environment.SIT_POSTGRES_FOCUSED_LEGACY === '1';
   const focusedWebFixture = environment.SIT_POSTGRES_FOCUSED_WEB_FIXTURE === '1';
+  const focusedMissionNeed = environment.SIT_POSTGRES_FOCUSED_MISSION_NEED === '1';
   const integrationGroups = integrationTestPlan({
     focusedGoogleRegistration,
     focusedLegacySchema,
@@ -278,6 +285,7 @@ export async function runLocalPostgresIntegration({
     focusedPrivateListing,
     focusedProfileAvatar,
     focusedWebFixture,
+    focusedMissionNeed,
   });
 
   const onSignal = (signal) => {

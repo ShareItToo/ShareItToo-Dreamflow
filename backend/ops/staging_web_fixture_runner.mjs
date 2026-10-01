@@ -56,7 +56,7 @@ export function verifyFixtureRunnerSourceFiles({ source, sourceRoot, runtimeBack
   const directory = resolve(runtimeBackend, 'sql/migrations');
   const ledger = readdirSync(directory).filter((name) => name.endsWith('.up.sql')).sort()
     .map((name) => ({ name, checksum: hash(readFileSync(resolve(directory, name))) }));
-  check(ledger.length === 98 && source.schemaCount === 98 && fixtureDigest(ledger) === source.ledgerDigest, 'fixture_runner_ledger_drift');
+  check(ledger.length === 99 && source.schemaCount === 99 && fixtureDigest(ledger) === source.ledgerDigest, 'fixture_runner_ledger_drift');
 }
 
 export function fixtureRunnerFingerprint(record) {
@@ -309,7 +309,7 @@ export async function runFixtureContainer({ binding, args, source = readAdapterS
         && hash(JSON.stringify(result.draft)) === result.manifestDigest, 'fixture_runner_draft_result');
       validateFixtureManifest(result.draft.preflight); validateFixtureEnvironment(result.draft.preflight, expectedEnv);
       check(result.draft.sourceCommit === source.commit && fixtureDigest(result.draft.sourceHashes) === fixtureDigest(source.hashes)
-        && result.draft.ledgerDigest === source.ledgerDigest && result.draft.schemaCount === 98
+        && result.draft.ledgerDigest === source.ledgerDigest && result.draft.schemaCount === 99
         && fixtureDigest(result.draft.preflight.photo) === fixtureDigest({ ...draftPhoto, file: `${inputRoot}/${fixturePhotoFileName(draftPhoto)}` }), 'fixture_runner_draft_result');
     } else if (binding.kind === 'sit-green-web-fixture-bootstrap') {
       exact(result, ['status', 'runtimeActivated']);
@@ -346,7 +346,7 @@ export async function runFixtureContainer({ binding, args, source = readAdapterS
 
 export function prepareFixtureRunnerInput({ manifest: draft, photoBytes, source }) {
   check(draft?.kind === 'sit-staging-web-fixture-adapter' && draft.schemaVersion === 1
-    && ['activate', 'cleanup'].includes(draft.operation) && source.schemaCount === 98, 'fixture_runner_input_manifest');
+    && ['activate', 'cleanup'].includes(draft.operation) && source.schemaCount === 99, 'fixture_runner_input_manifest');
   check(fixturePhotoBytesValid(draft.preflight?.photo, photoBytes), 'fixture_runner_input_photo');
   // Canonical in-container path stays byte-identical across activation/cleanup;
   // fresh host directories must never silently change the audit scope.

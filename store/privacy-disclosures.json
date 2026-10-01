@@ -15,10 +15,6 @@
       "sha256": "d7b8be389b09ec64656bafe1fc9e54ddc5bdf58b8602b3e76db266a665544d33"
     },
     {
-      "path": "lib/services/privacy_export_service.dart",
-      "sha256": "b55e3dfd3cc2fbc3514604de096f3e1465cb5e78fe715e9e20f3f10f5cffd45a"
-    },
-    {
       "path": "pubspec.yaml",
       "sha256": "cf8951f90c98f5a98778cd33e991ab94717b944437b41eb3aa342c37a8d5786d"
     },
@@ -67,12 +63,16 @@
       "sha256": "6a47cda99904c2093df368deff392bb12051c8b5faa07319bf8167f3810594b5"
     },
     {
-      "path": "backend/src/account_actions.js",
-      "sha256": "51f002157dcbba92db6800eb504536cac10d0c98ca71c4fef71d860ee3086215"
+      "path": "lib/services/privacy_export_service.dart",
+      "sha256": "b55e3dfd3cc2fbc3514604de096f3e1465cb5e78fe715e9e20f3f10f5cffd45a"
     },
     {
       "path": "lib/widgets/privacy_export_cache_lifecycle_host.dart",
       "sha256": "c377b8ea822cd891ecccb29d99f3a638f2a72e32b8d6c875db99b4400d4ef476"
+    },
+    {
+      "path": "backend/src/account_actions.js",
+      "sha256": "51f002157dcbba92db6800eb504536cac10d0c98ca71c4fef71d860ee3086215"
     },
     {
       "path": "backend/src/auth_session_actions.js",
@@ -80,11 +80,11 @@
     },
     {
       "path": "backend/src/privacy_export.js",
-      "sha256": "6537ec0657120bc0bef152f6109f9e97a58d91245fb351ab06ada5cdfe4ab15a"
+      "sha256": "701fa2d77c550dd7ad3b26813ef3495fba812fd3dd464b50911e5a173015422d"
     },
     {
       "path": "backend/src/privacy_export_policy.js",
-      "sha256": "917d41fe1602e7ba22143200834a3e7e055feeabf527a5c029c1a73bf5d7e9af"
+      "sha256": "7aab0f6ced7147637e10cba95a4cc647584314a1e8c464747959b57cc5da7fcf"
     },
     {
       "path": "backend/src/observability.js",
@@ -291,20 +291,20 @@
       "sha256": "a9cea4e6f25faf3d06762d8a45c04b1f1f3d290062aa6bc118ac6d8f9c050558"
     },
     {
-      "path": "backend/src/moderation_workflow.js",
-      "sha256": "4bd2f6addd75e07f2bdd13798144699b581d28de3ac25a071994cb6855ff3209"
-    },
-    {
-      "path": "backend/src/moderation_decision_workflow.js",
-      "sha256": "086cb86a745e0f54b5e8a145ec007f56ac1c3223f7cefbafdc23e163452af3eb"
-    },
-    {
       "path": "backend/src/moderation_account_measure_domain.js",
       "sha256": "25bc46e8e2482cfad9c3271aabd52e7c7fc860c4f02441ce3d7ab2523afb989e"
     },
     {
       "path": "backend/src/moderation_account_measure_workflow.js",
       "sha256": "d21b2f4f5012e8c682d29c0d6041acaba8033f28608ba91c2c1366bae377fd83"
+    },
+    {
+      "path": "backend/src/moderation_workflow.js",
+      "sha256": "4bd2f6addd75e07f2bdd13798144699b581d28de3ac25a071994cb6855ff3209"
+    },
+    {
+      "path": "backend/src/moderation_decision_workflow.js",
+      "sha256": "086cb86a745e0f54b5e8a145ec007f56ac1c3223f7cefbafdc23e163452af3eb"
     },
     {
       "path": "backend/src/moderation_review_correction_workflow.js",
@@ -612,7 +612,7 @@
     },
     {
       "path": "backend/src/retention_inventory.js",
-      "sha256": "6e30c300fc90f189cef0bdf043cb3afa5d9d53438a99c54441cce3510c160a74"
+      "sha256": "bbb7f866415a13ed2e7cf61baf738857b9ad363a08bd0e5b065bc71ed3fb7bec"
     },
     {
       "path": "backend/src/financial_documents.js",
@@ -705,6 +705,18 @@
     {
       "path": "backend/sql/migrations/098_booking_checkout_declaration_constraints.down.sql",
       "sha256": "959847e95e017033a0869dba9b1a5c03d1c2a474b49abb3d1ab3b20b29e70aa6"
+    },
+    {
+      "path": "backend/src/mission_need_workflow.js",
+      "sha256": "53ff315bb63cacac114b757bd73839633288c57775498bdbf018d13c4242df4b"
+    },
+    {
+      "path": "backend/sql/migrations/099_mission_need_revisions.up.sql",
+      "sha256": "97715ff0f381615ec148799d15dcc71b4eab302e9ad7fec946a3c5b534e249c0"
+    },
+    {
+      "path": "backend/sql/migrations/099_mission_need_revisions.down.sql",
+      "sha256": "0ce49439d7e61a0b7b46584d69692dd5b8614642390768bb746d6ca3a008f24b"
     },
     {
       "path": "backend/src/firebase_identity_cleanup.js",
@@ -948,7 +960,7 @@
     },
     {
       "path": "backend/src/app.js",
-      "sha256": "a83d3c86c396a47a7e5b93e321244532abaad9cd50f07d842085a80846cabb66"
+      "sha256": "f53baf3af7fce3a5a54b945b380f7d98477166e82b01e9276918c47fe206730b"
     },
     {
       "path": "backend/src/rate_limit_policy.js",
