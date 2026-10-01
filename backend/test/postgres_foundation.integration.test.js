@@ -246,6 +246,7 @@ if (!databaseUrl) {
         '096_booking_exact_time_snapshot.up.sql',
         '097_registration_consent_bundle.up.sql',
         '098_booking_checkout_declaration_constraints.up.sql',
+        '099_mission_need_revisions.up.sql',
         '100_private_shelf_items.up.sql',
       ]);
       assert.match(migrationRows.rows[0].checksum, /^[0-9a-f]{64}$/);
@@ -12174,6 +12175,7 @@ if (!databaseUrl) {
         deleted: true,
         identityVerificationCleanup: 'not_required',
         appleRevocationCleanup: 'not_required',
+        privateShelfMediaCleanup: 'complete',
       });
       assert.equal((await login(nextPassword)).status, 401);
       const erasedUser = await setupPool.query(

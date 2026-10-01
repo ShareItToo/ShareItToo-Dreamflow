@@ -90,6 +90,9 @@ discover a mechanically stale source hash.
 - New integration tests sharing the local PostgreSQL suite must not use generic
   fixed primary keys. Use run-unique IDs or package-namespaced fixtures whose
   non-collision is proved before insertion.
+- Append-only migration and source ledgers extend ordered expectations. When
+  advancing the terminal schema, append the new terminal entry and never
+  replace or omit the previously accepted terminal entry.
 - Shared validators must continue to accept explicit immutable historical
   contract variants without rewriting their evidence. Gate newly added fields
   by the applicable version or terminal schema, and test both the current

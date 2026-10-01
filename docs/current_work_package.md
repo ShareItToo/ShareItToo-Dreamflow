@@ -101,7 +101,7 @@ negative fixture still derived a fast digest from test password data. The
 local successor now uses a deterministic non-secret 64-hex literal for that
 invalid-format case; it is included in the exact-head P2 PASS above.
 
-## P3-A private Shelf backend — LOCAL SOURCE PASS; SOL/CI PENDING
+## P3-A private Shelf backend — COMMIT `09796ac6`; CI FIX LOCAL
 
 The smallest additive P3 backend slice introduces migration `100` and an
 owner-only private Shelf API. An authenticated owner can idempotently create,
@@ -135,13 +135,19 @@ descriptor/digest rejection, durable unlink retry, private file removal, export,
 account deletion, and byte-equivalent legacy cart/listing/upload state. Dynamic
 source-fixture and R9 consumers advance to schema 100; historical evidence and
 the exact live Green runner remain unchanged. Retention remains explicitly
-open: no Shelf TTL was invented. This is local source only; exact-head CI and
-any later runtime publication/promotion are separate packages.
+open: no Shelf TTL was invented. This remains source only; any later runtime
+publication/promotion is a separate package.
 
 Sol's independent review passed 19 focused Node tests plus backend check and
 diff-check, the real PostgreSQL 16 P3 suite, 35 combined R9/privacy tests, and
-both privacy and retention validators. Exact-head CI remains pending until the
-reviewed source is committed.
+both privacy and retention validators before the reviewed source was committed.
+
+Exact commit `09796ac6` reached Regression run `36862998450`; only
+`postgres-runner-proof` job `110371544149` failed. The real migration result was
+correctly append-only with both `099_mission_need_revisions.up.sql` and
+`100_private_shelf_items.up.sql`; the foundation test had replaced 099 in its
+ordered expectation instead of appending 100. The local CI successor restores
+099 and appends 100. Exact-head successor CI remains pending.
 
 ## Closed prerequisite: Phase 0 Web/CORS and safe synthetic catalog QA
 
