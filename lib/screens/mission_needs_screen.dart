@@ -7,12 +7,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lendify/config/planner_technical_config.dart';
 import 'package:lendify/models/mission_need.dart';
+import 'package:lendify/models/mission_fit_check.dart';
+import 'package:lendify/screens/mission_fit_check_screen.dart';
 import 'package:lendify/services/backend_http.dart';
 import 'package:lendify/services/listing_mutation_service.dart';
 import 'package:lendify/services/mission_need_gateway.dart';
 import 'package:lendify/services/shared_persistence_sync.dart';
+import 'package:lendify/widgets/listing_mutation_interaction.dart';
 
 typedef MissionNeedIdempotencyKeyFactory = String Function();
+typedef MissionFitCheckScreenBuilder = Widget Function(String missionNeedId);
+
+Widget _defaultMissionFitCheckScreenBuilder(String missionNeedId) =>
+    MissionFitCheckScreen(missionNeedId: missionNeedId);
 
 @visibleForTesting
 String newMissionNeedIdempotencyKey() {
@@ -26,12 +33,14 @@ class MissionNeedsScreen extends StatefulWidget {
     this.gateway = const BackendMissionNeedGateway(),
     this.listingMutationService = const ListingMutationService(),
     this.idempotencyKeyFactory = newMissionNeedIdempotencyKey,
+    this.fitCheckScreenBuilder = _defaultMissionFitCheckScreenBuilder,
     this.enableForTesting = false,
   });
 
   final MissionNeedGateway gateway;
   final ListingMutationService listingMutationService;
   final MissionNeedIdempotencyKeyFactory idempotencyKeyFactory;
+  final MissionFitCheckScreenBuilder fitCheckScreenBuilder;
 
   @visibleForTesting
   final bool enableForTesting;
@@ -44,6 +53,8 @@ class _MissionNeedsScreenState extends State<MissionNeedsScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final List<_MissionNeedDraft> _needDrafts = <_MissionNeedDraft>[];
+  final ListingMutationInteractionController _ownedRoutes =
+      ListingMutationInteractionController();
   StreamSubscription<String>? _sessionSubscription;
   ListingMutationContext? _context;
   List<MissionNeed> _missions = const <MissionNeed>[];
@@ -56,6 +67,7 @@ class _MissionNeedsScreenState extends State<MissionNeedsScreen> {
   bool _messageIsError = false;
   String? _pendingRequestFingerprint;
   String? _pendingIdempotencyKey;
+  bool _fitCheckRouteOpening = false;
 
   bool get _available =>
       PlannerTechnicalConfig.available ||
@@ -67,6 +79,7 @@ class _MissionNeedsScreenState extends State<MissionNeedsScreen> {
     _sessionSubscription = SharedPersistenceSync.changes.listen((key) {
       if (key != SharedPersistenceSync.accountSecurityStateKey) return;
       _accountGeneration += 1;
+      _ownedRoutes.invalidate();
       if (mounted) {
         setState(() {
           _context = null;
@@ -74,6 +87,7 @@ class _MissionNeedsScreenState extends State<MissionNeedsScreen> {
           _clearEditor();
           _loading = true;
           _busy = false;
+          _fitCheckRouteOpening = false;
           _message = null;
         });
       }
@@ -86,6 +100,7 @@ class _MissionNeedsScreenState extends State<MissionNeedsScreen> {
   void dispose() {
     _accountGeneration += 1;
     _sessionSubscription?.cancel();
+    _ownedRoutes.dispose();
     _titleController.dispose();
     _disposeNeedDrafts();
     super.dispose();
@@ -112,6 +127,7 @@ class _MissionNeedsScreenState extends State<MissionNeedsScreen> {
       }
       setState(() {
         _context = context;
+        _ownedRoutes.replaceContext(context);
         _missions = missions;
         _loading = false;
         _message = null;
@@ -208,6 +224,41 @@ class _MissionNeedsScreenState extends State<MissionNeedsScreen> {
     );
     _pendingRequestFingerprint = null;
     _pendingIdempotencyKey = null;
+  }
+
+  bool _supportsFitCheck(MissionNeed mission) => mission.payload.needs
+      .any((need) => need.needKey == plantContainerNeedKey);
+
+  Future<void> _openFitCheck() async {
+    final selected = _selected;
+    if (_fitCheckRouteOpening ||
+        selected == null ||
+        !_supportsFitCheck(selected)) {
+      return;
+    }
+    final owner = _ownedRoutes.capture();
+    if (owner == null) return;
+    final generation = _accountGeneration;
+    setState(() => _fitCheckRouteOpening = true);
+    try {
+      if (!await _ownedRoutes.isCurrent(widget.listingMutationService, owner) ||
+          !mounted ||
+          generation != _accountGeneration) {
+        return;
+      }
+      final route = MaterialPageRoute<void>(
+        builder: (_) => widget.fitCheckScreenBuilder(selected.missionNeedId),
+      );
+      await _ownedRoutes.pushOwnedRoute<void>(
+        context: context,
+        owner: owner,
+        route: route,
+      );
+    } finally {
+      if (mounted && generation == _accountGeneration) {
+        setState(() => _fitCheckRouteOpening = false);
+      }
+    }
   }
 
   void _addNeed() {
@@ -518,6 +569,15 @@ class _MissionNeedsScreenState extends State<MissionNeedsScreen> {
             label: const Text('Bedarfspunkt hinzufügen'),
           ),
           const SizedBox(height: 12),
+          if (selected != null && _supportsFitCheck(selected)) ...<Widget>[
+            OutlinedButton.icon(
+              key: const Key('mission-open-fit-check'),
+              onPressed: _busy || _fitCheckRouteOpening ? null : _openFitCheck,
+              icon: const Icon(Icons.straighten_outlined),
+              label: const Text('Privaten Maß-FitCheck öffnen'),
+            ),
+            const SizedBox(height: 12),
+          ],
           FilledButton.icon(
             key: const Key('mission-save'),
             onPressed: _busy ? null : _save,

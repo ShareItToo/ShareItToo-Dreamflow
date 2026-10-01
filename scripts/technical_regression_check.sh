@@ -1082,6 +1082,12 @@ flutter test --no-pub --test-randomize-ordering-seed=7 \
   --dart-define=SIT_BACKEND_ENABLED=true \
   --dart-define=SIT_API_BASE_URL=http://127.0.0.1:1/api/v1 \
   test/private_shelf_gateway_http_test.dart
+# Mission FitCheck ownership and mission binding must execute the real HTTP
+# helper; the default disabled-backend run skips this branch.
+flutter test --no-pub --test-randomize-ordering-seed=7 \
+  --dart-define=SIT_BACKEND_ENABLED=true \
+  --dart-define=SIT_API_BASE_URL=http://127.0.0.1:1/api/v1 \
+  test/mission_fit_check_gateway_http_test.dart
 # Bound project writes and guest migration must exercise the real HTTP helper
 # with synthetic, zone-local mocks; default disabled mode is not this proof.
 flutter test --reporter expanded --test-randomize-ordering-seed=7 \

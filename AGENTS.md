@@ -658,6 +658,14 @@ discover a mechanically stale source hash.
   async gap, and every owned route must be dismissed on principal change.
   Authoritative collection refreshes must reconcile any open detail and private
   media state while preserving same-principal unsent drafts and idempotency keys.
+- An account-bound nested route is owned by the exact opener: opening becomes
+  single-flight before the first await, principal change removes only that
+  captured route even when another route is above it, and the child still
+  performs its own generation checks.
+- Changing a server-bound resource selection must synchronously clear every
+  dependent unconfirmed fact, confirmation and request fingerprint before the
+  replacement is loaded. Never carry measurements or other derived inputs from
+  one owned resource onto another.
 - Support/compliance intake booleans must reflect guidance actually shown and
   acknowledged by the user; never manufacture an attestation by hardcoding a
   `guidanceShown`, single-issue, non-urgent, or similar claim without its UI

@@ -195,7 +195,7 @@ publication was skipped. CodeQL workflow `36871368560` and separate CodeQL
 check `110401111028` also passed. P3-B therefore remains source-only and made
 no Live, Green, Play, provider or payment change.
 
-## P4-A dimensional FitCheck backend — SOURCE IN REVIEW
+## P4-A dimensional FitCheck backend — EXACT-HEAD PASS
 
 The first bounded P4 slice defines only
 `plant_container_dimensional_fit_v1` for the exact
@@ -216,10 +216,49 @@ support owner list/create/load/correct with uniform foreign/missing `404` and
 authoritative server IDs/revisions. Privacy export, account cascade, retention
 inventory, current migration consumers and R9 are extended additively; the
 accepted exact live Green runner remains bound to its published schema-98
-runtime. Focused source, PostgreSQL, privacy/retention and R9 closure is local
-and pending Sol review plus exact-head CI. No Flutter P4-B, Live, Green, Play,
-provider, payment, public listing/search, booking, contract or external AI
-state changes in this package.
+runtime. Exact successor `efd664ae6ef1c7b779e30d9c238a21c4a326aeb3`
+passed Regression `36879308110`, including Backend, PostgreSQL, Flutter and
+R10; publication was skipped. CodeQL workflow `36879307906` and separate
+CodeQL check `110428152131` also passed. P4-A therefore remains source-only and
+made no Live, Green, Play, provider or payment change.
+
+## P4-B private dimensional FitCheck UI — LOCAL SOURCE PASS
+
+The smallest internal Flutter/Web slice adds one owner-bound FitCheck entry to
+the existing Mission detail for the exact need type
+`plant_container_equipment`. It loads fresh server Mission and private Shelf
+truth, lets the owner choose one owned Shelf item, enter the four requirement
+and four item measurements in fixed `ml`/`mm` units, and confirm the two fact
+groups independently. The client never recalculates the outcome: it displays
+the server's strict `fit`, `unfit` or `unknown` result and keeps stored history
+separate from current applicability. Every result is visibly dimensional-only,
+non-binding and without a safety guarantee.
+
+Create and correction calls keep a stable measurement batch and idempotency
+key until the request meaning changes or succeeds. Server IDs, mission/Shelf
+bindings and revisions are authoritative; malformed or foreign response
+bindings fail closed. A `409` or outcome-unknown error preserves the complete
+draft and its old correction base so refresh cannot silently bypass a revision
+conflict. Changing the selected Shelf object synchronously clears all dependent
+item facts and confirmation. If the current Mission no longer contains the
+supported need, historical checks remain visible as stale/blocked while new
+creation is disabled.
+
+The Mission screen owns exactly the nested private route and opens it
+single-flight. Account switch or logout removes only that owned route, while
+the child additionally checks the initiating principal and generation before
+and after every await. Late account-A list/load/write results cannot enter an
+account-B or logged-out screen; no FitCheck result or draft is durably cached
+across restart.
+
+Local acceptance passes 15 focused model/widget/nested-route tests, 5
+enabled-backend owner HTTP tests and 2 structural wiring tests; the focused
+Flutter analyzer, shell syntax and diff checks pass. The HTTP proof is now a
+mandatory enabled-backend command in the standard technical regression runner.
+The change is additive: existing search, public listings, navigation, booking,
+reservation, contract, payment and provider flows are not reworked. No public
+surface, AI/photo analysis, Live, Green, Play or deployment state is changed.
+Exact-head CI remains pending after Sol review.
 
 ## Closed prerequisite: Phase 0 Web/CORS and safe synthetic catalog QA
 

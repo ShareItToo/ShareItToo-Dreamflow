@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lendify/models/mission_fit_check.dart';
 import 'package:lendify/models/mission_need.dart';
 import 'package:lendify/screens/mission_needs_screen.dart';
 import 'package:lendify/services/auth_service.dart';
@@ -218,6 +219,134 @@ void main() {
       find.textContaining('aktuell angemeldete Konto'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('FitCheck nested route opens single-flight from the exact need',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(900, 1300));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final service = _SwitchableContextService();
+    final plantMission = _mission(
+      _idA,
+      'Pflanzmission',
+      needs: const <MissionNeedItem>[
+        MissionNeedItem(
+          needKey: plantContainerNeedKey,
+          necessity: MissionNeedNecessity.required,
+          quantity: 1,
+        ),
+      ],
+    );
+    final gateway = _MissionGateway(
+      accountA: <MissionNeed>[plantMission],
+      accountB: const <MissionNeed>[],
+    );
+    var builds = 0;
+
+    await tester.pumpWidget(MaterialApp(
+      home: MissionNeedsScreen(
+        gateway: gateway,
+        listingMutationService: service,
+        fitCheckScreenBuilder: (_) {
+          builds += 1;
+          return const Scaffold(body: Text('Privater FitCheck A'));
+        },
+        enableForTesting: true,
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Pflanzmission'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const Key('mission-open-fit-check')),
+    );
+    final open = tester.widget<OutlinedButton>(
+      find.byKey(const Key('mission-open-fit-check')),
+    );
+    open.onPressed!();
+    open.onPressed!();
+    await tester.pumpAndSettle();
+
+    expect(builds, 1);
+    expect(find.text('Privater FitCheck A'), findsOneWidget);
+  });
+
+  testWidgets(
+      'account switch and logout remove only the exact owned FitCheck route',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(900, 1300));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final navigatorKey = GlobalKey<NavigatorState>();
+    final service = _SwitchableContextService();
+    MissionNeed plant(String id, String title) => _mission(
+          id,
+          title,
+          needs: const <MissionNeedItem>[
+            MissionNeedItem(
+              needKey: plantContainerNeedKey,
+              necessity: MissionNeedNecessity.required,
+              quantity: 1,
+            ),
+          ],
+        );
+    final gateway = _MissionGateway(
+      accountA: <MissionNeed>[plant(_idA, 'Pflanzmission A')],
+      accountB: <MissionNeed>[plant(_idB, 'Pflanzmission B')],
+    );
+
+    await tester.pumpWidget(MaterialApp(
+      navigatorKey: navigatorKey,
+      home: MissionNeedsScreen(
+        gateway: gateway,
+        listingMutationService: service,
+        fitCheckScreenBuilder: (_) =>
+            const Scaffold(body: Text('Privater FitCheck Route')),
+        enableForTesting: true,
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Pflanzmission A'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const Key('mission-open-fit-check')),
+    );
+    await tester.tap(find.byKey(const Key('mission-open-fit-check')));
+    await tester.pumpAndSettle();
+    expect(find.text('Privater FitCheck Route'), findsOneWidget);
+
+    navigatorKey.currentState!.push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => const Scaffold(body: Text('Fremde B Route')),
+      ),
+    );
+    await tester.pumpAndSettle();
+    service.activateAccountB();
+    SharedPersistenceSync.notify(
+      SharedPersistenceSync.accountSecurityStateKey,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Fremde B Route'), findsOneWidget);
+    navigatorKey.currentState!.pop();
+    await tester.pumpAndSettle();
+    expect(find.text('Privater FitCheck Route'), findsNothing);
+    expect(find.text('Pflanzmission B'), findsOneWidget);
+
+    await tester.tap(find.text('Pflanzmission B'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const Key('mission-open-fit-check')),
+    );
+    await tester.tap(find.byKey(const Key('mission-open-fit-check')));
+    await tester.pumpAndSettle();
+    expect(find.text('Privater FitCheck Route'), findsOneWidget);
+    service.logout();
+    SharedPersistenceSync.notify(
+      SharedPersistenceSync.accountSecurityStateKey,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Privater FitCheck Route'), findsNothing);
+    expect(find.textContaining('aktuell angemeldete Konto'), findsOneWidget);
   });
 }
 

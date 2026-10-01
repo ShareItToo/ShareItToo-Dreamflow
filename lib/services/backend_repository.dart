@@ -1096,6 +1096,70 @@ class BackendRepository {
         },
       );
 
+  static Future<List<Map<String, dynamic>>> getMissionFitChecksForOwner({
+    required AuthSessionOwner owner,
+    required String missionNeedId,
+  }) async {
+    final response = await _authorizedForOwner(
+      owner: owner,
+      method: 'GET',
+      path: '/mission-needs/${Uri.encodeComponent(missionNeedId)}/fit-checks',
+    );
+    return _strictMaps(response['fitChecks']);
+  }
+
+  static Future<Map<String, dynamic>> getMissionFitCheckForOwner({
+    required AuthSessionOwner owner,
+    required String fitCheckId,
+  }) async {
+    final response = await _authorizedForOwner(
+      owner: owner,
+      method: 'GET',
+      path: '/mission-fit-checks/${Uri.encodeComponent(fitCheckId)}',
+    );
+    if (response['fitCheck'] is! Map) {
+      throw const FormatException('mission_fit_check_invalid');
+    }
+    return Map<String, dynamic>.from(response['fitCheck'] as Map);
+  }
+
+  static Future<Map<String, dynamic>> createMissionFitCheckForOwner({
+    required AuthSessionOwner owner,
+    required String missionNeedId,
+    required Map<String, dynamic> payload,
+    required String idempotencyKey,
+  }) =>
+      _authorizedForOwner(
+        owner: owner,
+        method: 'POST',
+        path: '/mission-needs/${Uri.encodeComponent(missionNeedId)}/fit-checks',
+        body: payload,
+        additionalHeaders: <String, String>{
+          'Idempotency-Key': idempotencyKey,
+        },
+      );
+
+  static Future<Map<String, dynamic>> correctMissionFitCheckForOwner({
+    required AuthSessionOwner owner,
+    required String fitCheckId,
+    required int expectedRevision,
+    required Map<String, dynamic> payload,
+    required String idempotencyKey,
+  }) =>
+      _authorizedForOwner(
+        owner: owner,
+        method: 'POST',
+        path:
+            '/mission-fit-checks/${Uri.encodeComponent(fitCheckId)}/revisions',
+        body: <String, dynamic>{
+          'expectedRevision': expectedRevision,
+          ...payload,
+        },
+        additionalHeaders: <String, String>{
+          'Idempotency-Key': idempotencyKey,
+        },
+      );
+
   static Future<List<Map<String, dynamic>>> getPrivateShelfItemsForOwner(
     AuthSessionOwner owner,
   ) async {
