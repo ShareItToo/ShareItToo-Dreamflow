@@ -258,6 +258,7 @@ export function validateRw20ListingMutationPrincipalEpochTransaction({
       ? [symbol, {
         'lib/screens/create_listing_screen.dart': 1,
         'lib/screens/explore_screen.dart': 1,
+        'lib/screens/mission_inventory_resolution_screen.dart': 1,
         'lib/screens/mission_needs_screen.dart': 1,
         'lib/screens/my_listings_screen.dart': 1,
         'lib/screens/own_profile_screen.dart': 2,
