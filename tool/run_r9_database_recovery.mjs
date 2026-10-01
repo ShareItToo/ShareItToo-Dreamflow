@@ -28,7 +28,7 @@ const requireFromBackend = createRequire(
   new URL('../backend/package.json', import.meta.url),
 );
 
-export const r9RequiredMigrationCount = 102;
+export const r9RequiredMigrationCount = 103;
 export const r9SyntheticAccountCount = 12;
 export const r9SyntheticListingCount = 6;
 export const r9ResultClassification = 'LOCAL_ISOLATED_DATABASE_RECOVERY_PROOF';
@@ -102,6 +102,10 @@ const rollbackGuardExpectations = Object.freeze([
   Object.freeze({
     filename: '102_mission_inventory_resolutions.down.sql',
     message: 'mission_inventory_resolution_rows_active',
+  }),
+  Object.freeze({
+    filename: '103_mission_supply_demands.down.sql',
+    message: 'mission_supply_demand_rows_active',
   }),
 ]);
 
@@ -182,7 +186,7 @@ async function readMigrationPlan(root) {
   }
   if (plan.length !== r9RequiredMigrationCount
       || plan[0]?.filename !== '001_b3_foundation.up.sql'
-      || plan.at(-1)?.filename !== '102_mission_inventory_resolutions.up.sql') {
+      || plan.at(-1)?.filename !== '103_mission_supply_demands.up.sql') {
     fail('r9_migration_inventory_unexpected');
   }
   return Object.freeze(plan);
@@ -884,6 +888,95 @@ async function assertRollbackGuardRefusals(pool, root) {
            )`,
         );
       }
+      if (guard.filename === '103_mission_supply_demands.down.sql') {
+        await client.query(
+          `INSERT INTO mission_needs (
+             id, owner_id, domain_version, status
+           ) VALUES (
+             'mission_need_00000000-0000-4000-8000-000000000103',
+             'r9-user-001', 'P2-A-2026-10-01.1', 'planned'
+           )`,
+        );
+        await client.query(
+          `INSERT INTO mission_need_revisions (
+             mission_need_id, revision, status, payload, payload_sha256
+           ) VALUES (
+             'mission_need_00000000-0000-4000-8000-000000000103', 1, 'planned',
+             '{"title":"R9 P6 guard","status":"planned","needs":[{"needKey":"plant_container_equipment","necessity":"required","quantity":1}]}'::jsonb,
+             repeat('a', 64)
+           )`,
+        );
+        await client.query(
+          `INSERT INTO private_shelf_items (
+             id, owner_id, domain_version, title, category_key, condition
+           ) VALUES (
+             'shelf_item_00000000-0000-4000-8000-000000000103',
+             'r9-user-002', 'P3-A-2026-10-01.1', 'R9 P6 recipient item',
+             'synthetic.p6', 'good'
+           )`,
+        );
+        await client.query(
+          `INSERT INTO mission_inventory_resolutions (
+             id, owner_id, mission_need_id, domain_version,
+             planner_core_version, planner_inventory_version
+           ) VALUES (
+             'mission_inventory_00000000-0000-4000-8000-000000000103',
+             'r9-user-001',
+             'mission_need_00000000-0000-4000-8000-000000000103',
+             'P5-A-2026-10-01.1', 'G4A-2026-08-21.1', 'G4B-2026-08-21.1'
+           )`,
+        );
+        const p6Revision = await client.query(
+          `INSERT INTO mission_inventory_resolution_revisions (
+             resolution_id, mission_need_id, revision, mission_need_revision,
+             mission_payload_sha256, start_date, end_date, location_snapshot,
+             location_snapshot_sha256, resolution_snapshot, resolution_snapshot_sha256
+           ) VALUES (
+             'mission_inventory_00000000-0000-4000-8000-000000000103',
+             'mission_need_00000000-0000-4000-8000-000000000103', 1, 1,
+             repeat('a', 64), '2026-11-01', '2026-11-02',
+             '{"sourceType":"owner_confirmed_search_origin","sourceVersion":"r9-p6-v1","ownerConfirmed":true,"radiusKm":25,"coordinateDigest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","exactCoordinatesStored":false}'::jsonb,
+             repeat('c', 64),
+             '{"coverage":[],"slots":[],"requiredCoverageComplete":false,"searchLimited":false,"quotePersisted":false,"revalidationRequiredBeforeRequest":true,"bindingStatus":"non_binding","reservationCreated":false,"bookingCreated":false,"contractCreated":false,"paymentCreated":false,"publicShelfCreated":false,"publicListingCreated":false,"automaticPublicationPerformed":false,"externalGenerativeAiUsed":false}'::jsonb,
+             repeat('d', 64)
+           ) RETURNING id`,
+        );
+        await client.query(
+          `INSERT INTO mission_inventory_resolution_assignments (
+             revision_id, resolution_id, resolution_revision, slot_key, need_key,
+             necessity, slot_ordinal, gap_reason
+           ) VALUES (
+             $1, 'mission_inventory_00000000-0000-4000-8000-000000000103', 1,
+             'required:plant_container_equipment:1', 'plant_container_equipment',
+             'required', 1, 'no_current_unique_candidate'
+           )`,
+          [p6Revision.rows[0].id],
+        );
+        await client.query(
+          `INSERT INTO mission_supply_demands (
+             id, requester_id, recipient_id, resolution_id, resolution_revision,
+             mission_need_id, mission_need_revision, mission_payload_sha256,
+             slot_key, need_key, necessity, quantity, slot_ordinal, gap_reason,
+             candidate_shelf_item_id, eligibility_version, purpose, start_date,
+             end_date, region_snapshot, region_snapshot_sha256, expires_at,
+             domain_version
+           ) VALUES (
+             'mission_demand_00000000-0000-4000-8000-000000000103',
+             'r9-user-001', 'r9-user-002',
+             'mission_inventory_00000000-0000-4000-8000-000000000103', 1,
+             'mission_need_00000000-0000-4000-8000-000000000103', 1,
+             repeat('a', 64), 'required:plant_container_equipment:1',
+             'plant_container_equipment', 'required', 1, 1,
+             'no_current_unique_candidate',
+             'shelf_item_00000000-0000-4000-8000-000000000103',
+             'r9-p6-synthetic-v1', 'mission_gap_supply_v1',
+             '2026-11-01', '2026-11-02',
+             '{"sourceType":"owner_confirmed_search_origin","sourceVersion":"r9-p6-v1","ownerConfirmed":true,"radiusKm":25,"coordinateDigest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","exactCoordinatesStored":false}'::jsonb,
+             repeat('c', 64), '2026-11-01T00:00:00Z',
+             'P6-A-2026-10-01.1'
+           )`,
+        );
+      }
       try {
         await client.query(sql);
       } catch (error) {
@@ -955,7 +1048,7 @@ async function closePools(pools) {
 
 export function validateR9Observation(value, {
   requiredMigrationCount = r9RequiredMigrationCount,
-  requiredLastMigration = '102_mission_inventory_resolutions.up.sql',
+  requiredLastMigration = '103_mission_supply_demands.up.sql',
   requiredRollbackGuards = rollbackGuardExpectations,
 } = {}) {
   if (value?.schemaVersion !== 1

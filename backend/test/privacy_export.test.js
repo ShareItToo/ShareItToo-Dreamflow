@@ -90,6 +90,43 @@ test('account export exposes owner FitCheck snapshots, provenance and commands w
   assert.equal(exported.paymentCreated, false);
 });
 
+test('account export projects expired private demands without recipient-only identifiers', async () => {
+  const client = {
+    async query(sql) {
+      if (sql.includes('FROM users WHERE id = $1')) {
+        return { rows: [{ id: 'recipient-a', email: 'recipient@example.invalid' }] };
+      }
+      if (sql.includes('FROM mission_supply_demands AS demand')
+          && !sql.includes('JOIN mission_supply_demands')) {
+        assert.match(sql, /expires_at <= CURRENT_TIMESTAMP[\s\S]*expired_no_response/u);
+        return { rows: [{
+          demandId: 'mission_demand_private',
+          participantRole: 'recipient',
+          missionNeedId: null,
+          missionInventoryId: null,
+          inventoryRevision: null,
+          slotKey: null,
+          needKey: 'plant_container_equipment',
+          necessity: 'required',
+          quantity: 1,
+          storedStatus: 'pending',
+          effectiveStatus: 'expired_no_response',
+        }] };
+      }
+      return { rows: [] };
+    },
+  };
+  const result = await buildAccountExport(client, 'recipient-a');
+  const demand = result.data.marketplace.missionSupplyDemands.demands[0];
+  assert.equal(demand.participantRole, 'recipient');
+  assert.equal(demand.storedStatus, 'pending');
+  assert.equal(demand.effectiveStatus, 'expired_no_response');
+  assert.equal(demand.missionNeedId, null);
+  assert.equal(demand.missionInventoryId, null);
+  assert.equal(demand.slotKey, null);
+  assert.doesNotMatch(JSON.stringify(demand), /requester-a|shelf_item_|coordinateDigest/u);
+});
+
 test('access-copy policy replaces internal identifiers and withholds security internals', () => {
   const result = applyAccountExportPolicy({
     account: {

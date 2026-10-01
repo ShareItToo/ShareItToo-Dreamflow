@@ -92,6 +92,15 @@ if (plannerInventoryEnabled && deploymentEnvironment === 'production') {
 if (plannerInventoryEnabled && !plannerCoreEnabled) {
   throw new Error('planner inventory requires the planner core');
 }
+const plannerDemandEnabled = (process.env.PLANNER_DEMAND_ENABLED ?? 'false')
+  .trim()
+  .toLowerCase() === 'true';
+if (plannerDemandEnabled && deploymentEnvironment === 'production') {
+  throw new Error('planner demand cannot be enabled in production before the release gate');
+}
+if (plannerDemandEnabled && (!plannerCoreEnabled || !plannerInventoryEnabled)) {
+  throw new Error('planner demand requires planner core and inventory resolution');
+}
 const listingSupplyEnrichmentEnabled = (
   process.env.LISTING_SUPPLY_ENRICHMENT_ENABLED ?? 'false'
 ).trim().toLowerCase() === 'true';
@@ -452,6 +461,8 @@ export const config = Object.freeze({
   planner: Object.freeze({
     enabled: plannerCoreEnabled,
     inventoryResolutionEnabled: plannerInventoryEnabled,
+    demandEnabled: plannerDemandEnabled,
+    demandActivationAllowed: false,
     publicReleaseAllowed: false,
     externalGenerativeAiAllowed: false,
     inventoryResolutionAllowed: false,

@@ -75,6 +75,10 @@ export async function inspectRetentionInventory(client, { actor }) {
        UNION ALL SELECT 'userIntent', 'mission_inventory_resolution_revisions', count(*)::bigint, min(created_at), max(created_at) FROM mission_inventory_resolution_revisions
        UNION ALL SELECT 'userIntent', 'mission_inventory_resolution_assignments', count(*)::bigint, min(created_at), max(created_at) FROM mission_inventory_resolution_assignments
        UNION ALL SELECT 'userIntent', 'mission_inventory_resolution_commands', count(*)::bigint, min(created_at), max(created_at) FROM mission_inventory_resolution_commands
+       UNION ALL SELECT 'userIntent', 'mission_supply_demands', count(*)::bigint, min(created_at), max(updated_at) FROM mission_supply_demands
+       UNION ALL SELECT 'userIntent', 'mission_supply_demand_revisions', count(*)::bigint, min(created_at), max(created_at) FROM mission_supply_demand_revisions
+       UNION ALL SELECT 'userIntent', 'mission_supply_releases', count(*)::bigint, min(created_at), max(created_at) FROM mission_supply_releases
+       UNION ALL SELECT 'userIntent', 'mission_supply_demand_commands', count(*)::bigint, min(created_at), max(created_at) FROM mission_supply_demand_commands
        UNION ALL SELECT 'userIntent', 'private_shelf_items', count(*)::bigint, min(created_at), max(updated_at) FROM private_shelf_items
        UNION ALL SELECT 'userIntent', 'private_shelf_media', count(*)::bigint, min(created_at), max(created_at) FROM private_shelf_media
        UNION ALL SELECT 'userIntent', 'private_shelf_item_commands', count(*)::bigint, min(created_at), max(created_at) FROM private_shelf_item_commands

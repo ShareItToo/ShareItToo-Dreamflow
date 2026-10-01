@@ -79,7 +79,7 @@ async function seed(client) {
   preflight.snapshotDigest = fixtureDigest(snapshot);
   preflight.availabilityDigest = fixtureDigest({ rules: snapshot.rules, blocks: snapshot.blocks });
   return { manifest: { kind: 'sit-staging-web-fixture-adapter', schemaVersion: 1, operation: 'activate',
-    sourceCommit: source.commit, sourceHashes: source.hashes, schemaCount: 102, ledgerDigest: source.ledgerDigest,
+    sourceCommit: source.commit, sourceHashes: source.hashes, schemaCount: 103, ledgerDigest: source.ledgerDigest,
     uploadDirectory: '/data/uploads', preflight }, source, environment, photoBytes, storedPhotoBytes: photoBytes,
   client, rehearsal: isolatedFixtureRehearsal };
 }
@@ -118,7 +118,7 @@ test('PG16 fixture adapter uses real schema, transactions, triggers and two clie
       assert.equal(Math.floor(Number((await client.query('SHOW server_version_num')).rows[0].server_version_num) / 10000), 16);
       await pool.query(read('backend/sql/schema.sql').toString());
       await runMigrations(pool);
-      assert.equal(ledger.length, 102);
+      assert.equal(ledger.length, 103);
       assert.deepEqual((await client.query('SELECT name,checksum FROM schema_migrations ORDER BY name')).rows, ledger);
 
       await t.test('dedicated seed/login proof use real credential attest, scoped reconcile, rollback and cleanup', async () => {
@@ -172,7 +172,7 @@ test('PG16 fixture adapter uses real schema, transactions, triggers and two clie
           const principalsBefore = (await client.query(`SELECT id,email,password_hash,role,account_status,
             deactivated_at,profile,failed_login_attempts,login_locked_until FROM users
             WHERE id=ANY($1::text[]) ORDER BY id`, [[dedicatedFixture.owner, dedicatedFixture.renter]])).rows;
-          assert.deepEqual(await proofStore.attest(manifest), { schemaCount: 102, ledgerDigest: source.ledgerDigest });
+          assert.deepEqual(await proofStore.attest(manifest), { schemaCount: 103, ledgerDigest: source.ledgerDigest });
           assert.deepEqual(await proofStore.attestCredentials(proofCredentials), { credentialsAttested: 2 });
           assert.equal((await client.query('SHOW transaction_read_only')).rows[0].transaction_read_only, 'off');
           assert.deepEqual((await client.query(`SELECT id,email,password_hash,role,account_status,

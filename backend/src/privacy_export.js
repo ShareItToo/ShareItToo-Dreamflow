@@ -123,6 +123,10 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
     missionInventoryResolutionRevisions,
     missionInventoryResolutionAssignments,
     missionInventoryResolutionCommands,
+    missionSupplyDemands,
+    missionSupplyDemandRevisions,
+    missionSupplyReleases,
+    missionSupplyDemandCommands,
     privateShelfItems,
     privateShelfMedia,
     privateShelfCommands,
@@ -487,6 +491,66 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
          FROM mission_inventory_resolution_commands
         WHERE owner_id = $1
         ORDER BY resolution_id, result_revision, idempotency_key`, userId),
+    rows(client,
+      `SELECT demand.id AS "demandId",
+              CASE WHEN demand.requester_id = $1 THEN 'requester' ELSE 'recipient' END
+                AS "participantRole",
+              CASE WHEN demand.requester_id = $1 THEN demand.mission_need_id ELSE NULL END
+                AS "missionNeedId",
+              CASE WHEN demand.requester_id = $1 THEN demand.resolution_id ELSE NULL END
+                AS "missionInventoryId",
+              CASE WHEN demand.requester_id = $1 THEN demand.resolution_revision ELSE NULL END
+                AS "inventoryRevision",
+              CASE WHEN demand.requester_id = $1 THEN demand.slot_key ELSE NULL END
+                AS "slotKey",
+              demand.need_key AS "needKey", demand.necessity, demand.quantity,
+              demand.purpose, demand.start_date::text AS "startDate",
+              demand.end_date::text AS "endDate",
+              jsonb_build_object(
+                'sourceType', 'owner_confirmed_search_origin',
+                'radiusKm', demand.region_snapshot -> 'radiusKm',
+                'exactCoordinatesStored', false
+              ) AS region,
+              demand.expires_at AS "expiresAt", demand.domain_version AS "domainVersion",
+              demand.current_revision AS revision,
+              demand.current_status AS "storedStatus",
+              CASE
+                WHEN demand.current_status = 'pending'
+                 AND demand.expires_at <= CURRENT_TIMESTAMP
+                THEN 'expired_no_response'
+                ELSE demand.current_status
+              END AS "effectiveStatus",
+              demand.created_at AS "createdAt", demand.updated_at AS "updatedAt"
+         FROM mission_supply_demands AS demand
+        WHERE demand.requester_id = $1 OR demand.recipient_id = $1
+        ORDER BY demand.updated_at, demand.id`, userId),
+    rows(client,
+      `SELECT revision.demand_id AS "demandId", revision.revision,
+              CASE WHEN revision.actor_id = demand.requester_id
+                THEN 'requester' ELSE 'recipient' END AS "actorRole",
+              revision.action, revision.status, revision.created_at AS "createdAt"
+         FROM mission_supply_demand_revisions AS revision
+         JOIN mission_supply_demands AS demand ON demand.id = revision.demand_id
+        WHERE demand.requester_id = $1 OR demand.recipient_id = $1
+        ORDER BY revision.demand_id, revision.revision`, userId),
+    rows(client,
+      `SELECT release.id AS "releaseId", release.demand_id AS "demandId",
+              release.purpose, release.released_revision AS "releasedRevision",
+              release.expires_at AS "expiresAt", release.created_at AS "createdAt"
+         FROM mission_supply_releases AS release
+         JOIN mission_supply_demands AS demand ON demand.id = release.demand_id
+        WHERE demand.requester_id = $1 OR demand.recipient_id = $1
+        ORDER BY release.created_at, release.id`, userId),
+    rows(client,
+      `SELECT command.idempotency_key AS "idempotencyKey",
+              command.command_type AS "commandType",
+              command.request_sha256 AS "requestDigest",
+              command.demand_id AS "demandId",
+              command.result_revision AS "resultRevision",
+              command.created_at AS "createdAt"
+         FROM mission_supply_demand_commands AS command
+        WHERE command.actor_id = $1
+        ORDER BY command.demand_id, command.result_revision, command.idempotency_key`, userId),
     rows(client,
       `SELECT id AS "shelfItemId", domain_version AS "domainVersion",
               title, category_key AS "categoryKey", condition,
@@ -1404,6 +1468,23 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
         globallyCompleteOrOptimal: false,
         publicShelfCreated: false,
         publicListingCreated: false,
+        reservationCreated: false,
+        bookingCreated: false,
+        contractCreated: false,
+        paymentCreated: false,
+      },
+      missionSupplyDemands: {
+        demands: missionSupplyDemands,
+        revisions: missionSupplyDemandRevisions,
+        releases: missionSupplyReleases,
+        commands: missionSupplyDemandCommands,
+        visibility: 'private_participants_only',
+        exactSearchCoordinatesStored: false,
+        privateShelfExposed: false,
+        publicListingCreated: false,
+        marketingContactCreated: false,
+        notificationCreated: false,
+        providerNotificationSent: false,
         reservationCreated: false,
         bookingCreated: false,
         contractCreated: false,

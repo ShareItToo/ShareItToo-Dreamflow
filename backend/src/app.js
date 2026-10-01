@@ -110,6 +110,16 @@ import {
   reviseMissionInventoryResolution,
 } from './mission_inventory_resolution_workflow.js';
 import {
+  assertMissionSupplyDemandCreateTechnicalAccess,
+  assertMissionSupplyDemandTechnicalAccess,
+  createMissionSupplyDemand,
+  getMissionSupplyDemand,
+  listMissionSupplyDemands,
+  MissionSupplyDemandError,
+  respondToMissionSupplyDemand,
+  revokeMissionSupplyRelease,
+} from './mission_supply_demand_workflow.js';
+import {
   addPrivateShelfMedia,
   assertPrivateShelfTechnicalAccess,
   createPrivateShelfItem,
@@ -2095,6 +2105,10 @@ export async function eraseAccount(client, user, { actorRole = 'user', source = 
   );
   await client.query('DELETE FROM notification_preferences WHERE user_id = $1', [user.id]);
   await client.query('DELETE FROM notifications WHERE user_id = $1', [user.id]);
+  await client.query(
+    'DELETE FROM mission_supply_demands WHERE requester_id = $1 OR recipient_id = $1',
+    [user.id],
+  );
   await client.query('DELETE FROM mission_needs WHERE owner_id = $1', [user.id]);
   await client.query('DELETE FROM private_shelf_items WHERE owner_id = $1', [user.id]);
   await client.query('DELETE FROM rental_carts WHERE user_id = $1', [user.id]);
@@ -2313,6 +2327,7 @@ export function createApp({
   screenBlueOceanListingImage,
   openAiListingAiProvider,
   syntheticCloneBookingLane = null,
+  resolveMissionSupplyRecipient = null,
 } = {}) {
   const app = express();
   const identityVerificationProvider = identityVerificationProviderOverride ?? new StripeProvider({
@@ -2551,6 +2566,7 @@ export function createApp({
   const supportMessageReviewLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 20, standardHeaders: 'draft-8', legacyHeaders: false, handler: limitHandler });
   const supportMessagePublishLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 20, standardHeaders: 'draft-8', legacyHeaders: false, handler: limitHandler });
   const blueOceanListingMutationLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 30, standardHeaders: 'draft-8', legacyHeaders: false, handler: limitHandler });
+  const missionSupplyDemandCreateLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 10, standardHeaders: 'draft-8', legacyHeaders: false, handler: limitHandler });
   const listingAiAssistLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 30, standardHeaders: 'draft-8', legacyHeaders: false, handler: limitHandler });
   const supportEvidenceUpload = multer({
     storage: multer.memoryStorage(),
@@ -5829,6 +5845,63 @@ export function createApp({
       .json(result);
   }));
 
+  app.get('/v1/mission-supply-demands', requireAuth, requireActiveAccount, requireUnsuspendedScope('booking'), asyncRoute(async (req, res) => {
+    assertMissionSupplyDemandTechnicalAccess(config);
+    const result = await inTransaction((client) => listMissionSupplyDemands(client, {
+      actorId: req.auth.userId,
+    }));
+    res.set('Cache-Control', 'private, no-store').json(result);
+  }));
+
+  app.get('/v1/mission-supply-demands/:id', requireAuth, requireActiveAccount, requireUnsuspendedScope('booking'), asyncRoute(async (req, res) => {
+    assertMissionSupplyDemandTechnicalAccess(config);
+    const result = await inTransaction((client) => getMissionSupplyDemand(client, {
+      actorId: req.auth.userId,
+      demandId: safeText(req.params.id, 160),
+    }));
+    res.set('Cache-Control', 'private, no-store').json(result);
+  }));
+
+  app.post('/v1/mission-inventory-resolutions/:id/supply-demands', missionSupplyDemandCreateLimiter, requireAuth, requireActiveAccount, requireUnsuspendedScope('booking'), asyncRoute(async (req, res) => {
+    assertMissionSupplyDemandCreateTechnicalAccess(config, resolveMissionSupplyRecipient);
+    const result = await inTransaction((client) => createMissionSupplyDemand(client, {
+      actorId: req.auth.userId,
+      resolutionId: safeText(req.params.id, 160),
+      raw: req.body,
+      idempotencyKey: req.get('Idempotency-Key'),
+      recipientResolver: resolveMissionSupplyRecipient,
+    }));
+    res.status(result.replayed ? 200 : 201)
+      .set('Cache-Control', 'private, no-store')
+      .json(result);
+  }));
+
+  app.post('/v1/mission-supply-demands/:id/respond', requireAuth, requireActiveAccount, requireUnsuspendedScope('booking'), asyncRoute(async (req, res) => {
+    assertMissionSupplyDemandTechnicalAccess(config);
+    const result = await inTransaction((client) => respondToMissionSupplyDemand(client, {
+      actorId: req.auth.userId,
+      demandId: safeText(req.params.id, 160),
+      raw: req.body,
+      idempotencyKey: req.get('Idempotency-Key'),
+    }));
+    res.status(result.replayed ? 200 : 201)
+      .set('Cache-Control', 'private, no-store')
+      .json(result);
+  }));
+
+  app.post('/v1/mission-supply-demands/:id/revoke', requireAuth, requireActiveAccount, requireUnsuspendedScope('booking'), asyncRoute(async (req, res) => {
+    assertMissionSupplyDemandTechnicalAccess(config);
+    const result = await inTransaction((client) => revokeMissionSupplyRelease(client, {
+      actorId: req.auth.userId,
+      demandId: safeText(req.params.id, 160),
+      raw: req.body,
+      idempotencyKey: req.get('Idempotency-Key'),
+    }));
+    res.status(result.replayed ? 200 : 201)
+      .set('Cache-Control', 'private, no-store')
+      .json(result);
+  }));
+
   const privateShelfUpload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 8 * 1024 * 1024, files: 1 },
@@ -8157,6 +8230,7 @@ export function createApp({
     const missionNeedError = error instanceof MissionNeedError;
     const missionFitCheckError = error instanceof MissionFitCheckError;
     const missionInventoryResolutionError = error instanceof MissionInventoryResolutionError;
+    const missionSupplyDemandError = error instanceof MissionSupplyDemandError;
     const privateShelfError = error instanceof PrivateShelfError;
     const listingSupplyEnrichmentError = error instanceof ListingSupplyEnrichmentError;
     const listingSetError = error instanceof ListingSetError;
@@ -8183,7 +8257,7 @@ export function createApp({
           ? 413
           : (uploadFieldsExceeded
               ? 400
-              : (invalidProcessedImage ? 422 : ((error instanceof HttpError || workflowError || rentalCartError || plannerInventoryError || missionNeedError || missionFitCheckError || missionInventoryResolutionError || privateShelfError || listingSupplyEnrichmentError || listingSetError || blueOceanListingError || flowTimeError || messageWorkflowError || paymentWorkflowError || moderationWorkflowError || retentionInventoryError || supportCaseError || handoverExceptionError || mfaWorkflowError || pilotCockpitError || mapsProxyError || bookingConfirmationError || syntheticCloneBookingLaneError || v51WithdrawalError || v52ActualLossError || v52HandoverReturnError || error instanceof PhoneVerificationError || error instanceof ComplianceReviewError) ? error.status : (error?.status ?? 500)))));
+              : (invalidProcessedImage ? 422 : ((error instanceof HttpError || workflowError || rentalCartError || plannerInventoryError || missionNeedError || missionFitCheckError || missionInventoryResolutionError || missionSupplyDemandError || privateShelfError || listingSupplyEnrichmentError || listingSetError || blueOceanListingError || flowTimeError || messageWorkflowError || paymentWorkflowError || moderationWorkflowError || retentionInventoryError || supportCaseError || handoverExceptionError || mfaWorkflowError || pilotCockpitError || mapsProxyError || bookingConfirmationError || syntheticCloneBookingLaneError || v51WithdrawalError || v52ActualLossError || v52HandoverReturnError || error instanceof PhoneVerificationError || error instanceof ComplianceReviewError) ? error.status : (error?.status ?? 500)))));
     const code = uploadTooLarge
       ? 'image_too_large'
       : (uploadFieldsExceeded
@@ -8192,7 +8266,7 @@ export function createApp({
               ? error.code
               : (bookingConflict
               ? 'booking_period_unavailable'
-              : ((error instanceof HttpError || workflowError || rentalCartError || plannerInventoryError || missionNeedError || missionFitCheckError || missionInventoryResolutionError || privateShelfError || listingSupplyEnrichmentError || listingSetError || blueOceanListingError || flowTimeError || messageWorkflowError || paymentWorkflowError || moderationWorkflowError || retentionInventoryError || supportCaseError || handoverExceptionError || mfaWorkflowError || pilotCockpitError || mapsProxyError || bookingConfirmationError || syntheticCloneBookingLaneError || v51WithdrawalError || v52ActualLossError || v52HandoverReturnError || error instanceof PhoneVerificationError || error instanceof ComplianceReviewError) ? error.code : (status === 500 ? 'internal_error' : 'request_failed')))));
+              : ((error instanceof HttpError || workflowError || rentalCartError || plannerInventoryError || missionNeedError || missionFitCheckError || missionInventoryResolutionError || missionSupplyDemandError || privateShelfError || listingSupplyEnrichmentError || listingSetError || blueOceanListingError || flowTimeError || messageWorkflowError || paymentWorkflowError || moderationWorkflowError || retentionInventoryError || supportCaseError || handoverExceptionError || mfaWorkflowError || pilotCockpitError || mapsProxyError || bookingConfirmationError || syntheticCloneBookingLaneError || v51WithdrawalError || v52ActualLossError || v52HandoverReturnError || error instanceof PhoneVerificationError || error instanceof ComplianceReviewError) ? error.code : (status === 500 ? 'internal_error' : 'request_failed')))));
     if (status >= 500) console.error(safeErrorLog(req, status, code, error));
     res.status(status).json(errorPayload(req, code, error?.details));
   });

@@ -17,8 +17,8 @@ function fixture() {
   const photo = { classification: 'synthetic_ai_illustration', syntheticAi: true, generatedAt: '2026-01-01',
     toolIdentity: 'unit-test/v1', promptHash: 'a'.repeat(64), usageLicenseStatement: 'Synthetic fixture only',
     mimeType: 'image/jpeg', currentProductEvidence: false, sha256: hash(photoBytes) };
-  const ledger = Array.from({ length: 102 }, (_, i) => ({ name: `${i}_test.up.sql`, checksum: 'b'.repeat(64) }));
-  const source = { commit: 'c'.repeat(40), schemaCount: 102, ledgerDigest: fixtureDigest(ledger), hashes: { 'source': 'd'.repeat(64) } };
+  const ledger = Array.from({ length: 103 }, (_, i) => ({ name: `${i}_test.up.sql`, checksum: 'b'.repeat(64) }));
+  const source = { commit: 'c'.repeat(40), schemaCount: 103, ledgerDigest: fixtureDigest(ledger), hashes: { 'source': 'd'.repeat(64) } };
   const environment = { DEPLOYMENT_ENVIRONMENT: 'test', APP_COMMIT: 'e'.repeat(40),
     DATABASE_URL: 'postgres://shareittoo_green@sit-green-postgres-20260918011528-wp254/shareittoo_green',
     SIT_STAGING_ACCESS_GATE_ENABLED: 'true', SIT_STAGING_ALLOWED_USER_IDS: 'renter,owner',

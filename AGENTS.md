@@ -101,6 +101,10 @@ discover a mechanically stale source hash.
 - Append-only migration and source ledgers extend ordered expectations. When
   advancing the terminal schema, append the new terminal entry and never
   replace or omit the previously accepted terminal entry.
+- For owner-targeted demand or matching workflows, recipient and owned-resource
+  selection must be server-authoritative and negative-tested. A fixture that
+  passes only because the client supplied the recipient or resource is an
+  invalid contract, not acceptance evidence.
 - Every runner, registry or plan-inventory change must update all structural
   expectation fixtures and pass CI's unchanged full standard test command
   locally before commit; focused tests alone are not closure evidence.

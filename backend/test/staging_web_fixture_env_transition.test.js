@@ -83,7 +83,7 @@ async function fixture() {
   const runId = 'web-fixture-bootstrap-private-run';
   const bootstrapManifest = {
     kind: 'sit-dedicated-web-fixture-bootstrap', schemaVersion: 2, operation: 'seed',
-    sourceCommit: bootstrapCommit, sourceHashes: { bootstrap: '1'.repeat(64) }, schemaCount: 102,
+    sourceCommit: bootstrapCommit, sourceHashes: { bootstrap: '1'.repeat(64) }, schemaCount: 103,
     ledgerDigest: migrationLedger, passwordDigests: [
       `scrypt$${'2'.repeat(32)}$${'3'.repeat(128)}`,
       `scrypt$${'4'.repeat(32)}$${'5'.repeat(128)}`,

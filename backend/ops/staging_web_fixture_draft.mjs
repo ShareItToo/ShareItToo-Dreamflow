@@ -13,7 +13,7 @@ export function fixtureDraftScope({ source, environment, photo, now = new Date()
   check(gate.enabled && gate.valid && gate.publicListingConfigurationValid && gate.publicUploadConfigurationValid
     && gate.allowedUserIds.length >= 2 && gate.publicListingIds.length === 1 && gate.publicUploadNames.length === 1,
   'fixture_draft_access_ambiguous');
-  check(source.schemaCount === 102 && /^[a-f0-9]{40}$/u.test(source.commit)
+  check(source.schemaCount === 103 && /^[a-f0-9]{40}$/u.test(source.commit)
     && /^[a-f0-9]{64}$/u.test(source.ledgerDigest), 'fixture_draft_source_invalid');
   const database = new URL(environment.DATABASE_URL);
   const preflight = { kind: 'sit-staging-web-two-role-preflight', schemaVersion: 1, target: fixtureTarget,
@@ -41,7 +41,7 @@ export async function generateFixtureDraft({ source, environment, photo, client,
   try {
     await client.query("SET LOCAL statement_timeout = '5s'");
     const ledger = (await client.query('SELECT name, checksum FROM schema_migrations ORDER BY name')).rows;
-    check(ledger.length === 102 && fixtureDigest(ledger) === source.ledgerDigest, 'fixture_draft_ledger_drift');
+    check(ledger.length === 103 && fixtureDigest(ledger) === source.ledgerDigest, 'fixture_draft_ledger_drift');
     const users = (await client.query(`SELECT id, email, phone_e164, profile, role, account_status, deactivated_at,
       email_verified_at, private_use_confirmed_at, private_marketplace_review_status
       FROM users WHERE id = ANY($1::text[]) ORDER BY id`, [gate.allowedUserIds])).rows;

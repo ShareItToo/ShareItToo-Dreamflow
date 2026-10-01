@@ -48,7 +48,7 @@ export function verifyFixturePassword(password, encoded) {
 export function buildFixtureBootstrapManifest({ source, environment, photo, passwords, runId, now = new Date() }) {
   const url = new URL(environment.DATABASE_URL);
   return { kind: 'sit-dedicated-web-fixture-bootstrap', schemaVersion: 2, operation: 'seed',
-    sourceCommit: source.commit, sourceHashes: source.hashes, schemaCount: 102, ledgerDigest: source.ledgerDigest,
+    sourceCommit: source.commit, sourceHashes: source.hashes, schemaCount: 103, ledgerDigest: source.ledgerDigest,
     passwordDigests: passwords.map(hashFixturePassword), preflight: { kind: 'sit-staging-web-two-role-preflight', schemaVersion: 1,
       target: fixtureTarget, createdAt: now.toISOString(), runId, runtimeCommit: environment.APP_COMMIT,
       environmentDigest: fixtureEnvironmentDigest(environment), snapshotDigest: '0'.repeat(64),
@@ -70,7 +70,7 @@ export function validateFixtureBootstrap({ manifest: m, source, environment, pas
   check(m?.kind === 'sit-dedicated-web-fixture-bootstrap' && m.schemaVersion === 2
     && ['seed', 'cleanup'].includes(m.operation), 'fixture_bootstrap_manifest_invalid');
   check(m.sourceCommit === source.commit && fixtureDigest(m.sourceHashes) === fixtureDigest(source.hashes)
-    && source.schemaCount === 102 && m.schemaCount === 102 && m.ledgerDigest === source.ledgerDigest, 'fixture_bootstrap_source_drift');
+    && source.schemaCount === 103 && m.schemaCount === 103 && m.ledgerDigest === source.ledgerDigest, 'fixture_bootstrap_source_drift');
   validateFixtureManifest(m.preflight, now, rehearsal);
   validateFixtureEffectBoundary(environment); validateFixtureDatabase(m.preflight, environment, rehearsal);
   check(['test', 'staging'].includes(environment.DEPLOYMENT_ENVIRONMENT) && environment.APP_COMMIT === m.preflight.runtimeCommit
@@ -181,7 +181,7 @@ export async function runFixtureBootstrap(input) {
     await client.query(`BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE${execute ? '' : ' READ ONLY'}`);
     await client.query("SET LOCAL statement_timeout='5s'"); await client.query("SET LOCAL lock_timeout='2s'");
     const ledger = (await client.query('SELECT name,checksum FROM schema_migrations ORDER BY name')).rows;
-    check(ledger.length === 102 && fixtureDigest(ledger) === source.ledgerDigest, 'fixture_bootstrap_schema_drift');
+    check(ledger.length === 103 && fixtureDigest(ledger) === source.ledgerDigest, 'fixture_bootstrap_schema_drift');
     if (execute) await lockDedicatedRoots(client);
     const snapshot = await readFixtureSnapshot(client, m.preflight, { withinTransaction: true });
     const collisions = (await client.query(`SELECT id FROM users WHERE email=ANY($1::text[]) AND NOT(id=ANY($2::text[]))

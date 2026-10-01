@@ -93,4 +93,8 @@ test('retention inventory is read-only, step-up routed and covers every local de
   assert.match(source, /'userIntent', 'mission_fit_checks'/u);
   assert.match(source, /'userIntent', 'mission_fit_check_revisions'/u);
   assert.match(source, /'userIntent', 'mission_fit_check_commands'/u);
+  assert.match(source, /'userIntent', 'mission_supply_demands'/u);
+  assert.match(source, /'userIntent', 'mission_supply_demand_revisions'/u);
+  assert.match(source, /'userIntent', 'mission_supply_releases'/u);
+  assert.match(source, /'userIntent', 'mission_supply_demand_commands'/u);
 });

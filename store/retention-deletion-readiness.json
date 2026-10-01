@@ -33,7 +33,7 @@
     },
     {
       "path": "backend/src/app.js",
-      "sha256": "24fea203131f80c17e7bbe47d0079c8df98d5e9e6c427b23094e64fbc12ede9c"
+      "sha256": "5d88f0ba592845b0a6b8f8f52fa16350046015f3415b3719a38a23b9dc6b8fec"
     },
     {
       "path": "backend/src/rate_limit_policy.js",
@@ -81,11 +81,11 @@
     },
     {
       "path": "backend/src/retention_inventory.js",
-      "sha256": "fa1cf8cf0927f925633e31b2d4db18ee8a7f0c0f166dca2770bed1404547819e"
+      "sha256": "036270992f5973b3cf1aef2c7ce211e591f05648ffd91b5aaaae8d37ad64a15b"
     },
     {
       "path": "backend/src/privacy_export.js",
-      "sha256": "6c0ee7079ef7c160b12f0675519ffd03974b583dbffc1eb63e939cf94f302669"
+      "sha256": "c8a3ab0b760cf461b77ea9c8d6b6bd6a3cdbefb2ce406ad852ec112014a28a2a"
     },
     {
       "path": "backend/src/privacy_export_policy.js",
@@ -265,7 +265,7 @@
     },
     {
       "path": "backend/src/config.js",
-      "sha256": "6d3fcdd48dd6d9e82c2ef162ff1aef97a0cd5d12c81eb8430d7aa00b98db8552"
+      "sha256": "25d0f775b774cb37a62df4eacc3d4cb1ff4b702b66c7918526ad8df4d074acf8"
     },
     {
       "path": "backend/src/notifications.js",
@@ -426,6 +426,18 @@
     {
       "path": "backend/sql/migrations/102_mission_inventory_resolutions.down.sql",
       "sha256": "6ccb63515e848e1c41e95752c1073574a4b213ed0925c7e6e004d3a13a06f8c0"
+    },
+    {
+      "path": "backend/src/mission_supply_demand_workflow.js",
+      "sha256": "a39cd6d6589dee01a3e002d70d0fdb344d24b5b7a47d56b5b4f7f48746f56990"
+    },
+    {
+      "path": "backend/sql/migrations/103_mission_supply_demands.up.sql",
+      "sha256": "1fad168a69b20199685675a609dad6dc234fc34a1a940312e0dc5c834e3752d9"
+    },
+    {
+      "path": "backend/sql/migrations/103_mission_supply_demands.down.sql",
+      "sha256": "dfdfd728920021ca7d49d6998b444c6039596c85ce6d3958e46e926124705c83"
     },
     {
       "path": "backend/src/private_shelf_workflow.js",

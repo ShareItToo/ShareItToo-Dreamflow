@@ -44,7 +44,7 @@ async function fixture(t) {
   const directory = realpathSync(mkdtempSync(join(tmpdir(), 'sit-fixture-seed-')));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const media = await programmaticPlaceholder();
-  const source = { commit: 'a'.repeat(40), hashes: { source: 'b'.repeat(64) }, schemaCount: 102, ledgerDigest: 'c'.repeat(64) };
+  const source = { commit: 'a'.repeat(40), hashes: { source: 'b'.repeat(64) }, schemaCount: 103, ledgerDigest: 'c'.repeat(64) };
   const environment = { DEPLOYMENT_ENVIRONMENT: 'test', APP_COMMIT: 'd'.repeat(40),
     DATABASE_URL: 'postgres://shareittoo_green@sit-green-postgres-20260918011528-wp254/shareittoo_green',
     SIT_STAGING_ACCESS_GATE_ENABLED: 'true', SIT_STAGING_ALLOWED_USER_IDS: 'old-untouched-owner,old-untouched-renter',

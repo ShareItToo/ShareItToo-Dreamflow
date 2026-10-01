@@ -23,9 +23,9 @@ function passedObservation() {
     postgresMajor: 16,
     migration: {
       emptyDatabaseTablesBeforeBootstrap: 0,
-      totalMigrations: 102,
+      totalMigrations: 103,
       firstMigration: '001_b3_foundation.up.sql',
-      lastMigration: '102_mission_inventory_resolutions.up.sql',
+      lastMigration: '103_mission_supply_demands.up.sql',
       secondRunAppliedMigrations: 0,
       checksumMismatches: 0,
       schemaFingerprintSha256: hash,
@@ -66,7 +66,7 @@ function passedObservation() {
     olderUpgrade: {
       startingMigration: '027_g2_persistent_rental_cart.up.sql',
       startingMigrationCount: 27,
-      finalMigrationCount: 102,
+      finalMigrationCount: 103,
       secondRunAppliedMigrations: 0,
       legacyUsersPreserved: 4,
       legacyListingsPreserved: 2,
@@ -92,6 +92,7 @@ function passedObservation() {
         '100_private_shelf_items.down.sql:private_shelf_rows_active',
         '101_mission_fit_checks.down.sql:mission_fit_check_rows_active',
         '102_mission_inventory_resolutions.down.sql:mission_inventory_resolution_rows_active',
+        '103_mission_supply_demands.down.sql:mission_supply_demand_rows_active',
       ],
       allDestructiveRollbacksRefused: true,
       restoredDataDigestUnchanged: true,
@@ -120,7 +121,7 @@ function passedObservation() {
 }
 
 test('accepts the complete isolated R9 recovery contract', async () => {
-  assert.equal(r9RequiredMigrationCount, 102);
+  assert.equal(r9RequiredMigrationCount, 103);
   const observation = passedObservation();
   assert.deepEqual(validateR9Observation(observation), observation);
   assert.deepEqual(await runR9DatabaseRecovery({

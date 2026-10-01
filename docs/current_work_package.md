@@ -303,7 +303,7 @@ navigation, booking, payment or provider flow. Exact successor
 `36893714616`, including Backend, PostgreSQL, Flutter and R10; CodeQL workflow
 `36893714592` passed. No Live, Green, Play or runtime state changed.
 
-## P5-B private Mission inventory UI — LOCAL SOURCE PASS
+## P5-B private Mission inventory UI — EXACT-HEAD PASS
 
 The smallest additive Flutter/Web slice adds one owner-bound inventory entry
 inside the existing selected Mission editor. It has no new global navigation
@@ -337,7 +337,51 @@ proof is mandatory in the standard technical regression runner. Privacy and
 retention source bindings and exact closure checks are part of this package's
 final local gate. Existing search, listing, navigation, booking, payment and
 provider flows are not restructured. No Live, Green, Play, deployment or
-public activation changed; exact-head CI remains pending after Sol review.
+public activation changed. Exact source
+`aff8faca7e1af0edf637bfd648340787ab80c108` passed Regression
+`36899283121`, including Backend, PostgreSQL, Flutter and R10; publication was
+skipped. CodeQL workflow `36899283429` also passed.
+
+## P6-A private one-recipient Mission demand — LOCAL SOURCE IN REVIEW
+
+The next additive backend slice creates at most one private demand for one
+exact unresolved P5 slot and one server-selected eligible Shelf owner. Current
+selection is proven only through an injected synthetic test resolver: there is
+no real owner/location eligibility resolver and no real-data activation. The
+client supplies neither recipient nor Shelf object. Every demand binds the
+exact Mission revision/digest, P5 revision/gap, dates, purpose, expiry and a
+private coarse search-region snapshot. Recipient responses expose only the
+need key, required/optional quantity, dates, coarse radius, purpose, status and
+expiry; Mission/P5 identifiers, Shelf identity/media, exact coordinates,
+address and foreign account identity remain hidden.
+
+Pending demands may be rejected or released only by the recipient; a release
+is request-/recipient-/Shelf-/purpose-/expiry-bound and may later be revoked by
+that same recipient. Explicit expiry is projected as `expired_no_response`
+without rewriting historical state. Release rechecks both accounts, bilateral
+blocks, Shelf existence and the exact current Mission/P5/gap truth; later
+Mission or P5 correction, account ineligibility or candidate removal fails
+closed. Stable command keys replay exact requests and reject changed bytes or
+races. Public listing, marketing, notification, provider, reservation,
+booking, contract, payment and external-AI effects all remain false.
+Resolver availability gates creation only; private list/load/respond/revoke
+remain available while the technical module is enabled, and the contact rate
+limit cannot block rejection, release or safety revocation.
+
+Migration `103` adds the private root/revision/release/command graph with exact
+composite foreign keys, immutable transition guards, owner/account deletion
+closure and a nonempty down guard. Account export is participant-shaped,
+projects expired pending state honestly and omits private Shelf/location
+fingerprints. Retention remains inventory-only with no invented TTL. The real
+PostgreSQL 16 proof covers server-only selection, replay/collision/races,
+anti-enumeration, recipient privacy, post-create block/account/Shelf/Mission/P5
+drift, export, public non-leakage, erasure and rollback refusal. The local R9
+backup/restore/legacy-upgrade proof passes all `103` migrations and preserves
+legacy cart rows byte-for-byte. This package is source-only and standard-off;
+no UI, Live, Green, Play, provider, payment or public state changed. Exact-head
+CI remains pending until Sol accepts the local package. A D3/D4 gate must later
+define and prove real owner/location eligibility selection before any real-data
+activation; this source package does not imply launch capability.
 
 ## Closed prerequisite: Phase 0 Web/CORS and safe synthetic catalog QA
 
