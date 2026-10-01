@@ -30,6 +30,9 @@ export const integrationTestGroups = Object.freeze({
   missionNeed: Object.freeze([
     'backend/test/mission_need_postgres.integration.test.js',
   ]),
+  missionFitCheck: Object.freeze([
+    'backend/test/mission_fit_check_postgres.integration.test.js',
+  ]),
   privateShelf: Object.freeze([
     'backend/test/private_shelf_postgres.integration.test.js',
   ]),
@@ -60,8 +63,10 @@ export function integrationTestPlan({
   focusedProfileAvatar = false,
   focusedWebFixture = false,
   focusedMissionNeed = false,
+  focusedMissionFitCheck = false,
   focusedPrivateShelf = false,
 } = {}) {
+  if (focusedMissionFitCheck) return [integrationTestGroups.missionFitCheck];
   if (focusedPrivateShelf) return [integrationTestGroups.privateShelf];
   if (focusedMissionNeed) return [integrationTestGroups.missionNeed];
   if (focusedWebFixture) return [integrationTestGroups.stagingWebFixture];
@@ -89,6 +94,7 @@ export function integrationTestPlan({
     integrationTestGroups.stagingWebFixture,
     integrationTestGroups.missionNeed,
     integrationTestGroups.privateShelf,
+    integrationTestGroups.missionFitCheck,
     integrationTestGroups.stagingGoogleRegistration,
     integrationTestGroups.listingAi,
     integrationTestGroups.identity,
@@ -284,6 +290,7 @@ export async function runLocalPostgresIntegration({
   const focusedLegacySchema = environment.SIT_POSTGRES_FOCUSED_LEGACY === '1';
   const focusedWebFixture = environment.SIT_POSTGRES_FOCUSED_WEB_FIXTURE === '1';
   const focusedMissionNeed = environment.SIT_POSTGRES_FOCUSED_MISSION_NEED === '1';
+  const focusedMissionFitCheck = environment.SIT_POSTGRES_FOCUSED_MISSION_FIT_CHECK === '1';
   const focusedPrivateShelf = environment.SIT_POSTGRES_FOCUSED_PRIVATE_SHELF === '1';
   const integrationGroups = integrationTestPlan({
     focusedGoogleRegistration,
@@ -293,6 +300,7 @@ export async function runLocalPostgresIntegration({
     focusedProfileAvatar,
     focusedWebFixture,
     focusedMissionNeed,
+    focusedMissionFitCheck,
     focusedPrivateShelf,
   });
 

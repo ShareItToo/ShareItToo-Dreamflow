@@ -108,6 +108,11 @@ discover a mechanically stale source hash.
   must never drain active reservations; every post-commit failure must leave a
   later-processable state, and Down/rollback must refuse to drop a non-empty
   cleanup outbox.
+- Every new owner-bound root/revision/command graph must preserve the complete
+  account-deletion cascade: child or revision foreign keys must not block the
+  cascade from `users`. A focused real-PostgreSQL test must delete the account
+  and prove that all owned roots, revisions and commands (plus owned files when
+  present) disappear.
 - Safety-mode build flags must fail startup whenever their requested
   configuration is invalid; they must never silently downgrade to normal
   behavior. A package report may claim an allowed or rejected configuration

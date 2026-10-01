@@ -28,7 +28,7 @@ const requireFromBackend = createRequire(
   new URL('../backend/package.json', import.meta.url),
 );
 
-export const r9RequiredMigrationCount = 100;
+export const r9RequiredMigrationCount = 101;
 export const r9SyntheticAccountCount = 12;
 export const r9SyntheticListingCount = 6;
 export const r9ResultClassification = 'LOCAL_ISOLATED_DATABASE_RECOVERY_PROOF';
@@ -94,6 +94,10 @@ const rollbackGuardExpectations = Object.freeze([
   Object.freeze({
     filename: '100_private_shelf_items.down.sql',
     message: 'private_shelf_rows_active',
+  }),
+  Object.freeze({
+    filename: '101_mission_fit_checks.down.sql',
+    message: 'mission_fit_check_rows_active',
   }),
 ]);
 
@@ -174,7 +178,7 @@ async function readMigrationPlan(root) {
   }
   if (plan.length !== r9RequiredMigrationCount
       || plan[0]?.filename !== '001_b3_foundation.up.sql'
-      || plan.at(-1)?.filename !== '100_private_shelf_items.up.sql') {
+      || plan.at(-1)?.filename !== '101_mission_fit_checks.up.sql') {
     fail('r9_migration_inventory_unexpected');
   }
   return Object.freeze(plan);
@@ -822,6 +826,39 @@ async function assertRollbackGuardRefusals(pool, root) {
            )`,
         );
       }
+      if (guard.filename === '101_mission_fit_checks.down.sql') {
+        await client.query(
+          `INSERT INTO mission_needs (
+             id, owner_id, domain_version, status
+           ) VALUES (
+             'mission_need_00000000-0000-4000-8000-000000000101',
+             'r9-user-001', 'P2-A-2026-10-01.1', 'draft'
+           )`,
+        );
+        await client.query(
+          `INSERT INTO private_shelf_items (
+             id, owner_id, domain_version, title, category_key, condition
+           ) VALUES (
+             'shelf_item_00000000-0000-4000-8000-000000000101',
+             'r9-user-001', 'P3-A-2026-10-01.1', 'Synthetic FitCheck item',
+             'synthetic.fit', 'good'
+           )`,
+        );
+        await client.query(
+          `INSERT INTO mission_fit_checks (
+             id, owner_id, mission_need_id, shelf_item_id, domain_version,
+             definition_id, definition_version, planner_core_version, need_key
+           ) VALUES (
+             'mission_fit_00000000-0000-4000-8000-000000000101',
+             'r9-user-001',
+             'mission_need_00000000-0000-4000-8000-000000000101',
+             'shelf_item_00000000-0000-4000-8000-000000000101',
+             'P4-A-2026-10-01.1', 'plant_container_dimensional_fit_v1',
+             'P4-A-PLANT-CONTAINER-DIMENSIONAL-2026-10-01.1',
+             'G4A-2026-08-21.1', 'plant_container_equipment'
+           )`,
+        );
+      }
       try {
         await client.query(sql);
       } catch (error) {
@@ -893,7 +930,7 @@ async function closePools(pools) {
 
 export function validateR9Observation(value, {
   requiredMigrationCount = r9RequiredMigrationCount,
-  requiredLastMigration = '100_private_shelf_items.up.sql',
+  requiredLastMigration = '101_mission_fit_checks.up.sql',
   requiredRollbackGuards = rollbackGuardExpectations,
 } = {}) {
   if (value?.schemaVersion !== 1

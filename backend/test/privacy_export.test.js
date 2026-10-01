@@ -62,6 +62,34 @@ test('account export includes technical sandbox runs and joined event metadata w
   assert.doesNotMatch(JSON.stringify(result.data.technicalSandbox), /auth-secret|hash-secret|response_payload/u);
 });
 
+test('account export exposes owner FitCheck snapshots, provenance and commands without claiming effects', async () => {
+  const client = {
+    async query(sql) {
+      if (sql.includes('FROM users WHERE id = $1')) {
+        return { rows: [{ id: 'user-a', email: 'user@example.invalid' }] };
+      }
+      if (sql.includes('FROM mission_fit_checks') && !sql.includes('JOIN')) {
+        return { rows: [{ fitCheckId: 'mission_fit_a', definitionId: 'plant_container_dimensional_fit_v1' }] };
+      }
+      if (sql.includes('FROM mission_fit_check_revisions')) {
+        return { rows: [{ fitCheckId: 'mission_fit_a', itemFacts: [{ provenance: { sourceType: 'owner_confirmed_measurement' } }] }] };
+      }
+      if (sql.includes('FROM mission_fit_check_commands')) {
+        return { rows: [{ fitCheckId: 'mission_fit_a', idempotencyKey: 'fit-command-a' }] };
+      }
+      return { rows: [] };
+    },
+  };
+  const result = await buildAccountExport(client, 'user-a');
+  const exported = result.data.marketplace.missionFitChecks;
+  assert.equal(exported.fitChecks.length, 1);
+  assert.equal(exported.revisions.length, 1);
+  assert.equal(exported.commands.length, 1);
+  assert.equal(exported.safetyGuarantee, false);
+  assert.equal(exported.externalGenerativeAiUsed, false);
+  assert.equal(exported.paymentCreated, false);
+});
+
 test('access-copy policy replaces internal identifiers and withholds security internals', () => {
   const result = applyAccountExportPolicy({
     account: {
@@ -154,6 +182,11 @@ test('portability policy contains own and observed data but excludes received an
         ],
       },
       rentalCart: { projects: [] },
+      missionFitChecks: {
+        fitChecks: [{ fitCheckId: 'mission-fit-own' }],
+        revisions: [{ fitCheckId: 'mission-fit-own', outcome: 'fit' }],
+        commands: [{ fitCheckId: 'mission-fit-own', resultRevision: 1 }],
+      },
       platformContracts: [],
       platformContractDeclarations: [],
       platformContractReceipts: [],
@@ -206,6 +239,7 @@ test('portability policy contains own and observed data but excludes received an
     result.data.marketplace.bookingGroups.quotes[0].id,
   );
   assert.equal(result.data.marketplace.bookingGroups.stateEvents.length, 1);
+  assert.equal(result.data.marketplace.missionFitChecks.revisions[0].outcome, 'fit');
   assert.equal(result.data.trustAndSafety.reviews.length, 1);
   assert.equal(result.data.financialActivity.payments.length, 1);
   assert.equal(result.data.technicalSandbox.runs.length, 1);

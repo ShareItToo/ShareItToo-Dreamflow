@@ -68,6 +68,9 @@ export async function inspectRetentionInventory(client, { actor }) {
        UNION ALL SELECT 'userIntent', 'mission_needs', count(*)::bigint, min(created_at), max(updated_at) FROM mission_needs
        UNION ALL SELECT 'userIntent', 'mission_need_revisions', count(*)::bigint, min(created_at), max(created_at) FROM mission_need_revisions
        UNION ALL SELECT 'userIntent', 'mission_need_commands', count(*)::bigint, min(created_at), max(created_at) FROM mission_need_commands
+       UNION ALL SELECT 'userIntent', 'mission_fit_checks', count(*)::bigint, min(created_at), max(updated_at) FROM mission_fit_checks
+       UNION ALL SELECT 'userIntent', 'mission_fit_check_revisions', count(*)::bigint, min(created_at), max(created_at) FROM mission_fit_check_revisions
+       UNION ALL SELECT 'userIntent', 'mission_fit_check_commands', count(*)::bigint, min(created_at), max(created_at) FROM mission_fit_check_commands
        UNION ALL SELECT 'userIntent', 'private_shelf_items', count(*)::bigint, min(created_at), max(updated_at) FROM private_shelf_items
        UNION ALL SELECT 'userIntent', 'private_shelf_media', count(*)::bigint, min(created_at), max(created_at) FROM private_shelf_media
        UNION ALL SELECT 'userIntent', 'private_shelf_item_commands', count(*)::bigint, min(created_at), max(created_at) FROM private_shelf_item_commands

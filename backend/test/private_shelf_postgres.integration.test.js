@@ -38,7 +38,7 @@ if (!databaseUrl) {
       await runMigrations(setupPool);
       await runMigrations(setupPool);
       const terminal = await setupPool.query('SELECT name FROM schema_migrations ORDER BY name');
-      assert.equal(terminal.rows.at(-1).name, '100_private_shelf_items.up.sql');
+      assert.equal(terminal.rows.at(-1).name, '101_mission_fit_checks.up.sql');
 
       const ownerId = 'private-shelf-owner';
       const otherId = 'private-shelf-other';

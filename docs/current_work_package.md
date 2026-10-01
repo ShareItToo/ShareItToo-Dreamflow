@@ -149,7 +149,7 @@ CodeQL workflow `36863695879` and separate CodeQL check `110375090588`. P3-A
 therefore remains the accepted source-only predecessor for P3-B; no Live,
 Green, Play, provider or payment state changed.
 
-## P3-B owner-only Mein Regal UI — SOURCE PASS LOCAL; SOL REVIEW PENDING
+## P3-B owner-only Mein Regal UI — EXACT-HEAD PASS
 
 The smallest internal Flutter/Web slice now exposes `Mein Regal` only behind
 the existing Planner technical gate. The authenticated owner can list, load,
@@ -188,6 +188,38 @@ for `lib/services/backend_repository.dart`. The verified exact-head SHA-256 is
 `9322ad7dc6b9f04bf884e77b19e421992f0994146768bbb1b5a6b7fe33eba237`.
 The bounded successor refreshes only those two source-binding entries; no
 privacy or retention claim/status and no historical evidence changes.
+
+Exact successor `2612df8e19d45a3b57f4ebfb2f29d196b4ee5987` passed
+Regression `36871368594`, including Backend, PostgreSQL, Flutter and R10;
+publication was skipped. CodeQL workflow `36871368560` and separate CodeQL
+check `110401111028` also passed. P3-B therefore remains source-only and made
+no Live, Green, Play, provider or payment change.
+
+## P4-A dimensional FitCheck backend — SOURCE IN REVIEW
+
+The first bounded P4 slice defines only
+`plant_container_dimensional_fit_v1` for the exact
+`plant_container_equipment` mission need. It compares four owner-confirmed,
+integer facts: usable volume plus width, depth and height. Width and depth may
+rotate; no other inference is made. The result is explicitly non-binding and
+does not claim horticultural suitability, safety, load capacity, material,
+drainage or use advice. Missing, unconfirmed, contradictory or stale truth is
+`unknown` and blocked; `unfit` is also blocked. A complete current dimensional
+match may be `fit`, but still has no safety guarantee.
+
+Migration `101` adds owner-composite FitCheck roots, immutable revisions and
+idempotent commands bound to the exact mission revision/digest, private Shelf
+snapshot/digest, G4A planner version and definition version. Later Mission or
+Shelf drift changes only current applicability to stale/unknown; it does not
+rewrite stored historical outcomes. Private Planner-gated, no-store routes
+support owner list/create/load/correct with uniform foreign/missing `404` and
+authoritative server IDs/revisions. Privacy export, account cascade, retention
+inventory, current migration consumers and R9 are extended additively; the
+accepted exact live Green runner remains bound to its published schema-98
+runtime. Focused source, PostgreSQL, privacy/retention and R9 closure is local
+and pending Sol review plus exact-head CI. No Flutter P4-B, Live, Green, Play,
+provider, payment, public listing/search, booking, contract or external AI
+state changes in this package.
 
 ## Closed prerequisite: Phase 0 Web/CORS and safe synthetic catalog QA
 

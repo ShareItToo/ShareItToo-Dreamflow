@@ -248,6 +248,7 @@ if (!databaseUrl) {
         '098_booking_checkout_declaration_constraints.up.sql',
         '099_mission_need_revisions.up.sql',
         '100_private_shelf_items.up.sql',
+        '101_mission_fit_checks.up.sql',
       ]);
       assert.match(migrationRows.rows[0].checksum, /^[0-9a-f]{64}$/);
       assert.match(migrationRows.rows[2].checksum, /^[0-9a-f]{64}$/);

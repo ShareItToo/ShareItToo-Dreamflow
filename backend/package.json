@@ -15,6 +15,7 @@
     "test:postgres:legacy": "SIT_POSTGRES_FOCUSED_LEGACY=1 node ../tool/run_local_postgres_integration.mjs",
     "test:postgres:profile-avatar": "SIT_POSTGRES_FOCUSED_PROFILE_AVATAR=1 node ../tool/run_local_postgres_integration.mjs",
     "test:postgres:mission-need": "SIT_POSTGRES_FOCUSED_MISSION_NEED=1 node ../tool/run_local_postgres_integration.mjs",
+    "test:postgres:mission-fit-check": "SIT_POSTGRES_FOCUSED_MISSION_FIT_CHECK=1 node ../tool/run_local_postgres_integration.mjs",
     "test:postgres:private-shelf": "SIT_POSTGRES_FOCUSED_PRIVATE_SHELF=1 node ../tool/run_local_postgres_integration.mjs",
     "acceptance:disposable-candidate": "node ops/staging_disposable_candidate_acceptance.mjs",
     "identity:pilot-end": "node ops/close_identity_verification_pilot.mjs",

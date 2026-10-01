@@ -112,6 +112,9 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
     missionNeeds,
     missionNeedRevisions,
     missionNeedCommands,
+    missionFitChecks,
+    missionFitCheckRevisions,
+    missionFitCheckCommands,
     privateShelfItems,
     privateShelfMedia,
     privateShelfCommands,
@@ -392,6 +395,43 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
          FROM mission_need_commands
         WHERE owner_id = $1
         ORDER BY mission_need_id, result_revision, idempotency_key`, userId),
+    rows(client,
+      `SELECT id AS "fitCheckId", mission_need_id AS "missionNeedId",
+              shelf_item_id AS "shelfItemId", domain_version AS "domainVersion",
+              definition_id AS "definitionId", definition_version AS "definitionVersion",
+              planner_core_version AS "plannerCoreVersion", need_key AS "needKey",
+              current_revision AS "currentRevision",
+              created_at AS "createdAt", updated_at AS "updatedAt"
+         FROM mission_fit_checks
+        WHERE owner_id = $1
+        ORDER BY updated_at, id`, userId),
+    rows(client,
+      `SELECT revision.fit_check_id AS "fitCheckId", revision.revision,
+              revision.mission_need_id AS "missionNeedId",
+              revision.mission_need_revision AS "missionRevision",
+              revision.mission_payload_sha256 AS "missionPayloadDigest",
+              revision.shelf_snapshot AS "shelfSnapshot",
+              revision.shelf_snapshot_sha256 AS "shelfSnapshotDigest",
+              revision.requirement_snapshot AS requirement,
+              revision.requirement_sha256 AS "requirementDigest",
+              revision.item_facts AS "itemFacts",
+              revision.item_facts_sha256 AS "itemFactsDigest",
+              revision.evaluation, revision.outcome,
+              revision.release_blocked AS "releaseBlocked",
+              revision.payload_sha256 AS "payloadDigest",
+              revision.created_at AS "createdAt"
+         FROM mission_fit_check_revisions AS revision
+         JOIN mission_fit_checks AS fit ON fit.id = revision.fit_check_id
+        WHERE fit.owner_id = $1
+        ORDER BY revision.fit_check_id, revision.revision`, userId),
+    rows(client,
+      `SELECT idempotency_key AS "idempotencyKey",
+              command_type AS "commandType", request_sha256 AS "requestDigest",
+              fit_check_id AS "fitCheckId", result_revision AS "resultRevision",
+              created_at AS "createdAt"
+         FROM mission_fit_check_commands
+        WHERE owner_id = $1
+        ORDER BY fit_check_id, result_revision, idempotency_key`, userId),
     rows(client,
       `SELECT id AS "shelfItemId", domain_version AS "domainVersion",
               title, category_key AS "categoryKey", condition,
@@ -1273,6 +1313,21 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
         bookingCreated: false,
         contractCreated: false,
         paymentCreated: false,
+      },
+      missionFitChecks: {
+        fitChecks: missionFitChecks,
+        revisions: missionFitCheckRevisions,
+        commands: missionFitCheckCommands,
+        bindingStatus: 'non_binding',
+        scope: 'dimensional_capacity_only',
+        safetyGuarantee: false,
+        publicListingCreated: false,
+        reservationCreated: false,
+        bookingCreated: false,
+        contractCreated: false,
+        paymentCreated: false,
+        externalGenerativeAiUsed: false,
+        automaticPhotoAnalysisUsed: false,
       },
       privateShelf: {
         items: privateShelfItems,
