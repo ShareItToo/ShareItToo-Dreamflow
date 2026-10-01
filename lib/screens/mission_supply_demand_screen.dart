@@ -96,6 +96,18 @@ class _MissionSupplyDemandScreenState extends State<MissionSupplyDemandScreen> {
 
   bool get _busy => _loading || _loadActive || _actionActive;
 
+  bool get _hasDemandForCreateGap {
+    final create = widget.createContext;
+    if (create == null) return false;
+    return _demands.any(
+      (demand) =>
+          demand.role == MissionSupplyDemandRole.requester &&
+          demand.resolutionId == create.resolutionId &&
+          demand.resolutionRevision == create.resolutionRevision &&
+          demand.slotKey == create.slotKey,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -209,7 +221,11 @@ class _MissionSupplyDemandScreenState extends State<MissionSupplyDemandScreen> {
     final context = _context;
     final create = widget.createContext;
     final expiry = _expiry;
-    if (_actionActive || context == null || create == null || expiry == null) {
+    if (_actionActive ||
+        context == null ||
+        create == null ||
+        expiry == null ||
+        _hasDemandForCreateGap) {
       return;
     }
     final generation = _generation;
@@ -420,22 +436,30 @@ class _MissionSupplyDemandScreenState extends State<MissionSupplyDemandScreen> {
                                   '${create.necessity == 'required' ? 'Erforderlich' : 'Optional'} · ${create.needKey} · Menge 1',
                                 ),
                                 const SizedBox(height: 12),
-                                OutlinedButton.icon(
-                                  key: const Key('mission-demand-expiry'),
-                                  onPressed: _busy ? null : _chooseExpiry,
-                                  icon: const Icon(Icons.schedule),
-                                  label: Text(_expiry == null
-                                      ? 'Ablauf ausdrücklich wählen'
-                                      : 'Ablauf: ${_dateTime(_expiry!)}'),
-                                ),
-                                const SizedBox(height: 8),
-                                FilledButton.icon(
-                                  key: const Key('mission-demand-create'),
-                                  onPressed:
-                                      _busy || _expiry == null ? null : _create,
-                                  icon: const Icon(Icons.send_outlined),
-                                  label: const Text('Private Anfrage senden'),
-                                ),
+                                if (_hasDemandForCreateGap)
+                                  const Text(
+                                    'Für diese Lücke besteht bereits eine private Anfrage.',
+                                    key: Key('mission-demand-existing-gap'),
+                                  )
+                                else ...<Widget>[
+                                  OutlinedButton.icon(
+                                    key: const Key('mission-demand-expiry'),
+                                    onPressed: _busy ? null : _chooseExpiry,
+                                    icon: const Icon(Icons.schedule),
+                                    label: Text(_expiry == null
+                                        ? 'Ablauf ausdrücklich wählen'
+                                        : 'Ablauf: ${_dateTime(_expiry!)}'),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  FilledButton.icon(
+                                    key: const Key('mission-demand-create'),
+                                    onPressed: _busy || _expiry == null
+                                        ? null
+                                        : _create,
+                                    icon: const Icon(Icons.send_outlined),
+                                    label: const Text('Private Anfrage senden'),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -475,7 +499,7 @@ class _MissionSupplyDemandScreenState extends State<MissionSupplyDemandScreen> {
             Text(
                 '${_date(demand.startDate)} bis ${_date(demand.endDate)} · Radius ${demand.radiusKm} km'),
             Text(
-                'Status: ${_status(demand.status)} · Ablauf ${_dateTime(demand.expiresAt)}'),
+                'Status: ${_status(demand)} · Ablauf ${_dateTime(demand.expiresAt)}'),
             if (demand.mayRespond) ...<Widget>[
               const SizedBox(height: 8),
               Row(
@@ -529,10 +553,16 @@ String _dateTime(DateTime value) {
   return '${_date(local)} ${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
 }
 
-String _status(MissionSupplyDemandStatus value) => switch (value) {
-      MissionSupplyDemandStatus.pending => 'Offen',
-      MissionSupplyDemandStatus.rejected => 'Abgelehnt',
-      MissionSupplyDemandStatus.released => 'Privat freigegeben',
-      MissionSupplyDemandStatus.revoked => 'Widerrufen',
-      MissionSupplyDemandStatus.expiredNoResponse => 'Ohne Antwort abgelaufen',
-    };
+String _status(MissionSupplyDemand demand) {
+  if (demand.status == MissionSupplyDemandStatus.released &&
+      demand.release?.visibilityStatus == 'expired') {
+    return 'Freigabe abgelaufen';
+  }
+  return switch (demand.status) {
+    MissionSupplyDemandStatus.pending => 'Offen',
+    MissionSupplyDemandStatus.rejected => 'Abgelehnt',
+    MissionSupplyDemandStatus.released => 'Privat freigegeben',
+    MissionSupplyDemandStatus.revoked => 'Widerrufen',
+    MissionSupplyDemandStatus.expiredNoResponse => 'Ohne Antwort abgelaufen',
+  };
+}

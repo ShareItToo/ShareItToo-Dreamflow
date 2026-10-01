@@ -197,7 +197,7 @@ class MissionSupplyDemand {
   bool get mayRevoke =>
       role == MissionSupplyDemandRole.recipient &&
       status == MissionSupplyDemandStatus.released &&
-      release != null;
+      release?.visibilityStatus == 'active';
 
   factory MissionSupplyDemand.fromJson(Object? raw) {
     final value = _object(raw, 'mission_supply_demand_invalid');

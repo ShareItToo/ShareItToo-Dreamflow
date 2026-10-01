@@ -63,6 +63,34 @@ void main() {
     expect(gateway.createExpiries.toSet(),
         <DateTime>{DateTime.utc(2026, 11, 9, 12)});
     expect(find.text('Von dir angefragt'), findsOneWidget);
+    expect(
+        find.byKey(const Key('mission-demand-existing-gap')), findsOneWidget);
+    expect(find.byKey(const Key('mission-demand-create')), findsNothing);
+  });
+
+  testWidgets('an existing exact gap demand disables duplicate creation',
+      (tester) async {
+    final gateway = _DemandGateway()
+      ..demands = <MissionSupplyDemand>[
+        MissionSupplyDemand.fromJson(testMissionSupplyDemandJson()),
+      ];
+    await tester.pumpWidget(MaterialApp(
+      home: MissionSupplyDemandScreen(
+        createContext: _createContext,
+        gateway: gateway,
+        listingMutationService: _ContextService(),
+        enableForTesting: true,
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Für diese Lücke besteht bereits eine private Anfrage.'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('mission-demand-expiry')), findsNothing);
+    expect(find.byKey(const Key('mission-demand-create')), findsNothing);
+    expect(gateway.createKeys, isEmpty);
   });
 
   testWidgets('409 preserves explicit expiry and exact idempotency key',
@@ -175,6 +203,38 @@ void main() {
     expect(find.textContaining('Widerrufen'), findsOneWidget);
     expect(gateway.respondKeys, <String>['stable-lifecycle-key-0001']);
     expect(gateway.revokeKeys, <String>['stable-lifecycle-key-0001']);
+  });
+
+  testWidgets('expired private release is not presented as active or revocable',
+      (tester) async {
+    final expiredReleaseJson = testMissionSupplyDemandJson(
+      role: MissionSupplyDemandRole.recipient,
+      status: MissionSupplyDemandStatus.released,
+      revision: 2,
+    );
+    (expiredReleaseJson['requestBoundRelease']
+        as Map<String, dynamic>)['visibilityStatus'] = 'expired';
+    final gateway = _DemandGateway()
+      ..demands = <MissionSupplyDemand>[
+        MissionSupplyDemand.fromJson(expiredReleaseJson),
+      ];
+    await tester.pumpWidget(MaterialApp(
+      home: MissionSupplyDemandScreen(
+        gateway: gateway,
+        listingMutationService: _ContextService(),
+        enableForTesting: true,
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Freigabe abgelaufen'), findsOneWidget);
+    expect(find.textContaining('Privat freigegeben'), findsNothing);
+    expect(
+      find.byKey(
+        const ValueKey('mission-demand-revoke-$testMissionSupplyDemandId'),
+      ),
+      findsNothing,
+    );
   });
 
   testWidgets(

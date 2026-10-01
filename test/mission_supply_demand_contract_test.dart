@@ -48,6 +48,15 @@ void main() {
     ));
     expect(released.mayRevoke, isTrue);
     expect(released.mayRespond, isFalse);
+    final expiredReleaseJson = testMissionSupplyDemandJson(
+      role: MissionSupplyDemandRole.recipient,
+      status: MissionSupplyDemandStatus.released,
+      revision: 2,
+    );
+    (expiredReleaseJson['requestBoundRelease']
+        as Map<String, dynamic>)['visibilityStatus'] = 'expired';
+    final expiredRelease = MissionSupplyDemand.fromJson(expiredReleaseJson);
+    expect(expiredRelease.mayRevoke, isFalse);
     final expired = MissionSupplyDemand.fromJson(testMissionSupplyDemandJson(
       role: MissionSupplyDemandRole.recipient,
       status: MissionSupplyDemandStatus.expiredNoResponse,

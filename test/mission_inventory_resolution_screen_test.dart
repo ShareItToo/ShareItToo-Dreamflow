@@ -228,6 +228,26 @@ void main() {
         'mission-inventory-demand-required:plant_container_equipment:2',
       ),
     );
+    final ordinalTwoCard = find.ancestor(
+      of: finder,
+      matching: find.byType(Card),
+    );
+    expect(ordinalTwoCard, findsOneWidget);
+    expect(
+      find.descendant(
+        of: ordinalTwoCard,
+        matching: find.text(
+          'Erforderlich · plant_container_equipment · Menge 1',
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        'Erforderlich · plant_container_equipment · Menge 2',
+      ),
+      findsNothing,
+    );
     await tester.ensureVisible(finder);
     final button = tester.widget<OutlinedButton>(finder);
     button.onPressed!();

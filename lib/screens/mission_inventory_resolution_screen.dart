@@ -810,7 +810,7 @@ class _MissionInventoryResolutionScreenState
             ),
             subtitle: assignment == null
                 ? Text(
-                    '${value.necessity == 'required' ? 'Erforderlich' : 'Optional'} · ${value.needKey} · Menge ${value.ordinal}',
+                    '${value.necessity == 'required' ? 'Erforderlich' : 'Optional'} · ${value.needKey} · Menge 1',
                   )
                 : Text(
                     '${assignment.city ?? 'Ort nicht angegeben'}${assignment.country == null ? '' : ', ${assignment.country}'} · ${assignment.distanceKm.toStringAsFixed(1)} km · unverbindliche Quote',
