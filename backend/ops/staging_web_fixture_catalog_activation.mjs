@@ -24,8 +24,12 @@ import { corsContainerFingerprint, withCorsTransitionLock } from './staging_web_
 export const catalogActivationManifestKind = 'sit-staging-web-fixture-catalog-activation-runtime-manifest';
 export const catalogActivationKey = 'SIT_STAGING_SYNTHETIC_CATALOG_ENABLED';
 export const requiredDatabasePreparationEvidenceSha256 = '109e29f5e0f13db97b0423cc6e00dbc1501f8a8daed85209d76f1565071acc32';
-export const requiredLoginProofEvidenceSha256 = 'f1b8310c88d0bc1937d4ef5d6f0efb41af09f261b6c75deae2a77938765e5419';
-export const requiredLoginProofOpsCommit = 'ef5eae4472f6349f6da0cec6249dc8ca88f96fa3';
+export const requiredLoginProofEvidenceSha256 = 'e6dd9fc8e96fcd59fa0145e601ae04d4cc31e14c1c9146055ed69872cab2ae95';
+export const requiredLoginProofOpsCommit = 'dfea6fa9680da437500f35ae84aa0236979fba8d';
+export const requiredLoginProofRuntimeCommit = '34194c42e5e477144b5db5a8eeb6c2d476c7aeef';
+export const requiredLoginProofImageDigest = 'sha256:0403a5f60b94a8aa91d7cbf29ae503aea989d85aeb72fcf4cf6dc14a801670b9';
+export const requiredLoginProofMarkerSha256 = '29f70925b0933705d338cb1ce7a56b147990032af34dc5ba845c2d55a26803a0';
+export const requiredLoginProofHistoryDigest = 'a2c37da0c6f79460b221e179a430d0e415b0bba8b210567e4235638f07fe056f';
 export const requiredBootstrapLedgerDigest = '4fff35fbe15c64a38f0ca423222b32298b5595da8dab81e306a7ad5a48e80f08';
 export const requiredLoginProofLedgerDigest = '4fff35fbe15c64a38f0ca423222b32298b5595da8dab81e306a7ad5a48e80f08';
 
@@ -116,12 +120,33 @@ function validateEvidenceBytes(bytes, expectedSha256, code, evidenceHash = hash)
 
 export function validateLoginProofEvidence(evidence, { runtimeRevision, imageDigest,
   bootstrapManifestSha256, bootstrapRunIdSha256 }) {
-  check(evidence.kind === 'sit-green-web-fixture-login-proof' && evidence.schemaVersion === 1
+  const code = 'catalog_activation_login_evidence_invalid';
+  exactKeys(evidence, ['kind', 'schemaVersion', 'createdAt', 'status', 'opsCommit', 'runtimeCommit',
+    'imageDigest', 'bootstrapManifestSha256', 'credentialsSha256', 'bootstrapRunIdSha256',
+    'roleDigest', 'markerSha256', 'rolesVerified', 'loginsVerified', 'meVerified', 'logoutsVerified',
+    'accessTokensRejected', 'activeSessions', 'activeRefreshTokens', 'credentialsAttested',
+    'quiescenceReadbacks', 'retainedSessionRecords', 'authHistory', 'loginAudits', 'schemaCount',
+    'ledgerDigest', 'identityDigest', 'identityUnchanged', 'catalogStateDigest', 'visibilityUnchanged',
+    'effectDigest', 'apiReadback', 'paymentMemory', 'stripeLivemode', 'registrationClosed',
+    'catalogEnabled', 'externalProvidersEnabled', 'cleanupVerified', 'runtimeActivated'], code);
+  exactKeys(evidence.authHistory, ['before', 'after', 'beforeDigest', 'afterDigest'], code);
+  for (const side of ['before', 'after']) {
+    exactKeys(evidence.authHistory[side], ['sessions', 'refreshTokens', 'loginAudits'], code);
+    check(Object.values(evidence.authHistory[side]).every((value) => value === (side === 'before' ? 2 : 4)), code);
+  }
+  check(evidence.authHistory.beforeDigest === requiredLoginProofHistoryDigest
+    && evidence.authHistory.afterDigest === requiredLoginProofHistoryDigest, code);
+  check(evidence.kind === 'sit-green-web-fixture-login-proof' && evidence.schemaVersion === 2
+    && typeof evidence.createdAt === 'string' && Number.isFinite(Date.parse(evidence.createdAt))
     && evidence.status === 'fixture-login-proof-verified-sessions-revoked'
     && evidence.opsCommit === requiredLoginProofOpsCommit && evidence.runtimeCommit === runtimeRevision
-    && evidence.imageDigest === imageDigest
+    && runtimeRevision === requiredLoginProofRuntimeCommit
+    && evidence.imageDigest === imageDigest && imageDigest === requiredLoginProofImageDigest
     && evidence.bootstrapManifestSha256 === bootstrapManifestSha256
     && evidence.bootstrapRunIdSha256 === bootstrapRunIdSha256
+    && ['credentialsSha256', 'roleDigest', 'bootstrapManifestSha256', 'bootstrapRunIdSha256']
+      .every((key) => digestPattern.test(evidence[key] ?? ''))
+    && evidence.markerSha256 === requiredLoginProofMarkerSha256 && evidence.quiescenceReadbacks === 3
     && evidence.rolesVerified === 2 && evidence.loginsVerified === 2 && evidence.meVerified === 2
     && evidence.logoutsVerified === 2 && evidence.accessTokensRejected === 2
     && evidence.credentialsAttested === 2 && evidence.activeSessions === 0
@@ -134,11 +159,14 @@ export function validateLoginProofEvidence(evidence, { runtimeRevision, imageDig
     && evidence.paymentMemory === true && evidence.stripeLivemode === false
     && evidence.registrationClosed === true && evidence.catalogEnabled === false
     && evidence.externalProvidersEnabled === false && evidence.cleanupVerified === true
-    && evidence.runtimeActivated === false, 'catalog_activation_login_evidence_invalid');
+    && evidence.runtimeActivated === false, code);
   return evidence;
 }
 
-export const catalogActivationStateSql = `WITH activation_listing AS (
+export const catalogActivationStateSql = `WITH proof_sessions AS (
+  SELECT * FROM auth_sessions
+  WHERE encode(sha256(convert_to(user_agent,'UTF8')),'hex')='${requiredLoginProofMarkerSha256}'
+), activation_listing AS (
   SELECT count(*)::int AS count, min(payload->>'syntheticFixtureRun') AS run_id FROM listings
   WHERE id='${dedicatedFixture.listing}'
 ), activation_audits AS (
@@ -180,6 +208,33 @@ SELECT json_build_object(
   'retainedSessions',(SELECT count(*)::int FROM auth_sessions WHERE user_id IN ('${dedicatedFixture.owner}','${dedicatedFixture.renter}')),
   'retainedRefresh',(SELECT count(*)::int FROM refresh_tokens WHERE user_id IN ('${dedicatedFixture.owner}','${dedicatedFixture.renter}')),
   'loginAudits',(SELECT count(*)::int FROM audit_log WHERE actor_id IN ('${dedicatedFixture.owner}','${dedicatedFixture.renter}') AND action='auth.login'),
+  'markerSessions',(SELECT count(*)::int FROM proof_sessions),
+  'markerPrincipals',(SELECT count(DISTINCT user_id)::int FROM proof_sessions
+    WHERE user_id IN ('${dedicatedFixture.owner}','${dedicatedFixture.renter}')),
+  'markerRefresh',(SELECT count(*)::int FROM refresh_tokens
+    WHERE encode(sha256(convert_to(user_agent,'UTF8')),'hex')='${requiredLoginProofMarkerSha256}'),
+  'markerRefreshPrincipals',(SELECT count(DISTINCT t.user_id)::int FROM refresh_tokens t
+    JOIN proof_sessions s ON t.session_id=s.id AND t.user_id=s.user_id
+    WHERE encode(sha256(convert_to(t.user_agent,'UTF8')),'hex')='${requiredLoginProofMarkerSha256}'
+      AND s.user_id IN ('${dedicatedFixture.owner}','${dedicatedFixture.renter}')),
+  'markerLoginAudits',(SELECT count(*)::int FROM audit_log a JOIN proof_sessions s
+    ON a.resource_type='auth_session' AND a.resource_id=s.id::text
+    WHERE a.action='auth.login'),
+  'markerAuditPrincipals',(SELECT count(DISTINCT a.actor_id)::int FROM audit_log a JOIN proof_sessions s
+    ON a.resource_type='auth_session' AND a.resource_id=s.id::text AND a.actor_id=s.user_id
+    WHERE s.user_id IN ('${dedicatedFixture.owner}','${dedicatedFixture.renter}') AND a.action='auth.login'),
+  'historyDigest',(SELECT encode(digest(jsonb_build_object(
+    'sessions',(SELECT COALESCE(jsonb_agg(to_jsonb(s) ORDER BY s.id),'[]'::jsonb) FROM auth_sessions s
+      WHERE s.user_id IN ('${dedicatedFixture.owner}','${dedicatedFixture.renter}')
+        AND encode(sha256(convert_to(s.user_agent,'UTF8')),'hex') IS DISTINCT FROM '${requiredLoginProofMarkerSha256}'),
+    'refresh',(SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY t.id),'[]'::jsonb) FROM refresh_tokens t
+      WHERE t.user_id IN ('${dedicatedFixture.owner}','${dedicatedFixture.renter}')
+        AND encode(sha256(convert_to(t.user_agent,'UTF8')),'hex') IS DISTINCT FROM '${requiredLoginProofMarkerSha256}'),
+    'loginAudits',(SELECT COALESCE(jsonb_agg(to_jsonb(a) ORDER BY a.id),'[]'::jsonb) FROM audit_log a
+      WHERE a.actor_id IN ('${dedicatedFixture.owner}','${dedicatedFixture.renter}') AND a.action='auth.login'
+        AND NOT EXISTS (SELECT 1 FROM proof_sessions s
+          WHERE a.resource_type='auth_session' AND a.resource_id=s.id::text))
+  )::text,'sha256'),'hex')),
   'bookings',(SELECT count(*)::int FROM bookings WHERE listing_id='${dedicatedFixture.listing}' OR owner_id IN ('${dedicatedFixture.owner}','${dedicatedFixture.renter}') OR renter_id IN ('${dedicatedFixture.owner}','${dedicatedFixture.renter}')),
   'requests',(SELECT count(*)::int FROM rental_requests WHERE item_id='${dedicatedFixture.listing}' OR owner_id IN ('${dedicatedFixture.owner}','${dedicatedFixture.renter}') OR renter_id IN ('${dedicatedFixture.owner}','${dedicatedFixture.renter}')),
   'identities',(SELECT count(*)::int FROM auth_identities WHERE user_id IN ('${dedicatedFixture.owner}','${dedicatedFixture.renter}')),
@@ -203,16 +258,25 @@ export function assertCatalogActivationState(stdout, binding = {}) {
   const value = parseJson(stdout, 'catalog_activation_database_state_invalid');
   const countKeys = ['users', 'listing', 'upload', 'seedAudits', 'activationAudits', 'activeSessions',
     'mfaFactors',
-    'activeRefresh', 'retainedSessions', 'retainedRefresh', 'loginAudits', 'bookings', 'requests',
+    'activeRefresh', 'retainedSessions', 'retainedRefresh', 'loginAudits',
+    'markerSessions', 'markerPrincipals', 'markerRefresh', 'markerRefreshPrincipals',
+    'markerLoginAudits', 'markerAuditPrincipals', 'bookings', 'requests',
     'identities', 'pushDevices', 'paymentCommands', 'identityProviderSessions', 'technicalProviderRuns',
     'notifications', 'notificationOutbox'];
-  exactKeys(value, [...countKeys, 'activationRunDigest', 'identityDigest', 'catalogDigest'],
+  exactKeys(value, [...countKeys, 'activationRunDigest', 'identityDigest', 'catalogDigest', 'historyDigest'],
     'catalog_activation_database_state_invalid');
   check(countKeys.every((key) => Number.isInteger(value[key]) && value[key] >= 0)
     && value.users === 2 && value.listing === 1 && value.upload === 1
     && value.seedAudits === 1 && value.activationAudits === 1
     && value.activeSessions === 0 && value.activeRefresh === 0 && value.mfaFactors === 0
-    && value.retainedSessions === 2 && value.retainedRefresh === 2 && value.loginAudits === 2
+    && value.retainedSessions === binding.loginRetainedSessions
+    && value.retainedRefresh === binding.loginRetainedRefresh
+    && value.loginAudits === binding.loginTotalAudits
+    && value.retainedSessions === 4 && value.retainedRefresh === 4 && value.loginAudits === 4
+    && value.markerSessions === 2 && value.markerPrincipals === 2
+    && value.markerRefresh === 2 && value.markerLoginAudits === 2
+    && value.markerRefreshPrincipals === 2 && value.markerAuditPrincipals === 2
+    && digestPattern.test(value.historyDigest ?? '') && value.historyDigest === binding.loginHistoryDigest
     && ['bookings', 'requests', 'identities', 'pushDevices', 'paymentCommands', 'identityProviderSessions',
       'technicalProviderRuns', 'notifications', 'notificationOutbox'].every((key) => value[key] === 0)
     && digestPattern.test(value.activationRunDigest ?? '')
@@ -292,7 +356,8 @@ function assertBinding(binding) {
   const keys = ['opsCommit', 'loginProofOpsCommit', 'bootstrapManifestSha256', 'bootstrapRunIdSha256',
     'seedScopeDigest', 'seedSnapshotDigest', 'activationRunDigest',
     'databasePreparationEvidenceSha256', 'loginProofEvidenceSha256', 'loginIdentityDigest',
-    'loginCatalogDigest', 'databaseStateDigest', 'publicBeforeDigest', 'envSha256',
+    'loginCatalogDigest', 'loginHistoryDigest', 'loginMarkerSha256', 'loginRetainedSessions',
+    'loginRetainedRefresh', 'loginTotalAudits', 'databaseStateDigest', 'publicBeforeDigest', 'envSha256',
     'environmentDigest', 'apiFingerprint', 'backupFile', 'evidenceFile'];
   exactKeys(binding, keys, 'catalog_activation_binding_invalid');
   check(commitPattern.test(binding.opsCommit ?? '') && binding.loginProofOpsCommit === requiredLoginProofOpsCommit
@@ -300,6 +365,9 @@ function assertBinding(binding) {
       .every((key) => digestPattern.test(binding[key] ?? ''))
     && binding.databasePreparationEvidenceSha256 === requiredDatabasePreparationEvidenceSha256
     && binding.loginProofEvidenceSha256 === requiredLoginProofEvidenceSha256
+    && binding.loginHistoryDigest === requiredLoginProofHistoryDigest
+    && binding.loginMarkerSha256 === requiredLoginProofMarkerSha256
+    && binding.loginRetainedSessions === 4 && binding.loginRetainedRefresh === 4 && binding.loginTotalAudits === 4
     && [binding.backupFile, binding.evidenceFile].every((path) => typeof path === 'string'
       && isAbsolute(path) && !path.startsWith(`${repositoryRoot}/`) && !path.includes('..'))
     && resolve(binding.backupFile) !== resolve(binding.evidenceFile),
@@ -309,7 +377,9 @@ function assertBinding(binding) {
 
 export function assertCatalogActivationManifest(manifest) {
   check(manifest?.kind === catalogActivationManifestKind && manifest.schemaVersion === 1
-    && digestPattern.test(manifest.apiContainerId ?? ''), 'catalog_activation_manifest_invalid');
+    && digestPattern.test(manifest.apiContainerId ?? '')
+    && manifest.runtimeRevision === requiredLoginProofRuntimeCommit
+    && manifest.imageDigest === requiredLoginProofImageDigest, 'catalog_activation_manifest_invalid');
   const { fixtureBinding, apiContainerId, ...base } = manifest;
   const validated = assertGoogleRegistrationRuntimeManifest({ ...base, apiContainerId,
     kind: 'sit-staging-google-registration-runtime-manifest' });
@@ -536,6 +606,10 @@ export async function prepareCatalogActivationManifest({
     databaseContainer, databaseUser: 'shareittoo_green', databaseName: 'shareittoo_green',
   }, 'catalog_activation_prepare_database_state', commandEnv), {
     loginIdentityDigest: loginEvidence.identityDigest, loginCatalogDigest: loginEvidence.catalogStateDigest,
+    loginHistoryDigest: loginEvidence.authHistory.afterDigest,
+    loginRetainedSessions: loginEvidence.authHistory.after.sessions,
+    loginRetainedRefresh: loginEvidence.authHistory.after.refreshTokens,
+    loginTotalAudits: loginEvidence.authHistory.after.loginAudits,
   });
   const publicBefore = await publicState(command, api.Id, false, 'catalog_activation_prepare_public_before', commandEnv);
   const candidate = await command('docker', ['exec', api.Id, 'node', '--input-type=module', '-e',
@@ -562,6 +636,10 @@ export async function prepareCatalogActivationManifest({
       databasePreparationEvidenceSha256: databaseEvidenceSha256,
       loginProofEvidenceSha256: loginEvidenceSha256, loginIdentityDigest: loginEvidence.identityDigest,
       loginCatalogDigest: loginEvidence.catalogStateDigest, databaseStateDigest: digest(state),
+      loginHistoryDigest: loginEvidence.authHistory.afterDigest, loginMarkerSha256: loginEvidence.markerSha256,
+      loginRetainedSessions: loginEvidence.authHistory.after.sessions,
+      loginRetainedRefresh: loginEvidence.authHistory.after.refreshTokens,
+      loginTotalAudits: loginEvidence.authHistory.after.loginAudits,
       publicBeforeDigest: digest(publicBefore), envSha256: hash(envContent),
       environmentDigest: digest(apiValues), apiFingerprint: corsContainerFingerprint(api), backupFile, evidenceFile,
     },
@@ -601,12 +679,20 @@ export async function runCatalogActivation({ manifest, bootstrapManifestBytes, d
     target.fixtureBinding.bootstrapManifestSha256);
   validateEvidenceBytes(databaseEvidenceBytes, target.fixtureBinding.databasePreparationEvidenceSha256,
     'catalog_activation_database_evidence', testOnlyEvidenceHash);
-  validateLoginProofEvidence(validateEvidenceBytes(loginEvidenceBytes,
+  const login = validateLoginProofEvidence(validateEvidenceBytes(loginEvidenceBytes,
     target.fixtureBinding.loginProofEvidenceSha256, 'catalog_activation_login_evidence', testOnlyEvidenceHash), {
     runtimeRevision: target.runtimeRevision, imageDigest: target.imageDigest,
     bootstrapManifestSha256: target.fixtureBinding.bootstrapManifestSha256,
     bootstrapRunIdSha256: target.fixtureBinding.bootstrapRunIdSha256,
   });
+  check(target.fixtureBinding.loginIdentityDigest === login.identityDigest
+    && target.fixtureBinding.loginCatalogDigest === login.catalogStateDigest
+    && target.fixtureBinding.loginHistoryDigest === login.authHistory.afterDigest
+    && target.fixtureBinding.loginMarkerSha256 === login.markerSha256
+    && target.fixtureBinding.loginRetainedSessions === login.authHistory.after.sessions
+    && target.fixtureBinding.loginRetainedRefresh === login.authHistory.after.refreshTokens
+    && target.fixtureBinding.loginTotalAudits === login.authHistory.after.loginAudits,
+  'catalog_activation_login_binding_drift');
   const run = async () => {
     const preflight = await collectPreflight({ manifest: target, sourceCommit, evidenceFile, command, commandEnv });
     if (!execute) {

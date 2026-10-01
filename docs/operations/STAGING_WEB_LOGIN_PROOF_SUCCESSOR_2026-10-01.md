@@ -1,7 +1,9 @@
 # Post-promotion Web fixture login proof
 
-This source package prepares a fresh proof after Green promotion. It performs no
-live login, catalog activation, API restart or database mutation. The immutable
+The first source package prepared a fresh proof after Green promotion. Its
+separately executed live proof and the second consumer-binding source package
+are recorded below. The current consumer package performs no live login,
+catalog activation, API restart or database mutation. The immutable
 bootstrap remains fixture/credential/schema provenance. A fresh binding and the
 verified current image bind the runtime being tested; the child must receive
 that exact runtime commit and `/version` must agree.
@@ -35,10 +37,60 @@ effect checks, token rejection and bounded cleanup remain required.
    Require the same history, identity and catalog digests. Refresh relevant
    tests/bindings and gates before any new activation preparation.
 
-The catalog consumer's existing historical digest/Ops constants are deliberately
-unchanged in package 1. It rejects the new runtime and schema-2 proof until
-package 2 is complete. No placeholder hash, compatibility exception or historical
-proof reuse may bridge the two packages.
+The catalog consumer's historical digest/Ops constants stayed unchanged in
+package 1. Package 2 now binds only the actual immutable proof below; it still
+requires source review and exact-HEAD gates before new activation preparation.
+No placeholder hash, compatibility exception or historical proof reuse bridges
+the two packages. Historical files are unchanged.
+
+## Verified immutable proof and consumer package
+
+The proof executed once from Ops `dfea6fa9680da437500f35ae84aa0236979fba8d`.
+Independent read-only closure verified the root:root 0600 artifact
+`/docker/shareittoo/evidence/web-login-proof-dfea6fa9-20261001T015321Z/evidence.json`,
+SHA-256 `e6dd9fc8e96fcd59fa0145e601ae04d4cc31e14c1c9146055ed69872cab2ae95`,
+created `2026-10-01T02:15:40.378Z`, schema 2. It binds the exact runtime and image
+listed above. The bootstrap remains SHA-256
+`e0e46ddc056c72df7a1199881f4713f275d5cf11dd5f9e2c8f056c50b81a8737`;
+its historical provenance is not rewritten.
+
+Both roles passed login/me/logout and post-logout token rejection. Three
+quiescence readbacks established zero active sessions/refresh tokens. Cumulative
+sessions/refresh/login-audits are exactly 4/4/4, with exactly 2/2/2 for this proof
+marker and both distinct principals. The marker SHA-256 is
+`29f70925b0933705d338cb1ce7a56b147990032af34dc5ba845c2d55a26803a0`.
+Prior-history before/after SHA-256 is unchanged:
+`a2c37da0c6f79460b221e179a430d0e415b0bba8b210567e4235638f07fe056f`.
+Identity/catalog readbacks match their proof digests; all forbidden-effect
+counts are zero. Catalog and registration remain false, external providers off,
+public catalog empty, exact health/version healthy, and transient resources
+absent. Login-proof completion is not browser or catalog-activation acceptance.
+
+The consumer now validates the complete exact schema-2 field set, nested history
+field sets and these immutable digest/Ops/runtime/image bindings. Its fresh
+runtime manifest carries the proof's cumulative totals, history digest and
+marker digest. Live SQL must attest totals 4/4/4, marker counts 2/2/2, both marker
+principals, zero active sessions/refresh tokens, and the same prior-history,
+identity and catalog digests. Marker selection uses the SHA-256 of the stored
+user-agent; no raw run identifier or credential is exposed. History hashing is
+identical to the producer and excludes only this proof's marker rows/audits.
+Aggregate counts alone are insufficient: every marked refresh record must join
+its marked session by `session_id` and the same `user_id`; every marked login
+audit must join its session resource ID and the same actor/session principal.
+Both exact principals must appear in each relationship, while global marker
+counts remain exactly two so additional or foreign rows cannot be hidden.
+Real PG16 negative cases preserve cumulative 4/4/4 and marker 2/2/2 counts while
+reassigning the renter refresh or audit actor to the owner; both are rejected.
+The audit case uses savepoint replay because audit rows remain append-only;
+no trigger is disabled and no retained audit is updated or deleted.
+Schema 1, missing/extra fields, incorrect totals, historical-row changes and
+binding drift fail before transition. The consumer also compares manifest
+identity/catalog bindings directly with the immutable proof before commands.
+
+Next: review/gate/commit package 2, then prepare a completely new protected
+catalog manifest and perform its default preflight. Any separately authorized
+one-key transition follows only that successful fresh preflight. Old activation
+manifests and namespace attempts remain historical and cannot be reused.
 
 ## CLI contract after exact-source gate
 

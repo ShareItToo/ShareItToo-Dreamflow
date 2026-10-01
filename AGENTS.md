@@ -42,6 +42,10 @@ discover a mechanically stale source hash.
   proof, alter bootstrap provenance, invent a future hash, or relax exact
   bindings. Repeat proofs keep per-run counts separate from cumulative retained
   history and verify that prior rows remain unchanged.
+- Aggregate counts are not ownership proof: related records must bind to the
+  immutable parent relationship and the same principal. Require both expected
+  principals and a real-database reassignment negative test that preserves
+  aggregate counts while changing ownership.
 
 ## Sol, Luna and Gemini review loop
 

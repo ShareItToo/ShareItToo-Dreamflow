@@ -15,6 +15,7 @@ import { bootstrapFileStore, buildFixtureBootstrapManifest, dedicatedFixture, ru
   fixtureBootstrapHandoff } from '../ops/staging_web_fixture_bootstrap.mjs';
 import { createFixtureLoginProofStore, loginProofMarker } from '../ops/staging_web_fixture_login_verifier.mjs';
 import { assertCatalogActivationState,
+  requiredLoginProofMarkerSha256,
   catalogActivationStateSql } from '../ops/staging_web_fixture_catalog_activation.mjs';
 import { assertFixtureSeedReadback,
   fixtureSeedReadbackSql } from '../ops/staging_web_fixture_env_transition.mjs';
@@ -416,6 +417,73 @@ test('PG16 fixture adapter uses real schema, transactions, triggers and two clie
           [role.userId, sessionId, `catalog-attestation-${sessionId}`]);
         }
         const m = f.manifest.preflight;
+        const repeatMarker = loginProofMarker(bootstrapRunId, sha(randomUUID()).slice(0, 32));
+        // Substitute only fixture IDs at the parameter boundary; run the real SQL.
+        const substitutions = new Map([[dedicatedFixture.owner, m.roles[0].userId],
+          [dedicatedFixture.renter, m.roles[1].userId], [dedicatedFixture.listing, m.listingId],
+          [dedicatedFixture.upload, m.uploadName]]);
+        const substitute = (value) => Array.isArray(value) ? value.map(substitute) : substitutions.get(value) ?? value;
+        const historyStore = createFixtureLoginProofStore({ query: (query, params) =>
+          client.query(query, params?.map(substitute)) }, { runId: bootstrapRunId, marker: repeatMarker });
+        const historyBefore = await historyStore.snapshot({ readOnly: true });
+        assert.deepEqual([historyBefore.totalSessions, historyBefore.totalRefreshTokens,
+          historyBefore.totalLoginAudits, historyBefore.markerLoginAudits], [2, 2, 2, 0]);
+        const sql = catalogActivationStateSql
+          .replaceAll(requiredLoginProofMarkerSha256, sha(repeatMarker))
+          .replaceAll(dedicatedFixture.owner, m.roles[0].userId)
+          .replaceAll(dedicatedFixture.renter, m.roles[1].userId)
+          .replaceAll(dedicatedFixture.listing, m.listingId)
+          .replaceAll(dedicatedFixture.upload, m.uploadName);
+        const readState = async () => (await client.query(sql)).rows[0]?.json_build_object;
+        const proofBinding = { activationRunDigest: sha(m.runId), loginHistoryDigest: historyBefore.historyDigest,
+          loginRetainedSessions: 4, loginRetainedRefresh: 4, loginTotalAudits: 4 };
+        const counts = (value) => [value.retainedSessions, value.retainedRefresh, value.loginAudits,
+          value.markerSessions, value.markerRefresh, value.markerLoginAudits];
+        const markerSessions = [];
+        for (const role of m.roles) {
+          const sessionId = randomUUID();
+          markerSessions.push({ userId: role.userId, sessionId });
+          await client.query(`INSERT INTO auth_sessions (id,user_id,user_agent,revoked_at)
+            VALUES ($1,$2,$3,now())`, [sessionId, role.userId, repeatMarker]);
+          await client.query(`INSERT INTO refresh_tokens
+            (user_id,session_id,family_id,token_hash,expires_at,user_agent,revoked_at)
+            VALUES ($1,$2,$2,$3,now()+interval '1 hour',$4,now())`,
+          [role.userId, sessionId, sha(randomUUID()), repeatMarker]);
+        }
+        const insertMarkerAudits = async (reassignRenter = false) => {
+          for (const { userId, sessionId } of markerSessions) {
+            const actorId = reassignRenter && userId === m.roles[1].userId ? m.roles[0].userId : userId;
+            await client.query(`INSERT INTO audit_log (actor_id,actor_role,action,resource_type,resource_id)
+              VALUES ($1,'user','auth.login','auth_session',$2)`, [actorId, sessionId]);
+          }
+        };
+        // Audits are append-only: replay the same session events with the wrong
+        // renter actor after a savepoint rollback, never disable audit triggers.
+        await client.query('BEGIN');
+        try {
+          await client.query('SAVEPOINT marker_audit_assignment');
+          await insertMarkerAudits();
+          const correct = await readState();
+          assertCatalogActivationState(JSON.stringify(correct), proofBinding);
+          await client.query('ROLLBACK TO SAVEPOINT marker_audit_assignment');
+          await insertMarkerAudits(true);
+          const reassigned = await readState();
+          assert.deepEqual(counts(reassigned), counts(correct));
+          assert.deepEqual(counts(reassigned), [4, 4, 4, 2, 2, 2]);
+          assert.equal(reassigned.historyDigest, correct.historyDigest);
+          assert.equal(reassigned.markerPrincipals, 2);
+          assert.equal(reassigned.markerAuditPrincipals, 1);
+          assert.throws(() => assertCatalogActivationState(JSON.stringify(reassigned), proofBinding),
+            /catalog_activation_database_state_invalid/u);
+        } finally { await client.query('ROLLBACK'); }
+        await insertMarkerAudits();
+        const historyAfter = await historyStore.snapshot({ readOnly: true });
+        assert.deepEqual([historyAfter.totalSessions, historyAfter.totalRefreshTokens,
+          historyAfter.totalLoginAudits, historyAfter.markerLoginAudits], [4, 4, 4, 2]);
+        assert.equal(historyAfter.historyDigest, historyBefore.historyDigest);
+        assert.equal(historyAfter.identityDigest, historyBefore.identityDigest);
+        assert.equal(historyAfter.catalogDigest, historyBefore.catalogDigest);
+        assert.equal(historyAfter.activeSessions, 0); assert.equal(historyAfter.activeRefreshTokens, 0);
         const seedSql = fixtureSeedReadbackSql
           .replaceAll(dedicatedFixture.owner, m.roles[0].userId)
           .replaceAll(dedicatedFixture.renter, m.roles[1].userId)
@@ -425,26 +493,24 @@ test('PG16 fixture adapter uses real schema, transactions, triggers and two clie
         assertFixtureSeedReadback(Object.values(seedReadback).join('|'), {
           seedScopeDigest, seedSnapshotDigest, bootstrapRunIdSha256: sha(bootstrapRunId),
         });
-        const sql = catalogActivationStateSql
-          .replaceAll(dedicatedFixture.owner, m.roles[0].userId)
-          .replaceAll(dedicatedFixture.renter, m.roles[1].userId)
-          .replaceAll(dedicatedFixture.listing, m.listingId)
-          .replaceAll(dedicatedFixture.upload, m.uploadName);
         const forbiddenRunHashInterpolation = `:${String.fromCharCode(39)}run_hash${String.fromCharCode(39)}`;
         assert.ok(!sql.includes(forbiddenRunHashInterpolation));
-        const readState = async () => (await client.query(sql)).rows[0]?.json_build_object;
         const row = await readState();
-        const attested = assertCatalogActivationState(JSON.stringify(row), { activationRunDigest: sha(m.runId) });
+        const attested = assertCatalogActivationState(JSON.stringify(row), proofBinding);
         assert.equal(attested.activationRunDigest, sha(m.runId));
         assert.notEqual(attested.activationRunDigest, sha(bootstrapRunId));
         assert.equal(attested.activeSessions, 0); assert.equal(attested.activeRefresh, 0);
         assert.equal(attested.mfaFactors, 0);
-        assert.equal(attested.retainedSessions, 2); assert.equal(attested.retainedRefresh, 2);
+        assert.equal(attested.retainedSessions, 4); assert.equal(attested.retainedRefresh, 4);
+        assert.equal(attested.historyDigest, historyAfter.historyDigest);
+        assert.equal(attested.markerSessions, 2); assert.equal(attested.markerRefresh, 2);
+        assert.equal(attested.markerLoginAudits, 2); assert.equal(attested.markerPrincipals, 2);
+        assert.equal(attested.markerRefreshPrincipals, 2); assert.equal(attested.markerAuditPrincipals, 2);
         await client.query(`INSERT INTO mfa_totp_factors
           (user_id,encrypted_secret,status,enabled_at) VALUES ($1,'test-encrypted-secret','enabled',now())`,
         [m.roles[0].userId]);
         await assert.rejects(async () => assertCatalogActivationState(JSON.stringify(
-          await readState())),
+          await readState()), proofBinding),
         /catalog_activation_database_state_invalid/u);
         await client.query('DELETE FROM mfa_totp_factors WHERE user_id=$1', [m.roles[0].userId]);
         const foreign = await seed(client);
@@ -454,7 +520,7 @@ test('PG16 fixture adapter uses real schema, transactions, triggers and two clie
           (user_id,encrypted_secret,status,enabled_at) VALUES ($1,'foreign-encrypted-secret','enabled',now())`,
         [foreign.manifest.preflight.roles[0].userId]);
         const afterForeign = assertCatalogActivationState(JSON.stringify(await readState()), {
-          activationRunDigest: sha(m.runId),
+          ...proofBinding,
         });
         assert.deepEqual(afterForeign, attested);
         assert.equal((await readFixtureSnapshot(client, foreign.manifest.preflight)).users.length, 2);
@@ -462,7 +528,7 @@ test('PG16 fixture adapter uses real schema, transactions, triggers and two clie
           await client.query('BEGIN');
           try {
             await mutate();
-            await assert.rejects(async () => assertCatalogActivationState(JSON.stringify(await readState())),
+            await assert.rejects(async () => assertCatalogActivationState(JSON.stringify(await readState()), proofBinding),
               /catalog_activation_database_state_invalid/u);
           } finally { await client.query('ROLLBACK'); }
         };
@@ -476,35 +542,26 @@ test('PG16 fixture adapter uses real schema, transactions, triggers and two clie
         await expectRejectedState(() => client.query(`UPDATE listings
           SET payload=jsonb_set(payload,'{syntheticFixtureRun}',to_jsonb('invalid'::text),true) WHERE id=$1`,
         [m.listingId]));
-        const repeatMarker = loginProofMarker(bootstrapRunId, sha(randomUUID()).slice(0, 32));
-        // Substitute only fixture IDs at the parameter boundary; run the real SQL.
-        const substitutions = new Map([[dedicatedFixture.owner, m.roles[0].userId],
-          [dedicatedFixture.renter, m.roles[1].userId], [dedicatedFixture.listing, m.listingId],
-          [dedicatedFixture.upload, m.uploadName]]);
-        const substitute = (value) => Array.isArray(value) ? value.map(substitute) : substitutions.get(value) ?? value;
-        const historyStore = createFixtureLoginProofStore({ query: (query, params) =>
-          client.query(query, params?.map(substitute)) }, { runId: bootstrapRunId, marker: repeatMarker });
-        const historyBefore = await historyStore.snapshot({ readOnly: true });
-        assert.deepEqual([historyBefore.totalSessions, historyBefore.totalRefreshTokens,
-          historyBefore.totalLoginAudits, historyBefore.markerLoginAudits], [2, 2, 2, 0]);
-        for (const role of m.roles) {
-          const sessionId = randomUUID();
-          await client.query(`INSERT INTO auth_sessions (id,user_id,user_agent,revoked_at)
-            VALUES ($1,$2,$3,now())`, [sessionId, role.userId, repeatMarker]);
-          await client.query(`INSERT INTO refresh_tokens
-            (user_id,session_id,family_id,token_hash,expires_at,user_agent,revoked_at)
-            VALUES ($1,$2,$2,$3,now()+interval '1 hour',$4,now())`,
-          [role.userId, sessionId, sha(randomUUID()), repeatMarker]);
-          await client.query(`INSERT INTO audit_log (actor_id,actor_role,action,resource_type,resource_id)
-            VALUES ($1,'user','auth.login','auth_session',$2)`, [role.userId, sessionId]);
-        }
-        const historyAfter = await historyStore.snapshot({ readOnly: true });
-        assert.deepEqual([historyAfter.totalSessions, historyAfter.totalRefreshTokens,
-          historyAfter.totalLoginAudits, historyAfter.markerLoginAudits], [4, 4, 4, 2]);
-        assert.equal(historyAfter.historyDigest, historyBefore.historyDigest);
-        assert.equal(historyAfter.identityDigest, historyBefore.identityDigest);
-        assert.equal(historyAfter.catalogDigest, historyBefore.catalogDigest);
-        assert.equal(historyAfter.activeSessions, 0); assert.equal(historyAfter.activeRefreshTokens, 0);
+        await expectRejectedState(() => client.query(`UPDATE auth_sessions SET device_label='Changed prior proof'
+          WHERE user_id=$1 AND user_agent='Catalog-Attestation-Integration'`, [m.roles[0].userId]));
+        await expectRejectedState(() => client.query(`UPDATE auth_sessions SET user_agent='Changed current marker'
+          WHERE user_id=$1 AND user_agent=$2`, [m.roles[0].userId, repeatMarker]));
+        await expectRejectedState(() => client.query(`UPDATE auth_sessions SET revoked_at=NULL
+          WHERE user_id=$1 AND user_agent=$2`, [m.roles[0].userId, repeatMarker]));
+        await client.query('BEGIN');
+        try {
+          const changed = await client.query(`UPDATE refresh_tokens SET user_id=$1
+            WHERE user_id=$2 AND user_agent=$3`, [m.roles[0].userId, m.roles[1].userId, repeatMarker]);
+          assert.equal(changed.rowCount, 1);
+          const reassigned = await readState();
+          assert.deepEqual(counts(reassigned), counts(attested));
+          assert.deepEqual(counts(reassigned), [4, 4, 4, 2, 2, 2]);
+          assert.equal(reassigned.historyDigest, attested.historyDigest);
+          assert.equal(reassigned.markerPrincipals, 2);
+          assert.equal(reassigned.markerRefreshPrincipals, 1);
+          assert.throws(() => assertCatalogActivationState(JSON.stringify(reassigned), proofBinding),
+            /catalog_activation_database_state_invalid/u);
+        } finally { await client.query('ROLLBACK'); }
         const cleaned = await runFixtureAdapter(bind(await cleanupManifest(f, activated.activationDigest)));
         assert.equal(cleaned.status, 'cleaned-noncatalogued-audits-retained');
       });

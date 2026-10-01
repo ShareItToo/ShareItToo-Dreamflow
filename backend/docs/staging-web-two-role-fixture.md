@@ -437,13 +437,27 @@ status, counts, booleans and digests—never email, password or token material.
 There is no auth-request retry; preserve a failure and prepare a new binding only
 after exact readback and review.
 
-### Separate synthetic catalog activation — historical schema-1 consumer
+### Current catalog consumer — exact schema-2 evidence binding
 
-The digest/Ops pins and commands below describe the unchanged historical
-consumer. It rejects schema-2 login evidence and cannot activate the promoted
-runtime using the old proof. Follow the linked schema-2 successor's two-commit
-ordering before preparing a new activation manifest; never replace these pins
-with a placeholder or reinterpret the old proof as current-runtime evidence.
+The separate consumer source package now pins the verified proof at
+`/docker/shareittoo/evidence/web-login-proof-dfea6fa9-20261001T015321Z/evidence.json`,
+SHA-256 `e6dd9fc8e96fcd59fa0145e601ae04d4cc31e14c1c9146055ed69872cab2ae95`,
+Ops `dfea6fa9680da437500f35ae84aa0236979fba8d`. It requires exact schema-2
+fields, current runtime/image, cumulative 4/4/4 and current-marker 2/2/2 counts,
+both exact principals for sessions and their matching refresh/audit relationships,
+zero active sessions/refresh and unchanged prior-history,
+identity and catalog digests. Full bindings and the next gate are in the
+[current successor runbook](../../docs/operations/STAGING_WEB_LOGIN_PROOF_SUCCESSOR_2026-10-01.md#verified-immutable-proof-and-consumer-package).
+After source review and exact-HEAD gates, use that actual evidence SHA in a new
+protected activation preparation. No activation is performed by this package.
+
+### Archived synthetic catalog activation — historical schema-1 consumer
+
+The digest/Ops pins and commands below preserve the historical consumer contract
+only; they are not current executable instructions. That consumer rejected
+schema-2 evidence and could not activate the promoted runtime using the old
+proof. The current consumer above rejects schema 1. Never reinterpret the old
+proof as current-runtime evidence or reuse the archived commands/manifests.
 
 `backend/ops/activate_staging_web_fixture_catalog.mjs` is the final, separate
 one-key Green transition. This source package does not run it. It reuses the

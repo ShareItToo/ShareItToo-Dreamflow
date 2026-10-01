@@ -45,15 +45,30 @@ remain memory-only, Stripe live mode and external Listing AI remain off, and
 the technical Sandbox remains unavailable.
 
 This promotion does **not** activate or prove the synthetic catalog:
-`SIT_STAGING_SYNTHETIC_CATALOG_ENABLED` remains `false`. The immediate next
-sequence is the schema-2 login-proof source gate, then a fresh immutable live
-two-role proof against the exact current runtime, then a separate catalog
-consumer-binding commit pinning that proof's actual SHA-256 and Ops commit.
-Only after that consumer commit passes its gates may a completely fresh,
+`SIT_STAGING_SYNTHETIC_CATALOG_ENABLED` remains `false`. The schema-2 login
+proof has now executed once from exact source
+`dfea6fa9680da437500f35ae84aa0236979fba8d` against this promoted runtime.
+Independent read-only closure verified its root:root `0600` immutable evidence:
+`/docker/shareittoo/evidence/web-login-proof-dfea6fa9-20261001T015321Z/evidence.json`,
+SHA-256 `e6dd9fc8e96fcd59fa0145e601ae04d4cc31e14c1c9146055ed69872cab2ae95`.
+Both roles passed login/me/logout and token rejection; active sessions/refresh
+are zero, cumulative retained sessions/refresh/login audits advanced `2/2/2`
+to `4/4/4`, and prior-history, identity and catalog digests remained unchanged.
+Health/version, runtime fingerprints and provider-off boundaries match; no
+proof controllers or children remain and the public catalog is still empty.
+
+The current bounded package is the separate catalog consumer-binding source
+change, pinning only this actual schema-2 evidence SHA/Ops/runtime/image and
+requiring exact cumulative/current-marker counts plus prior-history equality.
+Refresh and login-audit rows must also bind to their marked session and the same
+principal, with both expected principals present; aggregate counts alone cannot
+pass ownership validation.
+It rejects schema 1 and all missing/extra fields, with no compatibility fallback.
+This package performs no manifest preparation or catalog activation. Only after
+the reviewed consumer commit passes its source and exact-HEAD gates may a fresh,
 exact-runtime catalog manifest and read-only preflight precede the one-key
 activation and independent readback. Historical activation manifests or evidence
-attempts must not be reused, and the existing schema-1 catalog consumer remains
-blocked for the new proof. See the
+attempts must not be reused. See the
 [current post-promotion schema-2 flow](operations/STAGING_WEB_LOGIN_PROOF_SUCCESSOR_2026-10-01.md).
 Authenticated browser acceptance remains
 after the catalog transition. Phase 0 completion still advances automatically
