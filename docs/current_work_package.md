@@ -181,6 +181,14 @@ pass. Exact-head CI remains pending after Sol review. This package adds no AI,
 photo analysis, inventory resolution, public/listing/cart/booking/payment or
 provider behavior and makes no Live, Green, Play or deployment change.
 
+Exact source `a59bf822c5f1bd10eb603a2e99befc240ebb3454` reached Regression
+`36870880870`; only Flutter job `110398019008` failed because the two current
+mutable privacy/retention source inventories still bound the predecessor hash
+for `lib/services/backend_repository.dart`. The verified exact-head SHA-256 is
+`9322ad7dc6b9f04bf884e77b19e421992f0994146768bbb1b5a6b7fe33eba237`.
+The bounded successor refreshes only those two source-binding entries; no
+privacy or retention claim/status and no historical evidence changes.
+
 ## Closed prerequisite: Phase 0 Web/CORS and safe synthetic catalog QA
 
 ### Synthetic catalog browser projection — PHASE 0 LIVE PASS 2026-10-01
