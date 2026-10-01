@@ -1088,6 +1088,12 @@ flutter test --no-pub --test-randomize-ordering-seed=7 \
   --dart-define=SIT_BACKEND_ENABLED=true \
   --dart-define=SIT_API_BASE_URL=http://127.0.0.1:1/api/v1 \
   test/mission_fit_check_gateway_http_test.dart
+# Mission inventory ownership, exact routes and strict server-truth parsing
+# must execute the enabled HTTP branch; default mode skips this proof.
+flutter test --no-pub --test-randomize-ordering-seed=7 \
+  --dart-define=SIT_BACKEND_ENABLED=true \
+  --dart-define=SIT_API_BASE_URL=http://127.0.0.1:1/api/v1 \
+  test/mission_inventory_resolution_gateway_http_test.dart
 # Bound project writes and guest migration must exercise the real HTTP helper
 # with synthetic, zone-local mocks; default disabled mode is not this proof.
 flutter test --reporter expanded --test-randomize-ordering-seed=7 \

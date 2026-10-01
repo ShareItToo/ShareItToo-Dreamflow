@@ -264,7 +264,7 @@ publication was skipped. CodeQL workflow `36885464014` and separate CodeQL
 check `110448911667` also passed. P4-B remains source-only and made no Live,
 Green, Play, provider or payment change.
 
-## P5-A honest Mission inventory resolution — LOCAL SOURCE PASS
+## P5-A honest Mission inventory resolution — EXACT-HEAD PASS
 
 The smallest additive P5 backend slice stores one owner-bound, revisioned
 resolution per Mission. Every revision binds the exact Mission revision and
@@ -298,8 +298,46 @@ deletion proofs, 82 privacy/retention/R9 validator tests, current-consumer
 closure, isolated privacy-export import without app secrets, and the real local
 R9 backup/restore/legacy-upgrade/down-guard proof at all 102 migrations. Backend
 checks and diff checks also pass. This package adds no UI and changes no existing search, listing,
-navigation, booking, payment or provider flow. No Live, Green, Play or runtime
-state changed; Sol review and exact-head CI remain pending.
+navigation, booking, payment or provider flow. Exact successor
+`18052a7a36ffb3fb8065c916e9ed09932ded3138` passed Regression
+`36893714616`, including Backend, PostgreSQL, Flutter and R10; CodeQL workflow
+`36893714592` passed. No Live, Green, Play or runtime state changed.
+
+## P5-B private Mission inventory UI — LOCAL SOURCE PASS
+
+The smallest additive Flutter/Web slice adds one owner-bound inventory entry
+inside the existing selected Mission editor. It has no new global navigation
+and remains behind the Planner technical gate. The private screen shows the
+Mission title/revision, explicit dates, owner-confirmed search radius, required
+and optional quantities, server assignments, visible gaps, bounded-search
+warnings and historical versus current/stale truth. It states that the result
+is non-binding and creates no reservation, booking, contract or payment.
+
+Search location uses the existing Maps proxy and accepts only an explicit
+suggestion selection. Profile location may prefill the search text but never
+counts as confirmation. Exact selected coordinates exist only in screen memory
+until the confirmed write/retry, are never rendered or cached, and the returned
+server truth exposes only owner confirmation, radius and that exact coordinates
+were not stored. Every correction requires a fresh explicit Maps selection.
+Dates require strict `start < end` and at most 365 days; historical dates open
+the picker through a safe current-range clamp.
+
+Server IDs, revisions, Mission/date/location bindings and all effect flags are
+strictly parsed. Stable request bytes retain the same idempotency key after an
+unknown outcome or `409`; inputs and the old correction base remain visible.
+The account generation and initiating principal are checked before and after
+every await. Account switch/logout clears all screen-only coordinates and
+draft truth, discards late results, and removes only the exact nested route even
+when an unrelated route is above it.
+
+Local acceptance passes 4 strict model-contract tests, 3 enabled owner-HTTP
+tests, 3 screen/state tests, 2 nested-route regressions and 2 structural wiring
+tests. The focused Flutter analyzer and shell syntax pass. The enabled HTTP
+proof is mandatory in the standard technical regression runner. Privacy and
+retention source bindings and exact closure checks are part of this package's
+final local gate. Existing search, listing, navigation, booking, payment and
+provider flows are not restructured. No Live, Green, Play, deployment or
+public activation changed; exact-head CI remains pending after Sol review.
 
 ## Closed prerequisite: Phase 0 Web/CORS and safe synthetic catalog QA
 

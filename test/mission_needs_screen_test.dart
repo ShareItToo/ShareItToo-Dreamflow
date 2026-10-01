@@ -348,6 +348,93 @@ void main() {
     expect(find.text('Privater FitCheck Route'), findsNothing);
     expect(find.textContaining('aktuell angemeldete Konto'), findsOneWidget);
   });
+
+  testWidgets('inventory resolution nested route opens single-flight',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(900, 1300));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final gateway = _MissionGateway(
+      accountA: <MissionNeed>[_mission(_idA, 'Inventarmission A')],
+      accountB: const <MissionNeed>[],
+    );
+    var builds = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: MissionNeedsScreen(
+        gateway: gateway,
+        listingMutationService: _SwitchableContextService(),
+        inventoryScreenBuilder: (_) {
+          builds += 1;
+          return const Scaffold(body: Text('Private Inventarauflösung A'));
+        },
+        enableForTesting: true,
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Inventarmission A'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const Key('mission-open-inventory-resolution')),
+    );
+    final open = tester.widget<OutlinedButton>(
+      find.byKey(const Key('mission-open-inventory-resolution')),
+    );
+    open.onPressed!();
+    open.onPressed!();
+    await tester.pumpAndSettle();
+    expect(builds, 1);
+    expect(find.text('Private Inventarauflösung A'), findsOneWidget);
+  });
+
+  testWidgets(
+      'account switch removes only its owned inventory route under a foreign route',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(900, 1300));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final navigatorKey = GlobalKey<NavigatorState>();
+    final service = _SwitchableContextService();
+    final gateway = _MissionGateway(
+      accountA: <MissionNeed>[_mission(_idA, 'Inventarmission A')],
+      accountB: <MissionNeed>[_mission(_idB, 'Inventarmission B')],
+    );
+    await tester.pumpWidget(MaterialApp(
+      navigatorKey: navigatorKey,
+      home: MissionNeedsScreen(
+        gateway: gateway,
+        listingMutationService: service,
+        inventoryScreenBuilder: (_) =>
+            const Scaffold(body: Text('Private Inventarroute')),
+        enableForTesting: true,
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Inventarmission A'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const Key('mission-open-inventory-resolution')),
+    );
+    await tester.tap(
+      find.byKey(const Key('mission-open-inventory-resolution')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Private Inventarroute'), findsOneWidget);
+
+    navigatorKey.currentState!.push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => const Scaffold(body: Text('Fremde Overlay-Route')),
+      ),
+    );
+    await tester.pumpAndSettle();
+    service.activateAccountB();
+    SharedPersistenceSync.notify(
+      SharedPersistenceSync.accountSecurityStateKey,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Fremde Overlay-Route'), findsOneWidget);
+    navigatorKey.currentState!.pop();
+    await tester.pumpAndSettle();
+    expect(find.text('Private Inventarroute'), findsNothing);
+    expect(find.text('Inventarmission B'), findsOneWidget);
+  });
 }
 
 final _userA = buildTestUser(

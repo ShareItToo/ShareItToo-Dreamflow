@@ -9,6 +9,7 @@ import 'package:lendify/config/planner_technical_config.dart';
 import 'package:lendify/models/mission_need.dart';
 import 'package:lendify/models/mission_fit_check.dart';
 import 'package:lendify/screens/mission_fit_check_screen.dart';
+import 'package:lendify/screens/mission_inventory_resolution_screen.dart';
 import 'package:lendify/services/backend_http.dart';
 import 'package:lendify/services/listing_mutation_service.dart';
 import 'package:lendify/services/mission_need_gateway.dart';
@@ -17,9 +18,13 @@ import 'package:lendify/widgets/listing_mutation_interaction.dart';
 
 typedef MissionNeedIdempotencyKeyFactory = String Function();
 typedef MissionFitCheckScreenBuilder = Widget Function(String missionNeedId);
+typedef MissionInventoryScreenBuilder = Widget Function(String missionNeedId);
 
 Widget _defaultMissionFitCheckScreenBuilder(String missionNeedId) =>
     MissionFitCheckScreen(missionNeedId: missionNeedId);
+
+Widget _defaultMissionInventoryScreenBuilder(String missionNeedId) =>
+    MissionInventoryResolutionScreen(missionNeedId: missionNeedId);
 
 @visibleForTesting
 String newMissionNeedIdempotencyKey() {
@@ -34,6 +39,7 @@ class MissionNeedsScreen extends StatefulWidget {
     this.listingMutationService = const ListingMutationService(),
     this.idempotencyKeyFactory = newMissionNeedIdempotencyKey,
     this.fitCheckScreenBuilder = _defaultMissionFitCheckScreenBuilder,
+    this.inventoryScreenBuilder = _defaultMissionInventoryScreenBuilder,
     this.enableForTesting = false,
   });
 
@@ -41,6 +47,7 @@ class MissionNeedsScreen extends StatefulWidget {
   final ListingMutationService listingMutationService;
   final MissionNeedIdempotencyKeyFactory idempotencyKeyFactory;
   final MissionFitCheckScreenBuilder fitCheckScreenBuilder;
+  final MissionInventoryScreenBuilder inventoryScreenBuilder;
 
   @visibleForTesting
   final bool enableForTesting;
@@ -68,6 +75,7 @@ class _MissionNeedsScreenState extends State<MissionNeedsScreen> {
   String? _pendingRequestFingerprint;
   String? _pendingIdempotencyKey;
   bool _fitCheckRouteOpening = false;
+  bool _inventoryRouteOpening = false;
 
   bool get _available =>
       PlannerTechnicalConfig.available ||
@@ -88,6 +96,7 @@ class _MissionNeedsScreenState extends State<MissionNeedsScreen> {
           _loading = true;
           _busy = false;
           _fitCheckRouteOpening = false;
+          _inventoryRouteOpening = false;
           _message = null;
         });
       }
@@ -232,6 +241,7 @@ class _MissionNeedsScreenState extends State<MissionNeedsScreen> {
   Future<void> _openFitCheck() async {
     final selected = _selected;
     if (_fitCheckRouteOpening ||
+        _inventoryRouteOpening ||
         selected == null ||
         !_supportsFitCheck(selected)) {
       return;
@@ -257,6 +267,36 @@ class _MissionNeedsScreenState extends State<MissionNeedsScreen> {
     } finally {
       if (mounted && generation == _accountGeneration) {
         setState(() => _fitCheckRouteOpening = false);
+      }
+    }
+  }
+
+  Future<void> _openInventoryResolution() async {
+    final selected = _selected;
+    if (_inventoryRouteOpening || _fitCheckRouteOpening || selected == null) {
+      return;
+    }
+    final owner = _ownedRoutes.capture();
+    if (owner == null) return;
+    final generation = _accountGeneration;
+    setState(() => _inventoryRouteOpening = true);
+    try {
+      if (!await _ownedRoutes.isCurrent(widget.listingMutationService, owner) ||
+          !mounted ||
+          generation != _accountGeneration) {
+        return;
+      }
+      final route = MaterialPageRoute<void>(
+        builder: (_) => widget.inventoryScreenBuilder(selected.missionNeedId),
+      );
+      await _ownedRoutes.pushOwnedRoute<void>(
+        context: context,
+        owner: owner,
+        route: route,
+      );
+    } finally {
+      if (mounted && generation == _accountGeneration) {
+        setState(() => _inventoryRouteOpening = false);
       }
     }
   }
@@ -572,9 +612,24 @@ class _MissionNeedsScreenState extends State<MissionNeedsScreen> {
           if (selected != null && _supportsFitCheck(selected)) ...<Widget>[
             OutlinedButton.icon(
               key: const Key('mission-open-fit-check'),
-              onPressed: _busy || _fitCheckRouteOpening ? null : _openFitCheck,
+              onPressed:
+                  _busy || _fitCheckRouteOpening || _inventoryRouteOpening
+                      ? null
+                      : _openFitCheck,
               icon: const Icon(Icons.straighten_outlined),
               label: const Text('Privaten Maß-FitCheck öffnen'),
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (selected != null) ...<Widget>[
+            OutlinedButton.icon(
+              key: const Key('mission-open-inventory-resolution'),
+              onPressed:
+                  _busy || _fitCheckRouteOpening || _inventoryRouteOpening
+                      ? null
+                      : _openInventoryResolution,
+              icon: const Icon(Icons.inventory_2_outlined),
+              label: const Text('Private Inventarauflösung öffnen'),
             ),
             const SizedBox(height: 12),
           ],

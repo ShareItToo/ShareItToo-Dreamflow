@@ -681,6 +681,9 @@ discover a mechanically stale source hash.
   single-flight before the first await, principal change removes only that
   captured route even when another route is above it, and the child still
   performs its own generation checks.
+- Account-generation helpers must validate mounted/principal/generation both
+  before and after every awaited current-context check; a pre-await check alone
+  must never authorize a late result after account switch or disposal.
 - Changing a server-bound resource selection must synchronously clear every
   dependent unconfirmed fact, confirmation and request fingerprint before the
   replacement is loaded. Never carry measurements or other derived inputs from
