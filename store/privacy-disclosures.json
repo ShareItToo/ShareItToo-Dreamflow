@@ -80,7 +80,7 @@
     },
     {
       "path": "backend/src/privacy_export.js",
-      "sha256": "fc096e9c202849881dc1c26cda65ec46975787da8d91ce662f4f90878df76573"
+      "sha256": "6c0ee7079ef7c160b12f0675519ffd03974b583dbffc1eb63e939cf94f302669"
     },
     {
       "path": "backend/src/privacy_export_policy.js",

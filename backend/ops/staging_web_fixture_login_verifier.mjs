@@ -121,7 +121,7 @@ function parseBootstrapBytes(manifestBytes, credentialsBytes) {
     'fixture_login_proof_credentials_invalid');
   check(manifest?.kind === 'sit-dedicated-web-fixture-bootstrap' && manifest.schemaVersion === 2
     && manifest.operation === 'seed' && commitPattern.test(manifest.sourceCommit ?? '')
-    && manifest.schemaCount === 101 && digestPattern.test(manifest.ledgerDigest ?? '')
+    && manifest.schemaCount === 102 && digestPattern.test(manifest.ledgerDigest ?? '')
     && credentials.kind === 'sit-private-dedicated-fixture-credentials'
     && credentials.sourceCommit === manifest.sourceCommit && credentials.runId === manifest.preflight?.runId
     && credentials.manifestSha256 === hash(manifestBytes)
@@ -714,7 +714,7 @@ function validateResult(result, binding, execute) {
       && result.quiescenceReadbacks >= 3 && result.quiescenceReadbacks <= 4
       : result.quiescenceReadbacks === 0)
     && result.retainedSessionRecords === (execute ? 2 : 0) && result.loginAudits === (execute ? 2 : 0)
-    && result.activeRefreshTokens === 0 && result.schemaCount === 101
+    && result.activeRefreshTokens === 0 && result.schemaCount === 102
     && digestPattern.test(result.ledgerDigest ?? '') && digestPattern.test(result.identityDigest ?? '')
     && digestPattern.test(result.catalogStateDigest ?? '')
     && result.identityUnchanged === true && result.visibilityUnchanged === true

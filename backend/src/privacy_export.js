@@ -441,7 +441,7 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
         WHERE owner_id = $1
         ORDER BY fit_check_id, result_revision, idempotency_key`, userId),
     rows(client,
-      `SELECT id AS "resolutionId", mission_need_id AS "missionNeedId",
+      `SELECT id AS "missionInventoryId", mission_need_id AS "missionNeedId",
               domain_version AS "domainVersion", planner_core_version AS "plannerCoreVersion",
               planner_inventory_version AS "plannerInventoryVersion",
               current_revision AS "currentRevision",
@@ -450,7 +450,7 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
         WHERE owner_id = $1
         ORDER BY updated_at, id`, userId),
     rows(client,
-      `SELECT revision.resolution_id AS "resolutionId", revision.revision,
+      `SELECT revision.resolution_id AS "missionInventoryId", revision.revision,
               revision.mission_need_id AS "missionNeedId",
               revision.mission_need_revision AS "missionRevision",
               revision.mission_payload_sha256 AS "missionPayloadDigest",
@@ -458,7 +458,7 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
               revision.end_date::text AS "endDate",
               revision.location_snapshot AS "locationSnapshot",
               revision.location_snapshot_sha256 AS "locationSnapshotDigest",
-              revision.resolution_snapshot AS "resolutionSnapshot",
+              revision.resolution_snapshot AS "inventorySnapshot",
               revision.created_at AS "createdAt"
          FROM mission_inventory_resolution_revisions AS revision
          JOIN mission_inventory_resolutions AS resolution
@@ -466,8 +466,8 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
         WHERE resolution.owner_id = $1
         ORDER BY revision.resolution_id, revision.revision`, userId),
     rows(client,
-      `SELECT assignment.resolution_id AS "resolutionId",
-              assignment.resolution_revision AS "resolutionRevision",
+      `SELECT assignment.resolution_id AS "missionInventoryId",
+              assignment.resolution_revision AS "inventoryRevision",
               assignment.slot_key AS "slotKey", assignment.need_key AS "needKey",
               assignment.necessity, assignment.slot_ordinal AS "slotOrdinal",
               assignment.listing_id AS "listingId",
@@ -482,7 +482,7 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
     rows(client,
       `SELECT idempotency_key AS "idempotencyKey",
               command_type AS "commandType", request_sha256 AS "requestDigest",
-              resolution_id AS "resolutionId", result_revision AS "resultRevision",
+              resolution_id AS "missionInventoryId", result_revision AS "resultRevision",
               created_at AS "createdAt"
          FROM mission_inventory_resolution_commands
         WHERE owner_id = $1
@@ -1329,7 +1329,7 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
   const missionInventoryResolutionRevisionsExport = missionInventoryResolutionRevisions
     .map((entry) => ({
       ...entry,
-      resolutionSnapshot: sanitizeMissionInventoryResolutionSnapshot(entry.resolutionSnapshot),
+      inventorySnapshot: sanitizeMissionInventoryResolutionSnapshot(entry.inventorySnapshot),
     }));
   const missionInventoryResolutionAssignmentsExport = missionInventoryResolutionAssignments
     .map((entry) => ({
@@ -1394,8 +1394,8 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
         externalGenerativeAiUsed: false,
         automaticPhotoAnalysisUsed: false,
       },
-      missionInventoryResolutions: {
-        resolutions: missionInventoryResolutions,
+      missionInventory: {
+        roots: missionInventoryResolutions,
         revisions: missionInventoryResolutionRevisionsExport,
         assignments: missionInventoryResolutionAssignmentsExport,
         commands: missionInventoryResolutionCommands,

@@ -117,6 +117,10 @@ discover a mechanically stale source hash.
 - Privacy/export modules must remain importable without application secrets.
   Put shared redaction or shaping helpers in a pure config-free module; never
   make export generation depend on a workflow module that loads runtime config.
+- Every new account-export namespace or field must be exercised with a
+  non-empty fixture against the repository-wide forbidden-field/privacy
+  contract. An empty exported section is not compatibility evidence, and the
+  shared privacy assertion must never be weakened to admit a new package.
 - A digest shown beside a redacted or sanitized payload must bind those exact
   visible bytes. Recompute it, label it explicitly as an internal-snapshot
   digest, or omit it; never imply that a hidden-field digest verifies the

@@ -40,7 +40,7 @@ export function validateAdapterInputs({ manifest, manifestHash, source, environm
   check(sha(Buffer.from(JSON.stringify(manifest))) === manifestHash, 'fixture_adapter_manifest_binding');
   check(manifest.sourceCommit === source.commit && /^[a-f0-9]{40}$/u.test(source.commit)
     && fixtureDigest(manifest.sourceHashes) === fixtureDigest(source.hashes)
-    && source.schemaCount === 101 && manifest.schemaCount === 101
+    && source.schemaCount === 102 && manifest.schemaCount === 102
     && manifest.ledgerDigest === source.ledgerDigest, 'fixture_adapter_source_drift');
   validateFixtureManifest(manifest.preflight, now, rehearsal);
   validateFixtureEnvironment(manifest.preflight, environment, rehearsal);

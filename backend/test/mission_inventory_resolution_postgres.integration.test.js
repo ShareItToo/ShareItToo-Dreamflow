@@ -187,7 +187,7 @@ if (!databaseUrl) {
       const create = await fetch(
         `${baseUrl}/v1/mission-needs/${mission.missionNeedId}/inventory-resolutions`,
         {
-          method: 'POST', headers: json(tokens[0], 'p5-resolution-create-0001'),
+          method: 'POST', headers: json(tokens[0], 'p5-inventory-create-0001'),
           body: JSON.stringify(request),
         },
       );
@@ -222,7 +222,7 @@ if (!databaseUrl) {
       const replay = await fetch(
         `${baseUrl}/v1/mission-needs/${mission.missionNeedId}/inventory-resolutions`,
         {
-          method: 'POST', headers: json(tokens[0], 'p5-resolution-create-0001'),
+          method: 'POST', headers: json(tokens[0], 'p5-inventory-create-0001'),
           body: JSON.stringify(request),
         },
       );
@@ -231,7 +231,7 @@ if (!databaseUrl) {
       const collision = await fetch(
         `${baseUrl}/v1/mission-needs/${mission.missionNeedId}/inventory-resolutions`,
         {
-          method: 'POST', headers: json(tokens[0], 'p5-resolution-create-0001'),
+          method: 'POST', headers: json(tokens[0], 'p5-inventory-create-0001'),
           body: JSON.stringify({
             ...request, location: { ...request.location, radiusKm: 26 },
           }),
@@ -413,18 +413,33 @@ if (!databaseUrl) {
       );
 
       const exported = await buildAccountExport(setupPool, renterId);
-      const exportedP5 = exported.data.marketplace.missionInventoryResolutions;
-      assert.equal(exportedP5.resolutions.length, 1);
+      const exportedP5 = exported.data.marketplace.missionInventory;
+      assert.equal(exportedP5.roots.length, 1);
       assert.equal(exportedP5.revisions.length, 2);
       assert.equal(exportedP5.assignments.length, 6);
       assert.equal(exportedP5.commands.length, 2);
+      assert.match(exportedP5.roots[0].missionInventoryId, /^ref_\d{6}$/u);
+      assert.equal(
+        exportedP5.revisions[0].missionInventoryId,
+        exportedP5.roots[0].missionInventoryId,
+      );
+      assert.ok(exportedP5.revisions[0].inventorySnapshot);
+      assert.equal(
+        exportedP5.assignments[0].missionInventoryId,
+        exportedP5.roots[0].missionInventoryId,
+      );
+      assert.equal(
+        exportedP5.commands[0].missionInventoryId,
+        exportedP5.roots[0].missionInventoryId,
+      );
       assert.equal(exportedP5.exactSearchCoordinatesStored, false);
       assert.equal(JSON.stringify(exportedP5).includes('latitudeE5'), false);
       assert.equal(JSON.stringify(exportedP5).includes('handoverLocationKey'), false);
       assert.equal(
-        exportedP5.revisions.some((revision) => Object.hasOwn(revision, 'resolutionSnapshotDigest')),
+        exportedP5.revisions.some((revision) => Object.hasOwn(revision, 'inventorySnapshotDigest')),
         false,
       );
+      assert.equal(JSON.stringify(exportedP5).includes('resolution'), false);
       assert.deepEqual(await effects(), effectsBefore);
       assert.deepEqual(await legacySnapshot(), legacyBefore);
       const publicCatalog = await fetch(`${baseUrl}/v1/listings?sort=newest&limit=100&offset=0`);
