@@ -42,9 +42,9 @@ if (!databaseUrl) {
       const ownerId = 'mission-need-owner';
       const otherId = 'mission-need-other';
       const deletionId = 'mission-need-delete';
-      const ownerSession = '11111111-1111-4111-8111-111111111111';
-      const otherSession = '22222222-2222-4222-8222-222222222222';
-      const deletionSession = '33333333-3333-4333-8333-333333333333';
+      const ownerSession = crypto.randomUUID();
+      const otherSession = crypto.randomUUID();
+      const deletionSession = crypto.randomUUID();
       await setupPool.query(
         `INSERT INTO users (id, email, profile, role, account_status, email_verified_at)
          VALUES

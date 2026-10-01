@@ -87,6 +87,9 @@ discover a mechanically stale source hash.
   only when that exact published image contains the new migration. A source-only
   product package leaves the accepted live runner unchanged; create its schema
   successor only after exact-HEAD CI and independent image/manifest binding.
+- New integration tests sharing the local PostgreSQL suite must not use generic
+  fixed primary keys. Use run-unique IDs or package-namespaced fixtures whose
+  non-collision is proved before insertion.
 - Safety-mode build flags must fail startup whenever their requested
   configuration is invalid; they must never silently downgrade to normal
   behavior. A package report may claim an allowed or rejected configuration
