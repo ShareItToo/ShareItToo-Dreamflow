@@ -74,3 +74,34 @@ test('rejects a direct screen listing write or stale protected source', () => {
     /source inventory hash is stale/u,
   );
 });
+
+test('keeps historical call sites immutable while checking current inventory', () => {
+  const rewritten = evidence();
+  const controller = rewritten.callSiteInventory.find(
+    ({ symbol }) => symbol === 'ListingMutationInteractionController',
+  );
+  controller.paths['lib/screens/mission_needs_screen.dart'] = 1;
+  assert.throws(
+    () => validateRw20ListingMutationPrincipalEpochTransaction({
+      repositoryRoot,
+      evidence: rewritten,
+    }),
+    /call-site inventory declaration is invalid/u,
+  );
+
+  const missionPath = 'lib/screens/mission_needs_screen.dart';
+  const mission = readFileSync(new URL(missionPath, root), 'utf8');
+  assert.throws(
+    () => validateRw20ListingMutationPrincipalEpochTransaction({
+      repositoryRoot,
+      evidence: evidence(),
+      sourceTexts: {
+        [missionPath]: mission.replace(
+          'ListingMutationInteractionController();',
+          'Object();',
+        ),
+      },
+    }),
+    /call-site inventory drifted for ListingMutationInteractionController/u,
+  );
+});

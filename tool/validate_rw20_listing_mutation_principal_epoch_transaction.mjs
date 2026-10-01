@@ -210,7 +210,7 @@ export function validateRw20ListingMutationPrincipalEpochTransaction({
     expectedActions.map(([id, file]) => [id, file, 'guarded-rw20']),
   )) fail('RW20 listing-action inventory is invalid.');
 
-  const expectedCallSites = [
+  const historicalExpectedCallSites = [
     ['DataService.addItem', {}],
     ['DataService.addItemForOwner', {
       'lib/services/listing_mutation_service.dart': 1,
@@ -245,16 +245,26 @@ export function validateRw20ListingMutationPrincipalEpochTransaction({
     ['ListingMutationInteractionController', {
       'lib/screens/create_listing_screen.dart': 1,
       'lib/screens/explore_screen.dart': 1,
-      'lib/screens/mission_needs_screen.dart': 1,
       'lib/screens/my_listings_screen.dart': 1,
       'lib/screens/own_profile_screen.dart': 2,
     }],
   ];
   if (!exact(
     value.callSiteInventory?.map(({ symbol, paths }) => [symbol, paths]),
-    expectedCallSites,
+    historicalExpectedCallSites,
   )) fail('RW20 call-site inventory declaration is invalid.');
-  for (const [symbol, paths] of expectedCallSites) {
+  const currentExpectedCallSites = historicalExpectedCallSites.map(
+    ([symbol, paths]) => symbol === 'ListingMutationInteractionController'
+      ? [symbol, {
+        'lib/screens/create_listing_screen.dart': 1,
+        'lib/screens/explore_screen.dart': 1,
+        'lib/screens/mission_needs_screen.dart': 1,
+        'lib/screens/my_listings_screen.dart': 1,
+        'lib/screens/own_profile_screen.dart': 2,
+      }]
+      : [symbol, paths],
+  );
+  for (const [symbol, paths] of currentExpectedCallSites) {
     if (!exact(countCallSites({ repositoryRoot, sourceTexts, symbol }), paths)) {
       fail(`RW20 call-site inventory drifted for ${symbol}.`);
     }

@@ -40,6 +40,9 @@ discover a mechanically stale source hash.
   validator schemas. Verify its recorded exact validator/source digests or run
   the validator from that captured snapshot; never rewrite historical evidence
   to satisfy the current schema.
+- Later call-site drift must never be healed by rewriting historical evidence.
+  Validate the immutable historical declaration and the current repository
+  inventory as separate contracts, with focused tests for both.
 - Evidence-gated successors use two commits when the next proof digest is not
   knowable before execution: first review and gate the proof runner, then run
   it against the exact current runtime, and only afterward bind its immutable
