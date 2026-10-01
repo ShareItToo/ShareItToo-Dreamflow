@@ -17,6 +17,49 @@ This objective record grants no new live, provider, payment, Production or Play 
 
 ## Active prerequisite: Phase 0 Web/CORS and safe synthetic catalog QA
 
+### Green runtime promotion — LIVE PASS 2026-10-01
+
+The Phase 0 Green API prerequisite is now live on runtime commit
+`34194c42e5e477144b5db5a8eeb6c2d476c7aeef`, using the exact image
+`ghcr.io/shareittoo/shareittoo-api:34194c42e5e477144b5db5a8eeb6c2d476c7aeef@sha256:0403a5f60b94a8aa91d7cbf29ae503aea989d85aeb72fcf4cf6dc14a801670b9`
+and reviewed Ops commit `77b0462f4c915d083d0cf3b20360fe0b4aefcc00`.
+Exact-HEAD regression run `36798290870` and CodeQL run `36798290858`
+passed before the separately preflighted promotion executed once. The prior
+`1ebc6eaf695e0cd9365680cdecd711b3edbb5586` API is sealed and stopped; the
+successor is running with zero host ports on the exact Green and provider
+networks and the approved three-mount inventory.
+
+The protected execution evidence is
+`/docker/shareittoo/evidence/green-promotion-1ebc6eaf-ops-77b0462f-to-34194c42-attempt-01.json`,
+SHA-256
+`0fb70e82d9d50e3c548212c3f2221820b9d8941c4b87ef70689db2f22b51789c`.
+Its fresh backup SHA-256 is
+`d76f2156f97930f84f10080383cd10123bc0bfb82314aee60e796242e0184172`;
+both artifacts are owner-only `0600`, the transient isolated environment is
+absent and cleanup is verified. Live readback preserves schema `98`, migration
+ledger digest
+`796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196`
+and the one enrolled Google identity. Public live, ready and version endpoints
+all report the exact successor. Payment, mail, push and identity transports
+remain memory-only, Stripe live mode and external Listing AI remain off, and
+the technical Sandbox remains unavailable.
+
+This promotion does **not** activate or prove the synthetic catalog:
+`SIT_STAGING_SYNTHETIC_CATALOG_ENABLED` remains `false`. The immediate next
+sequence is the schema-2 login-proof source gate, then a fresh immutable live
+two-role proof against the exact current runtime, then a separate catalog
+consumer-binding commit pinning that proof's actual SHA-256 and Ops commit.
+Only after that consumer commit passes its gates may a completely fresh,
+exact-runtime catalog manifest and read-only preflight precede the one-key
+activation and independent readback. Historical activation manifests or evidence
+attempts must not be reused, and the existing schema-1 catalog consumer remains
+blocked for the new proof. See the
+[current post-promotion schema-2 flow](operations/STAGING_WEB_LOGIN_PROOF_SUCCESSOR_2026-10-01.md).
+Authenticated browser acceptance remains
+after the catalog transition. Phase 0 completion still advances automatically
+to **P2 — dauerhafter unverbindlicher Missionsbedarf** and does not complete
+the SIT Mission / Blue Ocean objective.
+
 The dedicated two-role synthetic catalog scope is now seeded and bound to the
 canonical Green Staging environment. Its guarded database preparation and
 independent readback passed while the synthetic catalog flag remained `false`:

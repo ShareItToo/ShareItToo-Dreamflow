@@ -35,6 +35,13 @@ discover a mechanically stale source hash.
   validator schemas. Verify its recorded exact validator/source digests or run
   the validator from that captured snapshot; never rewrite historical evidence
   to satisfy the current schema.
+- Evidence-gated successors use two commits when the next proof digest is not
+  knowable before execution: first review and gate the proof runner, then run
+  it against the exact current runtime, and only afterward bind its immutable
+  digest and Ops commit in the consumer. Never substitute a historical runtime
+  proof, alter bootstrap provenance, invent a future hash, or relax exact
+  bindings. Repeat proofs keep per-run counts separate from cumulative retained
+  history and verify that prior rows remain unchanged.
 
 ## Sol, Luna and Gemini review loop
 

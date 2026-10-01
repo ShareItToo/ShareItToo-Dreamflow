@@ -19,6 +19,7 @@ import {
   validateFixtureLoginProofBinding,
   validateFixtureLoginProofConfirmation,
   validateFixtureLoginProofEnvironment,
+  validateFixtureLoginProofHistory,
   verifyFixtureLoginProofPassword,
 } from '../ops/staging_web_fixture_login_verifier.mjs';
 
@@ -44,7 +45,7 @@ async function encodedSecret(secret) {
   return `scrypt$${salt.toString('hex')}$${Buffer.from(derived).toString('hex')}`;
 }
 
-function privateInput() {
+function privateInput(bootstrapRuntimeCommit = runtimeCommit) {
   const secrets = [crypto.randomBytes(36).toString('base64url'), crypto.randomBytes(36).toString('base64url')]
     .map((value) => `Sit9-${value}`);
   const roles = [ownerId, renterId].map((userId, index) => ({
@@ -54,7 +55,7 @@ function privateInput() {
     kind: 'sit-dedicated-web-fixture-bootstrap', schemaVersion: 1, operation: 'seed',
     sourceCommit: 'e'.repeat(40), sourceHashes: { bootstrap: 'f'.repeat(64) },
     schemaCount: 98, ledgerDigest, passwordDigests: secrets.map(sha),
-    preflight: { runId, runtimeCommit, roles, listingId, uploadName,
+    preflight: { runId, runtimeCommit: bootstrapRuntimeCommit, roles, listingId, uploadName,
       database: { host: dbName, name: 'shareittoo_green', user: 'shareittoo_green' } },
   };
   const manifestBytes = Buffer.from(`${JSON.stringify(manifest)}\n`);
@@ -90,6 +91,7 @@ function environment() {
 
 function baseState(overrides = {}) {
   return { users: 2, seedAudits: 1, mfaFactors: 0, activeSessions: 0, activeRefreshTokens: 0,
+    totalSessions: 0, totalRefreshTokens: 0, totalLoginAudits: 0, historyDigest: '6'.repeat(64),
     markerSessions: 0, markerActiveSessions: 0, markerRefreshTokens: 0,
     markerActiveRefreshTokens: 0, markerLoginAudits: 0, identityDigest: '9'.repeat(64),
     catalogDigest: '7'.repeat(64),
@@ -100,6 +102,7 @@ function baseState(overrides = {}) {
 
 function fakeProof(input, { fault, responseRole = 'user', foreignMarker = false,
   cleanupFault = false, healthFault = false, credentialFault = false,
+  priorCount = 0, historyDrift = false,
   lateSessionAfterFirstReconcile = false, unstableCleanupReadback = false } = {}) {
   const sessions = [];
   const calls = [];
@@ -109,6 +112,10 @@ function fakeProof(input, { fault, responseRole = 'user', foreignMarker = false,
     calls.push(`snapshot:${readOnly ? 'read-only' : 'readback'}`);
     const owned = own();
     return baseState({ activeSessions: owned.filter((entry) => entry.active).length,
+      totalSessions: priorCount + sessions.length,
+      totalRefreshTokens: priorCount + sessions.length + (unstableCleanupReadback ? reconciles : 0),
+      totalLoginAudits: priorCount + sessions.length,
+      historyDigest: (historyDrift && reconciles ? '5' : '6').repeat(64),
       activeRefreshTokens: owned.filter((entry) => entry.refreshActive).length,
       markerSessions: sessions.length, markerActiveSessions: sessions.filter((entry) => entry.active).length,
       markerRefreshTokens: sessions.length + (unstableCleanupReadback ? reconciles : 0),
@@ -219,20 +226,20 @@ test('protected bootstrap reader requires exact runner-owned file contract witho
 
 test('environment gate binds registration, catalog, payment and every external provider off boundary', () => {
   const input = privateInput(); const expected = environment();
-  assert.deepEqual(validateFixtureLoginProofEnvironment(expected, input.manifest), expected);
+  assert.deepEqual(validateFixtureLoginProofEnvironment(expected, input.manifest, runtimeCommit), expected);
   for (const [key, value] of Object.entries({ SIT_STAGING_SYNTHETIC_CATALOG_ENABLED: 'true',
     SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'true', PAYMENT_TRANSPORT: 'stripe', STRIPE_LIVEMODE: 'true',
     PUSH_TRANSPORT: 'fcm', IDENTITY_VERIFICATION_TRANSPORT: 'stripe', SIT_LISTING_AI_PROVIDER: 'openai',
     SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '1', TECHNICAL_SANDBOX_ENABLED: '1',
     TECHNICAL_SANDBOX_KILL_SWITCH: '0' })) {
-    assert.throws(() => validateFixtureLoginProofEnvironment({ ...expected, [key]: value }, input.manifest),
+    assert.throws(() => validateFixtureLoginProofEnvironment({ ...expected, [key]: value }, input.manifest, runtimeCommit),
       /effect_boundary_invalid/u, key);
   }
 });
 
 test('default proof preflight uses DB read-only plus health/version and makes no auth or compensation call', async () => {
   const input = privateInput(); const fake = fakeProof(input);
-  const result = await runFixtureLoginProof({ input, environment: environment(), ...fake, marker });
+  const result = await runFixtureLoginProof({ input, environment: environment(), runtimeCommit, ...fake, marker });
   assert.equal(result.status, 'fixture-login-proof-preflight-passed-no-mutation');
   assert.deepEqual(fake.calls, ['attest:read-only', 'credentials:read-only', 'snapshot:read-only', 'GET:/health/live:token',
     'GET:/health/ready:token', 'GET:/version:token']);
@@ -243,7 +250,7 @@ test('default proof preflight uses DB read-only plus health/version and makes no
 test('credential drift blocks default and execute before every HTTP request without DB mutation', async () => {
   for (const execute of [false, true]) {
     const input = privateInput(); const fake = fakeProof(input, { credentialFault: true });
-    await assert.rejects(runFixtureLoginProof({ input, environment: environment(), ...fake,
+    await assert.rejects(runFixtureLoginProof({ input, environment: environment(), runtimeCommit, ...fake,
       execute, marker }), /credential_attestation_failed/u);
     assert.deepEqual(fake.calls, ['attest:read-only', 'credentials:read-only']);
     assert.deepEqual(fake.sessions, []);
@@ -265,7 +272,7 @@ test('execute requires both exact current source and private bootstrap run confi
 
 test('unready canonical API blocks before authentication', async () => {
   const input = privateInput(); const fake = fakeProof(input, { healthFault: true });
-  await assert.rejects(runFixtureLoginProof({ input, environment: environment(), ...fake,
+  await assert.rejects(runFixtureLoginProof({ input, environment: environment(), runtimeCommit, ...fake,
     marker }), /api_readback_failed/u);
   assert.ok(!fake.calls.some((call) => call.includes('/v1/auth/')));
   assert.ok(!fake.calls.includes('reconcile'));
@@ -273,7 +280,7 @@ test('unready canonical API blocks before authentication', async () => {
 
 test('execute verifies owner then renter through login, me, logout and rejects both access tokens', async () => {
   const input = privateInput(); const fake = fakeProof(input);
-  const result = await runFixtureLoginProof({ input, environment: environment(), ...fake, execute: true, marker });
+  const result = await runFixtureLoginProof({ input, environment: environment(), runtimeCommit, ...fake, execute: true, marker });
   assert.equal(result.status, 'fixture-login-proof-verified-sessions-revoked');
   assert.deepEqual([result.loginsVerified, result.meVerified, result.logoutsVerified,
     result.accessTokensRejected, result.activeSessions, result.activeRefreshTokens], [2, 2, 2, 2, 0, 0]);
@@ -285,6 +292,51 @@ test('execute verifies owner then renter through login, me, logout and rejects b
   for (const secret of input.secrets) assert.ok(!serialized.includes(secret));
   for (const account of input.credentials.accounts) assert.ok(!serialized.includes(account.email));
   assert.doesNotMatch(serialized, /access-|refresh-/u);
+});
+
+test('fresh marker preserves prior proof history and records exact cumulative counts', async () => {
+  for (const priorCount of [2, 4]) {
+    for (const execute of [false, true]) {
+      const input = privateInput('e'.repeat(40)); const fake = fakeProof(input, { priorCount });
+      const result = await runFixtureLoginProof({ input, environment: environment(), runtimeCommit,
+        ...fake, execute, marker });
+      const count = priorCount + (execute ? 2 : 0);
+      assert.deepEqual(result.authHistory.before, { sessions: priorCount, refreshTokens: priorCount, loginAudits: priorCount });
+      assert.deepEqual(result.authHistory.after, { sessions: count, refreshTokens: count, loginAudits: count });
+      assert.equal(result.retainedSessionRecords, execute ? 2 : 0);
+      assert.equal(result.loginAudits, execute ? 2 : 0);
+      validateFixtureLoginProofHistory(result.authHistory, execute);
+      assert.equal(result.activeSessions, 0); assert.equal(result.activeRefreshTokens, 0);
+      assert.equal(result.accessTokensRejected, execute ? 2 : 0);
+    }
+  }
+});
+
+test('prior retained history drift fails after owned cleanup without suppressing history', async () => {
+  const input = privateInput(); const fake = fakeProof(input, { priorCount: 2, historyDrift: true });
+  await assert.rejects(runFixtureLoginProof({ input, environment: environment(), runtimeCommit,
+    ...fake, execute: true, marker }), /post_readback_invalid/u);
+  assert.ok(fake.sessions.every((entry) => !entry.active && !entry.refreshActive));
+});
+
+test('missing or old runtime binding fails before DB or HTTP despite valid bootstrap', async () => {
+  for (const expectedCommit of [undefined, 'e'.repeat(40)]) {
+    const input = privateInput(); const fake = fakeProof(input);
+    await assert.rejects(runFixtureLoginProof({ input, environment: environment(), runtimeCommit: expectedCommit,
+      ...fake, execute: true, marker }), /effect_boundary_invalid/u);
+    assert.deepEqual(fake.calls, []);
+  }
+});
+
+test('cumulative proof contract rejects deletion, unexpected growth, malformed counts and changed prior rows', () => {
+  const valid = { before: { sessions: 2, refreshTokens: 2, loginAudits: 2 },
+    after: { sessions: 4, refreshTokens: 4, loginAudits: 4 },
+    beforeDigest: '6'.repeat(64), afterDigest: '6'.repeat(64) };
+  for (const after of [{ sessions: 2 }, { refreshTokens: 5 }, { loginAudits: '4' }]) {
+    assert.throws(() => validateFixtureLoginProofHistory({ ...valid, after: { ...valid.after, ...after } }, true),
+      /history_invalid/u);
+  }
+  assert.throws(() => validateFixtureLoginProofHistory({ ...valid, afterDigest: '5'.repeat(64) }, true), /history_invalid/u);
 });
 
 for (const [fault, code] of [
@@ -299,7 +351,7 @@ for (const [fault, code] of [
   ['logout-lost:renter', 'logout-response-lost'],
 ]) test(`fault ${fault} compensates every exact owned session without retry`, async () => {
   const input = privateInput(); const fake = fakeProof(input, { fault });
-  await assert.rejects(runFixtureLoginProof({ input, environment: environment(), ...fake,
+  await assert.rejects(runFixtureLoginProof({ input, environment: environment(), runtimeCommit, ...fake,
     execute: true, marker }), new RegExp(code, 'u'));
   assert.ok(fake.sessions.every((entry) => !entry.active && !entry.refreshActive));
   assert.equal(fake.calls.filter((call) => call === 'reconcile').length, 3);
@@ -310,7 +362,7 @@ test('lost login response with a session committed after first reconcile is revo
   const input = privateInput(); const fake = fakeProof(input, {
     fault: 'login-before:owner', lateSessionAfterFirstReconcile: true,
   });
-  await assert.rejects(runFixtureLoginProof({ input, environment: environment(), ...fake,
+  await assert.rejects(runFixtureLoginProof({ input, environment: environment(), runtimeCommit, ...fake,
     execute: true, marker }), /login-before-response/u);
   assert.equal(fake.calls.filter((call) => call === 'POST:/v1/auth/login:owner').length, 1);
   assert.equal(fake.calls.filter((call) => call === 'reconcile').length, 4);
@@ -321,7 +373,7 @@ test('lost login response with a session committed after first reconcile is revo
 
 test('unstable cleanup readback never becomes success and requires manual readback', async () => {
   const input = privateInput(); const fake = fakeProof(input, { unstableCleanupReadback: true });
-  await assert.rejects(runFixtureLoginProof({ input, environment: environment(), ...fake,
+  await assert.rejects(runFixtureLoginProof({ input, environment: environment(), runtimeCommit, ...fake,
     execute: true, marker }), /cleanup_quiescence_unproven_manual_readback_required/u);
   assert.equal(fake.calls.filter((call) => call === 'reconcile').length, 4);
   assert.ok(fake.sessions.every((entry) => !entry.active && !entry.refreshActive));
@@ -330,7 +382,7 @@ test('unstable cleanup readback never becomes success and requires manual readba
 test('wrong API role and unexpected MFA fail closed and reconcile', async () => {
   for (const options of [{ responseRole: 'admin' }, { fault: 'mfa:owner' }]) {
     const input = privateInput(); const fake = fakeProof(input, options);
-    await assert.rejects(runFixtureLoginProof({ input, environment: environment(), ...fake,
+    await assert.rejects(runFixtureLoginProof({ input, environment: environment(), runtimeCommit, ...fake,
       execute: true, marker }), /login_response_invalid|mfa_unexpected/u);
     assert.ok(fake.sessions.every((entry) => !entry.active && !entry.refreshActive));
   }
@@ -339,13 +391,13 @@ test('wrong API role and unexpected MFA fail closed and reconcile', async () => 
 test('cleanup fault overrides success and foreign marker is never silently accepted', async () => {
   {
     const input = privateInput(); const fake = fakeProof(input, { cleanupFault: true });
-    await assert.rejects(runFixtureLoginProof({ input, environment: environment(), ...fake,
+    await assert.rejects(runFixtureLoginProof({ input, environment: environment(), runtimeCommit, ...fake,
       execute: true, marker }), /cleanup_failed/u);
     assert.ok(fake.sessions.every((entry) => !entry.active && !entry.refreshActive));
   }
   {
     const input = privateInput(); const fake = fakeProof(input, { foreignMarker: true });
-    await assert.rejects(runFixtureLoginProof({ input, environment: environment(), ...fake,
+    await assert.rejects(runFixtureLoginProof({ input, environment: environment(), runtimeCommit, ...fake,
       execute: true, marker }), /cleanup_failed/u);
     assert.ok(fake.sessions.filter((entry) => [ownerId, renterId].includes(entry.userId))
       .every((entry) => !entry.active && !entry.refreshActive));
@@ -437,7 +489,7 @@ function sourceAndBinding(input) {
     'backend/ops/stable_private_file.mjs': '1'.repeat(64),
     'backend/ops/staging_web_fixture_login_verifier.mjs': '2'.repeat(64),
   } };
-  const binding = { kind: fixtureLoginProofKind, schemaVersion: 1, createdAt: new Date().toISOString(),
+  const binding = { kind: fixtureLoginProofKind, schemaVersion: 2, createdAt: new Date().toISOString(),
     opsCommit: source.commit, sourceHashes: source.hashes, runtimeCommit,
     imageDigest: `sha256:${'3'.repeat(64)}`, apiId: '4'.repeat(64), apiFingerprint: '5'.repeat(64),
     databaseId: '6'.repeat(64), databaseFingerprint: '7'.repeat(64), networkId: '8'.repeat(64),
@@ -453,6 +505,8 @@ test('binding and immutable child launch contain only digests/paths and exact ha
   validateFixtureLoginProofBinding(binding, source);
   const launch = buildFixtureLoginProofLaunch({ binding, source, execute: true,
     name: `sit-web-login-proof-${'a'.repeat(24)}`, nonce: 'a'.repeat(24) });
+  assert.equal(JSON.parse(/const input=(.*);/u.exec(launch.child)[1]).runtimeCommit, binding.runtimeCommit);
+  assert.match(launch.child, /runFixtureLoginProof\(\{input:protectedInput,environment:process.env,runtimeCommit:input.runtimeCommit,/u);
   assert.equal(launch.args[launch.args.indexOf('--network') + 1], binding.networkId);
   for (const expected of ['--pull=never', '--read-only', '--cap-drop', 'ALL', 'no-new-privileges']) {
     assert.ok(launch.args.includes(expected));
@@ -485,6 +539,7 @@ test('binding and immutable child launch contain only digests/paths and exact ha
 
 test('binding rejects stale preparation, source drift and paths outside protected evidence', () => {
   const input = privateInput(); const { source, binding } = sourceAndBinding(input);
+  assert.throws(() => validateFixtureLoginProofBinding({ ...binding, schemaVersion: 1 }, source), /binding_invalid/u);
   assert.throws(() => validateFixtureLoginProofBinding({ ...binding,
     createdAt: new Date(Date.now() - 3_600_001).toISOString() }, source), /binding_invalid/u);
   assert.throws(() => validateFixtureLoginProofBinding(binding, { ...source, commit: 'f'.repeat(40) }), /source_drift/u);
@@ -520,6 +575,9 @@ function hostFixture(input) {
   accessTokensRejected: execute ? 2 : 0, activeSessions: 0, activeRefreshTokens: 0,
   credentialsAttested: 2, quiescenceReadbacks: execute ? 3 : 0,
   retainedSessionRecords: execute ? 2 : 0, loginAudits: execute ? 2 : 0, schemaCount: 98,
+  authHistory: { before: { sessions: 2, refreshTokens: 2, loginAudits: 2 },
+    after: { sessions: execute ? 4 : 2, refreshTokens: execute ? 4 : 2, loginAudits: execute ? 4 : 2 },
+    beforeDigest: '6'.repeat(64), afterDigest: '6'.repeat(64) },
   ledgerDigest, identityDigest: '9'.repeat(64), identityUnchanged: true, effectDigest: '8'.repeat(64),
   catalogStateDigest: '7'.repeat(64), visibilityUnchanged: true,
   apiReadback: true,
@@ -569,7 +627,7 @@ function hostFixture(input) {
 }
 
 test('prepare builder derives a one-hour binding only from exact read-only runtime and private digests', () => {
-  const fixture = hostFixture(privateInput()); let assertions = 0;
+  const fixture = hostFixture(privateInput('e'.repeat(40))); let assertions = 0;
   const binding = buildFixtureLoginProofBinding({ source: fixture.source, ...fixture.inventory,
     inputDirectory: fixture.binding.inputDirectory, input: fixture.input,
     evidenceFile: fixture.binding.evidenceFile, proofNonce, io: {
@@ -583,11 +641,14 @@ test('prepare builder derives a one-hour binding only from exact read-only runti
   assert.equal(binding.bootstrapManifestSha256, sha(fixture.input.manifestBytes));
   assert.equal(binding.credentialsSha256, sha(fixture.input.credentialsBytes));
   assert.equal(binding.markerSha256, sha(marker));
+  assert.equal(binding.runtimeCommit, runtimeCommit);
+  assert.notEqual(binding.runtimeCommit, fixture.input.manifest.preflight.runtimeCommit);
+  assert.equal(binding.schemaVersion, 2);
 });
 
 test('host runner writes protected sanitized evidence only after confirmed execute and owned cleanup', async () => {
   for (const execute of [false, true]) {
-    const fixture = hostFixture(privateInput()); const result = await fixture.run({ execute });
+    const fixture = hostFixture(privateInput('e'.repeat(40))); const result = await fixture.run({ execute });
     assert.equal(result.containerCleanup, 'verified'); assert.equal(fixture.runner, undefined);
     assert.equal(fixture.evidence.length, execute ? 1 : 0);
     if (execute) {
@@ -595,9 +656,19 @@ test('host runner writes protected sanitized evidence only after confirmed execu
       const payload = JSON.parse(fixture.evidence[0].bytes);
       assert.equal(payload.activeSessions, 0); assert.equal(payload.activeRefreshTokens, 0);
       assert.equal(payload.runtimeActivated, false); assert.equal(payload.externalProvidersEnabled, false);
+      assert.equal(payload.schemaVersion, 2);
+      assert.deepEqual(payload.authHistory.after, { sessions: 4, refreshTokens: 4, loginAudits: 4 });
       assert.ok(fixture.events.indexOf('rm') < fixture.events.indexOf('evidence'));
       for (const secret of fixture.input.secrets) assert.ok(!fixture.evidence[0].bytes.includes(secret));
     }
+  }
+});
+
+test('host rejects an old runtime or image binding before creating a proof runner', async () => {
+  for (const drift of [{ runtimeCommit: 'e'.repeat(40) }, { imageDigest: `sha256:${'e'.repeat(64)}` }]) {
+    const fixture = hostFixture(privateInput()); Object.assign(fixture.binding, drift);
+    await assert.rejects(fixture.run({ execute: true }), /runtime_drift/u);
+    assert.deepEqual(fixture.calls, []); assert.deepEqual(fixture.evidence, []);
   }
 });
 

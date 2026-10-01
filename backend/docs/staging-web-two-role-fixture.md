@@ -365,7 +365,19 @@ authorize silently changing that listing's category or product facts. A real
 pilot listing still needs a current authentic photo of the actual item and
 truthful owner/publication/region/availability declarations.
 
-### Protected two-role login proof — source contract only
+### Protected two-role login proof — historical schema-1 contract
+
+The following section preserves the historical schema-1 workflow. The current
+post-promotion flow is the
+[schema-2 login-proof successor](../../docs/operations/STAGING_WEB_LOGIN_PROOF_SUCCESSOR_2026-10-01.md).
+Its order is mandatory: review and gate the schema-2 runner commit, obtain a
+fresh immutable live proof on the exact current runtime, then create a separate
+catalog consumer-binding commit pinning that actual proof digest and Ops commit.
+Only after that second commit passes its gates may fresh catalog preparation,
+read-only preflight and activation proceed. Historical bootstrap/proof bytes
+remain unchanged; schema 2 records cumulative retained history separately from
+the new marker's two sessions. The historical commands below are not a shortcut
+past the current source and evidence gates.
 
 `backend/ops/staging_web_fixture_login_verifier.mjs` is the separate verifier
 for the already seeded dedicated owner/renter credentials. This source package
@@ -425,7 +437,13 @@ status, counts, booleans and digests—never email, password or token material.
 There is no auth-request retry; preserve a failure and prepare a new binding only
 after exact readback and review.
 
-### Separate synthetic catalog activation — source contract only
+### Separate synthetic catalog activation — historical schema-1 consumer
+
+The digest/Ops pins and commands below describe the unchanged historical
+consumer. It rejects schema-2 login evidence and cannot activate the promoted
+runtime using the old proof. Follow the linked schema-2 successor's two-commit
+ordering before preparing a new activation manifest; never replace these pins
+with a placeholder or reinterpret the old proof as current-runtime evidence.
 
 `backend/ops/activate_staging_web_fixture_catalog.mjs` is the final, separate
 one-key Green transition. This source package does not run it. It reuses the

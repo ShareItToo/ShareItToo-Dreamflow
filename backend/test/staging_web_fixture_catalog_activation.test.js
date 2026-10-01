@@ -267,8 +267,19 @@ test('login proof remains bound to its historical commit and canonical-row ledge
   const fx = await fixture();
   try {
     const evidence = JSON.parse(fx.loginBytes);
+    for (const drift of [{ runtimeCommit: 'e'.repeat(40) }, { imageDigest: `sha256:${'e'.repeat(64)}` }]) {
+      assert.throws(() => validateLoginProofEvidence({ ...evidence, ...drift }, {
+        runtimeRevision: runtimeCommit, imageDigest,
+        bootstrapManifestSha256: fx.bootstrapSha, bootstrapRunIdSha256: hash(fx.runId),
+      }), /catalog_activation_login_evidence_invalid/u);
+    }
     assert.doesNotThrow(() => validateLoginProofEvidence(evidence, { runtimeRevision: runtimeCommit, imageDigest,
       bootstrapManifestSha256: fx.bootstrapSha, bootstrapRunIdSha256: hash(fx.runId) }));
+    assert.throws(() => validateLoginProofEvidence({ ...evidence, schemaVersion: 2 }, {
+      runtimeRevision: runtimeCommit, imageDigest,
+      bootstrapManifestSha256: fx.bootstrapSha, bootstrapRunIdSha256: hash(fx.runId),
+    }), /catalog_activation_login_evidence_invalid/u,
+    'unchanged consumer must reject schema 2 until a separate exact-proof binding commit');
     assert.throws(() => validateLoginProofEvidence({ ...evidence, opsCommit }, { runtimeRevision: runtimeCommit, imageDigest,
       bootstrapManifestSha256: fx.bootstrapSha, bootstrapRunIdSha256: hash(fx.runId) }),
     /catalog_activation_login_evidence_invalid/u);

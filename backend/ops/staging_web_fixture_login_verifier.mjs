@@ -165,12 +165,12 @@ export function readProtectedFixtureLoginInput(inputDirectory, {
     read(resolve(inputDirectory, 'credentials.json'), options));
 }
 
-export function validateFixtureLoginProofEnvironment(environment, manifest) {
+export function validateFixtureLoginProofEnvironment(environment, manifest, runtimeCommit) {
   const allowed = String(environment.SIT_STAGING_ALLOWED_USER_IDS ?? '').split(',');
   let database;
   try { database = new URL(environment.DATABASE_URL); } catch { fail('fixture_login_proof_database_invalid'); }
   check(['test', 'staging'].includes(environment.DEPLOYMENT_ENVIRONMENT)
-    && environment.APP_COMMIT === manifest.preflight.runtimeCommit
+    && commitPattern.test(runtimeCommit ?? '') && environment.APP_COMMIT === runtimeCommit
     && environment.SIT_STAGING_ACCESS_GATE_ENABLED === 'true'
     && allowed.length >= 2 && allowed[0] === ids[0] && allowed[1] === ids[1]
     && new Set(allowed).size === allowed.length
@@ -207,9 +207,9 @@ export function buildFixtureLoginProofBinding({ source, api, database, network, 
   const match = /^ghcr\.io\/shareittoo\/shareittoo-api:([a-f0-9]{40})@(sha256:[a-f0-9]{64})$/u.exec(api.Config?.Image ?? '');
   check(match && /^[a-f0-9]{32}$/u.test(proofNonce), 'fixture_login_proof_runtime_invalid');
   const environment = validateRuntimeInventory({ api, database, network, image, envBytes, expected: null });
-  validateFixtureLoginProofEnvironment(environment, input.manifest);
+  validateFixtureLoginProofEnvironment(environment, input.manifest, match[1]);
   const marker = loginProofMarker(input.manifest.preflight.runId, proofNonce);
-  return validateFixtureLoginProofBinding({ kind: fixtureLoginProofKind, schemaVersion: 1,
+  return validateFixtureLoginProofBinding({ kind: fixtureLoginProofKind, schemaVersion: 2,
     createdAt: now.toISOString(), opsCommit: source.commit, sourceHashes: source.hashes,
     runtimeCommit: match[1], imageDigest: match[2], apiId: api.Id,
     apiFingerprint: fixtureLoginProofFingerprint(api), databaseId: database.Id,
@@ -230,7 +230,7 @@ export function validateFixtureLoginProofBinding(binding, source, now = Date.now
     'envSha256', 'inputDirectory', 'bootstrapManifestSha256', 'credentialsSha256',
     'bootstrapRunIdSha256', 'roleDigest', 'proofNonce', 'markerSha256', 'evidenceFile'],
   'fixture_login_proof_binding_invalid');
-  check(binding.kind === fixtureLoginProofKind && binding.schemaVersion === 1
+  check(binding.kind === fixtureLoginProofKind && binding.schemaVersion === 2
     && Number.isFinite(Date.parse(binding.createdAt)) && now - Date.parse(binding.createdAt) >= 0
     && now - Date.parse(binding.createdAt) <= 3600000
     && commitPattern.test(binding.opsCommit ?? '') && commitPattern.test(binding.runtimeCommit ?? '')
@@ -300,13 +300,15 @@ const forbiddenState = (state) => ({ bookings: state.bookings, requests: state.r
 function assertPreflightState(state) {
   exact(state, ['users', 'seedAudits', 'mfaFactors', 'activeSessions', 'activeRefreshTokens',
     'markerSessions', 'markerActiveSessions', 'markerRefreshTokens', 'markerActiveRefreshTokens',
-    'markerLoginAudits', 'identityDigest', 'catalogDigest',
+    'markerLoginAudits', 'totalSessions', 'totalRefreshTokens', 'totalLoginAudits',
+    'historyDigest', 'identityDigest', 'catalogDigest',
     'bookings', 'requests', 'identities', 'pushDevices', 'paymentCommands', 'identityProviderSessions',
     'technicalProviderRuns', 'notifications', 'notificationOutbox'], 'fixture_login_proof_state_invalid');
-  const counts = Object.entries(state).filter(([key]) => !['identityDigest', 'catalogDigest'].includes(key))
+  const counts = Object.entries(state).filter(([key]) => !['identityDigest', 'catalogDigest', 'historyDigest'].includes(key))
     .map(([, value]) => value);
   check(counts.every(Number.isInteger) && counts.every((value) => value >= 0)
     && digestPattern.test(state.identityDigest ?? '') && digestPattern.test(state.catalogDigest ?? '')
+    && digestPattern.test(state.historyDigest ?? '')
     && state.users === 2 && state.seedAudits === 1 && state.mfaFactors === 0
     && state.activeSessions === 0 && state.activeRefreshTokens === 0
     && state.markerSessions === 0 && state.markerActiveSessions === 0
@@ -322,8 +324,33 @@ function assertPostState(before, after) {
     && after.markerActiveSessions === 0 && after.markerActiveRefreshTokens === 0
     && after.identityDigest === before.identityDigest
     && after.catalogDigest === before.catalogDigest
+    && after.historyDigest === before.historyDigest
+    && after.totalSessions === before.totalSessions + after.markerSessions
+    && after.totalRefreshTokens === before.totalRefreshTokens + after.markerRefreshTokens
+    && after.totalLoginAudits === before.totalLoginAudits + after.markerLoginAudits
     && fixtureLoginProofDigest(forbiddenState(after)) === fixtureLoginProofDigest(forbiddenState(before)),
   'fixture_login_proof_post_readback_invalid');
+}
+
+function authHistory(before, after) {
+  const counts = (state) => ({ sessions: state.totalSessions,
+    refreshTokens: state.totalRefreshTokens, loginAudits: state.totalLoginAudits });
+  return Object.freeze({ before: counts(before), after: counts(after),
+    beforeDigest: before.historyDigest, afterDigest: after.historyDigest });
+}
+
+export function validateFixtureLoginProofHistory(history, execute) {
+  exact(history, ['before', 'after', 'beforeDigest', 'afterDigest'], 'fixture_login_proof_history_invalid');
+  const keys = ['sessions', 'refreshTokens', 'loginAudits'];
+  for (const side of ['before', 'after']) {
+    exact(history[side], keys, 'fixture_login_proof_history_invalid');
+    check(keys.every((key) => Number.isSafeInteger(history[side][key]) && history[side][key] >= 0),
+      'fixture_login_proof_history_invalid');
+  }
+  check(keys.every((key) => history.after[key] === history.before[key] + (execute ? 2 : 0))
+    && digestPattern.test(history.beforeDigest ?? '') && history.afterDigest === history.beforeDigest,
+  'fixture_login_proof_history_invalid');
+  return history;
 }
 
 export function createFixtureLoginProofStore(client, { runId, marker }) {
@@ -377,6 +404,19 @@ export function createFixtureLoginProofStore(client, { runId, marker }) {
         (SELECT count(*)::int FROM mfa_totp_factors WHERE user_id=ANY($1::text[]) AND status='enabled') AS mfa_factors,
         (SELECT count(*)::int FROM auth_sessions WHERE user_id=ANY($1::text[]) AND revoked_at IS NULL) AS active_sessions,
         (SELECT count(*)::int FROM refresh_tokens WHERE user_id=ANY($1::text[]) AND revoked_at IS NULL) AS active_refresh_tokens,
+        (SELECT count(*)::int FROM auth_sessions WHERE user_id=ANY($1::text[])) AS total_sessions,
+        (SELECT count(*)::int FROM refresh_tokens WHERE user_id=ANY($1::text[])) AS total_refresh_tokens,
+        (SELECT count(*)::int FROM audit_log WHERE actor_id=ANY($1::text[]) AND action='auth.login') AS total_login_audits,
+        (SELECT encode(digest(jsonb_build_object(
+          'sessions',(SELECT COALESCE(jsonb_agg(to_jsonb(s) ORDER BY s.id),'[]'::jsonb)
+            FROM auth_sessions s WHERE s.user_id=ANY($1::text[]) AND s.user_agent IS DISTINCT FROM $4),
+          'refresh',(SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY t.id),'[]'::jsonb)
+            FROM refresh_tokens t WHERE t.user_id=ANY($1::text[]) AND t.user_agent IS DISTINCT FROM $4),
+          'loginAudits',(SELECT COALESCE(jsonb_agg(to_jsonb(a) ORDER BY a.id),'[]'::jsonb)
+            FROM audit_log a WHERE a.actor_id=ANY($1::text[]) AND a.action='auth.login'
+              AND NOT EXISTS (SELECT 1 FROM auth_sessions s WHERE s.user_agent=$4
+                AND a.resource_type='auth_session' AND a.resource_id=s.id::text))
+        )::text,'sha256'),'hex')) AS history_digest,
         (SELECT count(*)::int FROM auth_sessions WHERE user_agent=$4) AS marker_sessions,
         (SELECT count(*)::int FROM auth_sessions WHERE user_agent=$4 AND revoked_at IS NULL) AS marker_active_sessions,
         (SELECT count(*)::int FROM refresh_tokens WHERE user_agent=$4) AS marker_refresh_tokens,
@@ -406,7 +446,7 @@ export function createFixtureLoginProofStore(client, { runId, marker }) {
       [ids, listingId, runId, marker, uploadName])).rows[0];
       check(row, 'fixture_login_proof_state_invalid');
       return Object.fromEntries(Object.entries(row).map(([key, value]) => [key.replace(/_([a-z])/gu, (_, c) => c.toUpperCase()),
-        ['identity_digest', 'catalog_digest'].includes(key) ? value : Number(value)]));
+        ['identity_digest', 'catalog_digest', 'history_digest'].includes(key) ? value : Number(value)]));
     } finally { await client.query('ROLLBACK'); }
   };
   const reconcile = async () => {
@@ -448,9 +488,9 @@ async function responseJson(response, code) {
   try { return await response.json(); } catch { fail(code); }
 }
 
-export async function runFixtureLoginProof({ input, environment, store, request, execute = false, marker,
+export async function runFixtureLoginProof({ input, environment, runtimeCommit, store, request, execute = false, marker,
   sleep = (milliseconds) => new Promise((resolveSleep) => setTimeout(resolveSleep, milliseconds)) }) {
-  validateFixtureLoginProofEnvironment(environment, input.manifest);
+  validateFixtureLoginProofEnvironment(environment, input.manifest, runtimeCommit);
   check(typeof request === 'function' && store?.attest && store?.attestCredentials
     && store?.snapshot && store?.reconcile
     && /^SIT-Staging-Login-Proof\/[a-f0-9]{40}$/u.test(marker ?? '')
@@ -482,7 +522,7 @@ export async function runFixtureLoginProof({ input, environment, store, request,
     activeSessions: 0, activeRefreshTokens: 0, schemaCount: database.schemaCount,
     credentialsAttested: credentialAttestation.credentialsAttested,
     quiescenceReadbacks: 0,
-    retainedSessionRecords: 0, loginAudits: 0, ledgerDigest: database.ledgerDigest,
+    retainedSessionRecords: 0, loginAudits: 0, authHistory: authHistory(before, before), ledgerDigest: database.ledgerDigest,
     identityDigest: before.identityDigest, identityUnchanged: true,
     catalogStateDigest: before.catalogDigest, visibilityUnchanged: true, effectDigest,
     apiReadback: true,
@@ -556,6 +596,7 @@ export async function runFixtureLoginProof({ input, environment, store, request,
     credentialsAttested: credentialAttestation.credentialsAttested,
     quiescenceReadbacks,
     retainedSessionRecords: after.markerSessions, loginAudits: after.markerLoginAudits,
+    authHistory: authHistory(before, after),
     schemaCount: database.schemaCount, ledgerDigest: database.ledgerDigest,
     identityDigest: after.identityDigest, identityUnchanged: true,
     catalogStateDigest: after.catalogDigest, visibilityUnchanged: true, effectDigest,
@@ -575,6 +616,7 @@ export function buildFixtureLoginProofLaunch({ binding, source, execute, name, n
   ];
   const child = `
 const input=${JSON.stringify({ execute, sourceCommit: source.commit, sourceHashes: source.hashes,
+    runtimeCommit: binding.runtimeCommit,
     bootstrapManifestSha256: binding.bootstrapManifestSha256, credentialsSha256: binding.credentialsSha256,
     bootstrapRunIdSha256: binding.bootstrapRunIdSha256, roleDigest: binding.roleDigest,
     markerSha256: binding.markerSha256 })};
@@ -596,7 +638,7 @@ try {
   try { const client=await pool.connect(); try {
     const store=verifier.createFixtureLoginProofStore(client,{runId:protectedInput.manifest.preflight.runId,marker});
     const request=(path,options)=>fetch('http://${apiName}:8080'+path,{...options,signal:AbortSignal.timeout(5000)});
-    const result=await verifier.runFixtureLoginProof({input:protectedInput,environment:process.env,store,request,execute:input.execute,marker});
+    const result=await verifier.runFixtureLoginProof({input:protectedInput,environment:process.env,runtimeCommit:input.runtimeCommit,store,request,execute:input.execute,marker});
     process.stdout.write(JSON.stringify(result)+'\\n');
   } finally { client.release(); } } finally { await pool.end(); }
 } catch { process.stderr.write('fixture_login_proof_child_failed\\n'); process.exitCode=1; }
@@ -657,7 +699,7 @@ function readBinding(filePath, expectedSha256) {
 function validateResult(result, binding, execute) {
   exact(result, ['status', 'executed', 'rolesVerified', 'loginsVerified', 'meVerified', 'logoutsVerified',
     'accessTokensRejected', 'activeSessions', 'activeRefreshTokens', 'credentialsAttested',
-    'quiescenceReadbacks', 'retainedSessionRecords',
+    'quiescenceReadbacks', 'retainedSessionRecords', 'authHistory',
     'loginAudits', 'schemaCount', 'ledgerDigest', 'identityDigest', 'identityUnchanged',
     'catalogStateDigest', 'visibilityUnchanged', 'effectDigest', 'apiReadback',
     'paymentMemory', 'stripeLivemode', 'registrationClosed', 'catalogEnabled',
@@ -683,6 +725,7 @@ function validateResult(result, binding, execute) {
     && result.cleanupVerified === true
     && digestPattern.test(result.effectDigest ?? '') && result.markerSha256 === binding.markerSha256,
   'fixture_login_proof_result_invalid');
+  validateFixtureLoginProofHistory(result.authHistory, execute);
   return result;
 }
 
@@ -701,7 +744,7 @@ export async function runFixtureLoginProofContainer({ binding, source, execute =
     && hash(loginProofMarker(input.manifest.preflight.runId, binding.proofNonce)) === binding.markerSha256,
   'fixture_login_proof_private_binding_drift');
   const environment = validateRuntimeInventory({ binding, ...inventory, expected: binding.runtimeCommit });
-  validateFixtureLoginProofEnvironment(environment, input.manifest);
+  validateFixtureLoginProofEnvironment(environment, input.manifest, binding.runtimeCommit);
   const nonce = crypto.randomBytes(12).toString('hex'); const name = `sit-web-login-proof-${nonce}`;
   const launch = buildFixtureLoginProofLaunch({ binding, source, execute, name, nonce });
   let id; let result; let failure;
@@ -735,7 +778,7 @@ export async function runFixtureLoginProofContainer({ binding, source, execute =
     && hash(readEnv()) === binding.envSha256,
   'fixture_login_proof_final_runtime_drift');
   if (execute) {
-    const evidence = { kind: fixtureLoginProofKind, schemaVersion: 1, createdAt: new Date().toISOString(),
+    const evidence = { kind: fixtureLoginProofKind, schemaVersion: 2, createdAt: new Date().toISOString(),
       status: result.status, opsCommit: source.commit, runtimeCommit: binding.runtimeCommit,
       imageDigest: binding.imageDigest, bootstrapManifestSha256: binding.bootstrapManifestSha256,
       credentialsSha256: binding.credentialsSha256, bootstrapRunIdSha256: binding.bootstrapRunIdSha256,
@@ -745,6 +788,7 @@ export async function runFixtureLoginProofContainer({ binding, source, execute =
       activeRefreshTokens: result.activeRefreshTokens, credentialsAttested: result.credentialsAttested,
       quiescenceReadbacks: result.quiescenceReadbacks,
       retainedSessionRecords: result.retainedSessionRecords,
+      authHistory: result.authHistory,
       loginAudits: result.loginAudits, schemaCount: result.schemaCount, ledgerDigest: result.ledgerDigest,
       identityDigest: result.identityDigest, identityUnchanged: result.identityUnchanged,
       catalogStateDigest: result.catalogStateDigest, visibilityUnchanged: result.visibilityUnchanged,

@@ -205,6 +205,36 @@ test('PG16 fixture adapter uses real schema, transactions, triggers and two clie
           assert.equal(proofAfter.markerActiveSessions, 0); assert.equal(proofAfter.markerActiveRefreshTokens, 0);
           assert.equal(proofAfter.identityDigest, proofBefore.identityDigest);
           assert.equal(proofAfter.catalogDigest, proofBefore.catalogDigest);
+          assert.equal(proofAfter.totalSessions, 2); assert.equal(proofAfter.totalRefreshTokens, 2);
+          assert.equal(proofAfter.historyDigest, proofBefore.historyDigest);
+
+          // A new marker sees the retained first run as immutable history.
+          const repeatMarker = loginProofMarker(manifest.preflight.runId, sha(randomUUID()).slice(0, 32));
+          const repeatStore = createFixtureLoginProofStore(client, { runId: manifest.preflight.runId, marker: repeatMarker });
+          const repeatBefore = await repeatStore.snapshot({ readOnly: true });
+          assert.equal(repeatBefore.markerSessions, 0); assert.equal(repeatBefore.markerRefreshTokens, 0);
+          assert.equal(repeatBefore.totalSessions, 2); assert.equal(repeatBefore.totalRefreshTokens, 2);
+          assert.notEqual(repeatBefore.historyDigest, proofBefore.historyDigest);
+          const repeatSessionIds = [randomUUID(), randomUUID()];
+          for (let index = 0; index < repeatSessionIds.length; index++) {
+            await client.query(`INSERT INTO auth_sessions (id,user_id,device_label,user_agent)
+              VALUES ($1,$2,'Repeated login proof integration',$3)`,
+            [repeatSessionIds[index], proofCredentials.accounts[index].id, repeatMarker]);
+            await client.query(`INSERT INTO refresh_tokens
+              (user_id,session_id,family_id,token_hash,expires_at,user_agent)
+              VALUES ($1,$2,$2,$3,now()+interval '1 hour',$4)`,
+            [proofCredentials.accounts[index].id, repeatSessionIds[index], sha(randomUUID()), repeatMarker]);
+          }
+          assert.deepEqual(await repeatStore.reconcile(), { matchedSessions: 2 });
+          const repeatAfter = await repeatStore.snapshot({ readOnly: true });
+          assert.equal(repeatAfter.totalSessions, 4); assert.equal(repeatAfter.totalRefreshTokens, 4);
+          assert.equal(repeatAfter.markerSessions, 2); assert.equal(repeatAfter.markerRefreshTokens, 2);
+          assert.equal(repeatAfter.activeSessions, 0); assert.equal(repeatAfter.activeRefreshTokens, 0);
+          assert.equal(repeatAfter.historyDigest, repeatBefore.historyDigest);
+          assert.equal(repeatAfter.identityDigest, repeatBefore.identityDigest);
+          assert.equal(repeatAfter.catalogDigest, repeatBefore.catalogDigest);
+          // Existing test teardown removes only sessions created by this isolated test.
+          ownedSessionIds.push(...repeatSessionIds);
 
           const ambiguousMarker = loginProofMarker(manifest.preflight.runId, sha(randomUUID()).slice(0, 32));
           const foreignUserId = `fixture-login-proof-foreign-${randomUUID()}`;
@@ -446,6 +476,35 @@ test('PG16 fixture adapter uses real schema, transactions, triggers and two clie
         await expectRejectedState(() => client.query(`UPDATE listings
           SET payload=jsonb_set(payload,'{syntheticFixtureRun}',to_jsonb('invalid'::text),true) WHERE id=$1`,
         [m.listingId]));
+        const repeatMarker = loginProofMarker(bootstrapRunId, sha(randomUUID()).slice(0, 32));
+        // Substitute only fixture IDs at the parameter boundary; run the real SQL.
+        const substitutions = new Map([[dedicatedFixture.owner, m.roles[0].userId],
+          [dedicatedFixture.renter, m.roles[1].userId], [dedicatedFixture.listing, m.listingId],
+          [dedicatedFixture.upload, m.uploadName]]);
+        const substitute = (value) => Array.isArray(value) ? value.map(substitute) : substitutions.get(value) ?? value;
+        const historyStore = createFixtureLoginProofStore({ query: (query, params) =>
+          client.query(query, params?.map(substitute)) }, { runId: bootstrapRunId, marker: repeatMarker });
+        const historyBefore = await historyStore.snapshot({ readOnly: true });
+        assert.deepEqual([historyBefore.totalSessions, historyBefore.totalRefreshTokens,
+          historyBefore.totalLoginAudits, historyBefore.markerLoginAudits], [2, 2, 2, 0]);
+        for (const role of m.roles) {
+          const sessionId = randomUUID();
+          await client.query(`INSERT INTO auth_sessions (id,user_id,user_agent,revoked_at)
+            VALUES ($1,$2,$3,now())`, [sessionId, role.userId, repeatMarker]);
+          await client.query(`INSERT INTO refresh_tokens
+            (user_id,session_id,family_id,token_hash,expires_at,user_agent,revoked_at)
+            VALUES ($1,$2,$2,$3,now()+interval '1 hour',$4,now())`,
+          [role.userId, sessionId, sha(randomUUID()), repeatMarker]);
+          await client.query(`INSERT INTO audit_log (actor_id,actor_role,action,resource_type,resource_id)
+            VALUES ($1,'user','auth.login','auth_session',$2)`, [role.userId, sessionId]);
+        }
+        const historyAfter = await historyStore.snapshot({ readOnly: true });
+        assert.deepEqual([historyAfter.totalSessions, historyAfter.totalRefreshTokens,
+          historyAfter.totalLoginAudits, historyAfter.markerLoginAudits], [4, 4, 4, 2]);
+        assert.equal(historyAfter.historyDigest, historyBefore.historyDigest);
+        assert.equal(historyAfter.identityDigest, historyBefore.identityDigest);
+        assert.equal(historyAfter.catalogDigest, historyBefore.catalogDigest);
+        assert.equal(historyAfter.activeSessions, 0); assert.equal(historyAfter.activeRefreshTokens, 0);
         const cleaned = await runFixtureAdapter(bind(await cleanupManifest(f, activated.activationDigest)));
         assert.equal(cleaned.status, 'cleaned-noncatalogued-audits-retained');
       });
