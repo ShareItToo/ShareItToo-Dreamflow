@@ -17,7 +17,39 @@ This objective record grants no new live, provider, payment, Production or Play 
 
 ## Active prerequisite: Phase 0 Web/CORS and safe synthetic catalog QA
 
-### Green runtime promotion — LIVE PASS 2026-10-01
+### Current D3 runtime and login prerequisite — LIVE PASS 2026-10-01
+
+Green now runs exact runtime `d3c2f5d7d7516d3bfaac4b61689c2c433924cc6e`
+from image digest
+`sha256:31b8b015eb0635b9fbb7d6c5e54ef43fe089d5b953dba8fa446aae2122a5888a`.
+The one-shot promotion used reviewed Ops
+`84408c04c0387a4412b8542ca1381d1be110ed1b`; its root-owned `0600` evidence is
+`/docker/shareittoo/evidence/green-promotion-34194c42-ops-84408c04-to-d3c2f5d7-attempt-01.json`,
+SHA-256 `42dfcc4af68ff08dd6d7ad7e6066964a3b84929312221212a89614896bc12e00`.
+The retained backup SHA-256 is
+`e91cbe166bac7c0d860eb93e552bb55d7872047e337b233cc37b82837dc60eae`.
+Independent readback verified the exact image/user, three mounts, zero host
+ports, both network IDs, schema `98`, migration ledger, catalog flag `false`,
+public count zero and unchanged payment/provider boundaries. The prior
+`34194c42…` API is sealed and stopped; no promotion controller/candidate remains.
+
+The fresh protected schema-2 proof then executed exactly once against D3 from
+the same Ops commit. Its root-owned `0600`, single-link evidence is
+`/docker/shareittoo/evidence/web-login-proof-84408c04-20261001T061535Z/evidence.json`,
+SHA-256 `0d320a50b458e5cf296ee5a1662cba7401db4a6c337e8591cc78ae914bb7eee5`,
+created `2026-10-01T06:20:59.472Z`. Both roles passed login, `/me`, logout and
+token rejection. Cumulative sessions/refresh/login audits advanced `4/4/4` to
+`6/6/6`; this marker owns exactly `2/2/2`, both principals and both immutable
+refresh/audit relationships. Active auth state is zero; prior-history, identity
+and catalog digests are unchanged; all forbidden-effect counts remain zero.
+Catalog and registration remain disabled and the public catalog remains empty.
+
+The active source package binds the catalog consumer to those exact bytes,
+runtime/image, marker and digests. It performs no manifest preparation or live
+activation. The older promotion, proof and failed activation sections below are
+retained as historical evidence and are not current-runtime prerequisites.
+
+### Historical Green runtime promotion — superseded 2026-10-01
 
 The Phase 0 Green API prerequisite is now live on runtime commit
 `34194c42e5e477144b5db5a8eeb6c2d476c7aeef`, using the exact image

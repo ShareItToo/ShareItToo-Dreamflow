@@ -21,6 +21,9 @@ import {
   requiredLoginProofImageDigest,
   requiredLoginProofMarkerSha256,
   requiredLoginProofHistoryDigest,
+  requiredLoginProofIdentityDigest,
+  requiredLoginProofCatalogDigest,
+  requiredLoginProofEffectDigest,
   runCatalogActivation,
   sanitizeCatalogActivationError,
   validateCatalogActivationBootstrap,
@@ -76,13 +79,13 @@ function activationState() {
   return { users: 2, listing: 1, upload: 1, seedAudits: 1, activationAudits: 1,
     activationRunDigest: hash(activationRunId),
     activeSessions: 0, activeRefresh: 0, mfaFactors: 0,
-    retainedSessions: 4, retainedRefresh: 4, loginAudits: 4,
+    retainedSessions: 6, retainedRefresh: 6, loginAudits: 6,
     markerSessions: 2, markerPrincipals: 2, markerRefresh: 2, markerLoginAudits: 2,
     markerRefreshPrincipals: 2, markerAuditPrincipals: 2,
     historyDigest: requiredLoginProofHistoryDigest,
     bookings: 0, requests: 0, identities: 0, pushDevices: 0, paymentCommands: 0,
     identityProviderSessions: 0, technicalProviderRuns: 0, notifications: 0, notificationOutbox: 0,
-    identityDigest: '1'.repeat(64), catalogDigest: '2'.repeat(64) };
+    identityDigest: requiredLoginProofIdentityDigest, catalogDigest: requiredLoginProofCatalogDigest };
 }
 
 function publicState(visible) {
@@ -101,10 +104,10 @@ function publicState(visible) {
 
 function loginEvidence(bootstrapSha, runSha, overrides = {}) {
   return { kind: 'sit-green-web-fixture-login-proof', schemaVersion: 2,
-    createdAt: '2026-10-01T02:15:40.378Z', credentialsSha256: '6'.repeat(64), roleDigest: '7'.repeat(64),
+    createdAt: '2026-10-01T06:20:59.472Z', credentialsSha256: '6'.repeat(64), roleDigest: '7'.repeat(64),
     markerSha256: requiredLoginProofMarkerSha256, quiescenceReadbacks: 3,
-    authHistory: { before: { sessions: 2, refreshTokens: 2, loginAudits: 2 },
-      after: { sessions: 4, refreshTokens: 4, loginAudits: 4 },
+    authHistory: { before: { sessions: 4, refreshTokens: 4, loginAudits: 4 },
+      after: { sessions: 6, refreshTokens: 6, loginAudits: 6 },
       beforeDigest: requiredLoginProofHistoryDigest, afterDigest: requiredLoginProofHistoryDigest },
     status: 'fixture-login-proof-verified-sessions-revoked', opsCommit: requiredLoginProofOpsCommit,
     runtimeCommit, imageDigest, bootstrapManifestSha256: bootstrapSha, bootstrapRunIdSha256: runSha,
@@ -113,7 +116,7 @@ function loginEvidence(bootstrapSha, runSha, overrides = {}) {
     retainedSessionRecords: 2, loginAudits: 2, schemaCount: 98, ledgerDigest: requiredLoginProofLedgerDigest,
     identityDigest: activationState().identityDigest, identityUnchanged: true,
     catalogStateDigest: activationState().catalogDigest, visibilityUnchanged: true,
-    effectDigest: '3'.repeat(64), apiReadback: true, paymentMemory: true, stripeLivemode: false,
+    effectDigest: requiredLoginProofEffectDigest, apiReadback: true, paymentMemory: true, stripeLivemode: false,
     registrationClosed: true, catalogEnabled: false, externalProvidersEnabled: false,
     cleanupVerified: true, runtimeActivated: false, ...overrides };
 }
@@ -164,7 +167,7 @@ async function fixture() {
     loginProofEvidenceSha256: requiredLoginProofEvidenceSha256,
     loginIdentityDigest: state.identityDigest, loginCatalogDigest: state.catalogDigest,
     loginHistoryDigest: requiredLoginProofHistoryDigest, loginMarkerSha256: requiredLoginProofMarkerSha256,
-    loginRetainedSessions: 4, loginRetainedRefresh: 4, loginTotalAudits: 4,
+    loginRetainedSessions: 6, loginRetainedRefresh: 6, loginTotalAudits: 6,
     databaseStateDigest: digest(state), publicBeforeDigest: digest(before), envSha256: hash(originalEnv),
     environmentDigest: digest(values), apiFingerprint: corsContainerFingerprint(api), backupFile, evidenceFile };
   const manifest = { kind: 'sit-staging-web-fixture-catalog-activation-runtime-manifest', schemaVersion: 1,
@@ -366,12 +369,14 @@ test('schema-2 proof rejects every missing field, unknown fields and cumulative/
     for (const drift of [{ unknown: true }, { markerSha256: '0'.repeat(64) },
       { quiescenceReadbacks: 0 }, { createdAt: 'invalid' }, { credentialsSha256: '' }, { roleDigest: '' },
       { retainedSessionRecords: 4 }, { loginAudits: 4 }, { activeSessions: 1 }, { activeRefreshTokens: 1 },
-      { bootstrapManifestSha256: '0'.repeat(64) }, { bootstrapRunIdSha256: '0'.repeat(64) }]) {
+      { identityDigest: '0'.repeat(64) }, { catalogStateDigest: '0'.repeat(64) },
+      { effectDigest: '0'.repeat(64) }, { bootstrapManifestSha256: '0'.repeat(64) },
+      { bootstrapRunIdSha256: '0'.repeat(64) }]) {
       assert.throws(() => validate({ ...evidence, ...drift }), /catalog_activation_login_evidence_invalid/u);
     }
     for (const side of ['before', 'after']) {
       for (const key of ['sessions', 'refreshTokens', 'loginAudits']) {
-        for (const value of [0, 3, '4', null]) {
+        for (const value of [0, side === 'before' ? 6 : 4, String(side === 'before' ? 4 : 6), null]) {
           const changed = structuredClone(evidence); changed.authHistory[side][key] = value;
           assert.throws(() => validate(changed), /catalog_activation_login_evidence_invalid/u);
         }
@@ -390,15 +395,23 @@ test('schema-2 proof rejects every missing field, unknown fields and cumulative/
   } finally { await rm(fx.root, { recursive: true, force: true }); }
 });
 
-test('consumer pins actual evidence SHA/Ops and forbids rebinding identity or retained history before commands', async () => {
-  assert.equal(requiredLoginProofEvidenceSha256, 'e6dd9fc8e96fcd59fa0145e601ae04d4cc31e14c1c9146055ed69872cab2ae95');
-  assert.equal(requiredLoginProofOpsCommit, 'dfea6fa9680da437500f35ae84aa0236979fba8d');
+test('consumer pins actual evidence/runtime/digests and forbids rebinding identity or retained history before commands', async () => {
+  assert.equal(requiredLoginProofEvidenceSha256, '0d320a50b458e5cf296ee5a1662cba7401db4a6c337e8591cc78ae914bb7eee5');
+  assert.equal(requiredLoginProofOpsCommit, '84408c04c0387a4412b8542ca1381d1be110ed1b');
+  assert.equal(requiredLoginProofRuntimeCommit, 'd3c2f5d7d7516d3bfaac4b61689c2c433924cc6e');
+  assert.equal(requiredLoginProofImageDigest, 'sha256:31b8b015eb0635b9fbb7d6c5e54ef43fe089d5b953dba8fa446aae2122a5888a');
+  assert.equal(requiredLoginProofMarkerSha256, 'bb5fe651bd42e33488a5834efedd4935f4db3556367807bab231ce001df025f7');
+  assert.equal(requiredLoginProofHistoryDigest, '79f84f73ab9a2353b9fa0250031b8c1cb9b8acef3fe47b6f30db588d95044816');
+  assert.equal(requiredLoginProofIdentityDigest, '6d11fe55adf0e90bce7bb0db45c99951c20f5c8aa01c5918fccbf6896964331e');
+  assert.equal(requiredLoginProofCatalogDigest, '806c52aff0f5d10400adbf7ba09296376d666b92a79c8385a6f9cb1bbad66797');
+  assert.equal(requiredLoginProofEffectDigest, 'd74fdca3fa2914d36bd24ac24bef69c38d05622f780a3418da6208b93c12aa51');
+  assert.equal(requiredLoginProofLedgerDigest, '4fff35fbe15c64a38f0ca423222b32298b5595da8dab81e306a7ad5a48e80f08');
   const fx = await fixture();
   try {
     for (const drift of [{ loginProofEvidenceSha256: '0'.repeat(64) },
       { loginProofOpsCommit: opsCommit }, { loginHistoryDigest: '0'.repeat(64) },
-      { loginMarkerSha256: '0'.repeat(64) }, { loginRetainedSessions: 2 },
-      { loginRetainedRefresh: 2 }, { loginTotalAudits: 2 }]) {
+      { loginMarkerSha256: '0'.repeat(64) }, { loginRetainedSessions: 4 },
+      { loginRetainedRefresh: 4 }, { loginTotalAudits: 4 }]) {
       assert.throws(() => assertCatalogActivationManifest({ ...fx.manifest,
         fixtureBinding: { ...fx.manifest.fixtureBinding, ...drift } }), /catalog_activation_binding_invalid/u);
     }
@@ -406,13 +419,9 @@ test('consumer pins actual evidence SHA/Ops and forbids rebinding identity or re
       assert.throws(() => assertCatalogActivationManifest({ ...fx.manifest, ...drift }), /catalog_activation_manifest_invalid/u);
     }
     for (const key of ['loginIdentityDigest', 'loginCatalogDigest']) {
-      const fake = fakeExecutor(fx);
-      await assert.rejects(runCatalogActivation({ manifest: { ...fx.manifest,
-        fixtureBinding: { ...fx.manifest.fixtureBinding, [key]: '0'.repeat(64) } },
-      bootstrapManifestBytes: fx.bootstrapBytes, databaseEvidenceBytes: fx.dbBytes,
-      loginEvidenceBytes: fx.loginBytes, sourceCommit: opsCommit, evidenceFile: fx.evidenceFile,
-      command: fake.command, commandEnv: {}, testOnlyEvidenceHash: evidenceHash }), /catalog_activation_login_binding_drift/u);
-      assert.equal(fake.calls.length, 0);
+      assert.throws(() => assertCatalogActivationManifest({ ...fx.manifest,
+        fixtureBinding: { ...fx.manifest.fixtureBinding, [key]: '0'.repeat(64) } }),
+      /catalog_activation_binding_invalid/u);
     }
     const fake = fakeExecutor(fx);
     await assert.rejects(runCatalogActivation({ manifest: fx.manifest,
@@ -527,7 +536,7 @@ test('database state binds only the protected activation run digest', async () =
     assert.throws(() => assertCatalogActivationState(JSON.stringify(fx.state), {
       ...fx.manifest.fixtureBinding, activationRunDigest: '6'.repeat(64),
     }), /catalog_activation_database_state_invalid/u);
-    for (const drift of [{ retainedSessions: 2 }, { retainedRefresh: 2 }, { loginAudits: 2 },
+    for (const drift of [{ retainedSessions: 4 }, { retainedRefresh: 4 }, { loginAudits: 4 },
       { markerSessions: 1 }, { markerPrincipals: 1 }, { markerRefresh: 3 }, { markerLoginAudits: 4 },
       { markerRefreshPrincipals: 1 }, { markerAuditPrincipals: 1 },
       { activeSessions: 1 }, { activeRefresh: 1 }, { historyDigest: '0'.repeat(64) }]) {

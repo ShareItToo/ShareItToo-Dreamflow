@@ -24,12 +24,15 @@ import { corsContainerFingerprint, withCorsTransitionLock } from './staging_web_
 export const catalogActivationManifestKind = 'sit-staging-web-fixture-catalog-activation-runtime-manifest';
 export const catalogActivationKey = 'SIT_STAGING_SYNTHETIC_CATALOG_ENABLED';
 export const requiredDatabasePreparationEvidenceSha256 = '109e29f5e0f13db97b0423cc6e00dbc1501f8a8daed85209d76f1565071acc32';
-export const requiredLoginProofEvidenceSha256 = 'e6dd9fc8e96fcd59fa0145e601ae04d4cc31e14c1c9146055ed69872cab2ae95';
-export const requiredLoginProofOpsCommit = 'dfea6fa9680da437500f35ae84aa0236979fba8d';
-export const requiredLoginProofRuntimeCommit = '34194c42e5e477144b5db5a8eeb6c2d476c7aeef';
-export const requiredLoginProofImageDigest = 'sha256:0403a5f60b94a8aa91d7cbf29ae503aea989d85aeb72fcf4cf6dc14a801670b9';
-export const requiredLoginProofMarkerSha256 = '29f70925b0933705d338cb1ce7a56b147990032af34dc5ba845c2d55a26803a0';
-export const requiredLoginProofHistoryDigest = 'a2c37da0c6f79460b221e179a430d0e415b0bba8b210567e4235638f07fe056f';
+export const requiredLoginProofEvidenceSha256 = '0d320a50b458e5cf296ee5a1662cba7401db4a6c337e8591cc78ae914bb7eee5';
+export const requiredLoginProofOpsCommit = '84408c04c0387a4412b8542ca1381d1be110ed1b';
+export const requiredLoginProofRuntimeCommit = 'd3c2f5d7d7516d3bfaac4b61689c2c433924cc6e';
+export const requiredLoginProofImageDigest = 'sha256:31b8b015eb0635b9fbb7d6c5e54ef43fe089d5b953dba8fa446aae2122a5888a';
+export const requiredLoginProofMarkerSha256 = 'bb5fe651bd42e33488a5834efedd4935f4db3556367807bab231ce001df025f7';
+export const requiredLoginProofHistoryDigest = '79f84f73ab9a2353b9fa0250031b8c1cb9b8acef3fe47b6f30db588d95044816';
+export const requiredLoginProofIdentityDigest = '6d11fe55adf0e90bce7bb0db45c99951c20f5c8aa01c5918fccbf6896964331e';
+export const requiredLoginProofCatalogDigest = '806c52aff0f5d10400adbf7ba09296376d666b92a79c8385a6f9cb1bbad66797';
+export const requiredLoginProofEffectDigest = 'd74fdca3fa2914d36bd24ac24bef69c38d05622f780a3418da6208b93c12aa51';
 export const requiredBootstrapLedgerDigest = '4fff35fbe15c64a38f0ca423222b32298b5595da8dab81e306a7ad5a48e80f08';
 export const requiredLoginProofLedgerDigest = '4fff35fbe15c64a38f0ca423222b32298b5595da8dab81e306a7ad5a48e80f08';
 
@@ -139,7 +142,7 @@ export function validateLoginProofEvidence(evidence, { runtimeRevision, imageDig
   exactKeys(evidence.authHistory, ['before', 'after', 'beforeDigest', 'afterDigest'], code);
   for (const side of ['before', 'after']) {
     exactKeys(evidence.authHistory[side], ['sessions', 'refreshTokens', 'loginAudits'], code);
-    check(Object.values(evidence.authHistory[side]).every((value) => value === (side === 'before' ? 2 : 4)), code);
+    check(Object.values(evidence.authHistory[side]).every((value) => value === (side === 'before' ? 4 : 6)), code);
   }
   check(evidence.authHistory.beforeDigest === requiredLoginProofHistoryDigest
     && evidence.authHistory.afterDigest === requiredLoginProofHistoryDigest, code);
@@ -160,9 +163,9 @@ export function validateLoginProofEvidence(evidence, { runtimeRevision, imageDig
     && evidence.activeRefreshTokens === 0 && evidence.retainedSessionRecords === 2
     && evidence.loginAudits === 2 && evidence.schemaCount === 98
     && evidence.ledgerDigest === requiredLoginProofLedgerDigest
-    && digestPattern.test(evidence.identityDigest ?? '') && evidence.identityUnchanged === true
-    && digestPattern.test(evidence.catalogStateDigest ?? '') && evidence.visibilityUnchanged === true
-    && digestPattern.test(evidence.effectDigest ?? '') && evidence.apiReadback === true
+    && evidence.identityDigest === requiredLoginProofIdentityDigest && evidence.identityUnchanged === true
+    && evidence.catalogStateDigest === requiredLoginProofCatalogDigest && evidence.visibilityUnchanged === true
+    && evidence.effectDigest === requiredLoginProofEffectDigest && evidence.apiReadback === true
     && evidence.paymentMemory === true && evidence.stripeLivemode === false
     && evidence.registrationClosed === true && evidence.catalogEnabled === false
     && evidence.externalProvidersEnabled === false && evidence.cleanupVerified === true
@@ -279,7 +282,7 @@ export function assertCatalogActivationState(stdout, binding = {}) {
     && value.retainedSessions === binding.loginRetainedSessions
     && value.retainedRefresh === binding.loginRetainedRefresh
     && value.loginAudits === binding.loginTotalAudits
-    && value.retainedSessions === 4 && value.retainedRefresh === 4 && value.loginAudits === 4
+    && value.retainedSessions === 6 && value.retainedRefresh === 6 && value.loginAudits === 6
     && value.markerSessions === 2 && value.markerPrincipals === 2
     && value.markerRefresh === 2 && value.markerLoginAudits === 2
     && value.markerRefreshPrincipals === 2 && value.markerAuditPrincipals === 2
@@ -374,7 +377,9 @@ function assertBinding(binding) {
     && binding.loginProofEvidenceSha256 === requiredLoginProofEvidenceSha256
     && binding.loginHistoryDigest === requiredLoginProofHistoryDigest
     && binding.loginMarkerSha256 === requiredLoginProofMarkerSha256
-    && binding.loginRetainedSessions === 4 && binding.loginRetainedRefresh === 4 && binding.loginTotalAudits === 4
+    && binding.loginIdentityDigest === requiredLoginProofIdentityDigest
+    && binding.loginCatalogDigest === requiredLoginProofCatalogDigest
+    && binding.loginRetainedSessions === 6 && binding.loginRetainedRefresh === 6 && binding.loginTotalAudits === 6
     && [binding.backupFile, binding.evidenceFile].every((path) => typeof path === 'string'
       && isAbsolute(path) && !path.startsWith(`${repositoryRoot}/`) && !path.includes('..'))
     && resolve(binding.backupFile) !== resolve(binding.evidenceFile),

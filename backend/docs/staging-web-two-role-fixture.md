@@ -388,6 +388,13 @@ existing runner-owned `0700` UID100:GID101 directory containing exact `0600`
 credential contents on the command line. Use new root-owned `0700` output
 directories and unused root-owned `0600` binding/evidence targets:
 
+Do not weaken the root-owned `0700` host evidence parents for a host-side UID
+check. Before any UID100:GID101 worker starts, the root Docker daemon verifies
+each bind source's exact metadata, hash and non-symlink identity. Inside the
+exact runtime namespace, UID100:GID101 must then directly traverse every
+mounted target parent, read every mounted target and pass Node syntax/import
+checks. Root-only readability is not worker evidence.
+
 ```sh
 node backend/ops/staging_web_fixture_login_verifier.mjs --prepare \
   "$PRIVATE_BOOTSTRAP_INPUT_DIRECTORY" "$NEW_LOGIN_PROOF_BINDING" "$NEW_LOGIN_PROOF_EVIDENCE"
@@ -440,14 +447,16 @@ after exact readback and review.
 ### Current catalog consumer — exact schema-2 evidence binding
 
 The separate consumer source package now pins the verified proof at
-`/docker/shareittoo/evidence/web-login-proof-dfea6fa9-20261001T015321Z/evidence.json`,
-SHA-256 `e6dd9fc8e96fcd59fa0145e601ae04d4cc31e14c1c9146055ed69872cab2ae95`,
-Ops `dfea6fa9680da437500f35ae84aa0236979fba8d`. It requires exact schema-2
-fields, current runtime/image, cumulative 4/4/4 and current-marker 2/2/2 counts,
+`/docker/shareittoo/evidence/web-login-proof-84408c04-20261001T061535Z/evidence.json`,
+SHA-256 `0d320a50b458e5cf296ee5a1662cba7401db4a6c337e8591cc78ae914bb7eee5`,
+Ops `84408c04c0387a4412b8542ca1381d1be110ed1b`, runtime
+`d3c2f5d7d7516d3bfaac4b61689c2c433924cc6e` and image digest
+`sha256:31b8b015eb0635b9fbb7d6c5e54ef43fe089d5b953dba8fa446aae2122a5888a`.
+It requires exact schema-2 fields, cumulative 6/6/6 and current-marker 2/2/2 counts,
 both exact principals for sessions and their matching refresh/audit relationships,
 zero active sessions/refresh and unchanged prior-history,
 identity and catalog digests. Full bindings and the next gate are in the
-[current successor runbook](../../docs/operations/STAGING_WEB_LOGIN_PROOF_SUCCESSOR_2026-10-01.md#verified-immutable-proof-and-consumer-package).
+[current successor runbook](../../docs/operations/STAGING_WEB_LOGIN_PROOF_SUCCESSOR_2026-10-01.md#current-d3-proof-and-consumer-binding).
 After source review and exact-HEAD gates, use that actual evidence SHA in a new
 protected activation preparation. No activation is performed by this package.
 

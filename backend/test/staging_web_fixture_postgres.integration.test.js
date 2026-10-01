@@ -402,19 +402,21 @@ test('PG16 fixture adapter uses real schema, transactions, triggers and two clie
           VALUES ('system','staging_web_fixture_seed.seeded','staging_web_fixture_seed',$1,$2,$3::jsonb)`,
         [f.manifest.preflight.listingId, bootstrapRunId,
           JSON.stringify({ scope: seedScopeDigest, snapshotHash: seedSnapshotDigest })]);
-        for (const role of f.manifest.preflight.roles) {
-          const sessionId = randomUUID();
-          await client.query(`INSERT INTO auth_sessions (id,user_id,device_label,user_agent,revoked_at)
-            VALUES ($1,$2,'Catalog attestation integration','Catalog-Attestation-Integration',now())`,
-          [sessionId, role.userId]);
-          await client.query(`INSERT INTO refresh_tokens
-            (user_id,session_id,family_id,token_hash,expires_at,user_agent,revoked_at)
-            VALUES ($1,$2,$2,$3,now()+interval '1 hour','Catalog-Attestation-Integration',now())`,
-          [role.userId, sessionId, sha(randomUUID())]);
-          await client.query(`INSERT INTO audit_log
-            (actor_id,actor_role,action,resource_type,resource_id,request_id)
-            VALUES ($1,'user','auth.login','auth_session',$2,$3)`,
-          [role.userId, sessionId, `catalog-attestation-${sessionId}`]);
+        for (let priorProof = 0; priorProof < 2; priorProof++) {
+          for (const role of f.manifest.preflight.roles) {
+            const sessionId = randomUUID();
+            await client.query(`INSERT INTO auth_sessions (id,user_id,device_label,user_agent,revoked_at)
+              VALUES ($1,$2,$3,'Catalog-Attestation-Integration',now())`,
+            [sessionId, role.userId, `Catalog attestation integration ${priorProof}`]);
+            await client.query(`INSERT INTO refresh_tokens
+              (user_id,session_id,family_id,token_hash,expires_at,user_agent,revoked_at)
+              VALUES ($1,$2,$2,$3,now()+interval '1 hour','Catalog-Attestation-Integration',now())`,
+            [role.userId, sessionId, sha(randomUUID())]);
+            await client.query(`INSERT INTO audit_log
+              (actor_id,actor_role,action,resource_type,resource_id,request_id)
+              VALUES ($1,'user','auth.login','auth_session',$2,$3)`,
+            [role.userId, sessionId, `catalog-attestation-${sessionId}`]);
+          }
         }
         const m = f.manifest.preflight;
         const repeatMarker = loginProofMarker(bootstrapRunId, sha(randomUUID()).slice(0, 32));
@@ -427,7 +429,7 @@ test('PG16 fixture adapter uses real schema, transactions, triggers and two clie
           client.query(query, params?.map(substitute)) }, { runId: bootstrapRunId, marker: repeatMarker });
         const historyBefore = await historyStore.snapshot({ readOnly: true });
         assert.deepEqual([historyBefore.totalSessions, historyBefore.totalRefreshTokens,
-          historyBefore.totalLoginAudits, historyBefore.markerLoginAudits], [2, 2, 2, 0]);
+          historyBefore.totalLoginAudits, historyBefore.markerLoginAudits], [4, 4, 4, 0]);
         const sql = catalogActivationStateSql
           .replaceAll(requiredLoginProofMarkerSha256, sha(repeatMarker))
           .replaceAll(dedicatedFixture.owner, m.roles[0].userId)
@@ -436,7 +438,7 @@ test('PG16 fixture adapter uses real schema, transactions, triggers and two clie
           .replaceAll(dedicatedFixture.upload, m.uploadName);
         const readState = async () => (await client.query(sql)).rows[0]?.json_build_object;
         const proofBinding = { activationRunDigest: sha(m.runId), loginHistoryDigest: historyBefore.historyDigest,
-          loginRetainedSessions: 4, loginRetainedRefresh: 4, loginTotalAudits: 4 };
+          loginRetainedSessions: 6, loginRetainedRefresh: 6, loginTotalAudits: 6 };
         const counts = (value) => [value.retainedSessions, value.retainedRefresh, value.loginAudits,
           value.markerSessions, value.markerRefresh, value.markerLoginAudits];
         const markerSessions = [];
@@ -469,7 +471,7 @@ test('PG16 fixture adapter uses real schema, transactions, triggers and two clie
           await insertMarkerAudits(true);
           const reassigned = await readState();
           assert.deepEqual(counts(reassigned), counts(correct));
-          assert.deepEqual(counts(reassigned), [4, 4, 4, 2, 2, 2]);
+          assert.deepEqual(counts(reassigned), [6, 6, 6, 2, 2, 2]);
           assert.equal(reassigned.historyDigest, correct.historyDigest);
           assert.equal(reassigned.markerPrincipals, 2);
           assert.equal(reassigned.markerAuditPrincipals, 1);
@@ -479,7 +481,7 @@ test('PG16 fixture adapter uses real schema, transactions, triggers and two clie
         await insertMarkerAudits();
         const historyAfter = await historyStore.snapshot({ readOnly: true });
         assert.deepEqual([historyAfter.totalSessions, historyAfter.totalRefreshTokens,
-          historyAfter.totalLoginAudits, historyAfter.markerLoginAudits], [4, 4, 4, 2]);
+          historyAfter.totalLoginAudits, historyAfter.markerLoginAudits], [6, 6, 6, 2]);
         assert.equal(historyAfter.historyDigest, historyBefore.historyDigest);
         assert.equal(historyAfter.identityDigest, historyBefore.identityDigest);
         assert.equal(historyAfter.catalogDigest, historyBefore.catalogDigest);
@@ -501,7 +503,7 @@ test('PG16 fixture adapter uses real schema, transactions, triggers and two clie
         assert.notEqual(attested.activationRunDigest, sha(bootstrapRunId));
         assert.equal(attested.activeSessions, 0); assert.equal(attested.activeRefresh, 0);
         assert.equal(attested.mfaFactors, 0);
-        assert.equal(attested.retainedSessions, 4); assert.equal(attested.retainedRefresh, 4);
+        assert.equal(attested.retainedSessions, 6); assert.equal(attested.retainedRefresh, 6);
         assert.equal(attested.historyDigest, historyAfter.historyDigest);
         assert.equal(attested.markerSessions, 2); assert.equal(attested.markerRefresh, 2);
         assert.equal(attested.markerLoginAudits, 2); assert.equal(attested.markerPrincipals, 2);
@@ -555,7 +557,7 @@ test('PG16 fixture adapter uses real schema, transactions, triggers and two clie
           assert.equal(changed.rowCount, 1);
           const reassigned = await readState();
           assert.deepEqual(counts(reassigned), counts(attested));
-          assert.deepEqual(counts(reassigned), [4, 4, 4, 2, 2, 2]);
+          assert.deepEqual(counts(reassigned), [6, 6, 6, 2, 2, 2]);
           assert.equal(reassigned.historyDigest, attested.historyDigest);
           assert.equal(reassigned.markerPrincipals, 2);
           assert.equal(reassigned.markerRefreshPrincipals, 1);

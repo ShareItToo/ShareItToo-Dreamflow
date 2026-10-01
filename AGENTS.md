@@ -46,6 +46,14 @@ discover a mechanically stale source hash.
   immutable parent relationship and the same principal. Require both expected
   principals and a real-database reassignment negative test that preserves
   aggregate counts while changing ownership.
+- Non-root bind-source mentor invariant: keep protected host evidence parents
+  root-owned `0700`; do not weaken them merely to make host-side UID traversal
+  pass. Before starting any non-root worker, the root Docker daemon must verify
+  every exact source file's metadata, byte hash and non-symlink identity. Then,
+  inside the exact runtime container namespace, prove that the worker UID/GID
+  can traverse every mounted target parent, read every mounted target, and run
+  the required syntax check and import. Root readability alone is never proof
+  of worker readability.
 
 ## Sol, Luna and Gemini review loop
 

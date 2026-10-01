@@ -32,8 +32,8 @@ effect checks, token rejection and bounded cleanup remain required.
 2. Only after successful live proof, read its exact bytes using the protected
    descriptor contract. In a separate reviewed commit, pin its SHA-256 and Ops
    commit in the catalog consumer, validate schema 2 and exact current
-   runtime/image, and bind cumulative DB counts to `authHistory.after` (expected
-   4/4/4 after one prior successful proof, but only actual evidence is authority).
+   runtime/image, and bind cumulative DB counts to `authHistory.after` (now
+   6/6/6 after two prior successful proofs, but only actual evidence is authority).
    Require the same history, identity and catalog digests. Refresh relevant
    tests/bindings and gates before any new activation preparation.
 
@@ -43,7 +43,7 @@ requires source review and exact-HEAD gates before new activation preparation.
 No placeholder hash, compatibility exception or historical proof reuse bridges
 the two packages. Historical files are unchanged.
 
-## Verified immutable proof and consumer package
+## Previous immutable proof and superseded consumer binding
 
 The proof executed once from Ops `dfea6fa9680da437500f35ae84aa0236979fba8d`.
 Independent read-only closure verified the root:root 0600 artifact
@@ -66,7 +66,7 @@ counts are zero. Catalog and registration remain false, external providers off,
 public catalog empty, exact health/version healthy, and transient resources
 absent. Login-proof completion is not browser or catalog-activation acceptance.
 
-The consumer now validates the complete exact schema-2 field set, nested history
+The previous consumer validated the complete exact schema-2 field set, nested history
 field sets and these immutable digest/Ops/runtime/image bindings. Its fresh
 runtime manifest carries the proof's cumulative totals, history digest and
 marker digest. Live SQL must attest totals 4/4/4, marker counts 2/2/2, both marker
@@ -87,8 +87,40 @@ Schema 1, missing/extra fields, incorrect totals, historical-row changes and
 binding drift fail before transition. The consumer also compares manifest
 identity/catalog bindings directly with the immutable proof before commands.
 
-Next: review/gate/commit package 2, then prepare a completely new protected
-catalog manifest and perform its default preflight. Any separately authorized
+## Current D3 proof and consumer binding
+
+After the exact D3 promotion, a fresh proof executed once from Ops
+`84408c04c0387a4412b8542ca1381d1be110ed1b`. Independent read-only closure
+verified the root-owned `0600`, single-link artifact
+`/docker/shareittoo/evidence/web-login-proof-84408c04-20261001T061535Z/evidence.json`,
+SHA-256 `0d320a50b458e5cf296ee5a1662cba7401db4a6c337e8591cc78ae914bb7eee5`,
+created `2026-10-01T06:20:59.472Z`. It binds runtime
+`d3c2f5d7d7516d3bfaac4b61689c2c433924cc6e` and image digest
+`sha256:31b8b015eb0635b9fbb7d6c5e54ef43fe089d5b953dba8fa446aae2122a5888a`.
+
+Both roles again passed login, `/me`, logout and post-logout token rejection.
+The cumulative session, refresh and login-audit histories advanced exactly from
+`4/4/4` to `6/6/6`; this proof still owns exactly `2/2/2`, both principals and
+the exact refresh-to-session and audit-to-session principal relationships.
+Active sessions and refresh tokens are zero. The marker SHA-256 is
+`bb5fe651bd42e33488a5834efedd4935f4db3556367807bab231ce001df025f7`;
+the before/after prior-history digest is identically
+`79f84f73ab9a2353b9fa0250031b8c1cb9b8acef3fe47b6f30db588d95044816`.
+Identity, catalog and proof-ledger digests are respectively
+`6d11fe55adf0e90bce7bb0db45c99951c20f5c8aa01c5918fccbf6896964331e`,
+`806c52aff0f5d10400adbf7ba09296376d666b92a79c8385a6f9cb1bbad66797`
+and `4fff35fbe15c64a38f0ca423222b32298b5595da8dab81e306a7ad5a48e80f08`.
+All forbidden-effect counts remain zero; catalog and registration remain off,
+the public catalog is empty, and payment/provider boundaries are unchanged.
+
+The current consumer pins these exact bytes, Ops/runtime/image and digests. Its
+live SQL requires cumulative `6/6/6`, current marker `2/2/2`, both principals,
+both immutable relationships and zero active auth state. The previous proof and
+its consumer values remain immutable history; they are not accepted as the
+current-runtime prerequisite.
+
+Next: review/gate/commit this consumer package, then prepare a completely new
+protected catalog manifest and perform its default preflight. Any separately reviewed
 one-key transition follows only that successful fresh preflight. Old activation
 manifests and namespace attempts remain historical and cannot be reused.
 
@@ -99,6 +131,11 @@ its immutable `adapter.json` / `credentials.json` must retain the runtime-reader
 ownership/modes required by `readProtectedFixtureLoginInput` (currently 100:101,
 directory 0700, files 0600), verified against the image before use. Binding and
 evidence are root:root 0600 beneath a root:root 0700 evidence directory.
+Protected host evidence parents stay root-owned `0700`; they are not made
+host-traversable by the worker UID. Before any non-root worker starts, the root
+Docker daemon verifies exact source metadata, hashes and non-symlink identity,
+then the exact runtime namespace proves UID100:GID101 target-parent traversal,
+target reads, Node syntax and import. Root-only readability is insufficient.
 
 ```text
 node <exact-source>/backend/ops/staging_web_fixture_login_verifier.mjs --prepare <protected-input-directory> <new-binding.json> <new-evidence.json>

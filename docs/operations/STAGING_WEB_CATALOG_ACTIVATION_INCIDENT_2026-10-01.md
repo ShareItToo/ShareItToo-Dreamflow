@@ -81,6 +81,20 @@ predates the fix; a later attempt therefore requires a newly built, verified
 and promoted runtime containing the fix before a fresh manifest and namespace
 can be prepared.
 
+That runtime prerequisite is now satisfied by the separately promoted D3
+runtime `d3c2f5d7d7516d3bfaac4b61689c2c433924cc6e`, image digest
+`sha256:31b8b015eb0635b9fbb7d6c5e54ef43fe089d5b953dba8fa446aae2122a5888a`,
+using reviewed Ops `84408c04c0387a4412b8542ca1381d1be110ed1b`.
+Independent promotion closure passed; this fact does not reactivate an old
+manifest or namespace. A fresh schema-2 login proof on D3 is retained at
+`/docker/shareittoo/evidence/web-login-proof-84408c04-20261001T061535Z/evidence.json`,
+SHA-256 `0d320a50b458e5cf296ee5a1662cba7401db4a6c337e8591cc78ae914bb7eee5`.
+It proves cumulative auth history `4/4/4 -> 6/6/6`, exact marker `2/2/2`, both
+principals and both referential relationships, with zero active auth state and
+unchanged prior-history, identity and catalog digests. The catalog flag remains
+`false` and public count remains zero. This source binding still performs no
+manifest preparation or activation.
+
 ## Reviewed execution-capsule requirements
 
 A future fresh capsule must, before any secondary checks:
@@ -96,6 +110,13 @@ A future fresh capsule must, before any secondary checks:
    fields from the restart-stable comparison; and
 5. keep the activation mutation non-retriable and require a fresh manifest and
    fresh namespace for any later authorized attempt.
+
+For every non-root bind-mounted worker, protected host evidence parents remain
+root-owned `0700` and are never weakened for host UID traversal. The root Docker
+daemon first verifies every source file's exact metadata, hash and non-symlink
+identity. The exact runtime namespace must then prove the worker UID/GID can
+traverse every mounted target parent, read every mounted target, and pass the
+required syntax check/import before the worker starts.
 
 This source successor is not live activation evidence and does not authorize a
 remote run.
