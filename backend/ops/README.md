@@ -128,13 +128,13 @@ legacy `shareittoo_staging` is never used by this lane.
 The source readback is exactly schema `98` with the manifest-bound ledger
 digest `796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196`.
 The pre-promotion image is exactly
-`ghcr.io/shareittoo/shareittoo-api:8a90ec61fbe2a0c67265191809ddf332dd26a6b4`
+`ghcr.io/shareittoo/shareittoo-api:1ebc6eaf695e0cd9365680cdecd711b3edbb5586`
 with digest
-`sha256:672f98fe2f49002ea8222a88118d82a46fedadbab9ed1ffdb41cc026c1eafc5e`.
+`sha256:22f609f21e04ddeb633186727b72c12158c473822dfef2859d3fa357e00647a2`.
 The new seal is
-`shareittoo-staging-api-alt-sealed-green-8a90ec61`. All 15 existing seals
-(the previous thirteen, `shareittoo-staging-api-alt-sealed-green-5d3b4261`
-and `shareittoo-staging-api-web-cors-rollback-aa1a4ef1e065`)
+`shareittoo-staging-api-alt-sealed-green-1ebc6eaf`. All 17 existing seals
+(the previous fifteen, `shareittoo-staging-api-alt-sealed-green-8a90ec61`
+and `shareittoo-staging-api-web-fixture-env-rollback-13b02611f3b0`)
 remain separately read-only validated, stopped containers
 with the exact Green label, run ID and immutable image digest; none is ever
 renamed, removed, restarted or network-targeted.
@@ -179,7 +179,16 @@ registration mapping empty/absent, access gate true, payment memory, and Stripe 
 false. It also hard-pins `MAIL_TRANSPORT=memory`, `PUSH_TRANSPORT=memory`,
 `IDENTITY_VERIFICATION_TRANSPORT=memory`, `SIT_LISTING_AI_PROVIDER=on_device`,
 `SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED=0`, and
-`SIT_LISTING_AI_BUDGET_CENTS=0`; protected-env and candidate/final runtime
+`SIT_LISTING_AI_BUDGET_CENTS=0`. It also requires
+`SIT_STAGING_SYNTHETIC_CATALOG_ENABLED=false`; protected-env,
+candidate/final runtime and rollback readbacks reject a missing, true or
+otherwise drifted value. The two public fixture selector keys must each exist
+exactly once. Their one-value counts and SHA-256 digests are preserved in
+readback/evidence without exposing either raw selector: listing digest
+`0fd441cd44dffb9d3273fac6b28bd618ffe6229d5cbfd9d3d8baadc8703ef2f7`
+and upload digest
+`12a3988ce523edf8a6c25fab0518dc19ebce4dc8f0b9588c8f4642e077e5e7e3`.
+Protected-env and candidate/final runtime
 readbacks reject SMTP, FCM, Stripe, OpenAI, an active external flag, or a
 nonzero budget before candidate/final start. Both candidate and final carry no
 Stripe key/webhook mounts. The Green promotion contract additionally hard-pins the optional
@@ -209,36 +218,36 @@ when cleanup or target/config preservation is uncertain.
 Preparation is local/read-only until the separately authorized operational
 gate is supplied; the target and config manifests stay outside Git:
 
-The 2026-09-30 post-CORS VPS readback binds the live 8a90 image, schema 98,
-and 15 stopped Green seals, including the retained bc86 witness. The protected
+The 2026-10-01 web-fixture VPS readback binds the live 1ebc image, schema 98,
+and 17 stopped Green seals, including the retained bc86 witness. The protected
 target manifest must use schemaVersion `4`; schema `3`/provider-off promotion
 is rejected for this current target. Its required `authProfile` has kind
 `google-post-enrollment`, schemaVersion `1`, sourceImageDigest
-`sha256:672f98fe2f49002ea8222a88118d82a46fedadbab9ed1ffdb41cc026c1eafc5e`,
+`sha256:22f609f21e04ddeb633186727b72c12158c473822dfef2859d3fa357e00647a2`,
 allowedUserIdsDigest
-`dea1a23d836f0c5966a889ac2bf8098ade2392e7a74e7d2819391dbc1ea7e2fd`,
-allowedUserIdsCount `4`, and googleUserIdDigest
+`94ea2a820e6a48d5776d3b3580e62df956a338a2c3dad2d47dd4b85dfbc746b0`,
+allowedUserIdsCount `6`, and googleUserIdDigest
 `8009329bd0eec86d923640e8d878ae2bf9117948a64d0f82f9460b03fef44a16`.
 The exact ordered access list must remain unchanged through candidate, final
 runtime and rollback; Firebase Auth stays enabled and registration stays closed.
 The separate finalized enrollment readback is `1|1|1`; never place raw user or
-provider identities in this contract. These live profile values, the new 8a90
-seal name and all 15 retained descriptors produce the normalized target digest
-`84925296b2b9a5c03fb6829221f19854baefb09b575336cb2f1c553fcdfff083`.
+provider identities in this contract. These live profile values, the new 1ebc
+seal name and all 17 retained descriptors produce the normalized target digest
+`582d1693c7987b40f028080152d0cf88385da58aef30d546ee5631445144737f`.
 Do not run the promotion against a stale manifest.
 
-This Ops-only target refresh prepares runtime source
-`1ebc6eaf695e0cd9365680cdecd711b3edbb5586`; its accepted immutable API image
-digest still has to be supplied after publication/readback. Keep
+This Ops-only target refresh can promote the separately published runtime source
+`34194c42e5e477144b5db5a8eeb6c2d476c7aeef` with immutable API image digest
+`sha256:0403a5f60b94a8aa91d7cbf29ae503aea989d85aeb72fcf4cf6dc14a801670b9`. Keep
 `GREEN_STAGING_OPS_COMMIT` bound to the separately reviewed successor Ops commit,
 not to that runtime SHA. Fresh owner-only target/config manifests and inventory
-remain required. This update does not activate the synthetic catalog flag,
+remain required. This update preserves the synthetic catalog flag disabled,
 provision another role, publish an image or authorize a live promotion.
 
 Default mode is a read-only preflight, not a promotion. It validates the protected
-manifests/env/runtime files, the exact 8a90 predecessor and all 15 retained seals,
+manifests/env/runtime files, the exact 1ebc predecessor and all 17 retained seals,
 auth/access/topology, the locally present immutable runtime image, schema/ledger
-and enrolled identity. Only the existing 26 Docker read commands before
+and enrolled identity. Only the existing 28 Docker read commands before
 `quiesce_green_api` run, in that exact order; only Docker needs to be available
 for this mode. No pull, curl, stop, rename, backup, evidence, isolated env,
 directory or resource creation occurs, including on failure. Output is only
