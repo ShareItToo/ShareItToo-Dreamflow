@@ -10,8 +10,9 @@ not current execution or release authority.
   fast, source-bound pilot acceptance. The exact-name image policy successor
   and its responsive browser acceptance are closed at exact source 967. The
   Google-Web activation prerequisite diagnosis is closed and awaits only its
-  named Gemini gate; independently, the dormant P7-A1 synthetic Quorum source
-  package is Sol-reviewed. Real Mission matching/data activation remains gated.
+  named Gemini gate. Independently, the dormant P7-A1 synthetic Quorum source
+  package and its isolated P7-A2a Web-test presentation are Sol-reviewed. Real
+  Mission matching/data activation remains gated.
 - **Authoritative sources:** [Mission masterplan](../product/SIT_MISSION_MASTERPLAN_2026-09-30.md),
   [Web contract](STAGING_WEB_PILOT.md), [Web/native matrix](SIT_WEB_NATIVE_CAPABILITY_MATRIX_2026-10-02.md),
   [P6-C2 boundary](SIT_MISSION_P6C2_OWNER_API_2026-10-02.md) and
@@ -19,9 +20,11 @@ not current execution or release authority.
   Older checkpoint statements in linked documents do not supersede this capsule.
 - **Source/candidate truth:** the deployed Web source remains exact
   `967958f6c6a4d580f4f05e6849b32991db233603` on branch
-  `codex/master-workflow-20260808`. The P7-A1 successor below changes only a
-  dormant synthetic read contract and its tests/runner; it is not deployed,
-  routeable, persisted, feature-flagged or evidence of real Mission completion.
+  `codex/master-workflow-20260808`. Dormant P7-A1 source head
+  `0940f1dcb4340a7c004409d4b664d4d8c9d8ced4` changes only a synthetic read
+  contract and its tests/runner. P7-A2a adds only isolated test support on top.
+  Neither package is deployed, routeable, persisted, feature-flagged or
+  evidence of real Mission completion.
 - **967 exact-head CI:**
   [Regression 37066632738](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37066632738)
   and [CodeQL 37066632784](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37066632784)
@@ -157,13 +160,36 @@ not current execution or release authority.
   unchanged full Backend gate passed 1,928 tests with 23 regular skips and zero
   failures; syntax and diff checks remain green. No migration, route, real
   binding, provider call or combined payment was added.
+- **P7-A1 exact-head CI — PASS:** Regression
+  [37074425077](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37074425077)
+  completed successfully at exact `0940f1dc`; backend, PostgreSQL-16,
+  Flutter/Android and clean-checkout reproducibility jobs all passed. CodeQL
+  [37074425086](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37074425086)
+  also completed successfully at the same head. The publish job was correctly
+  skipped; this is source/CI evidence, not deployment.
+- **P7-A2a isolated synthetic Web presentation — Sol source PASS:** a
+  versioned, whitelist-only display envelope revalidates P7-A1 and binds its
+  projection digest plus all visible bytes. It exposes two distinct synthetic
+  owners/components, eleven separate axes, exact four named pickup and four
+  return slots, QR-v3 and exact-six-digit fallback metadata without exposing a
+  usable code, authentic media or real identity. The Flutter decoder requires
+  the independently supplied digest and principal, rejects malformed/real IDs
+  and detaches caller data. Its disclosure remains permanently visible and
+  states synthetic/non-authentic/non-binding/no-money truth. Missing 4/4,
+  rejection, timeout, optional conflict and dispute isolation remain honest.
+  Backend P7+A2a passed 23/23; VM and Chrome widget matrices passed 14/14 each
+  at 390/768/1920/3840 px and text scale 1/2; the runtime/import boundary passed
+  3/3. Analyzer, syntax, diff and working-tree secret scan passed. All six files
+  live under `backend/test` or `test`; normal app, API, jobs, flags, builds,
+  Staging profile, network and persistence have no P7-A2a dependency. This is
+  accessible browser-test evidence only, not a public Staging page or activation.
 - **Exact next:** when the visible SIT Gemini account is signed in, verify
   exactly Google AI Pro `Pro` with `Extended` and submit only gate
   `SIT-GOOGLE-WEB-PREREQ-01`; on PASS, execute the bounded Web-app/domain
   provider package and independently read it back before any flag activation.
-  Independently, commit and push the reviewed P7-A1 source package, then accept
-  only automatic Regression and CodeQL success on its exact successor head.
-  Do not deploy or wire P7-A1. D1/D2/D3/D4 stay open, and a blocked provider
+  Independently, commit and push the reviewed P7-A2a test-support package, then
+  accept only automatic Regression and CodeQL success on its exact successor
+  head. Do not deploy or wire P7. D1/D2/D3/D4 stay open, and a blocked provider
   lane must not stop the independent source/CI package.
   No Production/Play change or pilot-complete claim follows from this sequence.
 
