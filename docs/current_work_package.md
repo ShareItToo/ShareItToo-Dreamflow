@@ -385,7 +385,7 @@ workflow `36905155481`. A D3/D4 gate must later define and prove real
 owner/location eligibility selection before any real-data activation; this
 source package does not imply launch capability.
 
-## P6-B private Mission demand UI — LOCAL SOURCE IN REVIEW
+## P6-B private Mission demand UI — EXACT-HEAD CI PASS; standard-off
 
 The smallest additive Flutter/Web slice adds one private participant screen.
 The requester may open it only from an exact current unresolved P5 gap and must
@@ -411,9 +411,11 @@ the structural wiring gate pass locally. Existing Mission and inventory widget
 tests remain green. This remains source-only behind the existing Planner gate:
 there is still no real eligibility resolver, Live activation, notification,
 public listing/search, booking, payment, provider, Green or Play change.
-Exact-head CI remains pending after Sol review.
+Exact-head successor `14e7678ff2ee32aac5ebaa8ef06f44a6cbbbb973`
+passed Regression `36911321026`, including Backend, PostgreSQL, Flutter and R10
+with publication skipped, and CodeQL workflow `36911321028`.
 
-## P6-C1 private supply participation foundation — LOCAL SOURCE; standard-off
+## P6-C1 private supply participation foundation — SOL PASS; exact-head CI pending
 
 The smallest additive successor adds only a normalized, owner-bound eligibility
 foundation. An owner participation has immutable `active`/`withdrawn` revisions;
@@ -432,6 +434,18 @@ only demand-create path. Real location/radius eligibility and final user-facing
 Art. 13 wording remain fail-closed for the next narrow gate. This is source-only
 and does not change Live, Green, Play, provider, payment, navigation or any
 standard/build flag.
+
+Sol reviewed the two-commit source successor
+`a5ec63bad268bbcafd876fddd3c9b0f13ef70c54` plus
+`4eb373474f66e03455717888d40af387448c50d7`. The follow-up closes direct
+root-state mutation, restricts the current allow-list to
+`plant_container_equipment`, and binds command result state to the exact
+referenced revision. A fresh focused PostgreSQL 16 run and 26 focused
+contract, export, retention and runner tests passed on `4eb37347`; privacy and
+retention validators also passed. Exact-head remote CI remains pending after
+the review-evidence commit. The preceding Gemini D3/D4 answer is recorded as
+`FIX`, not approval or legal advice; see the
+[P6-C D3/D4 gate record](operations/SIT_GEMINI_MISSION_P6C_D3_D4_GATE_2026-10-02.md).
 
 ## Closed prerequisite: Phase 0 Web/CORS and safe synthetic catalog QA
 
