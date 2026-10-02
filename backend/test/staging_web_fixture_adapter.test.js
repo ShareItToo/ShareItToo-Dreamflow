@@ -46,9 +46,9 @@ function fixture() {
     PRIVATE_PILOT_V4_ENABLED: 'true', PRIVATE_PILOT_ALLOWED_REGIONS: 'heilbronn',
     SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'false', PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false',
     MAIL_TRANSPORT: 'memory', PUSH_TRANSPORT: 'disabled' };
-  const ledger = Array.from({ length: 103 }, (_, i) => ({ name: `${String(i + 1).padStart(3, '0')}_fixture.up.sql`, checksum: 'a'.repeat(64) }));
+  const ledger = Array.from({ length: 104 }, (_, i) => ({ name: `${String(i + 1).padStart(3, '0')}_fixture.up.sql`, checksum: 'a'.repeat(64) }));
   const source = { commit: 'b'.repeat(40), hashes: Object.fromEntries(adapterSources.map((p) => [p, 'c'.repeat(64)])),
-    ledgerDigest: fixtureDigest(ledger), schemaCount: 103 };
+    ledgerDigest: fixtureDigest(ledger), schemaCount: 104 };
   const preflight = { kind: 'sit-staging-web-two-role-preflight', schemaVersion: 1, target: fixtureTarget,
     runId: 'web-fixture-20260930-adapter', createdAt: now.toISOString(), runtimeCommit: environment.APP_COMMIT,
     environmentDigest: fixtureEnvironmentDigest(environment), snapshotDigest: fixtureDigest(snapshot),
@@ -61,7 +61,7 @@ function fixture() {
       mimeType: 'image/jpeg', sha256: bytesHash(photoBytes), currentProductEvidence: false,
       sourceUrl: 'https://example.invalid/illustration', creator: 'Synthetic fixture', license: 'CC0', capturedAt: '2017-01-01' } };
   const manifest = { kind: 'sit-staging-web-fixture-adapter', schemaVersion: 1, operation: 'activate',
-    sourceCommit: source.commit, sourceHashes: source.hashes, schemaCount: 103, ledgerDigest: source.ledgerDigest,
+    sourceCommit: source.commit, sourceHashes: source.hashes, schemaCount: 104, ledgerDigest: source.ledgerDigest,
     uploadDirectory: '/data/uploads', preflight };
   const f = { manifest, source, environment, photoBytes, storedPhotoBytes: Buffer.from(photoBytes), now,
     state: { snapshot, events: [], refresh: [], dependencyCount: 0 }, calls: [], failAt: null, rollbackFail: false };
