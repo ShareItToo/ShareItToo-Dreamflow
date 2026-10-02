@@ -196,6 +196,8 @@ const sourcePaths = [
   'backend/src/mission_supply_demand_workflow.js',
   'backend/sql/migrations/103_mission_supply_demands.up.sql',
   'backend/sql/migrations/103_mission_supply_demands.down.sql',
+  'backend/sql/migrations/104_mission_supply_participation.up.sql',
+  'backend/sql/migrations/104_mission_supply_participation.down.sql',
   'backend/src/private_shelf_workflow.js',
   'backend/src/private_shelf_media_files.js',
   'backend/ops/private_shelf_media_cleanup.mjs',

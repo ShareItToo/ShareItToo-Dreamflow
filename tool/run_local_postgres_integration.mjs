@@ -39,6 +39,9 @@ export const integrationTestGroups = Object.freeze({
   missionSupplyDemand: Object.freeze([
     'backend/test/mission_supply_demand_postgres.integration.test.js',
   ]),
+  missionSupplyParticipation: Object.freeze([
+    'backend/test/mission_supply_participation_postgres.integration.test.js',
+  ]),
   privateShelf: Object.freeze([
     'backend/test/private_shelf_postgres.integration.test.js',
   ]),
@@ -72,12 +75,16 @@ export function integrationTestPlan({
   focusedMissionFitCheck = false,
   focusedMissionInventoryResolution = false,
   focusedMissionSupplyDemand = false,
+  focusedMissionSupplyParticipation = false,
   focusedPrivateShelf = false,
 } = {}) {
   if (focusedMissionInventoryResolution) {
     return [integrationTestGroups.missionInventoryResolution];
   }
   if (focusedMissionSupplyDemand) return [integrationTestGroups.missionSupplyDemand];
+  if (focusedMissionSupplyParticipation) {
+    return [integrationTestGroups.missionSupplyParticipation];
+  }
   if (focusedMissionFitCheck) return [integrationTestGroups.missionFitCheck];
   if (focusedPrivateShelf) return [integrationTestGroups.privateShelf];
   if (focusedMissionNeed) return [integrationTestGroups.missionNeed];
@@ -109,6 +116,7 @@ export function integrationTestPlan({
     integrationTestGroups.missionFitCheck,
     integrationTestGroups.missionInventoryResolution,
     integrationTestGroups.missionSupplyDemand,
+    integrationTestGroups.missionSupplyParticipation,
     integrationTestGroups.stagingGoogleRegistration,
     integrationTestGroups.listingAi,
     integrationTestGroups.identity,
@@ -309,6 +317,8 @@ export async function runLocalPostgresIntegration({
     environment.SIT_POSTGRES_FOCUSED_MISSION_INVENTORY_RESOLUTION === '1';
   const focusedMissionSupplyDemand =
     environment.SIT_POSTGRES_FOCUSED_MISSION_SUPPLY_DEMAND === '1';
+  const focusedMissionSupplyParticipation =
+    environment.SIT_POSTGRES_FOCUSED_MISSION_SUPPLY_PARTICIPATION === '1';
   const focusedPrivateShelf = environment.SIT_POSTGRES_FOCUSED_PRIVATE_SHELF === '1';
   const integrationGroups = integrationTestPlan({
     focusedGoogleRegistration,
@@ -321,6 +331,7 @@ export async function runLocalPostgresIntegration({
     focusedMissionFitCheck,
     focusedMissionInventoryResolution,
     focusedMissionSupplyDemand,
+    focusedMissionSupplyParticipation,
     focusedPrivateShelf,
   });
 

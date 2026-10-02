@@ -37,7 +37,7 @@ if (!databaseUrl) {
       const migrations = await setupPool.query(
         'SELECT name FROM schema_migrations ORDER BY name',
       );
-      assert.equal(migrations.rows.at(-1).name, '103_mission_supply_demands.up.sql');
+      assert.equal(migrations.rows.at(-1).name, '104_mission_supply_participation.up.sql');
 
       const ownerId = 'mission-need-owner';
       const otherId = 'mission-need-other';

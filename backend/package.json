@@ -18,6 +18,7 @@
     "test:postgres:mission-fit-check": "SIT_POSTGRES_FOCUSED_MISSION_FIT_CHECK=1 node ../tool/run_local_postgres_integration.mjs",
     "test:postgres:mission-inventory-resolution": "SIT_POSTGRES_FOCUSED_MISSION_INVENTORY_RESOLUTION=1 node ../tool/run_local_postgres_integration.mjs",
     "test:postgres:mission-supply-demand": "SIT_POSTGRES_FOCUSED_MISSION_SUPPLY_DEMAND=1 node ../tool/run_local_postgres_integration.mjs",
+    "test:postgres:mission-supply-participation": "SIT_POSTGRES_FOCUSED_MISSION_SUPPLY_PARTICIPATION=1 node ../tool/run_local_postgres_integration.mjs",
     "test:postgres:private-shelf": "SIT_POSTGRES_FOCUSED_PRIVATE_SHELF=1 node ../tool/run_local_postgres_integration.mjs",
     "acceptance:disposable-candidate": "node ops/staging_disposable_candidate_acceptance.mjs",
     "identity:pilot-end": "node ops/close_identity_verification_pilot.mjs",

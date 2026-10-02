@@ -28,7 +28,7 @@ const requireFromBackend = createRequire(
   new URL('../backend/package.json', import.meta.url),
 );
 
-export const r9RequiredMigrationCount = 103;
+export const r9RequiredMigrationCount = 104;
 export const r9SyntheticAccountCount = 12;
 export const r9SyntheticListingCount = 6;
 export const r9ResultClassification = 'LOCAL_ISOLATED_DATABASE_RECOVERY_PROOF';
@@ -106,6 +106,10 @@ const rollbackGuardExpectations = Object.freeze([
   Object.freeze({
     filename: '103_mission_supply_demands.down.sql',
     message: 'mission_supply_demand_rows_active',
+  }),
+  Object.freeze({
+    filename: '104_mission_supply_participation.down.sql',
+    message: 'mission_supply_participation_rows_active',
   }),
 ]);
 
@@ -186,7 +190,7 @@ async function readMigrationPlan(root) {
   }
   if (plan.length !== r9RequiredMigrationCount
       || plan[0]?.filename !== '001_b3_foundation.up.sql'
-      || plan.at(-1)?.filename !== '103_mission_supply_demands.up.sql') {
+      || plan.at(-1)?.filename !== '104_mission_supply_participation.up.sql') {
     fail('r9_migration_inventory_unexpected');
   }
   return Object.freeze(plan);
@@ -977,6 +981,16 @@ async function assertRollbackGuardRefusals(pool, root) {
            )`,
         );
       }
+      if (guard.filename === '104_mission_supply_participation.down.sql') {
+        await client.query(
+          `INSERT INTO mission_supply_participations (
+             id, owner_id, domain_version
+           ) VALUES (
+             'mission_supply_participation_00000000-0000-4000-8000-000000000104',
+             'r9-user-001', 'P6-C1-2026-10-02.1'
+           )`,
+        );
+      }
       try {
         await client.query(sql);
       } catch (error) {
@@ -1048,7 +1062,7 @@ async function closePools(pools) {
 
 export function validateR9Observation(value, {
   requiredMigrationCount = r9RequiredMigrationCount,
-  requiredLastMigration = '103_mission_supply_demands.up.sql',
+  requiredLastMigration = '104_mission_supply_participation.up.sql',
   requiredRollbackGuards = rollbackGuardExpectations,
 } = {}) {
   if (value?.schemaVersion !== 1

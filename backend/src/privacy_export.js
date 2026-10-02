@@ -127,6 +127,11 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
     missionSupplyDemandRevisions,
     missionSupplyReleases,
     missionSupplyDemandCommands,
+    missionSupplyParticipations,
+    missionSupplyParticipationRevisions,
+    missionSupplyParticipationCommands,
+    missionSupplyParticipationItemRevisions,
+    missionSupplyParticipationItemCommands,
     privateShelfItems,
     privateShelfMedia,
     privateShelfCommands,
@@ -551,6 +556,45 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
          FROM mission_supply_demand_commands AS command
         WHERE command.actor_id = $1
         ORDER BY command.demand_id, command.result_revision, command.idempotency_key`, userId),
+    rows(client,
+      `SELECT id AS "participationId", domain_version AS "domainVersion",
+              current_revision AS "currentRevision", current_status AS status,
+              created_at AS "createdAt", updated_at AS "updatedAt"
+         FROM mission_supply_participations
+        WHERE owner_id = $1
+        ORDER BY updated_at, id`, userId),
+    rows(client,
+      `SELECT revision.participation_id AS "participationId", revision.revision,
+              revision.status, revision.created_at AS "createdAt"
+         FROM mission_supply_participation_revisions AS revision
+        WHERE revision.owner_id = $1
+        ORDER BY revision.participation_id, revision.revision`, userId),
+    rows(client,
+      `SELECT idempotency_key AS "idempotencyKey",
+              command_type AS "commandType", request_sha256 AS "requestDigest",
+              participation_id AS "participationId",
+              result_revision AS "resultRevision", created_at AS "createdAt"
+         FROM mission_supply_participation_commands
+        WHERE owner_id = $1
+        ORDER BY participation_id, result_revision, idempotency_key`, userId),
+    rows(client,
+      `SELECT item.participation_id AS "participationId",
+              item.shelf_item_id AS "shelfItemId", item.need_key AS "needKey",
+              item.revision, item.availability_status AS "availabilityStatus",
+              item.created_at AS "createdAt"
+         FROM mission_supply_participation_item_revisions AS item
+        WHERE item.owner_id = $1
+        ORDER BY item.participation_id, item.shelf_item_id, item.need_key, item.revision`, userId),
+    rows(client,
+      `SELECT idempotency_key AS "idempotencyKey",
+              command_type AS "commandType", request_sha256 AS "requestDigest",
+              participation_id AS "participationId",
+              shelf_item_id AS "shelfItemId", need_key AS "needKey",
+              result_revision AS "resultRevision", result_status AS "resultStatus",
+              created_at AS "createdAt"
+         FROM mission_supply_participation_item_commands
+        WHERE owner_id = $1
+        ORDER BY participation_id, shelf_item_id, need_key, result_revision, idempotency_key`, userId),
     rows(client,
       `SELECT id AS "shelfItemId", domain_version AS "domainVersion",
               title, category_key AS "categoryKey", condition,
@@ -1481,6 +1525,23 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
         visibility: 'private_participants_only',
         exactSearchCoordinatesStored: false,
         privateShelfExposed: false,
+        publicListingCreated: false,
+        marketingContactCreated: false,
+        notificationCreated: false,
+        providerNotificationSent: false,
+        reservationCreated: false,
+        bookingCreated: false,
+        contractCreated: false,
+        paymentCreated: false,
+      },
+      missionSupplyParticipation: {
+        participations: missionSupplyParticipations,
+        revisions: missionSupplyParticipationRevisions,
+        commands: missionSupplyParticipationCommands,
+        itemRevisions: missionSupplyParticipationItemRevisions,
+        itemCommands: missionSupplyParticipationItemCommands,
+        visibility: 'private_owner_only',
+        exactSearchCoordinatesStored: false,
         publicListingCreated: false,
         marketingContactCreated: false,
         notificationCreated: false,

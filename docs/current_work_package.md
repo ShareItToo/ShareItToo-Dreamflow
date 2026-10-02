@@ -413,6 +413,26 @@ there is still no real eligibility resolver, Live activation, notification,
 public listing/search, booking, payment, provider, Green or Play change.
 Exact-head CI remains pending after Sol review.
 
+## P6-C1 private supply participation foundation — LOCAL SOURCE; standard-off
+
+The smallest additive successor adds only a normalized, owner-bound eligibility
+foundation. An owner participation has immutable `active`/`withdrawn` revisions;
+item revisions bind the owner's private Shelf item to an allow-listed `needKey`
+and either `confirmed_available` or `withdrawn`. Composite foreign keys and
+server-side revision triggers prevent a client or a foreign owner from selecting
+an item, owner, key or revision. Idempotency command rows bind the owner,
+request digest and exact result revision. No location, address, radius match,
+public listing, notification, contract, payment, provider or retention TTL is
+stored or activated.
+
+Account deletion cascades through all participation, item-history and command
+rows; the access export and count-only retention inventory expose the new
+private datasets. The existing P6-A synthetic injected resolver remains the
+only demand-create path. Real location/radius eligibility and final user-facing
+Art. 13 wording remain fail-closed for the next narrow gate. This is source-only
+and does not change Live, Green, Play, provider, payment, navigation or any
+standard/build flag.
+
 ## Closed prerequisite: Phase 0 Web/CORS and safe synthetic catalog QA
 
 ### Synthetic catalog browser projection — PHASE 0 LIVE PASS 2026-10-01

@@ -251,6 +251,7 @@ if (!databaseUrl) {
         '101_mission_fit_checks.up.sql',
         '102_mission_inventory_resolutions.up.sql',
         '103_mission_supply_demands.up.sql',
+        '104_mission_supply_participation.up.sql',
       ]);
       assert.match(migrationRows.rows[0].checksum, /^[0-9a-f]{64}$/);
       assert.match(migrationRows.rows[2].checksum, /^[0-9a-f]{64}$/);
