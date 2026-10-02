@@ -812,7 +812,7 @@
     },
     {
       "path": "lib/services/backend_config.dart",
-      "sha256": "5c05efcf5ddb5b797e0222eb720731ac3c4f0c6af3c5743334c14c8c07b88369"
+      "sha256": "1c7679b4976816953ec104de0467037a50c6799102ef27e1bfe072aa5ce7c36d"
     },
     {
       "path": "lib/services/firebase_runtime.dart",

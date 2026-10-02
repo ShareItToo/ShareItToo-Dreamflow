@@ -7,43 +7,41 @@ source link. Everything below **Historical snapshots** is retained provenance,
 not current execution or release authority.
 
 - **Objective:** advance Mission source safely while using Staging Web for
-  fast, source-bound pilot acceptance. Finalize the reviewed transfer-archive
-  tooling alongside the mobile FIX for one combined Web successor; real Mission
+  fast, source-bound pilot acceptance. Finalize the reviewed exact-name image
+  policy FIX after the c513 technical Web promotion; real Mission
   matching/data activation remains separately gated.
 - **Authoritative sources:** [Mission masterplan](../product/SIT_MISSION_MASTERPLAN_2026-09-30.md),
   [Web contract](STAGING_WEB_PILOT.md), [Web/native matrix](SIT_WEB_NATIVE_CAPABILITY_MATRIX_2026-10-02.md),
   [P6-C2 boundary](SIT_MISSION_P6C2_OWNER_API_2026-10-02.md) and
   [D3/D4 FIX record](SIT_GEMINI_MISSION_P6C_D3_D4_GATE_2026-10-02.md).
   Older checkpoint statements in linked documents do not supersede this capsule.
-- **Source/candidate truth:** branch `codex/master-workflow-20260808`;
-  the mobile successor is committed and pushed at exact
-  `74240634bb0390efeba2e40feea2e7b7b16e9249`.
-  The first archive successor is committed/pushed at exact
-  `d2cc9915b845fe30b005a145d4c67db55d1f29e8`. Its real-artifact compatibility
-  repair below is reviewed local source, requiring a new successor commit,
-  automatic exact-head CI and a fresh exact-successor build before promotion.
-- **d2cc exact-head CI — fresh readback:**
-  [Regression 37056287185](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37056287185)
-  and [CodeQL 37056287166](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37056287166)
-  completed **SUCCESS** for exact `d2cc9915…`. The older mobile Regression
-  37054069755 ended **CANCELLED**; it is not successor evidence.
-- **Live Staging Web — Sol handoff:** source `3c1ba1c1…`, current manifest
-  SHA-256 `e49d51e488d4f2c5daccf70d0e7f3ea0b4084fb5e2dfb167a99cf0bdf921b157`.
-  The desktop responsive package is deployed. Earlier `ba49aecc…` CI and Web
-  records do not describe this current source or prove the pending mobile FIX.
+- **Source/candidate truth:** branch `codex/master-workflow-20260808`, committed
+  and pushed at `c513d07fa88b88fe92f2a55bbaac721cd864b9b2`. The image policy FIX
+  below is Sol-reviewed local source, not yet a deployed fix. It requires its
+  own successor commit, automatic exact-head CI and fresh exact-source build.
+- **c513 exact-head CI:**
+  [Regression 37061518629](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37061518629)
+  and [CodeQL 37061518654](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37061518654)
+  completed **SUCCESS** for exact c513; all four required Regression jobs passed.
+- **Live Staging Web — technical promotion PASS:** source exact c513, manifest
+  `6d62474d66f59f495122340836c906cf022a62d6b2bc0f16981c19afc99069ff`, archive
+  `a4899066f98be547edf6325828611db937445b50f62b7102ef96c6039e342eb0`.
+  One clean build, two smokes, seal, independent archive/extraction checks and
+  one reversible Staging-only promotion passed. Static assets match manifest
+  hashes with `no-store`; previous remains e49d/3c1 and rollback preflight passed.
 - **Unchanged runtime boundary:** API remains
   `6c0ef70db2656df3e378add858d5f5157388127e` in test. Before/after API version,
   one-row synthetic catalog and exact-origin CORS 204 readbacks were identical.
   Production root bytes/pointer and Caddy configuration were unchanged;
   no API, provider, payment or Play activation occurred.
-- **Fresh browser evidence — Sol readback:** at 1920 and 3840 px, content is
-  centered at exactly 1200 px and featured cards are 320×324; console has zero
-  warnings/errors. At 390 px, the visible featured card is about 104 px wide,
-  `Synthetische Katalogfixture` breaks inside words and `Testansicht öffnen` is
-  hidden. Desktop acceptance is green; mobile acceptance is **FIX**, not PASS.
-  Synthetic truth and non-bookable detail remain the accepted boundary; this
-  is not Google/provider, real-inventory, native or Mission-deployment proof.
-- **Mobile successor — Sol local PASS, pushed, not deployed:** at 390 px the row
+- **Fresh 390px browser evidence — Sol FIX:** the synthetic illustration is
+  blank because the frontend rejects the server-bound storage name
+  `synthetic_web_catalog_placeholder_v1.webp`. Its live anonymous response is
+  HTTP 200 `image/webp`, 1,172 bytes, SHA
+  `d5b762e354eff48a5a8b744ce144ab9edafdc1c8a85be96ec6bf40a135ad04bf`.
+  Technical promotion is not complete browser acceptance. Synthetic truth,
+  disabled booking and all provider/native/Mission boundaries remain intact.
+- **Mobile layout source proof — included in deployed c513:** at 390 px the row
   has two complete 157.33 px cards plus 25% of a third, with a 320 px maximum.
   Synthetic cards have a 280 px disclosure/action height floor and no implicit
   margin that narrows the visible surface. Desktop content/detail bounds, synthetic labels,
@@ -64,7 +62,7 @@ not current execution or release authority.
   The committed archive builder correctly refused five shipped CanvasKit WASM
   modes and then 16 USTAR-unrepresentable image names. That build is retained
   only as rejected compatibility evidence, never relabelled as a new candidate.
-- **Archive repair — Sol reviewed local PASS:**
+- **Archive repair — included in deployed c513:**
   [Node-only builder/readback](../../tool/staging_web_archive.mjs) preserves
   `0755` only for five exact manifest-bound, validated CanvasKit WASM paths.
   Canonical GNU LongName records are allowed only for safe manifest-bound paths
@@ -77,7 +75,22 @@ not current execution or release authority.
   87,505,408 bytes, 148 files, 18 directories and 16 necessary LongName records.
   Owning tests passed 207/207, archive tests 100/100; closure, syntax, privacy,
   retention and diff checks passed without changing approval state. No current
-  source-inventory binding is affected. No transfer or deployment occurred.
+  source-inventory binding was affected. The d2cc artifact was not deployed;
+  c513's separate exact-source promotion is recorded above.
+- **Image policy successor — Sol local PASS, no live fix yet:** exact string
+  equality accepts only the dedicated storage name at the configured managed
+  upload URL. It grants no listing-photo authenticity. Existing explicit public
+  image surfaces send no credentials; private guest/default surfaces remain
+  credential-gated and blank. Near names, encodings, query/fragment, alternate
+  paths, foreign origins and arbitrary names remain rejected; UUID-full rules
+  are unchanged. The 390px Explore-to-detail proof scrolls the intended grid
+  action into view, asserts `hitTestable()` and taps it with missed-tap warnings
+  fatal. The earlier warning-bearing tap is rejected evidence, not acceptance.
+  Final exact two-file Flutter gate passed 15/15 with zero framework warnings
+  or exceptions; wiring 10/10 and analyzer/diff passed. The preceding focused
+  33-test functional gate and 424 consumer assertions passed. Only BackendConfig's
+  current privacy binding was refreshed once; retention and historical evidence
+  remain unchanged. Working-tree secret scan and privacy/retention validators passed.
 - **Google Web auth:** current release intentionally off. Source popup/session
   handling exists; verified Firebase Web options, authorized Staging domain,
   backend-project/runtime and provider bindings plus real Web-login proof remain
@@ -87,8 +100,8 @@ not current execution or release authority.
   default-off, with no real matching, region or provider effects. D3/D4 remains
   open with prior FIX. Per Sol UI handoff, the Gemini tab awaits a signed-in
   Pro Extended send; no new accepted answer exists. This gate does not block
-  the source-only mobile/archive successor.
-- **Exact next:** commit/push this reviewed archive compatibility repair and
+  the source-only image policy successor.
+- **Exact next:** commit/push this reviewed image policy FIX and
   capsule → automatic exact-successor Regression and CodeQL success → one new
   isolated exact-successor Web build/smoke/seal/checked archive → authorized
   reversible Staging-only promotion with fresh pre/post readback → independent

@@ -13,18 +13,22 @@ import 'package:lendify/services/localization_service.dart';
 import 'package:lendify/widgets/app_image.dart';
 import 'package:lendify/widgets/image_gallery_overlay.dart';
 import 'package:lendify/widgets/item_details_overlay.dart';
+import 'package:lendify/widgets/synthetic_catalog_listing.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 final managedPhoto = BackendConfig.uri(
   '/uploads/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa-full.webp',
 ).toString();
+final syntheticPhoto = BackendConfig.uri(
+  '/uploads/synthetic_web_catalog_placeholder_v1.webp',
+).toString();
 
-Item catalogItem({required bool synthetic}) {
+Item catalogItem({required bool synthetic, String? photo}) {
   final json = jsonDecode(
       File('test/fixtures/staging_synthetic_catalog_public_listing.json')
           .readAsStringSync()) as Map<String, dynamic>;
-  json['photos'] = [managedPhoto];
+  json['photos'] = [photo ?? managedPhoto];
   if (!synthetic) {
     for (final key in [
       'catalogClass',
@@ -44,12 +48,16 @@ Item catalogItem({required bool synthetic}) {
 
 void main() {
   late _ImageClient client;
+  late bool previousHitTestWarningFatal;
   setUp(() {
+    previousHitTestWarningFatal = WidgetController.hitTestWarningShouldBeFatal;
+    WidgetController.hitTestWarningShouldBeFatal = true;
     SharedPreferences.setMockInitialValues({});
     client = _ImageClient();
     debugNetworkImageHttpClientProvider = () => client;
   });
   tearDown(() {
+    WidgetController.hitTestWarningShouldBeFatal = previousHitTestWarningFatal;
     debugNetworkImageHttpClientProvider = null;
     PaintingBinding.instance.imageCache.clear();
     PaintingBinding.instance.imageCache.clearLiveImages();
@@ -87,10 +95,54 @@ void main() {
 
   imageTest('default private managed image remains absent for a guest',
       (tester) async {
-    await tester.pumpWidget(MaterialApp(home: AppImage(url: managedPhoto)));
+    for (final photo in [managedPhoto, syntheticPhoto]) {
+      await tester.pumpWidget(MaterialApp(home: AppImage(url: photo)));
+      await tester.pumpAndSettle();
+      expect(find.byType(Image), findsNothing);
+      expect(client.urls, isEmpty);
+    }
+  });
+
+  imageTest(
+      'live-shaped 390px Explore opens the dedicated anonymous illustration',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    SharedPreferences.setMockInitialValues({
+      'items': jsonEncode([
+        catalogItem(synthetic: true, photo: syntheticPhoto).toJson(),
+      ]),
+      'users': '[]',
+    });
+    await tester.pumpWidget(ChangeNotifierProvider(
+      create: (_) => MainNavController(),
+      child: _localized(const ExploreScreen()),
+    ));
     await tester.pumpAndSettle();
-    expect(find.byType(Image), findsNothing);
-    expect(client.urls, isEmpty);
+    // Use the grid card and normal scrolling; never tap a covered carousel copy.
+    final action = find.descendant(
+      of: find.byType(SyntheticCatalogCard).last,
+      matching: find.text('Testansicht öffnen'),
+    );
+    await tester.ensureVisible(action);
+    await tester.pumpAndSettle();
+    final visibleAction = action.hitTestable();
+    expect(visibleAction, findsOneWidget);
+    await tester.tap(visibleAction);
+    await tester.pumpAndSettle();
+    final provider =
+        tester.widget<Image>(find.byType(Image)).image as NetworkImage;
+    expect(provider.url, syntheticPhoto);
+    expect(provider.headers ?? {}, isEmpty);
+    await _decode(tester, provider);
+    expect(client.urls, [Uri.parse(syntheticPhoto)]);
+    expect(client.headers.values, isEmpty);
+    expect(find.text(Item.syntheticCatalogNotice), findsOneWidget);
+    expect(tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+        isNull);
+    expect(tester.takeException(), isNull);
   });
 
   for (final action in ['Anzeige öffnen', 'Verfügbarkeit prüfen']) {
@@ -128,13 +180,15 @@ void main() {
       })
     });
     await tester.pumpWidget(MaterialApp(
-        home: AppImage(url: managedPhoto, publicCatalogImage: true)));
+        home: AppImage(url: syntheticPhoto, publicCatalogImage: true)));
     await tester.pumpAndSettle();
     final provider =
         tester.widget<Image>(find.byType(Image)).image as NetworkImage;
     expect(provider.headers ?? {}, isEmpty);
+    expect(provider.url, syntheticPhoto);
     await _decode(tester, provider);
     expect(client.headers.values, isEmpty);
+    expect(client.urls, [Uri.parse(syntheticPhoto)]);
   });
 
   imageTest(
@@ -238,6 +292,13 @@ void main() {
       managedPhoto.replaceFirst('://', '://user@'),
       managedPhoto.replaceFirst('/uploads/', '/uploads/%61'),
       'data:image/png;base64,AAAA',
+      syntheticPhoto.replaceFirst('_v1.', '_v2.'),
+      syntheticPhoto.replaceFirst('_v1.', '_v1-thumb.'),
+      syntheticPhoto.replaceFirst('synthetic_', '%73ynthetic_'),
+      '$syntheticPhoto?token=x',
+      '$syntheticPhoto#fragment',
+      syntheticPhoto.replaceFirst('/uploads/', '/private/'),
+      syntheticPhoto.replaceFirst('shareittoo.com', 'foreign.invalid'),
     ]) {
       expect(BackendConfig.isPublicCatalogImageUrl(url), isFalse);
       await tester.pumpWidget(

@@ -6,6 +6,18 @@ import test from 'node:test';
 const root = resolve(import.meta.dirname, '../..');
 const read = (path) => readFileSync(resolve(root, path), 'utf8');
 
+test('dedicated frontend illustration name matches the exact server fixture contract', () => {
+  const server = read('backend/ops/staging_web_fixture_bootstrap.mjs');
+  const frontend = read('lib/services/backend_config.dart');
+  const name = /upload: '([^']+)'/u.exec(server)?.[1];
+  assert.equal(name, 'synthetic_web_catalog_placeholder_v1.webp');
+  assert.equal(/_syntheticCatalogImageStorageName\s*=\s*'([^']+)'/u.exec(frontend)?.[1], name);
+  assert.match(frontend, /value == uri\('\/uploads\/\$_syntheticCatalogImageStorageName'\)\.toString\(\)/u);
+  const runtimeTests = read('test/public_catalog_image_test.dart');
+  assert.ok(runtimeTests.includes(name));
+  assert.match(runtimeTests, /live-shaped 390px Explore opens the dedicated anonymous illustration/u);
+});
+
 test('anonymous opt-in is fail-closed and precedes ordinary debug image handling', () => {
   const image = read('lib/widgets/app_image.dart');
   assert.match(image, /this\.publicCatalogImage = false/u);

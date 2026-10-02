@@ -227,6 +227,14 @@ discover a mechanically stale source hash.
   fixtures must import the current canonical policy constants and preflight
   them before sending requests; never hand-copy legal/policy text or permit
   `generated`/`materially_altered` classifications in synthetic payloads.
+- Public-media fixture invariant: bind exceptional storage names across server
+  and frontend with a contract test, then exercise the exact live-shaped URL
+  through the widget's network request. UUID-only substitutes cannot prove
+  compatibility; public opt-in must send no credentials and private guest
+  surfaces must remain blank.
+- Widget-interaction evidence must select and assert a visible, hit-testable
+  target before tapping. A green test with a missed-tap warning is not
+  acceptance evidence; make such warnings fatal in the owning test cluster.
 - Acceptance moderation-decision mentor invariant: before the first B9
   mutation, acceptance fixtures must track every current mandatory moderation
   decision field through one reusable human-decision helper. Every
