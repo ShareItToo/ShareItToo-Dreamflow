@@ -386,6 +386,108 @@ if (!databaseUrl) {
       assert.equal(noResolverCreate.status, 404);
       assert.equal((await noResolverCreate.json()).error, 'mission_supply_demand_not_enabled');
 
+      const adminId = `p6-revoke-admin-${crypto.randomUUID()}`;
+      await setupPool.query(
+        `INSERT INTO users (id, email, profile, role, account_status)
+         VALUES ($1, $2, '{}'::jsonb, 'admin', 'active')`,
+        [adminId, `${adminId}@example.invalid`],
+      );
+      const { setUserSuspension } = await import('../src/moderation_workflow.js');
+      const suspensionEndsAt = futureDate(1).toISOString();
+      const suspend = (userId, scope) => inTransaction((client) => setUserSuspension(client, {
+        actor: { id: adminId, role: 'admin' }, userId, idempotencyKey: crypto.randomUUID(),
+        raw: { scope, reasonCode: 'synthetic_test',
+          ...(scope === 'account' ? { provisional: true, endsAt: suspensionEndsAt } : {}),
+          decision: {
+            facts: 'Synthetic fixture for safe mission release revocation.',
+            basis: 'Synthetic test fixture only.',
+            reasoning: 'Verify suspension boundaries in an isolated database.',
+            detectionMethod: 'human', statementOfReasons: {
+              decisionGround: 'terms_violation', decisionOrigin: 'notice',
+              territorialScope: 'Synthetic isolated test only.',
+              durationType: scope === 'account' ? 'fixed' : 'until_reversed',
+              ...(scope === 'account' ? { endsAt: suspensionEndsAt } : {}),
+              automationRole: 'none',
+            },
+          },
+        },
+      }));
+      const bookingSuspension = await suspend(recipientId, 'booking');
+      const revoke = (actor = recipientId, expectedRevision = 2,
+        key = crypto.randomUUID(), id = created.demandId) => fetch(
+        `${lifecycleBaseUrl}/v1/mission-supply-demands/${id}/revoke`, {
+          method: 'POST', headers: json(actor, key),
+          body: JSON.stringify({ expectedRevision }),
+        },
+      );
+      const expectError = async (pending, status, code) => {
+        const response = await pending;
+        assert.equal(response.status, status);
+        assert.equal((await response.json()).error, code);
+      };
+      const countsBeforeRevoke = await demandCounts();
+      const resolverCallsBeforeRevoke = resolverCalls;
+      const revokeEffectsBefore = await effects();
+      for (const actor of [requesterId, foreignId]) {
+        await expectError(revoke(actor), 404, 'mission_supply_demand_not_found');
+      }
+      await expectError(revoke(recipientId, 2, crypto.randomUUID(),
+        `mission_demand_${crypto.randomUUID()}`), 404, 'mission_supply_demand_not_found');
+      await expectError(revoke(recipientId, 1), 409, 'mission_supply_revision_conflict');
+      await expectError(fetch(
+        `${lifecycleBaseUrl}/v1/mission-supply-demands/${created.demandId}/revoke`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ expectedRevision: 2 }),
+        },
+      ), 401, 'authentication_required');
+      for (const suffix of ['', `/${created.demandId}`]) {
+        await expectError(fetch(`${lifecycleBaseUrl}/v1/mission-supply-demands${suffix}`, {
+          headers: auth(recipientId),
+        }), 403, 'action_blocked_by_moderation');
+      }
+      for (const decision of ['release', 'reject']) {
+        await expectError(fetch(
+          `${lifecycleBaseUrl}/v1/mission-supply-demands/${created.demandId}/respond`, {
+            method: 'POST', headers: json(recipientId, crypto.randomUUID()),
+            body: JSON.stringify({ expectedRevision: 2, decision }),
+          },
+        ), 403, 'action_blocked_by_moderation');
+      }
+      const requesterSuspension = await suspend(requesterId, 'booking');
+      await expectError(fetch(
+        `${lifecycleBaseUrl}/v1/mission-inventory-resolutions/${firstGap.resolutionId}/supply-demands`, {
+          method: 'POST', headers: json(requesterId, 'p6-suspended-create-0001'),
+          body: JSON.stringify({
+            resolutionRevision: 1, slotKey: firstGap.slotKey,
+            purpose: 'mission_gap_supply_v1', expiresAt,
+          }),
+        },
+      ), 403, 'action_blocked_by_moderation');
+      await setupPool.query('DELETE FROM user_suspensions WHERE id = $1', [requesterSuspension.suspension.id]);
+      await setupPool.query('UPDATE auth_sessions SET revoked_at = now() WHERE id = $1', [sessionIds[1]]);
+      await expectError(revoke(), 401, 'account_not_active');
+      await setupPool.query('UPDATE auth_sessions SET revoked_at = NULL WHERE id = $1', [sessionIds[1]]);
+      await setupPool.query("UPDATE users SET account_status = 'suspended' WHERE id = $1", [recipientId]);
+      await expectError(revoke(), 401, 'account_not_active');
+      await setupPool.query("UPDATE users SET account_status = 'active', deactivated_at = now() WHERE id = $1", [recipientId]);
+      await expectError(revoke(), 401, 'account_not_active');
+      await setupPool.query('UPDATE users SET deactivated_at = NULL WHERE id = $1', [recipientId]);
+      const { encryptTotpSecret, generateTotpSecret } = await import('../src/mfa_totp.js');
+      await setupPool.query(
+        `INSERT INTO mfa_totp_factors (user_id, status, enabled_at, encrypted_secret)
+         VALUES ($1, 'enabled', now(), $2)`,
+        [recipientId, encryptTotpSecret(generateTotpSecret(), crypto.randomBytes(32))],
+      );
+      await expectError(revoke(), 401, 'account_not_active');
+      await setupPool.query('DELETE FROM mfa_totp_factors WHERE user_id = $1', [recipientId]);
+      const accountSuspension = await suspend(recipientId, 'account');
+      await expectError(revoke(), 401, 'account_not_active');
+      // Isolate the account-scope guard even if an otherwise active session exists.
+      await setupPool.query("UPDATE users SET account_status = 'active' WHERE id = $1", [recipientId]);
+      await setupPool.query('UPDATE auth_sessions SET revoked_at = NULL WHERE id = $1', [sessionIds[1]]);
+      await expectError(revoke(), 403, 'action_blocked_by_moderation');
+      await setupPool.query('DELETE FROM user_suspensions WHERE id = $1', [accountSuspension.suspension.id]);
+      assert.deepEqual(await demandCounts(), countsBeforeRevoke);
       const revokeResponse = await fetch(
         `${lifecycleBaseUrl}/v1/mission-supply-demands/${created.demandId}/revoke`,
         {
@@ -396,7 +498,34 @@ if (!databaseUrl) {
       assert.equal(revokeResponse.status, 201);
       const revoked = (await revokeResponse.json()).demand;
       assert.equal(revoked.status, 'revoked');
+      assert.equal(revoked.revision, 3);
       assert.equal(revoked.requestBoundRelease.visibilityStatus, 'revoked');
+      assert.match(revokeResponse.headers.get('cache-control'), /no-store/u);
+      const countsAfterRevoke = await demandCounts();
+      assert.deepEqual(countsAfterRevoke, {
+        ...countsBeforeRevoke,
+        revisions: countsBeforeRevoke.revisions + 1,
+        commands: countsBeforeRevoke.commands + 1,
+      });
+      const revokeReplay = await revoke(recipientId, 2, 'p6-revoke-demand-0001');
+      assert.equal(revokeReplay.status, 200);
+      const replayedRevoke = await revokeReplay.json();
+      assert.equal(replayedRevoke.replayed, true);
+      assert.deepEqual(replayedRevoke.demand, revoked);
+      await expectError(revoke(recipientId, 3, 'p6-revoke-demand-0001'),
+        409, 'mission_supply_idempotency_key_reused');
+      const requesterRevoked = await fetch(
+        `${lifecycleBaseUrl}/v1/mission-supply-demands/${created.demandId}`,
+        { headers: auth(requesterId) },
+      );
+      assert.equal(requesterRevoked.status, 200);
+      const requesterRevokedDemand = (await requesterRevoked.json()).demand;
+      assert.equal(requesterRevokedDemand.status, 'revoked');
+      assert.equal(requesterRevokedDemand.requestBoundRelease.visibilityStatus, 'revoked');
+      assert.deepEqual(await demandCounts(), countsAfterRevoke);
+      assert.equal(resolverCalls, resolverCallsBeforeRevoke);
+      assert.deepEqual(await effects(), revokeEffectsBefore);
+      await setupPool.query('DELETE FROM user_suspensions WHERE id = $1', [bookingSuspension.suspension.id]);
 
       const lifecycleGap = await insertGap(requesterId, 13);
       const lifecycleCreate = await createDemand(

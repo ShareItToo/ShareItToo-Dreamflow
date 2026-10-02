@@ -183,3 +183,16 @@ test('P6 contact limiter applies to create only and never blocks lifecycle or re
     );
   }
 });
+
+test('P6 safe revoke retains authentication and account guards while other routes retain booking guards', () => {
+  const source = readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
+  assert.ok(source.includes("app.post('/v1/mission-supply-demands/:id/revoke', requireAuth, requireActiveAccount, requireUnsuspendedScope('account'),"));
+  for (const route of [
+    "app.get('/v1/mission-supply-demands'",
+    "app.get('/v1/mission-supply-demands/:id'",
+    "app.post('/v1/mission-supply-demands/:id/respond'",
+    "app.post('/v1/mission-inventory-resolutions/:id/supply-demands', missionSupplyDemandCreateLimiter",
+  ]) {
+    assert.ok(source.includes(`${route}, requireAuth, requireActiveAccount, requireUnsuspendedScope('booking'),`));
+  }
+});

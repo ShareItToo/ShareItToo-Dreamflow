@@ -5897,7 +5897,7 @@ export function createApp({
       .json(result);
   }));
 
-  app.post('/v1/mission-supply-demands/:id/revoke', requireAuth, requireActiveAccount, requireUnsuspendedScope('booking'), asyncRoute(async (req, res) => {
+  app.post('/v1/mission-supply-demands/:id/revoke', requireAuth, requireActiveAccount, requireUnsuspendedScope('account'), asyncRoute(async (req, res) => {
     assertMissionSupplyDemandTechnicalAccess(config);
     const result = await inTransaction((client) => revokeMissionSupplyRelease(client, {
       actorId: req.auth.userId,

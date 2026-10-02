@@ -33,7 +33,7 @@
     },
     {
       "path": "backend/src/app.js",
-      "sha256": "d670d2ee7e9dab7176b0303c82a6ae8173b2df6d6fb053992d7bdcda3ce6c9a8"
+      "sha256": "ac867635b2d02c992347416a0ba3f1f2b681b5902963728c99f89457703863e2"
     },
     {
       "path": "backend/src/rate_limit_policy.js",
