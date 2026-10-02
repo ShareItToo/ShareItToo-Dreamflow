@@ -11,8 +11,9 @@ not current execution or release authority.
   and its responsive browser acceptance are closed at exact source 967. The
   Google-Web activation prerequisite diagnosis is closed and awaits only its
   named Gemini gate. Independently, the dormant P7-A1 synthetic Quorum source
-  package and its isolated P7-A2a Web-test presentation are Sol-reviewed. Real
-  Mission matching/data activation remains gated.
+  package, its isolated P7-A2a Web-test presentation and the local-only P7-A2b
+  browser vertical-slice runner are Sol-reviewed. Real Mission matching/data
+  activation remains gated.
 - **Authoritative sources:** [Mission masterplan](../product/SIT_MISSION_MASTERPLAN_2026-09-30.md),
   [Web contract](STAGING_WEB_PILOT.md), [Web/native matrix](SIT_WEB_NATIVE_CAPABILITY_MATRIX_2026-10-02.md),
   [P6-C2 boundary](SIT_MISSION_P6C2_OWNER_API_2026-10-02.md) and
@@ -183,14 +184,39 @@ not current execution or release authority.
   live under `backend/test` or `test`; normal app, API, jobs, flags, builds,
   Staging profile, network and persistence have no P7-A2a dependency. This is
   accessible browser-test evidence only, not a public Staging page or activation.
+- **P7-A2a exact-head CI — PASS:** Regression
+  [37077345814](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37077345814)
+  completed successfully at exact
+  `02fa266529ff7a22acd75fb492f43d2e210dc35a`; backend, PostgreSQL-16,
+  Flutter/Android and clean-checkout reproducibility jobs all passed. CodeQL
+  [37077345875](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37077345875)
+  also completed successfully at the same head. No publish or deployment
+  evidence follows from these source checks.
+- **P7-A2b local browser vertical slice — Sol source/runtime PASS:** the
+  test-support-only runner accepts only the exact current source head and
+  ephemeral port `0`, revalidates every bound P7-A2a byte before and after the
+  build, derives an isolated minimal Flutter project from the committed lock,
+  and builds under an OS-level network deny plus offline package resolution.
+  It serves only from `127.0.0.1` with no-store/CSP headers and never imports a
+  product bootstrap, plugin, provider, persistence layer or service worker.
+  The runner matrix passed 9/9 and the unchanged runtime/import contract 3/3.
+  Sol independently repeated the real build and browser review: the permanent
+  synthetic/non-authentic/non-binding/no-money disclosure, two owners, eleven
+  separate axes, exact 4+4 named slots, QR-v3, exact-six-digit fallback and
+  reset were exposed through browser accessibility. Shutdown then emitted one
+  cleanup record; listener port `55487`, runner/build PIDs and the owned temp
+  root were independently absent. No product, Staging, Play or deployment file
+  changed. This proves the isolated P7 VERIFY vertical slice only; D1-D4 remain
+  open and no real Mission, provider or payment was activated.
 - **Exact next:** when the visible SIT Gemini account is signed in, verify
   exactly Google AI Pro `Pro` with `Extended` and submit only gate
   `SIT-GOOGLE-WEB-PREREQ-01`; on PASS, execute the bounded Web-app/domain
   provider package and independently read it back before any flag activation.
-  Independently, commit and push the reviewed P7-A2a test-support package, then
-  accept only automatic Regression and CodeQL success on its exact successor
-  head. Do not deploy or wire P7. D1/D2/D3/D4 stay open, and a blocked provider
-  lane must not stop the independent source/CI package.
+  Independently, commit and push the reviewed P7-A2b runner, then accept only
+  automatic Regression and CodeQL success on its exact successor head. Next,
+  perform the bounded P7 closure audit against the masterplan and current
+  source/runtime evidence; do not deploy or wire P7. D1/D2/D3/D4 stay open,
+  and a blocked provider lane must not stop the independent source/CI package.
   No Production/Play change or pilot-complete claim follows from this sequence.
 
 ## Historical snapshots — retained evidence, superseded execution state
