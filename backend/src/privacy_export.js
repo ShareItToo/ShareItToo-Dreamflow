@@ -573,7 +573,8 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
       `SELECT idempotency_key AS "idempotencyKey",
               command_type AS "commandType", request_sha256 AS "requestDigest",
               participation_id AS "participationId",
-              result_revision AS "resultRevision", created_at AS "createdAt"
+              result_revision AS "resultRevision", result_status AS "resultStatus",
+              created_at AS "createdAt"
          FROM mission_supply_participation_commands
         WHERE owner_id = $1
         ORDER BY participation_id, result_revision, idempotency_key`, userId),

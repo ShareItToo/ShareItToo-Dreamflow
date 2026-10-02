@@ -82,9 +82,61 @@ if (!databaseUrl) {
       await pool.query(
         `INSERT INTO mission_supply_participation_commands
            (owner_id, idempotency_key, command_type, request_sha256,
-            participation_id, result_revision)
-         VALUES ($1, 'p6c1-part-command-001', 'activate', repeat('b', 64), $2, 1)`,
+            participation_id, result_revision, result_status)
+         VALUES ($1, 'p6c1-part-command-001', 'activate', repeat('b', 64),
+                 $2, 1, 'active')`,
         [ids.owner, participationId],
+      );
+
+      await assert.rejects(
+        () => pool.query(
+          `INSERT INTO mission_supply_participations
+             (id, owner_id, domain_version, current_revision, current_status)
+           VALUES ($1, $2, 'P6-C1-2026-10-02.1', 0, 'active')`,
+          [`mission_supply_participation_${crypto.randomUUID()}`, ids.foreignOwner],
+        ),
+        /mission_supply_participation_initial_state_invalid/u,
+        'participation roots cannot start active',
+      );
+      await assert.rejects(
+        () => pool.query(
+          `UPDATE mission_supply_participations
+              SET current_status = 'withdrawn'
+            WHERE id = $1`,
+          [participationId],
+        ),
+        /mission_supply_participation_root_update_invalid/u,
+        'direct root status changes are rejected',
+      );
+      await assert.rejects(
+        () => pool.query(
+          `UPDATE mission_supply_participations
+              SET current_revision = current_revision + 1
+            WHERE id = $1`,
+          [participationId],
+        ),
+        /mission_supply_participation_root_update_invalid/u,
+        'direct root revision changes are rejected',
+      );
+      await assert.rejects(
+        () => pool.query(
+          `UPDATE mission_supply_participations
+              SET owner_id = $2
+            WHERE id = $1`,
+          [participationId, ids.foreignOwner],
+        ),
+        /mission_supply_participation_root_update_invalid/u,
+        'direct root owner changes are rejected',
+      );
+      await assert.rejects(
+        () => pool.query(
+          `UPDATE mission_supply_participations
+              SET domain_version = 'P6-C1-forged'
+            WHERE id = $1`,
+          [participationId],
+        ),
+        /mission_supply_participation_root_update_invalid/u,
+        'direct root domain changes are rejected',
       );
 
       await assert.rejects(
@@ -119,6 +171,18 @@ if (!databaseUrl) {
         ),
         /foreign key/u,
         'an item from a different owner cannot be bound',
+      );
+      await assert.rejects(
+        () => pool.query(
+          `INSERT INTO mission_supply_participation_item_revisions
+             (participation_id, owner_id, shelf_item_id, need_key, revision,
+              actor_id, availability_status)
+           VALUES ($1, $2, $3, 'synthetic_other_key', 1, $2,
+                   'confirmed_available')`,
+          [participationId, ids.owner, itemId],
+        ),
+        /check constraint|violates check/u,
+        'syntactically valid but unapproved need keys are rejected',
       );
       await assert.rejects(
         () => pool.query(
@@ -164,6 +228,50 @@ if (!databaseUrl) {
         availability_status: 'confirmed_available',
         need_key: 'plant_container_equipment',
       }]);
+
+      await pool.query(
+        `INSERT INTO mission_supply_participation_revisions
+           (participation_id, owner_id, revision, actor_id, status)
+         VALUES ($1, $2, 2, $2, 'withdrawn')`,
+        [participationId, ids.owner],
+      );
+      await assert.rejects(
+        () => pool.query(
+          `INSERT INTO mission_supply_participation_commands
+             (owner_id, idempotency_key, command_type, request_sha256,
+              participation_id, result_revision, result_status)
+           VALUES ($1, 'p6c1-root-drift-activate', 'activate', repeat('d', 64),
+                   $2, 2, 'active')`,
+          [ids.owner, participationId],
+        ),
+        /foreign key/u,
+        'root command cannot point to a withdrawn revision',
+      );
+      await assert.rejects(
+        () => pool.query(
+          `INSERT INTO mission_supply_participation_commands
+             (owner_id, idempotency_key, command_type, request_sha256,
+              participation_id, result_revision, result_status)
+           VALUES ($1, 'p6c1-root-drift-withdraw', 'withdraw', repeat('e', 64),
+                   $2, 1, 'withdrawn')`,
+          [ids.owner, participationId],
+        ),
+        /foreign key/u,
+        'root command cannot point to an active revision as withdrawn',
+      );
+      await assert.rejects(
+        () => pool.query(
+          `INSERT INTO mission_supply_participation_item_commands
+             (owner_id, idempotency_key, command_type, request_sha256,
+              participation_id, shelf_item_id, need_key, result_revision,
+              result_status)
+           VALUES ($1, 'p6c1-item-drift-withdraw', 'withdraw', repeat('f', 64),
+                   $2, $3, 'plant_container_equipment', 1, 'withdrawn')`,
+          [ids.owner, participationId, itemId],
+        ),
+        /foreign key/u,
+        'item command cannot point to a confirmed revision as withdrawn',
+      );
 
       await pool.query(
         `INSERT INTO mission_supply_participations

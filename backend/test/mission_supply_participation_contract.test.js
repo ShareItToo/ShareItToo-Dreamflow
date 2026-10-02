@@ -10,6 +10,13 @@ test('P6-C1 is private, deterministic and fail-closed for unproven location/lega
   assert.match(up, /current_status TEXT NOT NULL DEFAULT 'withdrawn'/u);
   assert.match(up, /current_status IN \('active', 'withdrawn'\)/u);
   assert.match(up, /availability_status IN \('confirmed_available', 'withdrawn'\)/u);
+  assert.match(up, /need_key TEXT NOT NULL CHECK \(\s*need_key = 'plant_container_equipment'/u);
+  assert.match(up, /mission_supply_participations_insert_guard/u);
+  assert.match(up, /mission_supply_participations_update_guard/u);
+  assert.match(up, /mission_supply_participation_root_update_invalid/u);
+  assert.match(up, /result_status TEXT NOT NULL CHECK \(result_status IN \('active', 'withdrawn'\)\)/u);
+  assert.match(up, /result_status\)\s+REFERENCES mission_supply_participation_revisions/u);
+  assert.match(up, /need_key, revision, availability_status\s*\)\s+ON DELETE CASCADE/u);
   assert.match(up, /FOREIGN KEY \(shelf_item_id, owner_id\)/u);
   assert.match(up, /FOREIGN KEY \(participation_id, owner_id\)/u);
   assert.match(up, /PRIMARY KEY \(owner_id, idempotency_key\)/gu);

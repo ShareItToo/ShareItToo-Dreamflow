@@ -80,7 +80,7 @@
     },
     {
       "path": "backend/src/privacy_export.js",
-      "sha256": "0c9bd74bb732b537e90d3bf1d66e95088f0f3c9726e49be7d6cee3500ee1b83e"
+      "sha256": "d945fe136b558f989b814b7ef7b6d52d114af1d3ecc6a8c7d25aac4601953f28"
     },
     {
       "path": "backend/src/privacy_export_policy.js",
@@ -768,11 +768,11 @@
     },
     {
       "path": "backend/sql/migrations/104_mission_supply_participation.up.sql",
-      "sha256": "1da99e9d87d4565716f0d36cb1e62c0d1480ed736a05ffe233246ba7f1708b45"
+      "sha256": "8bb5cf10cf0e8f9db8d812e07b7d80a6e4945ebf122e1c8a3e0fd82445b95ffb"
     },
     {
       "path": "backend/sql/migrations/104_mission_supply_participation.down.sql",
-      "sha256": "d025606c846c659b24d75901d9d1760908f005e46d10ac803bca88b5ee6d3492"
+      "sha256": "0ed84e0becb54cb4d5071d74fb1163c75024c812e2691374f9f1743392a16b60"
     },
     {
       "path": "backend/src/private_shelf_workflow.js",

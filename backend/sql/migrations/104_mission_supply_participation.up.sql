@@ -21,6 +21,23 @@ CREATE TABLE mission_supply_participations (
   UNIQUE (owner_id)
 );
 
+CREATE OR REPLACE FUNCTION sit_validate_mission_supply_participation_insert()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW.current_revision <> 0 OR NEW.current_status <> 'withdrawn' THEN
+    RAISE EXCEPTION 'mission_supply_participation_initial_state_invalid'
+      USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER mission_supply_participations_insert_guard
+BEFORE INSERT ON mission_supply_participations
+FOR EACH ROW EXECUTE FUNCTION sit_validate_mission_supply_participation_insert();
+
 CREATE INDEX mission_supply_participations_owner_idx
   ON mission_supply_participations(owner_id, updated_at DESC, id);
 
@@ -33,6 +50,7 @@ CREATE TABLE mission_supply_participation_revisions (
   status TEXT NOT NULL CHECK (status IN ('active', 'withdrawn')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (participation_id, revision),
+  UNIQUE (participation_id, revision, status),
   UNIQUE (id, participation_id, revision),
   FOREIGN KEY (participation_id, owner_id)
     REFERENCES mission_supply_participations(id, owner_id) ON DELETE CASCADE
@@ -52,12 +70,19 @@ CREATE TABLE mission_supply_participation_commands (
   request_sha256 CHAR(64) NOT NULL CHECK (request_sha256 ~ '^[0-9a-f]{64}$'),
   participation_id TEXT NOT NULL,
   result_revision INTEGER NOT NULL CHECK (result_revision > 0),
+  result_status TEXT NOT NULL CHECK (result_status IN ('active', 'withdrawn')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (owner_id, idempotency_key),
+  CHECK (
+    (command_type = 'activate' AND result_status = 'active')
+    OR (command_type = 'withdraw' AND result_status = 'withdrawn')
+  ),
   FOREIGN KEY (participation_id, owner_id)
     REFERENCES mission_supply_participations(id, owner_id) ON DELETE CASCADE,
-  FOREIGN KEY (participation_id, result_revision)
-    REFERENCES mission_supply_participation_revisions(participation_id, revision)
+  FOREIGN KEY (participation_id, result_revision, result_status)
+    REFERENCES mission_supply_participation_revisions(
+      participation_id, revision, status
+    )
     ON DELETE CASCADE
 );
 
@@ -69,9 +94,7 @@ CREATE TABLE mission_supply_participation_item_revisions (
   participation_id TEXT NOT NULL,
   owner_id TEXT NOT NULL,
   shelf_item_id TEXT NOT NULL,
-  need_key TEXT NOT NULL CHECK (
-    need_key ~ '^[A-Za-z0-9][A-Za-z0-9_.:-]{1,79}$'
-  ),
+  need_key TEXT NOT NULL CHECK (need_key = 'plant_container_equipment'),
   revision INTEGER NOT NULL CHECK (revision > 0),
   actor_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   availability_status TEXT NOT NULL CHECK (
@@ -79,6 +102,9 @@ CREATE TABLE mission_supply_participation_item_revisions (
   ),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (participation_id, shelf_item_id, need_key, revision),
+  UNIQUE (
+    participation_id, shelf_item_id, need_key, revision, availability_status
+  ),
   UNIQUE (id, participation_id, shelf_item_id, need_key, revision),
   FOREIGN KEY (participation_id, owner_id)
     REFERENCES mission_supply_participations(id, owner_id) ON DELETE CASCADE,
@@ -100,9 +126,7 @@ CREATE TABLE mission_supply_participation_item_commands (
   request_sha256 CHAR(64) NOT NULL CHECK (request_sha256 ~ '^[0-9a-f]{64}$'),
   participation_id TEXT NOT NULL,
   shelf_item_id TEXT NOT NULL,
-  need_key TEXT NOT NULL CHECK (
-    need_key ~ '^[A-Za-z0-9][A-Za-z0-9_.:-]{1,79}$'
-  ),
+  need_key TEXT NOT NULL CHECK (need_key = 'plant_container_equipment'),
   result_revision INTEGER NOT NULL CHECK (result_revision > 0),
   result_status TEXT NOT NULL CHECK (
     result_status IN ('confirmed_available', 'withdrawn')
@@ -118,9 +142,9 @@ CREATE TABLE mission_supply_participation_item_commands (
   FOREIGN KEY (shelf_item_id, owner_id)
     REFERENCES private_shelf_items(id, owner_id) ON DELETE CASCADE,
   FOREIGN KEY (
-    participation_id, shelf_item_id, need_key, result_revision
+    participation_id, shelf_item_id, need_key, result_revision, result_status
   ) REFERENCES mission_supply_participation_item_revisions(
-    participation_id, shelf_item_id, need_key, revision
+    participation_id, shelf_item_id, need_key, revision, availability_status
   ) ON DELETE CASCADE
 );
 
@@ -159,6 +183,29 @@ $$;
 CREATE TRIGGER mission_supply_participation_revisions_sequence_guard
 BEFORE INSERT ON mission_supply_participation_revisions
 FOR EACH ROW EXECUTE FUNCTION sit_validate_mission_supply_participation_revision();
+
+CREATE OR REPLACE FUNCTION sit_validate_mission_supply_participation_root_update()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF pg_trigger_depth() <> 2
+     OR NEW.id <> OLD.id
+     OR NEW.owner_id <> OLD.owner_id
+     OR NEW.domain_version <> OLD.domain_version
+     OR NEW.created_at <> OLD.created_at
+     OR NEW.current_revision <> OLD.current_revision + 1
+     OR NEW.updated_at < OLD.updated_at THEN
+    RAISE EXCEPTION 'mission_supply_participation_root_update_invalid'
+      USING ERRCODE = '55000';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER mission_supply_participations_update_guard
+BEFORE UPDATE ON mission_supply_participations
+FOR EACH ROW EXECUTE FUNCTION sit_validate_mission_supply_participation_root_update();
 
 CREATE OR REPLACE FUNCTION sit_validate_mission_supply_participation_item_revision()
 RETURNS trigger

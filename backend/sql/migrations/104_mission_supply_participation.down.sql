@@ -35,9 +35,15 @@ DROP TRIGGER mission_supply_participation_item_revisions_sequence_guard
   ON mission_supply_participation_item_revisions;
 DROP TRIGGER mission_supply_participation_revisions_sequence_guard
   ON mission_supply_participation_revisions;
+DROP TRIGGER mission_supply_participations_update_guard
+  ON mission_supply_participations;
+DROP TRIGGER mission_supply_participations_insert_guard
+  ON mission_supply_participations;
 DROP FUNCTION sit_reject_mission_supply_participation_immutable_update();
 DROP FUNCTION sit_validate_mission_supply_participation_item_revision();
+DROP FUNCTION sit_validate_mission_supply_participation_root_update();
 DROP FUNCTION sit_validate_mission_supply_participation_revision();
+DROP FUNCTION sit_validate_mission_supply_participation_insert();
 DROP TABLE mission_supply_participation_item_commands;
 DROP TABLE mission_supply_participation_item_revisions;
 DROP TABLE mission_supply_participation_commands;
