@@ -1166,7 +1166,7 @@ class _SearchSheetState extends State<_SearchSheet> {
                           rating: 0,
                           reviews: 0,
                           onTap: () => ItemDetailsOverlay.showFullPage(context,
-                              item: it, owner: owner),
+                              item: it, owner: owner, publicCatalogImage: true),
                         );
                       },
                     );
@@ -1295,7 +1295,7 @@ class _MiniItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (item.isSyntheticCatalog) {
-      return SyntheticCatalogCard(item: item);
+      return SyntheticCatalogCard(item: item, publicCatalogImage: true);
     }
     final bool isVerified = ownerVerified;
     return InkWell(
@@ -1317,6 +1317,7 @@ class _MiniItem extends StatelessWidget {
           child: Stack(children: [
             Positioned.fill(
                 child: AppImage(
+                    publicCatalogImage: true,
                     url: item.photos.isNotEmpty ? item.photos.first : '',
                     fit: BoxFit.cover)),
             // Verification badge moved to top-right and reduced to half size

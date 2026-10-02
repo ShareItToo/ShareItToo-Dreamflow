@@ -4,15 +4,21 @@ import 'package:lendify/widgets/app_image.dart';
 
 /// A server-classified test illustration, never a normal offer/owner claim.
 class SyntheticCatalogCard extends StatelessWidget {
-  const SyntheticCatalogCard({super.key, required this.item});
+  const SyntheticCatalogCard({
+    super.key,
+    required this.item,
+    this.publicCatalogImage = false,
+  });
   final Item item;
+  final bool publicCatalogImage;
 
   @override
   Widget build(BuildContext context) => Card(
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: () => Navigator.of(context).push<void>(MaterialPageRoute(
-            builder: (_) => SyntheticCatalogDetails(item: item),
+            builder: (_) => SyntheticCatalogDetails(
+                item: item, publicCatalogImage: publicCatalogImage),
           )),
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(12),
@@ -33,8 +39,13 @@ class SyntheticCatalogCard extends StatelessWidget {
 }
 
 class SyntheticCatalogDetails extends StatelessWidget {
-  const SyntheticCatalogDetails({super.key, required this.item});
+  const SyntheticCatalogDetails({
+    super.key,
+    required this.item,
+    this.publicCatalogImage = false,
+  });
   final Item item;
+  final bool publicCatalogImage;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -57,6 +68,7 @@ class SyntheticCatalogDetails extends StatelessWidget {
                   child: AspectRatio(
                       aspectRatio: 4 / 3,
                       child: AppImage(
+                          publicCatalogImage: publicCatalogImage,
                           url: item.photos.first, fit: BoxFit.contain)),
                 ),
               ),

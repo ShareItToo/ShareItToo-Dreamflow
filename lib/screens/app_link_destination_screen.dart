@@ -362,7 +362,7 @@ class _AppLinkDestinationScreenState extends State<AppLinkDestinationScreen> {
                 onAction: _retryListing,
               );
             }
-            return LinkedListingDetailsScreen(item: item);
+            return LinkedListingDetailsScreen(item: item, publicCatalogImage: true);
           },
         );
       case AppLinkKind.profile:

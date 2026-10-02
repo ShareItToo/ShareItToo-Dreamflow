@@ -16,6 +16,7 @@ class ListingCarouselCard extends StatelessWidget {
   final double? distanceKm;
   final double? rating;
   final int? rentals;
+  final bool publicCatalogImage;
   const ListingCarouselCard({
     super.key,
     required this.item,
@@ -25,11 +26,15 @@ class ListingCarouselCard extends StatelessWidget {
     this.distanceKm,
     this.rating,
     this.rentals,
+    this.publicCatalogImage = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (item.isSyntheticCatalog) return SyntheticCatalogCard(item: item);
+    if (item.isSyntheticCatalog) {
+      return SyntheticCatalogCard(
+          item: item, publicCatalogImage: publicCatalogImage);
+    }
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final cs = theme.colorScheme;
@@ -73,6 +78,7 @@ class ListingCarouselCard extends StatelessWidget {
           aspectRatio: 4 / 3,
           child: Stack(fit: StackFit.expand, children: [
             AppImage(
+              publicCatalogImage: publicCatalogImage,
               url: item.photos.isNotEmpty ? item.photos.first : '',
               fit: BoxFit.cover,
             ),

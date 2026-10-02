@@ -25,6 +25,7 @@ class ItemCard extends StatelessWidget {
   final ListingOptionsContext? longPressContext;
   final VoidCallback? onContextActionCompleted;
   final SavedCartActionScope? savedCartScope;
+  final bool publicCatalogImage;
 
   const ItemCard(
       {super.key,
@@ -32,6 +33,7 @@ class ItemCard extends StatelessWidget {
       this.compact = false,
       this.longPressContext,
       this.savedCartScope,
+      this.publicCatalogImage = false,
       this.onContextActionCompleted});
 
   static double recommendedGridChildAspectRatio(
@@ -69,14 +71,20 @@ class ItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (item.isSyntheticCatalog) return SyntheticCatalogCard(item: item);
+    final publicImage = publicCatalogImage && savedCartScope == null;
+    if (item.isSyntheticCatalog) {
+      return SyntheticCatalogCard(item: item, publicCatalogImage: publicImage);
+    }
     return LongPressFeedbackWrapper(
       child: InkWell(
         onTap: () => ItemDetailsOverlay.showFullPage(context,
-            item: item, savedCartScope: savedCartScope),
+            item: item,
+            savedCartScope: savedCartScope,
+            publicCatalogImage: publicImage),
         onLongPress: longPressContext == null
             ? null
             : () => showListingOptionsDialog(context,
+                publicCatalogImage: publicImage,
                 item: item,
                 contextType: longPressContext!,
                 savedCartScope: savedCartScope,
@@ -108,6 +116,7 @@ class ItemCard extends StatelessWidget {
                     child: Stack(children: [
                       Positioned.fill(
                         child: AppImage(
+                          publicCatalogImage: publicImage,
                           url: item.photos.isNotEmpty ? item.photos.first : '',
                           fit: BoxFit.cover,
                         ),

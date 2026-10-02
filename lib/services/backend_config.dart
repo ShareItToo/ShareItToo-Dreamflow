@@ -23,12 +23,22 @@ class BackendConfig {
     return _isManagedUploadImageUrl(value, allowThumbnail: false);
   }
 
+  /// Anonymous catalog reads accept only the exact managed full-image URL,
+  /// without credentials, query parameters, fragments, or alternate encodings.
+  /// The upload endpoint, not this URL check, authorizes public visibility.
+  static bool isPublicCatalogImageUrl(String value) {
+    if (!isManagedListingImageUrl(value)) return false;
+    final candidate = Uri.parse(value);
+    return value == uri('/uploads/${candidate.pathSegments.last}').toString();
+  }
+
   static bool isManagedImageUrl(String value) {
     return _isManagedUploadImageUrl(value, allowThumbnail: true);
   }
 
-  /// Release builds may fetch image bytes only from SIT's authenticated,
-  /// managed upload origin. Debug builds retain external demo-image support
+  /// Release builds may fetch image bytes only from SIT's managed upload
+  /// origin. Private reads remain authenticated; public catalog reads also
+  /// require [isPublicCatalogImageUrl]. Debug builds retain demo-image support
   /// for local QA, but that exception can never be enabled at runtime in a
   /// signed release build.
   static bool isPermittedRuntimeImageUrl(

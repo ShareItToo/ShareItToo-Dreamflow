@@ -25,6 +25,7 @@ Future<void> showListingOptionsDialog(
   VoidCallback? onWishlistChanged,
   VoidCallback? onVisibilityChanged,
   SavedCartActionScope? savedCartScope,
+  bool publicCatalogImage = false,
 }) async {
   if (savedCartScope != null) {
     if (contextType != ListingOptionsContext.wishlist) {
@@ -42,6 +43,8 @@ Future<void> showListingOptionsDialog(
     options = await _buildOptions(context,
         item: item,
         contextType: contextType,
+        publicCatalogImage: publicCatalogImage && savedCartScope == null &&
+            contextType == ListingOptionsContext.explore,
         onWishlistChanged: onWishlistChanged,
         onVisibilityChanged: onVisibilityChanged);
   } catch (error) {
@@ -250,12 +253,14 @@ Future<List<_ListingOption>> _buildOptions(
   BuildContext context, {
   required Item item,
   required ListingOptionsContext contextType,
+  bool publicCatalogImage = false,
   VoidCallback? onWishlistChanged,
   VoidCallback? onVisibilityChanged,
 }) async {
   Future<void> openListing() async {
     if (!context.mounted) return;
-    ItemDetailsOverlay.showFullPage(context, item: item, fresh: true);
+    ItemDetailsOverlay.showFullPage(context,
+        item: item, fresh: true, publicCatalogImage: publicCatalogImage);
   }
 
   Future<void> shareListing() async {

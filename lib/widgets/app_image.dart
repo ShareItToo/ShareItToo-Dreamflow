@@ -9,7 +9,7 @@ import 'package:lendify/services/backend_config.dart';
 import 'package:lendify/services/shared_persistence_sync.dart';
 
 /// AppImage renders policy-approved URLs, data: URIs, and local file paths.
-/// Signed releases fetch only authenticated SIT-managed image URLs and fall
+/// Signed releases fetch only SIT-managed image URLs and fall
 /// back without a request for every unapproved or malformed source.
 class AppImage extends StatelessWidget {
   /// Source URL/path. Can be null/invalid when coming from older local storage
@@ -20,6 +20,9 @@ class AppImage extends StatelessWidget {
   final double? height;
   final BorderRadius? borderRadius;
   final Widget? fallback;
+  /// Opt in only at public catalog entry points. Private surfaces retain
+  /// owner-bound authentication; the server authorizes anonymous media reads.
+  final bool publicCatalogImage;
 
   const AppImage({
     super.key,
@@ -29,6 +32,7 @@ class AppImage extends StatelessWidget {
     this.height,
     this.borderRadius,
     this.fallback,
+    this.publicCatalogImage = false,
   });
 
   Widget _fallback() => fallback ?? const ColoredBox(color: Color(0x14000000));
@@ -49,6 +53,14 @@ class AppImage extends StatelessWidget {
     final src = (url ?? '').trim();
     if (src.isEmpty) {
       return _fallback();
+    }
+    if (publicCatalogImage) {
+      if (!BackendConfig.isPublicCatalogImageUrl(src)) return _fallback();
+      return Image.network(
+        src,
+        fit: fit,
+        errorBuilder: (_, __, ___) => _fallback(),
+      );
     }
     if (src.startsWith('http')) {
       if (BackendConfig.isManagedImageUrl(src)) {

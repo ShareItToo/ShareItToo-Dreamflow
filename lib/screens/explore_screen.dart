@@ -29,6 +29,7 @@ import 'package:lendify/screens/explore_screen_pinned_header.dart';
 import 'package:lendify/widgets/scroll_edge_indicators.dart';
 import 'package:lendify/widgets/app_image.dart';
 import 'package:lendify/widgets/listing_carousel_card.dart';
+import 'package:lendify/widgets/synthetic_catalog_listing.dart';
 import 'package:lendify/widgets/listing_display_truth.dart';
 import 'package:lendify/theme.dart';
 import 'package:lendify/widgets/app_popup.dart';
@@ -1026,10 +1027,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
                                             child: InkWell(
                                               onTap: () => ItemDetailsOverlay
                                                   .showFullPage(context,
-                                                      item: it, fresh: true),
+                                                      item: it, fresh: true, publicCatalogImage: true),
                                               onLongPress: () =>
                                                   showListingOptionsDialog(
                                                       context,
+                                                      publicCatalogImage: true,
                                                       item: it,
                                                       contextType:
                                                           ListingOptionsContext
@@ -1042,6 +1044,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                                               highlightColor:
                                                   Colors.transparent,
                                               child: ListingCarouselCard(
+                                                publicCatalogImage: true,
                                                 item: it,
                                                 isFavorite: isFav,
                                                 onFavoriteToggle: () =>
@@ -2147,6 +2150,9 @@ class _ExploreListingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (item.isSyntheticCatalog) {
+      return SyntheticCatalogCard(item: item, publicCatalogImage: true);
+    }
     // Guardrail: explore grid tiles can become very tight on small devices and/or
     // with large accessibility text. We clamp scaling inside the card to prevent
     // RenderFlex overflows while keeping the overall app text scaling intact.
@@ -2209,8 +2215,9 @@ class _ExploreListingCardContent extends StatelessWidget {
     return LongPressFeedbackWrapper(
       child: InkWell(
         onTap: () =>
-            ItemDetailsOverlay.showFullPage(context, item: item, fresh: true),
+            ItemDetailsOverlay.showFullPage(context, item: item, fresh: true, publicCatalogImage: true),
         onLongPress: () => showListingOptionsDialog(context,
+            publicCatalogImage: true,
             item: item,
             contextType: ListingOptionsContext.explore,
             onWishlistChanged: onFavoriteToggle,
@@ -2241,6 +2248,7 @@ class _ExploreListingCardContent extends StatelessWidget {
               aspectRatio: 1.55,
               child: Stack(fit: StackFit.expand, children: [
                 AppImage(
+                    publicCatalogImage: true,
                     url: item.photos.isNotEmpty ? item.photos.first : '',
                     fit: BoxFit.cover),
                 Positioned(

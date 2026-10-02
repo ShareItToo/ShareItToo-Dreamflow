@@ -79,14 +79,18 @@ class ItemDetailsOverlay {
     String? editRequestId,
     bool fresh = false,
     bool isOwnerPreview = false,
+    bool publicCatalogImage = false,
     String? overrideAppBarTitle,
     SavedCartActionScope? savedCartScope,
   }) async {
     if (savedCartScope != null && !await savedCartScope.isCurrent()) return;
     if (!context.mounted) return;
+    final publicImage =
+        publicCatalogImage && !isOwnerPreview && savedCartScope == null;
     if (item.isSyntheticCatalog) {
       await Navigator.of(context).push<void>(MaterialPageRoute(
-        builder: (_) => SyntheticCatalogDetails(item: item),
+        builder: (_) => SyntheticCatalogDetails(
+            item: item, publicCatalogImage: publicImage),
       ));
       return;
     }
@@ -99,6 +103,7 @@ class ItemDetailsOverlay {
         editRequestId: editRequestId,
         fresh: fresh,
         isOwnerPreview: isOwnerPreview,
+        publicCatalogImage: publicImage,
         overrideAppBarTitle: overrideAppBarTitle,
         savedCartScope: savedCartScope,
       ),
@@ -117,15 +122,22 @@ class ItemDetailsOverlay {
 
 class LinkedListingDetailsScreen extends StatelessWidget {
   final Item item;
+  final bool publicCatalogImage;
 
-  const LinkedListingDetailsScreen({super.key, required this.item});
+  const LinkedListingDetailsScreen({
+    super.key,
+    required this.item,
+    this.publicCatalogImage = false,
+  });
 
   @override
   Widget build(BuildContext context) => item.isSyntheticCatalog
-      ? SyntheticCatalogDetails(item: item)
+      ? SyntheticCatalogDetails(
+          item: item, publicCatalogImage: publicCatalogImage)
       : _ItemDetailsPage(
           item: item,
           ownerFuture: DataService.getUserById(item.ownerId),
+          publicCatalogImage: publicCatalogImage,
         );
 }
 
@@ -688,6 +700,7 @@ class _ItemDetailsPage extends StatefulWidget {
   final String? editRequestId;
   final bool fresh;
   final bool isOwnerPreview;
+  final bool publicCatalogImage;
   final String? overrideAppBarTitle;
   final SavedCartActionScope? savedCartScope;
   const _ItemDetailsPage({
@@ -696,6 +709,7 @@ class _ItemDetailsPage extends StatefulWidget {
     this.editRequestId,
     this.fresh = false,
     this.isOwnerPreview = false,
+    this.publicCatalogImage = false,
     this.overrideAppBarTitle,
     this.savedCartScope,
   });
@@ -1240,7 +1254,10 @@ class _ItemDetailsPageState extends State<_ItemDetailsPage> {
                     itemBuilder: (context, index) {
                       final url =
                           item.photos.isNotEmpty ? item.photos[index] : '';
-                      return AppImage(url: url, fit: BoxFit.cover);
+                      return AppImage(
+                          url: url,
+                          fit: BoxFit.cover,
+                          publicCatalogImage: widget.publicCatalogImage);
                     },
                   ),
                   // Tap to open immersive gallery overlay
@@ -1257,6 +1274,7 @@ class _ItemDetailsPageState extends State<_ItemDetailsPage> {
                           onWishlistPressed: _toggleWishlistFromMenu,
                           onShare: _share,
                           savedCartScope: widget.savedCartScope,
+                          publicCatalogImage: widget.publicCatalogImage,
                         );
                       },
                     ),

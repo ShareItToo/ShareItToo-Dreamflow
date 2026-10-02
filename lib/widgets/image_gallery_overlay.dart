@@ -17,6 +17,7 @@ class ImageGalleryOverlay extends StatefulWidget {
   final Future<void> Function()? onShare;
   final SavedCartActionScope? savedCartScope;
   final VoidCallback? onClose;
+  final bool publicCatalogImage;
 
   const ImageGalleryOverlay({
     super.key,
@@ -27,6 +28,7 @@ class ImageGalleryOverlay extends StatefulWidget {
     this.onShare,
     this.savedCartScope,
     this.onClose,
+    this.publicCatalogImage = false,
   });
 
   static Future<void> show(
@@ -37,6 +39,7 @@ class ImageGalleryOverlay extends StatefulWidget {
     required Future<void> Function() onWishlistPressed,
     Future<void> Function()? onShare,
     SavedCartActionScope? savedCartScope,
+    bool publicCatalogImage = false,
   }) async {
     RoutePageBuilder pageBuilder(ValueChanged<void> complete) =>
         (ctx, anim, secAnim) {
@@ -47,6 +50,7 @@ class ImageGalleryOverlay extends StatefulWidget {
             onWishlistPressed: onWishlistPressed,
             onShare: onShare,
             savedCartScope: savedCartScope,
+            publicCatalogImage: publicCatalogImage && savedCartScope == null,
             onClose: () => complete(null),
           );
         };
@@ -208,6 +212,8 @@ class _ImageGalleryOverlayState extends State<ImageGalleryOverlay> {
                               borderRadius: BorderRadius.circular(imageRadius),
                               child: Center(
                                 child: AppImage(
+                                  publicCatalogImage: widget.publicCatalogImage &&
+                                      widget.savedCartScope == null,
                                   url: url,
                                   fit: BoxFit.contain,
                                   // Also pass the same radius to the image as an extra safety.

@@ -494,6 +494,7 @@ class _SquareTitleOnlyCard extends StatefulWidget {
 class _SquareTitleOnlyCardState extends State<_SquareTitleOnlyCard> {
   Future<void> _showOptions() => showListingOptionsDialog(
         context,
+        publicCatalogImage: true,
         item: widget.item,
         contextType: ListingOptionsContext.explore,
         onWishlistChanged: widget.onFavoriteToggle,
@@ -502,7 +503,7 @@ class _SquareTitleOnlyCardState extends State<_SquareTitleOnlyCard> {
   @override
   Widget build(BuildContext context) {
     if (widget.item.isSyntheticCatalog) {
-      return SyntheticCatalogCard(item: widget.item);
+      return SyntheticCatalogCard(item: widget.item, publicCatalogImage: true);
     }
     final openLabel = 'Anzeige öffnen: ${widget.item.title}';
     final optionsLabel = 'Anzeigenoptionen: ${widget.item.title}';
@@ -516,13 +517,14 @@ class _SquareTitleOnlyCardState extends State<_SquareTitleOnlyCard> {
       label: openLabel,
       child: GestureDetector(
         onTap: () => ItemDetailsOverlay.showFullPage(context,
-            item: widget.item, fresh: true),
+            item: widget.item, fresh: true, publicCatalogImage: true),
         onLongPress: _showOptions,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(18),
           child: Stack(children: [
             Positioned.fill(
                 child: AppImage(
+                    publicCatalogImage: true,
                     url: widget.item.photos.isNotEmpty
                         ? widget.item.photos.first
                         : '',

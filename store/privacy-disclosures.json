@@ -812,7 +812,7 @@
     },
     {
       "path": "lib/services/backend_config.dart",
-      "sha256": "0359bad55ec4e23cbd8528ff6be585e48317cb34c6a1c1d29f92a19b0529b15e"
+      "sha256": "5c05efcf5ddb5b797e0222eb720731ac3c4f0c6af3c5743334c14c8c07b88369"
     },
     {
       "path": "lib/services/firebase_runtime.dart",
@@ -828,7 +828,7 @@
     },
     {
       "path": "lib/screens/app_link_destination_screen.dart",
-      "sha256": "0b522af484bfc74c33721659ae991cc9c0ef11e80188dd9c76b9188d83f348aa"
+      "sha256": "33d19b546932a3a3c542f9e74d72dcdddc1b5f5e30a7d0ad48fa815154fd098a"
     },
     {
       "path": "android/app/src/main/kotlin/com/shareittoo/app/MainActivity.kt",
@@ -836,7 +836,7 @@
     },
     {
       "path": "lib/widgets/app_image.dart",
-      "sha256": "531c7d68c4dcc1948d45f8a43c1cd173c628758a803de587ba4bf4bdf404bf80"
+      "sha256": "a27f36d4f484517ba0712373ff17522dc56f2d1c95095ca11ebed2161d3571d0"
     },
     {
       "path": "lib/services/address_privacy.dart",
@@ -916,7 +916,7 @@
     },
     {
       "path": "lib/widgets/item_details_overlay.dart",
-      "sha256": "ffbac677b03a31462d07c87ece2e229b6d77a56af14edc9f631a8483caafc5e3"
+      "sha256": "c266bf017a6133e34627712ed70e4ceecc571f2f35174f40e179b0753f37f495"
     },
     {
       "path": "lib/config/private_pilot_config.dart",
@@ -1052,7 +1052,7 @@
     },
     {
       "path": "lib/screens/explore_screen.dart",
-      "sha256": "f6ae966f1ee2afeb0d03440ac099bed3eff12a28bea3802a7d4e602b950e58bf"
+      "sha256": "2c58eb921d37564356e4b258c7497676d69c060045735ab1af82a0d563fd3ddd"
     },
     {
       "path": "lib/widgets/supply_enrichment_dialog.dart",

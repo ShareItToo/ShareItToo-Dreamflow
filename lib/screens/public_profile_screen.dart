@@ -890,7 +890,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                           ? IgnorePointer(
                               child: ItemCard(item: _items[i], compact: true),
                             )
-                          : ItemCard(item: _items[i], compact: true),
+                          : ItemCard(item: _items[i], compact: true, publicCatalogImage: true),
                     ),
                   ],
                 ],

@@ -111,6 +111,34 @@ test('public listing media remains readable without exposing profile upload meta
   assert.equal(response.headers.get('x-upload-id'), null);
 });
 
+test('anonymous catalog reads serve only public active catalog media; forged client opt-in has no authority', async (t) => {
+  const request = requester(t);
+  const publicListing = uploadRecord({ listing: true });
+  const publicResponse = await request({ record: publicListing });
+  assert.equal(publicResponse.status, 200);
+  assert.match(publicResponse.headers.get('content-type'), /^image\/webp/u);
+  assert.equal(publicResponse.headers.get('x-upload-id'), null);
+  assert.equal(await publicResponse.text(), 'upload');
+  assert.equal(pool.query.mock.calls.length, 1,
+    'anonymous public read performs only the authoritative upload/listing lookup');
+
+  for (const record of [
+    { ...publicListing, visibility: 'private' },
+    { ...publicListing, listing_is_active: false },
+    { ...publicListing, listing_status: 'paused' },
+    { ...publicListing, listing_status: 'draft' },
+    { ...publicListing, listing_catalog_version: 0 },
+  ]) {
+    const denied = await request({ record });
+    assert.equal(denied.status, 401);
+    assert.equal((await denied.json()).error, 'invalid_or_expired_session');
+    assert.equal(denied.headers.get('x-upload-id'), null);
+  }
+  const missing = await request({ record: null });
+  assert.equal(missing.status, 404);
+  assert.equal((await missing.json()).error, 'upload_not_found');
+});
+
 test('a database storage name that is not one safe filename fails closed', async (t) => {
   const request = requester(t);
   const response = await request({
