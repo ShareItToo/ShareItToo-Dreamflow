@@ -42,6 +42,48 @@ approved out of band; the deployer never trusts an artifact's self-declared hash
 This is a repeatable input contract, not a claim of byte-identical Flutter output
 across different toolchains. No timestamps or local/private paths enter it.
 
+## Required checked transfer archive
+
+Before any authorized artifact transfer, build an uncompressed USTAR archive
+with the accepted manifest SHA and a new absolute output outside the artifact:
+
+```sh
+node tool/staging_web_archive.mjs /absolute/sealed/artifact EXPECTED_MANIFEST_SHA /absolute/new/transfer.tar
+```
+
+This Node-only helper validates the existing sealed-artifact contract, captures
+the exact regular-file bytes through no-follow descriptors, creates the target
+exclusively and independently parses the resulting file before reporting
+`staging-web-archive-verified`. Retain its `archiveHash`, `archiveBytes` and
+`manifestHash`; transfer only after this readback passes. For a later independent
+check, import `verifyArchive(artifact, manifestHash, archive)` from the same
+module. The verifier reads the archive itself and compares every entry's name,
+type, mode, length and SHA-256 to the validated artifact; it does not regenerate
+headers as its test oracle. Verify the transferred archive SHA before extraction
+and revalidate the extracted artifact against the accepted manifest afterward.
+The archive check grants no transfer or deployment authorization.
+
+Only regular single-link `0644` files and `0755` directories are accepted.
+Entries have stable ASCII ordering, zero UID/GID/mtime and empty owner names;
+paths must fit USTAR name/prefix fields. Symlinks, hardlinks, special files,
+AppleDouble/`__MACOSX`, path aliases/escapes and PAX/GNU extension headers are
+rejected. There are no xattr, ACL, fflag or provenance headers, and no system
+`tar` metadata inheritance. The bounded format accepts at most 10,000 entries
+and 512 MiB including archive framing. Unsupported inputs fail before output
+creation; a write/readback failure may leave a new unsuccessful archive for
+inspection, which must not be transferred or silently overwritten. Neither the
+sealed bytes nor their existing manifest format is changed. Identical sealed
+bytes and accepted modes produce identical archive SHA even when mtimes differ.
+
+Mentor rule: a byte-correct extraction with metadata warnings is still transfer
+tooling debt. Use this checked archive builder for subsequent transfers; never
+silence tar warnings or treat an unexamined OS-generated archive as evidence.
+Determine artifact/output containment from canonical path components with
+`path.relative`, never a raw string prefix. Test both trailing separators and
+outside sibling paths sharing the artifact's name prefix before accepting it.
+The permanent tests exercise the real Node CLI and independent system-tar
+extraction, including malicious headers and exact extracted-byte comparison.
+
 ## Cache isolation
 
 `--pwa-strategy=none` is required (currently supported but deprecated by Flutter;
@@ -189,7 +231,7 @@ provides atomic process-level switching, not a power-loss durability guarantee.
 ## Focused proof
 
 ```sh
-node --test test/tool/staging_web_bootstrap.test.mjs test/tool/staging_web_contract.test.mjs test/tool/p0a_web_smoke_readiness.test.mjs test/tool/prepare_public_store_route_rollout.test.mjs
+node --test test/tool/staging_web_archive.test.mjs test/tool/staging_web_bootstrap.test.mjs test/tool/staging_web_contract.test.mjs test/tool/p0a_web_smoke_readiness.test.mjs test/tool/prepare_public_store_route_rollout.test.mjs
 node tool/check_current_consumer_closure.mjs
 git diff --check
 ```

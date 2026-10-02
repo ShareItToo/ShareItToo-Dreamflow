@@ -7,19 +7,23 @@ source link. Everything below **Historical snapshots** is retained provenance,
 not current execution or release authority.
 
 - **Objective:** advance Mission source safely while using Staging Web for
-  fast, source-bound pilot acceptance. The current bounded FIX restores readable
-  mobile featured cards; real Mission matching/data activation remains separately gated.
+  fast, source-bound pilot acceptance. Finalize the reviewed transfer-archive
+  tooling alongside the mobile FIX for one combined Web successor; real Mission
+  matching/data activation remains separately gated.
 - **Authoritative sources:** [Mission masterplan](../product/SIT_MISSION_MASTERPLAN_2026-09-30.md),
   [Web contract](STAGING_WEB_PILOT.md), [Web/native matrix](SIT_WEB_NATIVE_CAPABILITY_MATRIX_2026-10-02.md),
   [P6-C2 boundary](SIT_MISSION_P6C2_OWNER_API_2026-10-02.md) and
   [D3/D4 FIX record](SIT_GEMINI_MISSION_P6C_D3_D4_GATE_2026-10-02.md).
   Older checkpoint statements in linked documents do not supersede this capsule.
 - **Source/candidate truth:** branch `codex/master-workflow-20260808`;
-  the accepted/deployed predecessor and package base are
-  `3c1ba1c1318f1b9108e46e5738cd34279ca796f6`.
-  This reviewed mobile FIX is the source successor. Its focused tests are local
-  evidence; successor commit, exact-head CI and deployment are recorded only
-  after those separate actions complete.
+  the mobile successor is committed and pushed at exact
+  `74240634bb0390efeba2e40feea2e7b7b16e9249`.
+  The archive-tool package below is the reviewed local successor to that source.
+  Its own automatic exact-head CI and combined deployment remain separate gates.
+- **Mobile exact-head CI — fresh readback:** [CodeQL 37054069654](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37054069654)
+  completed **SUCCESS** for exact `74240634…`;
+  [Regression 37054069755](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37054069755)
+  is still **in progress**. Neither run proves the archive-tool successor or deployment.
 - **Live Staging Web — Sol handoff:** source `3c1ba1c1…`, current manifest
   SHA-256 `e49d51e488d4f2c5daccf70d0e7f3ea0b4084fb5e2dfb167a99cf0bdf921b157`.
   The desktop responsive package is deployed. Earlier `ba49aecc…` CI and Web
@@ -36,7 +40,7 @@ not current execution or release authority.
   hidden. Desktop acceptance is green; mobile acceptance is **FIX**, not PASS.
   Synthetic truth and non-bookable detail remain the accepted boundary; this
   is not Google/provider, real-inventory, native or Mission-deployment proof.
-- **Mobile successor — Sol local PASS, commit pending:** at 390 px the row
+- **Mobile successor — Sol local PASS, pushed, not deployed:** at 390 px the row
   has two complete 157.33 px cards plus 25% of a third, with a 320 px maximum.
   Synthetic cards have a 280 px disclosure/action height floor and no implicit
   margin that narrows the visible surface. Desktop content/detail bounds, synthetic labels,
@@ -51,6 +55,17 @@ not current execution or release authority.
   Reverse-binding discovery found exactly two mutable Explore bindings
   (privacy/retention); both were refreshed once after final source changes.
   Historical evidence and existing fail-closed approvals remain unchanged.
+- **Transfer-archive successor — Sol local PASS:**
+  [Node-only builder/readback](../../tool/staging_web_archive.mjs) creates an
+  exclusive metadata-free USTAR archive from the validated sealed artifact.
+  Independent parsing rejects unsafe paths, links/specials, AppleDouble,
+  PAX/xattr/provenance metadata, inventory/byte drift and existing targets.
+  Repeated builds have identical SHA-256 and independent tar extraction retains
+  exact sealed bytes without warnings. Full standard tooling passed 3627/3627;
+  the subsequent reviewed containment correction passed its focused 63/63 cases,
+  including trailing separators, unchanged refused artifacts and outside siblings.
+  Syntax/diff passed; the [Web runbook](STAGING_WEB_PILOT.md) makes this transfer
+  check mandatory. No live build, transfer or deployment is claimed.
 - **Google Web auth:** current release intentionally off. Source popup/session
   handling exists; verified Firebase Web options, authorized Staging domain,
   backend-project/runtime and provider bindings plus real Web-login proof remain
@@ -60,11 +75,11 @@ not current execution or release authority.
   default-off, with no real matching, region or provider effects. D3/D4 remains
   open with prior FIX. Per Sol UI handoff, the Gemini tab awaits a signed-in
   Pro Extended send; no new accepted answer exists. This gate does not block
-  the source-only mobile FIX.
-- **Exact next:** Sol reviews the mobile FIX and current bindings → authorized
-  commit/push and automatic exact-head CI → build/seal
-  and separately authorized Staging Web successor promotion → fresh wide/mobile
-  browser acceptance → Google-Web activation package with its missing evidence gates.
+  the source-only mobile/archive successor.
+- **Exact next:** commit/push the reviewed archive-tool successor and this
+  capsule → automatic exact-head CI → one combined Web build/seal, separately
+  authorized Staging promotion and fresh wide/mobile browser acceptance →
+  Google-Web activation package with its missing evidence gates.
   No Production/Play change or pilot-complete claim follows from this sequence.
 
 ## Historical snapshots — retained evidence, superseded execution state
