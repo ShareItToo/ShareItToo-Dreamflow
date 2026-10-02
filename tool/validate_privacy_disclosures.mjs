@@ -194,6 +194,7 @@ const sourcePaths = [
   'backend/sql/migrations/102_mission_inventory_resolutions.up.sql',
   'backend/sql/migrations/102_mission_inventory_resolutions.down.sql',
   'backend/src/mission_supply_demand_workflow.js',
+  'backend/src/mission_supply_participation_workflow.js',
   'backend/sql/migrations/103_mission_supply_demands.up.sql',
   'backend/sql/migrations/103_mission_supply_demands.down.sql',
   'backend/sql/migrations/104_mission_supply_participation.up.sql',

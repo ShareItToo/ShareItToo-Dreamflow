@@ -21,6 +21,14 @@ function validate({ retentionManifest = clone(baseRetention), privacyManifest = 
   return validateRetentionDeletionReadiness({ root, retentionManifest, privacyManifest, sourceTexts, evidenceTexts, requireApproved, historicalSnapshot });
 }
 
+test('retention inventory binds the owner participation API workflow', () => {
+  const retentionManifest = clone(baseRetention);
+  retentionManifest.sourceInventory = retentionManifest.sourceInventory.filter(
+    (entry) => entry.path !== 'backend/src/mission_supply_participation_workflow.js',
+  );
+  assert.throws(() => validate({ retentionManifest }), /every required retention source exactly once/u);
+});
+
 test('historical source selection requires a genuine complete snapshot attestation', () => {
   const forged = {
     [boundSnapshotAttestationBrand]: true,

@@ -19,6 +19,7 @@ import { normalizeIdentityVerificationTransport } from './identity_verification_
 import { readStagingAccessConfiguration } from './staging_access_gate.js';
 import { readSyntheticCatalogConfiguration } from './staging_synthetic_catalog.js';
 import { readStagingGoogleRegistrationConfiguration } from './staging_google_registration.js';
+import { readMissionSupplyParticipationEnabled } from './mission_supply_participation_workflow.js';
 
 function required(name) {
   const value = process.env[name]?.trim();
@@ -101,6 +102,12 @@ if (plannerDemandEnabled && deploymentEnvironment === 'production') {
 if (plannerDemandEnabled && (!plannerCoreEnabled || !plannerInventoryEnabled)) {
   throw new Error('planner demand requires planner core and inventory resolution');
 }
+const plannerSupplyParticipationEnabled = readMissionSupplyParticipationEnabled(process.env, {
+  deploymentEnvironment,
+  coreEnabled: plannerCoreEnabled,
+  inventoryEnabled: plannerInventoryEnabled,
+  demandEnabled: plannerDemandEnabled,
+});
 const listingSupplyEnrichmentEnabled = (
   process.env.LISTING_SUPPLY_ENRICHMENT_ENABLED ?? 'false'
 ).trim().toLowerCase() === 'true';
@@ -462,6 +469,7 @@ export const config = Object.freeze({
     enabled: plannerCoreEnabled,
     inventoryResolutionEnabled: plannerInventoryEnabled,
     demandEnabled: plannerDemandEnabled,
+    supplyParticipationEnabled: plannerSupplyParticipationEnabled,
     demandActivationAllowed: false,
     publicReleaseAllowed: false,
     externalGenerativeAiAllowed: false,

@@ -48,6 +48,14 @@ function validate({
   });
 }
 
+test('privacy inventory binds the owner participation API workflow', () => {
+  const privacyManifest = clone(basePrivacyManifest);
+  privacyManifest.sourceInventory = privacyManifest.sourceInventory.filter(
+    (entry) => entry.path !== 'backend/src/mission_supply_participation_workflow.js',
+  );
+  assert.throws(() => validate({ privacyManifest }), /every required privacy source exactly once/u);
+});
+
 test('historical source selection requires a genuine complete snapshot attestation', () => {
   const forged = {
     [boundSnapshotAttestationBrand]: true,

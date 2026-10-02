@@ -33,7 +33,7 @@
     },
     {
       "path": "backend/src/app.js",
-      "sha256": "5d88f0ba592845b0a6b8f8f52fa16350046015f3415b3719a38a23b9dc6b8fec"
+      "sha256": "d670d2ee7e9dab7176b0303c82a6ae8173b2df6d6fb053992d7bdcda3ce6c9a8"
     },
     {
       "path": "backend/src/rate_limit_policy.js",
@@ -265,7 +265,7 @@
     },
     {
       "path": "backend/src/config.js",
-      "sha256": "25d0f775b774cb37a62df4eacc3d4cb1ff4b702b66c7918526ad8df4d074acf8"
+      "sha256": "b2a29054cdfc65e77c981d1d02c3a0af5f1b8c2a08cc536c58847d5f4c80f515"
     },
     {
       "path": "backend/src/notifications.js",
@@ -430,6 +430,10 @@
     {
       "path": "backend/src/mission_supply_demand_workflow.js",
       "sha256": "a39cd6d6589dee01a3e002d70d0fdb344d24b5b7a47d56b5b4f7f48746f56990"
+    },
+    {
+      "path": "backend/src/mission_supply_participation_workflow.js",
+      "sha256": "5b7c8f93757e964f0e1669513e8bc3bd5f8823801e2db91a61f20f3735b254a1"
     },
     {
       "path": "backend/sql/migrations/103_mission_supply_demands.up.sql",

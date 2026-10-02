@@ -136,9 +136,13 @@ discover a mechanically stale source hash.
   cleanup outbox.
 - Every new owner-bound root/revision/command graph must preserve the complete
   account-deletion cascade: child or revision foreign keys must not block the
-  cascade from `users`. A focused real-PostgreSQL test must delete the account
-  and prove that all owned roots, revisions and commands (plus owned files when
-  present) disappear.
+  cascade from `users`. Focused real-PostgreSQL tests must prove both the FK
+  hard-delete cascade and the application's account-erasure/tombstone path
+  with populated graphs. Count owned roots, revisions and every command family
+  before and after each path; prove owned-file cleanup when files are present.
+- Workflow integration tests create suspension fixtures through the current
+  `setUserSuspension` contract with a complete synthetic decision. Direct legacy
+  suspension-row inserts belong only in migration/storage-isolation tests.
 - Safety-mode build flags must fail startup whenever their requested
   configuration is invalid; they must never silently downgrade to normal
   behavior. A package report may claim an allowed or rejected configuration

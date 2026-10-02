@@ -120,6 +120,13 @@ import {
   revokeMissionSupplyRelease,
 } from './mission_supply_demand_workflow.js';
 import {
+  assertMissionSupplyParticipationTechnicalAccess,
+  getMissionSupplyParticipation,
+  MissionSupplyParticipationError,
+  setMissionSupplyParticipation,
+  setMissionSupplyParticipationItem,
+} from './mission_supply_participation_workflow.js';
+import {
   addPrivateShelfMedia,
   assertPrivateShelfTechnicalAccess,
   createPrivateShelfItem,
@@ -2110,6 +2117,7 @@ export async function eraseAccount(client, user, { actorRole = 'user', source = 
     [user.id],
   );
   await client.query('DELETE FROM mission_needs WHERE owner_id = $1', [user.id]);
+  await client.query('DELETE FROM mission_supply_participations WHERE owner_id = $1', [user.id]);
   await client.query('DELETE FROM private_shelf_items WHERE owner_id = $1', [user.id]);
   await client.query('DELETE FROM rental_carts WHERE user_id = $1', [user.id]);
   await client.query('DELETE FROM listing_sets WHERE owner_id = $1', [user.id]);
@@ -5902,6 +5910,32 @@ export function createApp({
       .json(result);
   }));
 
+  // Participation is an owner-only technical surface; it does not resolve demand recipients.
+  app.use('/v1/mission-supply-participation', (_req, res, next) => {
+    res.set('Cache-Control', 'private, no-store');
+    next();
+  });
+  app.get('/v1/mission-supply-participation', requireAuth, requireActiveAccount, asyncRoute(async (req, res) => {
+    assertMissionSupplyParticipationTechnicalAccess(config);
+    const result = await inTransaction((client) => getMissionSupplyParticipation(client, { actorId: req.auth.userId }));
+    res.json(result);
+  }));
+  app.post('/v1/mission-supply-participation', requireAuth, requireActiveAccount, asyncRoute(async (req, res) => {
+    assertMissionSupplyParticipationTechnicalAccess(config);
+    const result = await inTransaction((client) => setMissionSupplyParticipation(client, {
+      actorId: req.auth.userId, raw: req.body, idempotencyKey: req.get('Idempotency-Key'),
+    }));
+    res.status(result.replayed ? 200 : 201).json(result);
+  }));
+  app.post('/v1/mission-supply-participation/items/:shelfItemId', requireAuth, requireActiveAccount, asyncRoute(async (req, res) => {
+    assertMissionSupplyParticipationTechnicalAccess(config);
+    const result = await inTransaction((client) => setMissionSupplyParticipationItem(client, {
+      actorId: req.auth.userId, shelfItemId: req.params.shelfItemId,
+      raw: req.body, idempotencyKey: req.get('Idempotency-Key'),
+    }));
+    res.status(result.replayed ? 200 : 201).json(result);
+  }));
+
   const privateShelfUpload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 8 * 1024 * 1024, files: 1 },
@@ -8230,7 +8264,8 @@ export function createApp({
     const missionNeedError = error instanceof MissionNeedError;
     const missionFitCheckError = error instanceof MissionFitCheckError;
     const missionInventoryResolutionError = error instanceof MissionInventoryResolutionError;
-    const missionSupplyDemandError = error instanceof MissionSupplyDemandError;
+    const missionSupplyDemandError = error instanceof MissionSupplyDemandError
+      || error instanceof MissionSupplyParticipationError;
     const privateShelfError = error instanceof PrivateShelfError;
     const listingSupplyEnrichmentError = error instanceof ListingSupplyEnrichmentError;
     const listingSetError = error instanceof ListingSetError;
