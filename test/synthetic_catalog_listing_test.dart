@@ -4,11 +4,16 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lendify/models/item.dart';
+import 'package:lendify/screens/search_results_screen.dart';
 import 'package:lendify/screens/select_rental_duration_screen.dart';
+import 'package:lendify/services/localization_service.dart';
 import 'package:lendify/widgets/item_card.dart';
 import 'package:lendify/widgets/item_details_overlay.dart';
 import 'package:lendify/widgets/listing_carousel_card.dart';
+import 'package:lendify/widgets/search_overlay.dart';
 import 'package:lendify/widgets/synthetic_catalog_listing.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 final Map<String, dynamic> backendSyntheticFixture = jsonDecode(
     File('test/fixtures/staging_synthetic_catalog_public_listing.json')
@@ -37,6 +42,94 @@ Map<String, dynamic> itemJson({bool synthetic = true}) {
 }
 
 void main() {
+  testWidgets('guest nearby search suggestions retain the synthetic notice',
+      (tester) async {
+    tester.view.physicalSize = const Size(1000, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    SharedPreferences.setMockInitialValues({
+      'items': jsonEncode([itemJson()]),
+      'users': '[]',
+    });
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(body: Builder(builder: (context) {
+        return TextButton(
+            onPressed: () => SearchOverlay.show(context),
+            child: const Text('Suche öffnen'));
+      })),
+    ));
+    await tester.tap(find.text('Suche öffnen'));
+    await tester.pumpAndSettle();
+    expect(find.text(Item.syntheticCatalogNotice), findsOneWidget);
+    expect(find.byType(SyntheticCatalogCard), findsOneWidget);
+    expect(find.byIcon(Icons.verified_outlined), findsNothing);
+    await tester.ensureVisible(find.text('Testansicht öffnen'));
+    await tester.tap(find.text('Testansicht öffnen'));
+    await tester.pumpAndSettle();
+    expect(find.byType(SyntheticCatalogDetails), findsOneWidget);
+    expect(tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+        isNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final synthetic in [true, false]) {
+    testWidgets(
+        'guest search ${synthetic ? 'synthetic results are noncontractual' : 'ordinary results retain listing controls'}',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final semantics = tester.ensureSemantics();
+      try {
+        final item = Item.fromJson(itemJson(synthetic: synthetic));
+        await tester.pumpWidget(ChangeNotifierProvider(
+          create: (_) => LocalizationController(),
+          child: MaterialApp(
+            home:
+                SearchResultsScreen(queryText: 'Synthetische', results: [item]),
+          ),
+        ));
+        await tester.pumpAndSettle();
+        if (!synthetic) {
+          expect(find.bySemanticsLabel('Anzeige öffnen: ${item.title}'),
+              findsOneWidget);
+          expect(find.byTooltip('Anzeigenoptionen'), findsOneWidget);
+          expect(find.byType(SyntheticCatalogCard), findsNothing);
+          return;
+        }
+        expect(find.text(Item.syntheticCatalogNotice), findsOneWidget);
+        expect(find.byType(SyntheticCatalogCard), findsOneWidget);
+        expect(
+            find.bySemanticsLabel(
+                RegExp('Anzeige öffnen|Anzeigenoptionen|Gemerkt')),
+            findsNothing);
+        expect(find.byTooltip('Nicht verifiziert'), findsNothing);
+        expect(find.textContaining('€'), findsNothing);
+        expect(find.byIcon(Icons.favorite_border), findsNothing);
+        // No long-press route to ordinary listing options or rental intent.
+        await tester.longPress(find.text(item.title));
+        await tester.pumpAndSettle();
+        expect(find.byType(AlertDialog), findsNothing);
+        // InkWell may treat an unhandled long press as the safe card tap.
+        if (find.byType(SyntheticCatalogDetails).evaluate().isNotEmpty) {
+          await tester.pageBack();
+          await tester.pumpAndSettle();
+        }
+        await tester.ensureVisible(find.text('Testansicht öffnen'));
+        await tester.tap(find.text('Testansicht öffnen'));
+        await tester.pumpAndSettle();
+        expect(find.byType(SyntheticCatalogDetails), findsOneWidget);
+        await tester.scrollUntilVisible(find.byType(FilledButton), 120);
+        expect(tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+            isNull);
+        expect(find.text('In den Mietkorb'), findsNothing);
+        expect(find.text('Reservieren'), findsNothing);
+        expect(tester.takeException(), isNull);
+      } finally {
+        semantics.dispose();
+      }
+    });
+  }
+
   test('ordinary parity and synthetic class survive persistence/restart', () {
     final ordinary = Item.fromJson(itemJson(synthetic: false));
     expect(ordinary.bookingAllowed, isTrue);

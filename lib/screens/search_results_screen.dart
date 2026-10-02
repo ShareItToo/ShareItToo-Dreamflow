@@ -14,6 +14,7 @@ import 'package:lendify/widgets/listing_options_dialog.dart';
 import 'package:lendify/config/synthetic_clone_config.dart';
 import 'package:provider/provider.dart';
 import 'package:lendify/widgets/wishlist_selection_sheet.dart';
+import 'package:lendify/widgets/synthetic_catalog_listing.dart';
 
 class SearchResultsScreen extends StatefulWidget {
   final String queryText; // e.g., "Bohrmaschine in Stuttgart"
@@ -500,6 +501,9 @@ class _SquareTitleOnlyCardState extends State<_SquareTitleOnlyCard> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.item.isSyntheticCatalog) {
+      return SyntheticCatalogCard(item: widget.item);
+    }
     final openLabel = 'Anzeige öffnen: ${widget.item.title}';
     final optionsLabel = 'Anzeigenoptionen: ${widget.item.title}';
     final favoriteLabel = widget.isFavorite

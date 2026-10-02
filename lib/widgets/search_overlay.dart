@@ -15,6 +15,7 @@ import 'package:lendify/widgets/app_image.dart';
 import 'package:lendify/widgets/all_categories_overlay.dart';
 import 'package:lendify/openai/openai_config.dart';
 import 'package:lendify/widgets/app_popup.dart';
+import 'package:lendify/widgets/synthetic_catalog_listing.dart';
 
 class SearchOverlay {
   static Future<void> show(BuildContext context) async {
@@ -1293,6 +1294,9 @@ class _MiniItem extends StatelessWidget {
       this.onTap});
   @override
   Widget build(BuildContext context) {
+    if (item.isSyntheticCatalog) {
+      return SyntheticCatalogCard(item: item);
+    }
     final bool isVerified = ownerVerified;
     return InkWell(
       onTap: onTap,
