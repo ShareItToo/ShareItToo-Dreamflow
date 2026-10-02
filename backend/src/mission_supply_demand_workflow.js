@@ -121,7 +121,7 @@ function iso(value) {
   return parsed.toISOString();
 }
 
-export function normalizeMissionSupplyDemandRequest(raw, { now = new Date() } = {}) {
+function normalizeStableMissionSupplyDemandRequest(raw) {
   const candidate = object(raw, 'mission_supply_request_invalid');
   exactKeys(
     candidate,
@@ -132,9 +132,6 @@ export function normalizeMissionSupplyDemandRequest(raw, { now = new Date() } = 
     throw new MissionSupplyDemandError(400, 'mission_supply_purpose_invalid');
   }
   const expiresAt = dateTime(candidate.expiresAt, 'mission_supply_expiry_invalid');
-  if (new Date(expiresAt).getTime() <= new Date(now).getTime()) {
-    throw new MissionSupplyDemandError(400, 'mission_supply_expiry_not_future');
-  }
   return Object.freeze({
     resolutionRevision: positiveRevision(
       candidate.resolutionRevision,
@@ -148,6 +145,18 @@ export function normalizeMissionSupplyDemandRequest(raw, { now = new Date() } = 
     purpose: missionSupplyDemandPurpose,
     expiresAt,
   });
+}
+
+function assertFutureExpiry(request, now) {
+  if (new Date(request.expiresAt).getTime() <= new Date(now).getTime()) {
+    throw new MissionSupplyDemandError(400, 'mission_supply_expiry_not_future');
+  }
+}
+
+export function normalizeMissionSupplyDemandRequest(raw, { now = new Date() } = {}) {
+  const request = normalizeStableMissionSupplyDemandRequest(raw);
+  assertFutureExpiry(request, now);
+  return request;
 }
 
 export function normalizeMissionSupplyDemandResponse(raw) {
@@ -505,7 +514,7 @@ export async function createMissionSupplyDemand(client, {
 }) {
   const requesterId = actorId(rawActorId);
   const inventoryId = resolutionId(rawResolutionId);
-  const request = normalizeMissionSupplyDemandRequest(raw, { now });
+  const request = normalizeStableMissionSupplyDemandRequest(raw);
   const key = commandKey(idempotencyKey);
   const requestDigest = missionSupplyDemandDigest({
     command: 'create', resolutionId: inventoryId, request,
@@ -515,6 +524,8 @@ export async function createMissionSupplyDemand(client, {
     principalId: requesterId, key, commandType: 'create', requestDigest, now,
   });
   if (replay) return replay;
+  // Expiry admits new commands; it must not invalidate an already committed retry.
+  assertFutureExpiry(request, now);
   await lockGap(client, inventoryId, request.resolutionRevision, request.slotKey);
   const gap = await exactGap(client, requesterId, inventoryId, request);
   const existing = await client.query(

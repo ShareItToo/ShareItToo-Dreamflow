@@ -69,6 +69,7 @@ if (!databaseUrl) {
       );
 
       const {
+        createMissionSupplyDemand,
         getMissionSupplyDemand,
         missionSupplyDemandDigest,
         respondToMissionSupplyDemand,
@@ -236,6 +237,23 @@ if (!databaseUrl) {
           idempotencyKey: key,
         })
       ));
+      const createDirect = (gap, key, now, { actorId = requesterId, ...overrides } = {}) => (
+        inTransaction((client) => createMissionSupplyDemand(client, {
+          actorId, resolutionId: gap.resolutionId, idempotencyKey: key,
+          raw: {
+            resolutionRevision: 1, slotKey: gap.slotKey,
+            purpose: 'mission_gap_supply_v1', expiresAt, ...overrides,
+          },
+          recipientResolver: resolver, now,
+        }))
+      );
+      const demandCounts = async () => (await setupPool.query(
+        `SELECT
+           (SELECT count(*)::int FROM mission_supply_demands) AS demands,
+           (SELECT count(*)::int FROM mission_supply_demand_commands) AS commands,
+           (SELECT count(*)::int FROM mission_supply_demand_revisions) AS revisions,
+           (SELECT count(*)::int FROM mission_supply_releases) AS releases`,
+      )).rows[0];
 
       const firstGap = await insertGap(requesterId, 1);
       const clientSelected = await createDemand(firstGap, 'p6-client-selection-0001', {
@@ -322,6 +340,13 @@ if (!databaseUrl) {
       assert.equal(released.requestBoundRelease.purpose, 'mission_gap_supply_v1');
       assert.equal(released.requestBoundRelease.visibilityStatus, 'active');
       assert.equal(JSON.stringify(released).includes(shelfItemId), false);
+      const expiredReleaseReplay = await createDirect(
+        firstGap, 'p6-create-demand-0001', new Date(expiresAt),
+      );
+      assert.equal(expiredReleaseReplay.replayed, true);
+      assert.equal(expiredReleaseReplay.demand.status, 'released');
+      assert.equal(expiredReleaseReplay.demand.revision, 2);
+      assert.equal(expiredReleaseReplay.demand.requestBoundRelease.visibilityStatus, 'expired');
       const releaseReplay = await fetch(
         `${baseUrl}/v1/mission-supply-demands/${created.demandId}/respond`,
         {
@@ -411,6 +436,47 @@ if (!databaseUrl) {
       const expiryCreate = await createDemand(expiryGap, 'p6-create-expiry-0001');
       const expiryDemand = (await expiryCreate.json()).demand;
       const afterExpiry = new Date(new Date(expiresAt).getTime() + 1_000);
+      const countsBeforeExpiryReplay = await demandCounts();
+      const resolverCallsBeforeExpiryReplay = resolverCalls;
+      for (const offset of [-1, 0, 1]) {
+        const boundaryReplay = await createDirect(
+          expiryGap, 'p6-create-expiry-0001', new Date(Date.parse(expiresAt) + offset),
+        );
+        assert.equal(boundaryReplay.replayed, true);
+        assert.equal(boundaryReplay.demand.demandId, expiryDemand.demandId);
+        assert.equal(boundaryReplay.demand.revision, 1);
+        assert.equal(boundaryReplay.demand.status, offset < 0 ? 'pending' : 'expired_no_response');
+        assert.equal(boundaryReplay.demand.requestBoundRelease, null);
+      }
+      const lateRetries = await Promise.all(Array.from({ length: 4 }, () => (
+        createDirect(expiryGap, 'p6-create-expiry-0001', afterExpiry)
+      )));
+      for (const lateReplay of lateRetries) {
+        assert.equal(lateReplay.replayed, true);
+        assert.equal(lateReplay.demand.demandId, expiryDemand.demandId);
+        assert.equal(lateReplay.demand.status, 'expired_no_response');
+      }
+      await assert.rejects(createDirect(expiryGap, 'p6-create-expiry-0001', afterExpiry, {
+        expiresAt: new Date(Date.parse(expiresAt) - 1_000).toISOString(),
+      }), (error) => error.status === 409 && error.code === 'mission_supply_idempotency_key_reused');
+      await assert.rejects(createDirect(expiryGap, 'p6-new-expired-0001', afterExpiry),
+        (error) => error.status === 400 && error.code === 'mission_supply_expiry_not_future');
+      for (const retryTime of [new Date(Date.parse(expiresAt) - 1), afterExpiry]) {
+        await assert.rejects(createDirect(expiryGap, 'p6-create-expiry-0001', retryTime, {
+          actorId: foreignId,
+        }), (error) => error.status === (retryTime < new Date(expiresAt) ? 404 : 400));
+      }
+      const revokedReplay = await createDirect(firstGap, 'p6-create-demand-0001', afterExpiry);
+      assert.equal(revokedReplay.replayed, true);
+      assert.equal(revokedReplay.demand.status, 'revoked');
+      assert.equal(revokedReplay.demand.requestBoundRelease.visibilityStatus, 'revoked');
+      const rejectedReplay = await createDirect(
+        lifecycleGap, 'p6-lifecycle-create-0001', afterExpiry,
+      );
+      assert.equal(rejectedReplay.demand.status, 'rejected');
+      assert.equal(rejectedReplay.replayed, true);
+      assert.deepEqual(await demandCounts(), countsBeforeExpiryReplay);
+      assert.equal(resolverCalls, resolverCallsBeforeExpiryReplay);
       const projected = await inTransaction((client) => getMissionSupplyDemand(client, {
         actorId: recipientId, demandId: expiryDemand.demandId, now: afterExpiry,
       }));
@@ -699,6 +765,20 @@ if (!databaseUrl) {
         'SELECT count(*)::int AS count FROM mission_supply_demands WHERE id = $1',
         [deleteDemandId],
       )).rows[0].count, 0);
+
+      const countsAfterErasure = await demandCounts();
+      const resolverCallsAfterErasure = resolverCalls;
+      for (const retryTime of [new Date(Date.parse(expiresAt) - 1), afterExpiry]) {
+        await assert.rejects(createDirect(deleteGap, 'p6-delete-create-0001', retryTime, {
+          actorId: deleteId,
+        }), (error) => error.status === (retryTime < new Date(expiresAt) ? 404 : 400));
+      }
+      assert.equal((await setupPool.query(
+        'SELECT count(*)::int AS count FROM mission_supply_demand_commands WHERE actor_id = $1',
+        [deleteId],
+      )).rows[0].count, 0);
+      assert.deepEqual(await demandCounts(), countsAfterErasure);
+      assert.equal(resolverCalls, resolverCallsAfterErasure);
 
       await assert.rejects(
         setupPool.query(await fs.readFile(
