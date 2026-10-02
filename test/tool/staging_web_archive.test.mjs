@@ -10,6 +10,10 @@ import { buildArchive, verifyArchive } from '../../tool/staging_web_archive.mjs'
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const cli = path.join(root, 'tool/staging_web_archive.mjs');
+const canvasKitPaths = ['canvaskit/canvaskit.wasm', 'canvaskit/chromium/canvaskit.wasm',
+  'canvaskit/skwasm.wasm', 'canvaskit/skwasm_heavy.wasm', 'canvaskit/wimp.wasm'];
+// Valid, non-executed WASM module with one empty function, not just a magic prefix.
+const wasm = Buffer.from('0061736d01000000010401600000030201000a040102000b', 'hex');
 function fixture(t, extra = {}) {
   const temp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sit-web-archive-')));
   t.after(() => fs.rmSync(temp, { recursive: true, force: true }));
@@ -77,7 +81,118 @@ test('real Node CLI builds reproducible metadata-free archives; independent tar 
     fs.readFileSync(path.join(extracted, 'web', name)), fs.readFileSync(path.join(f.artifact, 'web', name)));
 });
 
-for (const type of ['x', 'g', 'L', 'K', '1', '2', '3', '4', '6', '7', 'S', '\0']) {
+test('manifest-bound CanvasKit WASM preserves 0755 through CLI, USTAR and independent extraction', (t) => {
+  const f = fixture(t, Object.fromEntries(canvasKitPaths.map((name) => [name, wasm])));
+  for (const name of canvasKitPaths) fs.chmodSync(path.join(f.artifact, 'web', name), 0o755);
+  const result = spawnSync(process.execPath, [cli, f.artifact, f.manifestHash, f.archive], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  const proof = verify(f);
+  const extracted = path.join(f.temp, 'extracted'); fs.mkdirSync(extracted);
+  const tar = spawnSync('tar', ['-xf', f.archive, '-C', extracted], { encoding: 'utf8' });
+  assert.equal(tar.status, 0, tar.stderr); assert.equal(tar.stderr, '');
+  for (const name of canvasKitPaths) {
+    assert.equal(fs.lstatSync(path.join(extracted, 'web', name)).mode & 0o7777, 0o755);
+    assert.deepEqual(fs.readFileSync(path.join(extracted, 'web', name)), wasm);
+  }
+  validateArtifact(extracted, f.manifestHash);
+  assert.equal(verifyArchive(extracted, f.manifestHash, f.archive).archiveHash, proof.archiveHash);
+  const bytes = fs.readFileSync(f.archive);
+  const index = entries(bytes).findIndex(({ offset }) => bytes.subarray(offset, offset + 100).toString().split('\0')[0] === 'web/canvaskit/canvaskit.wasm');
+  assert.ok(index >= 0);
+  editHeader(f, (h) => h.write('0000644\0', 100), index);
+  assert.throws(() => verify(f), /archive_type_mode_size_mismatch/);
+});
+for (const [name, bytes, mode] of [
+  ['main.dart.js', 'executable JS', 0o755],
+  ['extra.html', '<html>executable HTML</html>', 0o755],
+  ['assets/arbitrary.wasm', wasm, 0o755],
+  ['canvaskit/arbitrary.wasm', wasm, 0o755],
+  ['canvaskit/canvaskit.wasm', wasm, 0o777],
+  ['canvaskit/canvaskit.wasm', wasm, 0o666],
+  ['canvaskit/canvaskit.wasm', 'not WASM', 0o755],
+  ['canvaskit/canvaskit.wasm', Buffer.from('0061736d0100000001ff', 'hex'), 0o755],
+]) {
+  test(`executable exception rejects ${name}, mode ${mode.toString(8)}, bytes ${Buffer.byteLength(bytes)}`, (t) => {
+    const f = fixture(t, { [name]: bytes });
+    fs.chmodSync(path.join(f.artifact, 'web', name), mode);
+    assert.throws(() => build(f), /archive_file_mode/);
+    assert.equal(fs.existsSync(f.archive), false);
+  });
+}
+test('0755 CanvasKit WASM still requires its exact accepted manifest membership and bytes', (t) => {
+  const f = fixture(t);
+  fs.mkdirSync(path.join(f.artifact, 'web/canvaskit'));
+  fs.writeFileSync(path.join(f.artifact, 'web/canvaskit/canvaskit.wasm'), wasm, { mode: 0o755 });
+  assert.throws(() => build(f), /artifact_integrity_mismatch/);
+  assert.equal(fs.existsSync(f.archive), false);
+});
+
+test('real CLI preserves 104–197-character leaves and directories through deterministic LongName and system tar', (t) => {
+  const f = fixture(t, { [`assets/${'a'.repeat(104)}`]: '104 bytes leaf',
+    [`assets/${'b'.repeat(197)}`]: '197 bytes leaf', [`assets/${'c'.repeat(197)}/nested.bin`]: 'long directory' });
+  const invoke = (target) => spawnSync(process.execPath, [cli, f.artifact, f.manifestHash, target], { encoding: 'utf8' });
+  const first = invoke(f.archive); assert.equal(first.status, 0, first.stderr);
+  const repeat = path.join(f.temp, 'repeat.tar'); assert.equal(invoke(repeat).status, 0);
+  assert.deepEqual(fs.readFileSync(repeat), fs.readFileSync(f.archive));
+  const bytes = fs.readFileSync(f.archive);
+  assert.equal(entries(bytes).filter((entry) => entry.type === 'L').length, 4);
+  const extracted = path.join(f.temp, 'extracted'); fs.mkdirSync(extracted);
+  const tar = spawnSync('tar', ['-xf', f.archive, '-C', extracted], { encoding: 'utf8' });
+  assert.equal(tar.status, 0, tar.stderr); assert.equal(tar.stderr, '');
+  validateArtifact(extracted, f.manifestHash);
+  assert.equal(verifyArchive(extracted, f.manifestHash, f.archive).archiveHash, verify(f).archiveHash);
+});
+
+for (const variant of ['consecutive', 'orphan', 'missing', 'extra', 'specialName', 'specialType', 'prefix', 'mode', 'sizeZero', 'sizeBound',
+  'padding', 'missingNul', 'interiorNul', 'nonAscii', 'traversal', 'AppleDouble', 'unbound', 'representable',
+  'representablePrefix', 'followingName', 'followingPrefix', 'followingType', 'followingMode', 'followingBytes', 'owner', 'mtime', 'xattr']) {
+  test(`LongName rejects ${variant}`, (t) => {
+    const f = fixture(t, { [`assets/${'z'.repeat(197)}`]: 'long-path bytes' }); build(f);
+    let bytes = fs.readFileSync(f.archive);
+    const records = entries(bytes); const i = records.findIndex((entry) => entry.type === 'L');
+    const record = records[i]; const next = records[i + 1];
+    const h = bytes.subarray(record.offset, record.offset + 512);
+    const payload = bytes.subarray(record.offset + 512, record.offset + 512 + record.size);
+    const nextHeader = bytes.subarray(next.offset, next.offset + 512);
+    if (variant === 'specialName') h[0] = 65;
+    if (variant === 'specialType') h.write('0', 156);
+    if (variant === 'prefix') h.write('prefix', 345);
+    if (variant === 'mode') h.write('0000644\0', 100);
+    if (variant === 'sizeZero') h.write('00000000000\0', 124);
+    if (variant === 'sizeBound') h.write('00000002002\0', 124);
+    if (variant === 'padding') bytes[record.offset + 512 + record.size] = 1;
+    if (variant === 'missingNul') payload[payload.length - 1] = 65;
+    if (variant === 'interiorNul') payload[10] = 0;
+    if (variant === 'nonAscii') payload[10] = 255;
+    if (variant === 'traversal') payload.write('../');
+    if (variant === 'AppleDouble') payload.write('._');
+    if (variant === 'unbound') payload[20] = 65;
+    if (variant === 'representable' || variant === 'representablePrefix') {
+      const name = variant === 'representable' ? 'web/main.dart.js' : `web/${'a'.repeat(80)}/${'b'.repeat(80)}`;
+      bytes.fill(0, record.offset + 512, record.offset + record.length);
+      bytes.write(`${name}\0`, record.offset + 512);
+      h.write(`${(name.length + 1).toString(8).padStart(11, '0')}\0`, 124);
+    }
+    if (variant === 'followingName') nextHeader[0] = 65;
+    if (variant === 'followingPrefix') nextHeader.write('prefix', 345);
+    if (variant === 'followingType') nextHeader.write('K', 156);
+    if (variant === 'followingMode') nextHeader.write('0000755\0', 100);
+    if (variant === 'followingBytes') bytes[next.offset + 512] ^= 1;
+    if (variant === 'owner') h.write('0000001\0', 108);
+    if (variant === 'mtime') h.write('00000000001\0', 136);
+    if (variant === 'xattr') h.write('LIBARCHIVE.xattr', 265);
+    checksum(bytes, record.offset); checksum(bytes, next.offset);
+    const longRecord = bytes.subarray(record.offset, next.offset);
+    if (variant === 'consecutive') bytes = Buffer.concat([bytes.subarray(0, next.offset), longRecord, bytes.subarray(next.offset)]);
+    if (variant === 'orphan') bytes = Buffer.concat([bytes.subarray(0, next.offset), Buffer.alloc(1024)]);
+    if (variant === 'missing') bytes = Buffer.concat([bytes.subarray(0, record.offset), bytes.subarray(next.offset)]);
+    if (variant === 'extra') bytes = Buffer.concat([bytes.subarray(0, bytes.length - 1024), longRecord, bytes.subarray(next.offset, next.offset + next.length), Buffer.alloc(1024)]);
+    fs.writeFileSync(f.archive, bytes);
+    assert.throws(() => verify(f), /archive_/);
+  });
+}
+
+for (const type of ['x', 'g', 'K', '1', '2', '3', '4', '6', '7', 'S', '\0']) {
   test(`archive rejects PAX/GNU/link/special type ${JSON.stringify(type)}`, (t) => {
     const f = fixture(t); build(f);
     editHeader(f, (h) => h.write(type, 156, 'ascii'));
@@ -179,10 +294,9 @@ test('CLI permits outside sibling with matching artifact name prefix', (t) => {
   assert.equal(verifyArchive(f.artifact, f.manifestHash, archive).archiveHash, JSON.parse(result.stdout).archiveHash);
   validateArtifact(f.artifact, f.manifestHash);
 });
-for (const variant of ['symlink', 'hardlink', 'fifo', 'writable', 'directoryMode', 'AppleDouble', 'longName']) {
+for (const variant of ['symlink', 'hardlink', 'fifo', 'writable', 'directoryMode', 'AppleDouble', 'unboundLongDirectory']) {
   test(`builder refuses unsafe source inventory: ${variant}`, (t) => {
-    const extra = variant === 'AppleDouble' ? { '._extra': 'metadata' }
-      : variant === 'longName' ? { ['a'.repeat(101)]: 'unrepresentable' } : {};
+    const extra = variant === 'AppleDouble' ? { '._extra': 'metadata' } : {};
     const f = fixture(t, extra);
     const file = path.join(f.artifact, 'web/main.dart.js');
     if (variant === 'symlink') { fs.unlinkSync(file); fs.symlinkSync('/does-not-exist', file); }
@@ -190,6 +304,7 @@ for (const variant of ['symlink', 'hardlink', 'fifo', 'writable', 'directoryMode
     if (variant === 'fifo') { fs.unlinkSync(file); assert.equal(spawnSync('mkfifo', [file]).status, 0); }
     if (variant === 'writable') fs.chmodSync(file, 0o666);
     if (variant === 'directoryMode') fs.chmodSync(path.join(f.artifact, 'web/empty'), 0o777);
+    if (variant === 'unboundLongDirectory') fs.mkdirSync(path.join(f.artifact, 'web', 'a'.repeat(197)));
     assert.throws(() => build(f));
     assert.equal(fs.existsSync(f.archive), false);
   });

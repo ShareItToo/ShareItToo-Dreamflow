@@ -44,7 +44,7 @@ across different toolchains. No timestamps or local/private paths enter it.
 
 ## Required checked transfer archive
 
-Before any authorized artifact transfer, build an uncompressed USTAR archive
+Before any authorized artifact transfer, build an uncompressed checked archive
 with the accepted manifest SHA and a new absolute output outside the artifact:
 
 ```sh
@@ -63,11 +63,25 @@ headers as its test oracle. Verify the transferred archive SHA before extraction
 and revalidate the extracted artifact against the accepted manifest afterward.
 The archive check grants no transfer or deployment authorization.
 
-Only regular single-link `0644` files and `0755` directories are accepted.
+Regular single-link files must be `0644`; directories must be `0755`. The sole
+file-mode exception preserves `0755` for the manifest-bound Flutter CanvasKit
+modules `web/canvaskit/{canvaskit,skwasm,skwasm_heavy,wimp}.wasm` and
+`web/canvaskit/chromium/canvaskit.wasm`. Each must match its accepted manifest
+hash, have WASM v1 magic and pass the actual Node runtime's `WebAssembly.validate`
+without executing it. USTAR/readback preserve and compare the exact input mode.
+Executable JS/HTML, arbitrary WASM paths, malformed WASM and other modes remain
+rejected. Never chmod the sealed artifact to bypass this gate.
 Entries have stable ASCII ordering, zero UID/GID/mtime and empty owner names;
-paths must fit USTAR name/prefix fields. Symlinks, hardlinks, special files,
-AppleDouble/`__MACOSX`, path aliases/escapes and PAX/GNU extension headers are
-rejected. There are no xattr, ACL, fflag or provenance headers, and no system
+paths use USTAR name/prefix fields whenever representable. Only longer safe
+manifest-bound paths (maximum 1,024 ASCII bytes) use a deterministic GNU
+LongName `L` record: canonical `././@LongLink`, mode/metadata zero, exactly one
+NUL-terminated path, then immediately one regular-file/directory header with
+the first 100 path bytes and empty prefix. Long directories must be ancestors
+of manifest-listed files. Unnecessary, consecutive, orphaned, unsafe or
+mismatched LongName records fail closed. Symlinks, hardlinks, special files,
+AppleDouble/`__MACOSX`, path aliases/escapes, all PAX headers, GNU LongLink and
+all other GNU extensions are rejected. There are no xattr, ACL, fflag or
+provenance headers, and no system
 `tar` metadata inheritance. The bounded format accepts at most 10,000 entries
 and 512 MiB including archive framing. Unsupported inputs fail before output
 creation; a write/readback failure may leave a new unsuccessful archive for
@@ -81,6 +95,10 @@ silence tar warnings or treat an unexamined OS-generated archive as evidence.
 Determine artifact/output containment from canonical path components with
 `path.relative`, never a raw string prefix. Test both trailing separators and
 outside sibling paths sharing the artifact's name prefix before accepting it.
+Before commit/push, exercise one complete real generated artifact inventory,
+including its actual modes and maximum path/leaf lengths, with independent
+extraction proof. Model the observed format narrowly; synthetic fixtures alone
+cannot prove compatibility with Flutter's shipped runtime binaries and assets.
 The permanent tests exercise the real Node CLI and independent system-tar
 extraction, including malicious headers and exact extracted-byte comparison.
 

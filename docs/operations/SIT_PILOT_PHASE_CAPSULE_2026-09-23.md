@@ -18,12 +18,15 @@ not current execution or release authority.
 - **Source/candidate truth:** branch `codex/master-workflow-20260808`;
   the mobile successor is committed and pushed at exact
   `74240634bb0390efeba2e40feea2e7b7b16e9249`.
-  The archive-tool package below is the reviewed local successor to that source.
-  Its own automatic exact-head CI and combined deployment remain separate gates.
-- **Mobile exact-head CI — fresh readback:** [CodeQL 37054069654](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37054069654)
-  completed **SUCCESS** for exact `74240634…`;
-  [Regression 37054069755](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37054069755)
-  is still **in progress**. Neither run proves the archive-tool successor or deployment.
+  The first archive successor is committed/pushed at exact
+  `d2cc9915b845fe30b005a145d4c67db55d1f29e8`. Its real-artifact compatibility
+  repair below is reviewed local source, requiring a new successor commit,
+  automatic exact-head CI and a fresh exact-successor build before promotion.
+- **d2cc exact-head CI — fresh readback:**
+  [Regression 37056287185](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37056287185)
+  and [CodeQL 37056287166](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37056287166)
+  completed **SUCCESS** for exact `d2cc9915…`. The older mobile Regression
+  37054069755 ended **CANCELLED**; it is not successor evidence.
 - **Live Staging Web — Sol handoff:** source `3c1ba1c1…`, current manifest
   SHA-256 `e49d51e488d4f2c5daccf70d0e7f3ea0b4084fb5e2dfb167a99cf0bdf921b157`.
   The desktop responsive package is deployed. Earlier `ba49aecc…` CI and Web
@@ -55,17 +58,26 @@ not current execution or release authority.
   Reverse-binding discovery found exactly two mutable Explore bindings
   (privacy/retention); both were refreshed once after final source changes.
   Historical evidence and existing fail-closed approvals remain unchanged.
-- **Transfer-archive successor — Sol local PASS:**
-  [Node-only builder/readback](../../tool/staging_web_archive.mjs) creates an
-  exclusive metadata-free USTAR archive from the validated sealed artifact.
-  Independent parsing rejects unsafe paths, links/specials, AppleDouble,
-  PAX/xattr/provenance metadata, inventory/byte drift and existing targets.
-  Repeated builds have identical SHA-256 and independent tar extraction retains
-  exact sealed bytes without warnings. Full standard tooling passed 3627/3627;
-  the subsequent reviewed containment correction passed its focused 63/63 cases,
-  including trailing separators, unchanged refused artifacts and outside siblings.
-  Syntax/diff passed; the [Web runbook](STAGING_WEB_PILOT.md) makes this transfer
-  check mandatory. No live build, transfer or deployment is claimed.
+- **d2cc build/seal smoke PASS; compatibility FIX, not deployed:** one isolated
+  exact-d2cc Web build and both loopback smokes passed; its retained manifest is
+  `369c85c920fc008cec618e05404e6b701f1d7ee2efb6751dcb2d0d47a982e8e7`.
+  The committed archive builder correctly refused five shipped CanvasKit WASM
+  modes and then 16 USTAR-unrepresentable image names. That build is retained
+  only as rejected compatibility evidence, never relabelled as a new candidate.
+- **Archive repair — Sol reviewed local PASS:**
+  [Node-only builder/readback](../../tool/staging_web_archive.mjs) preserves
+  `0755` only for five exact manifest-bound, validated CanvasKit WASM paths.
+  Canonical GNU LongName records are allowed only for safe manifest-bound paths
+  that cannot fit USTAR; PAX, other GNU extensions, xattr/ACL/provenance metadata,
+  links/specials, path ambiguity and inventory/mode/byte drift remain rejected.
+  The unchanged complete d2cc artifact passed two identical archive builds,
+  independent parsing, warning-free system-tar extraction and manifest/mode/hash
+  readback: archive SHA
+  `960403cb6630685d8d072e38ffe47022964b676e2d0da0b46efc7bb6b8429cf7`,
+  87,505,408 bytes, 148 files, 18 directories and 16 necessary LongName records.
+  Owning tests passed 207/207, archive tests 100/100; closure, syntax, privacy,
+  retention and diff checks passed without changing approval state. No current
+  source-inventory binding is affected. No transfer or deployment occurred.
 - **Google Web auth:** current release intentionally off. Source popup/session
   handling exists; verified Firebase Web options, authorized Staging domain,
   backend-project/runtime and provider bindings plus real Web-login proof remain
@@ -76,9 +88,11 @@ not current execution or release authority.
   open with prior FIX. Per Sol UI handoff, the Gemini tab awaits a signed-in
   Pro Extended send; no new accepted answer exists. This gate does not block
   the source-only mobile/archive successor.
-- **Exact next:** commit/push the reviewed archive-tool successor and this
-  capsule → automatic exact-head CI → one combined Web build/seal, separately
-  authorized Staging promotion and fresh wide/mobile browser acceptance →
+- **Exact next:** commit/push this reviewed archive compatibility repair and
+  capsule → automatic exact-successor Regression and CodeQL success → one new
+  isolated exact-successor Web build/smoke/seal/checked archive → authorized
+  reversible Staging-only promotion with fresh pre/post readback → independent
+  Sol browser acceptance at 390/768/1920/3840 →
   Google-Web activation package with its missing evidence gates.
   No Production/Play change or pilot-complete claim follows from this sequence.
 

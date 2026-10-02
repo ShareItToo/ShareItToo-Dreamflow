@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Deliberately small USTAR subset: no OS tar invocation or metadata extensions.
+// USTAR plus canonical GNU LongName only: no OS tar or provenance metadata.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,13 +9,20 @@ const check = (condition, code) => { if (!condition) throw Error(code); };
 const BLOCK = 512;
 const MAX_BYTES = 512 * 1024 * 1024;
 const MAX_ENTRIES = 10000;
+const MAX_PATH = 1024;
+const LONG_NAME = '././@LongLink';
+// Flutter 3.41.7 ships these runtime WASM modules as 0755. Preserve only this
+// manifest-bound binary class; never generalize the exception to executables.
+const canvasKitWasmPaths = new Set(['web/canvaskit/canvaskit.wasm',
+  'web/canvaskit/chromium/canvaskit.wasm', 'web/canvaskit/skwasm.wasm',
+  'web/canvaskit/skwasm_heavy.wasm', 'web/canvaskit/wimp.wasm']);
 const zero = (bytes) => bytes.every((byte) => byte === 0);
 function absoluteFile(file) {
   check(typeof file === 'string' && path.isAbsolute(file) && path.normalize(file) === file && file !== '/', 'archive_path_unsafe');
   confinedDirectory(path.dirname(file));
 }
 function safeName(name) {
-  check(typeof name === 'string' && name.length > 0 && name.split('/').every((part) =>
+  check(typeof name === 'string' && name.length > 0 && name.length <= MAX_PATH && name.split('/').every((part) =>
     /^[A-Za-z0-9_.@+-]+$/.test(part) && part !== '.' && part !== '..'
       && !part.startsWith('._') && part !== '__MACOSX'), 'archive_path_unsafe');
 }
@@ -57,13 +64,16 @@ function snapshot(artifact, manifestHash) {
         result.push({ name: key, type: '5', mode: 0o755, bytes: Buffer.alloc(0) }); visit(key);
       } else {
         const captured = readRegular(file, MAX_BYTES - total);
-        check((captured.stat.mode & 0o7777n) === 0o644n, 'archive_file_mode');
         const expected = key === 'staging-web-manifest.json' ? manifestHash
           : key.startsWith('web/') ? manifest.files[key.slice(4)] : undefined;
         if (expected) check(sha256(captured.bytes) === expected, 'archive_source_changed');
         else check(key === 'SHA256SUMS', 'archive_source_inventory');
+        const mode = Number(captured.stat.mode & 0o7777n);
+        check(mode === 0o644 || (mode === 0o755 && expected && canvasKitWasmPaths.has(key)
+          && captured.bytes.subarray(0, 8).equals(Buffer.from('0061736d01000000', 'hex'))
+          && WebAssembly.validate(captured.bytes)), 'archive_file_mode');
         total += captured.bytes.length;
-        result.push({ name: key, type: '0', mode: 0o644, bytes: captured.bytes });
+        result.push({ name: key, type: '0', mode, bytes: captured.bytes });
       }
     }
     check(sameStat(before, fs.lstatSync(directory, { bigint: true })), 'archive_source_changed');
@@ -73,6 +83,9 @@ function snapshot(artifact, manifestHash) {
   const actualFiles = result.filter((entry) => entry.type === '0').map((entry) => entry.name);
   const expectedFiles = ['SHA256SUMS', 'staging-web-manifest.json', ...Object.keys(manifest.files).map((name) => `web/${name}`)].sort();
   check(JSON.stringify(actualFiles) === JSON.stringify(expectedFiles), 'archive_source_inventory');
+  for (const entry of result) if (!splitName(entry.name)) {
+    check(expectedFiles.some((name) => name === entry.name || name.startsWith(`${entry.name}/`)), 'archive_longname_manifest_binding');
+  }
   const sums = `${manifestHash}  staging-web-manifest.json\n${Object.entries(manifest.files).map(([name, hash]) => `${hash}  web/${name}\n`).join('')}`;
   check(result.find((entry) => entry.name === 'SHA256SUMS').bytes.equals(Buffer.from(sums)), 'archive_source_changed');
   return result;
@@ -82,7 +95,7 @@ function splitName(name) {
   for (let slash = name.lastIndexOf('/'); slash > 0; slash = name.lastIndexOf('/', slash - 1)) {
     if (slash <= 155 && name.length - slash - 1 <= 100) return { leaf: name.slice(slash + 1), prefix: name.slice(0, slash) };
   }
-  throw Error('archive_ustar_name_too_long');
+  return null;
 }
 function header(entry) {
   const out = Buffer.alloc(BLOCK); const { leaf, prefix } = splitName(entry.name);
@@ -103,10 +116,11 @@ function header(entry) {
 // It independently validates each actual header, payload and end marker.
 function inspectArchive(bytes, expected) {
   check(bytes.length % BLOCK === 0 && bytes.length >= BLOCK * 2, 'archive_length_invalid');
-  let offset = 0; let index = 0; const seen = new Set();
+  let offset = 0; let index = 0; let longName = null; const seen = new Set();
   while (offset < bytes.length) {
     const h = bytes.subarray(offset, offset + BLOCK);
     if (zero(h)) {
+      check(longName === null, 'archive_longname_orphan');
       check(bytes.length - offset === BLOCK * 2 && zero(bytes.subarray(offset)), 'archive_trailer_invalid');
       check(index === expected.length, 'archive_inventory_missing');
       return { archiveHash: sha256(bytes), archiveBytes: bytes.length, entries: index };
@@ -127,19 +141,36 @@ function inspectArchive(bytes, expected) {
     check(/^[0-7]{6}\x00 $/.test(h.subarray(148, 156).toString('latin1'))
       && parseInt(h.subarray(148, 154).toString('ascii'), 8) === sum, 'archive_checksum_invalid');
     const type = String.fromCharCode(h[156]);
-    check(type === '0' || type === '5', 'archive_type_forbidden');
+    check(type === '0' || type === '5' || type === 'L', 'archive_type_forbidden');
     check(h.subarray(257, 265).equals(Buffer.from('ustar\x0000', 'ascii')), 'archive_magic_invalid');
     check(zero(h.subarray(157, 257)) && zero(h.subarray(265, 345)) && zero(h.subarray(500)), 'archive_metadata_forbidden');
     check(octal(108, 8) === 0 && octal(116, 8) === 0 && octal(136, 12) === 0, 'archive_metadata_forbidden');
     const leaf = ascii(0, 100); const prefix = ascii(345, 155);
     check(leaf.length > 0, 'archive_path_unsafe');
-    const name = prefix ? `${prefix}/${leaf}` : leaf; safeName(name);
+    const mode = octal(100, 8); const size = octal(124, 12);
+    const end = offset + BLOCK + size; const paddedEnd = offset + BLOCK + Math.ceil(size / BLOCK) * BLOCK;
+    check(paddedEnd <= bytes.length, 'archive_payload_mismatch');
+    check(zero(bytes.subarray(end, paddedEnd)), 'archive_payload_padding');
+    if (type === 'L') {
+      check(longName === null, 'archive_longname_consecutive');
+      check(leaf === LONG_NAME && prefix === '' && mode === 0 && size > 1 && size <= MAX_PATH + 1, 'archive_longname_header');
+      const payload = bytes.subarray(offset + BLOCK, end);
+      check(payload[size - 1] === 0 && payload.subarray(0, -1).every((byte) => byte >= 32 && byte < 127), 'archive_longname_payload');
+      longName = payload.subarray(0, -1).toString('ascii'); safeName(longName);
+      // Independently determine USTAR representability; do not call the encoder.
+      const representable = longName.length <= 100 || [...longName].some((char, at) =>
+        char === '/' && at > 0 && at <= 155 && longName.length - at - 1 <= 100);
+      check(!representable, 'archive_longname_unnecessary');
+      check(expected[index]?.name === longName, 'archive_longname_inventory');
+      offset = paddedEnd; continue;
+    }
+    if (longName !== null) check(prefix === '' && leaf === longName.slice(0, 100), 'archive_longname_following_mismatch');
+    const name = longName ?? (prefix ? `${prefix}/${leaf}` : leaf); safeName(name);
+    longName = null;
     check(!seen.has(name), 'archive_duplicate_path'); seen.add(name);
     const entry = expected[index++];
     check(entry && name === entry.name, 'archive_inventory_or_order');
-    const mode = octal(100, 8); const size = octal(124, 12);
     check(type === entry.type && mode === entry.mode && size === entry.bytes.length, 'archive_type_mode_size_mismatch');
-    const end = offset + BLOCK + size; const paddedEnd = offset + BLOCK + Math.ceil(size / BLOCK) * BLOCK;
     check(paddedEnd <= bytes.length && sha256(bytes.subarray(offset + BLOCK, end)) === sha256(entry.bytes), 'archive_payload_mismatch');
     check(zero(bytes.subarray(end, paddedEnd)), 'archive_payload_padding');
     offset = paddedEnd;
@@ -159,8 +190,11 @@ export function buildArchive(artifact, manifestHash, archive) {
   // lstat also rejects an existing dangling symlink; O_EXCL remains the race guard.
   try { fs.lstatSync(archive); throw Error('archive_output_exists'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   const expected = snapshot(artifact, manifestHash);
-  const chunks = expected.flatMap((entry) => [header(entry), entry.bytes,
-    Buffer.alloc((BLOCK - entry.bytes.length % BLOCK) % BLOCK)]);
+  const record = (entry) => [header(entry), entry.bytes, Buffer.alloc((BLOCK - entry.bytes.length % BLOCK) % BLOCK)];
+  const chunks = expected.flatMap((entry) => splitName(entry.name) ? record(entry) : [
+    ...record({ name: LONG_NAME, type: 'L', mode: 0, bytes: Buffer.from(`${entry.name}\0`, 'ascii') }),
+    ...record({ ...entry, name: entry.name.slice(0, 100) }),
+  ]);
   chunks.push(Buffer.alloc(BLOCK * 2));
   check(chunks.reduce((total, bytes) => total + bytes.length, 0) <= MAX_BYTES, 'archive_size_limit');
   const fd = fs.openSync(archive, fs.constants.O_RDWR | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW, 0o600);

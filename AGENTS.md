@@ -635,6 +635,9 @@ discover a mechanically stale source hash.
    no worktree fallback, and a missing commit/blob is a hard failure.
 5. Run focused checks first. Run the complete technical regression at package
    and release gates.
+   Archive-builder mentor invariant: before commit/push, exercise one complete
+   real generated artifact inventory, covering actual file modes and maximum
+   path/leaf lengths with independent extraction; fixtures alone are insufficient.
    Focused regression tests must exercise their intended branch under the
    repository's standard runner; do not rely on an unrecorded dart-define,
    environment flag or local-only invocation. Test-only seams may inject a
