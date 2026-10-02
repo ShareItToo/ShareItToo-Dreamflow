@@ -4653,6 +4653,7 @@ if (!databaseUrl) {
       assert.equal((await blockedCheck.json()).reason, 'listing_period_blocked');
 
       const b6Window = futureBerlinBookingWindow();
+      const expiringWindow = futureBerlinBookingWindow({ daysAhead: 240 });
       const quotePayload = {
         itemId: 'listing-1',
         startDate: b6Window.startDate,
@@ -5872,8 +5873,8 @@ if (!databaseUrl) {
         body: JSON.stringify({
           itemId: 'listing-1',
           id: 'b6-expiring',
-          startDate: '2026-11-01',
-          endDate: '2026-11-03',
+          startDate: expiringWindow.startDate,
+          endDate: expiringWindow.endDate,
         }),
       });
       assert.equal(createExpiring.status, 201);
