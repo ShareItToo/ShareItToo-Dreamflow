@@ -997,20 +997,22 @@ class _ExploreScreenState extends State<ExploreScreen> {
                               child: Padding(
                                 padding: const EdgeInsets.only(bottom: 14),
                                 child: LayoutBuilder(builder: (context, c) {
-                                  // 2 full cards + 25% of the next card.
+                                  // 2 full cards + 25% of the next card. Only
+                                  // leading padding is visible at scroll start.
                                   const sidePad = 16.0;
                                   const gap = 10.0;
                                   final viewport = c.maxWidth;
                                   final cardW = min(
-                                      (viewport - sidePad * 2 - gap * 2) / 3,
+                                      (viewport - sidePad - gap * 2) / 2.25,
                                       320.0);
-                                  // Keep the featured (upper) cards compact.
-                                  // Image is 4:3 => height = width * 3/4.
-                                  // Tighten the horizontal featured cards so they end right under the price.
-                                  // Image is 4:3 => height = width * 3/4.
-                                  // Content below image is intentionally compact.
-                                  final cardH = cardW * (3 / 4) + 84;
                                   final featured = items.take(10).toList();
+                                  // Ordinary cards retain their 4:3 image and
+                                  // compact price area. Test cards need room
+                                  // for the full disclosure and opening action.
+                                  final cardH = max(cardW * (3 / 4) + 84,
+                                      featured.any((it) => it.isSyntheticCatalog)
+                                          ? 280.0
+                                          : 0.0);
                                   return SizedBox(
                                     height: cardH,
                                     child: ListView.separated(

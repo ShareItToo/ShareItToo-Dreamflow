@@ -3,6 +3,8 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lendify/models/item.dart';
 import 'package:lendify/navigation/main_nav_controller.dart';
@@ -31,6 +33,14 @@ Item syntheticItem() {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() async {
+    // Use shipped glyph metrics: Ahem's square glyphs cannot prove whether
+    // German words fit without being split in the actual catalog font.
+    final font = FontLoader('Roboto')
+      ..addFont(rootBundle.load('assets/fonts/Roboto-Regular.ttf'));
+    await font.load();
+  });
   for (final size in [
     const Size(390, 844),
     const Size(768, 1024),
@@ -49,7 +59,12 @@ void main() {
       viewport(tester);
       final item = syntheticItem();
       SharedPreferences.setMockInitialValues({
-        'items': jsonEncode([item.toJson()]),
+        'items': jsonEncode(List.generate(
+            4,
+            (index) => {
+                  ...item.toJson(),
+                  'id': 'synthetic-responsive-$index',
+                })),
         'users': '[]',
       });
       await tester.pumpWidget(MultiProvider(
@@ -57,7 +72,9 @@ void main() {
           ChangeNotifierProvider(create: (_) => LocalizationController()),
           ChangeNotifierProvider(create: (_) => MainNavController()),
         ],
-        child: const MaterialApp(home: ExploreScreen()),
+        child: MaterialApp(
+            theme: ThemeData(fontFamily: 'Roboto'),
+            home: const ExploreScreen()),
       ));
       for (var i = 0; i < 20; i++) {
         await tester.pump(const Duration(milliseconds: 100));
@@ -77,10 +94,27 @@ void main() {
                   (widget.width! - (content.width - 32) / 5).abs() < 0.01)),
           findsWidgets);
       final featured = find.byType(ListingCarouselCard).first;
-      final card = tester.getSize(featured);
-      expect(
-          card.width, closeTo(math.min((content.width - 52) / 3, 320), 0.01));
+      Rect cardSurface(Finder carousel) => tester.getRect(
+          find.descendant(of: carousel, matching: find.byType(Material)).first);
+      final card = cardSurface(featured).size;
+      expect(card.width, inInclusiveRange(150, 320));
       expect(card.height, lessThanOrEqualTo(324));
+      if (size.width == 390) {
+        // Observe what the user sees, independently of the sizing formula.
+        final cards = find.byType(ListingCarouselCard);
+        final first = cardSurface(cards.at(0));
+        final second = cardSurface(cards.at(1));
+        final third = cardSurface(cards.at(2));
+        expect(first.left, greaterThanOrEqualTo(content.left));
+        expect(first.right, lessThanOrEqualTo(content.right));
+        expect(second.left, greaterThan(first.right));
+        expect(second.right, lessThanOrEqualTo(content.right));
+        final visibleThird = third.intersect(content).width / third.width;
+        expect(visibleThird, closeTo(0.25, 0.02));
+      }
+      if (size.width >= 900) {
+        expect(card, const Size(320, 324));
+      }
       expect(tester.widget<ListingCarouselCard>(featured).publicCatalogImage,
           isTrue);
       expect(find.text(Item.syntheticCatalogNotice), findsWidgets);
@@ -91,13 +125,39 @@ void main() {
       expect(gridCard.right, lessThanOrEqualTo(content.right));
       if (size.width >= 900) {
         expect(gridCard.width, lessThanOrEqualTo(290));
-        expect(find.text(Item.syntheticCatalogNotice).first.hitTestable(),
-            findsOneWidget);
-        expect(find.text('Testansicht öffnen').first.hitTestable(),
-            findsOneWidget);
       }
-      await tester.ensureVisible(find.text('Testansicht öffnen').first);
-      await tester.tap(find.text('Testansicht öffnen').first);
+      final featuredRect = tester.getRect(featured);
+      for (final text in [
+        item.title,
+        Item.syntheticCatalogNotice,
+        'Testansicht öffnen',
+      ]) {
+        final visibleText =
+            find.descendant(of: featured, matching: find.text(text));
+        final bounds = tester.getRect(visibleText);
+        expect(bounds.top, greaterThanOrEqualTo(featuredRect.top));
+        expect(bounds.bottom, lessThanOrEqualTo(featuredRect.bottom));
+        expect(bounds.bottom, lessThan(size.height));
+        expect(visibleText.hitTestable(), findsOneWidget);
+        if (text == item.title) {
+          final paragraph = tester.renderObject<RenderParagraph>(visibleText);
+          for (final word in text.split(' ')) {
+            final start = text.indexOf(word);
+            expect(
+                paragraph.getBoxesForSelection(TextSelection(
+                    baseOffset: start, extentOffset: start + word.length)),
+                hasLength(1),
+                reason: 'A title word must not break across multiple lines');
+          }
+        }
+      }
+      final cardScroll = tester.state<ScrollableState>(
+          find.descendant(of: featured, matching: find.byType(Scrollable)));
+      expect(cardScroll.position.pixels, 0);
+      expect(cardScroll.position.maxScrollExtent, 0);
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.descendant(
+          of: featured, matching: find.text('Testansicht öffnen')));
       await tester.pumpAndSettle();
       expect(find.byType(SyntheticCatalogDetails), findsOneWidget);
       expect(tester.widget<AppImage>(find.byType(AppImage)).publicCatalogImage,

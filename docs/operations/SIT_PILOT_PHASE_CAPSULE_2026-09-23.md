@@ -7,50 +7,50 @@ source link. Everything below **Historical snapshots** is retained provenance,
 not current execution or release authority.
 
 - **Objective:** advance Mission source safely while using Staging Web for
-  fast, source-bound pilot acceptance. The current bounded package is desktop
-  responsiveness; real Mission matching/data activation remains separately gated.
+  fast, source-bound pilot acceptance. The current bounded FIX restores readable
+  mobile featured cards; real Mission matching/data activation remains separately gated.
 - **Authoritative sources:** [Mission masterplan](../product/SIT_MISSION_MASTERPLAN_2026-09-30.md),
   [Web contract](STAGING_WEB_PILOT.md), [Web/native matrix](SIT_WEB_NATIVE_CAPABILITY_MATRIX_2026-10-02.md),
   [P6-C2 boundary](SIT_MISSION_P6C2_OWNER_API_2026-10-02.md) and
   [D3/D4 FIX record](SIT_GEMINI_MISSION_P6C_D3_D4_GATE_2026-10-02.md).
   Older checkpoint statements in linked documents do not supersede this capsule.
 - **Source/candidate truth:** branch `codex/master-workflow-20260808`;
-  local HEAD and remote branch are
-  `ba49aecc9d83dfebe23ff9599ed53e186557d651`.
-  The worktree contains the Sol-accepted responsive package and this capsule;
-  neither has yet been committed, CI-proven or deployed as a successor.
-- **Exact-base CI:** [Regression 37041495708](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37041495708)
-  and [CodeQL 37041495750](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37041495750)
-  are completed **SUCCESS** for exact `ba49aecc…`; all four core Regression jobs
-  passed. These results do not cover the pending responsive/capsule commit.
-- **Live Staging Web:** source `ba49aecc…`, version `1.0.0+2026092905`,
-  sealed bootstrap v2; current manifest SHA-256
-  `092e726be9e23bdfaab27b66289e9399825267511698f40b957a0d192563a4cd`;
-  retained previous manifest
-  `b050417566e4cda220e07c94693d27fd47740fb818ea6bfc0616dc561e9bbfa3`.
-  Ordinary Web promotion passed; current/previous validate and no lock remains.
-  Five served files, including the main bundle, matched exact artifact bytes
-  with HTTP 200/no-store. The freshness notice is persistent and manual-reload
-  only; already-open legacy-v1 tabs need a manual reload to acquire the monitor.
+  the accepted/deployed predecessor and package base are
+  `3c1ba1c1318f1b9108e46e5738cd34279ca796f6`.
+  This reviewed mobile FIX is the source successor. Its focused tests are local
+  evidence; successor commit, exact-head CI and deployment are recorded only
+  after those separate actions complete.
+- **Live Staging Web — Sol handoff:** source `3c1ba1c1…`, current manifest
+  SHA-256 `e49d51e488d4f2c5daccf70d0e7f3ea0b4084fb5e2dfb167a99cf0bdf921b157`.
+  The desktop responsive package is deployed. Earlier `ba49aecc…` CI and Web
+  records do not describe this current source or prove the pending mobile FIX.
 - **Unchanged runtime boundary:** API remains
   `6c0ef70db2656df3e378add858d5f5157388127e` in test. Before/after API version,
   one-row synthetic catalog and exact-origin CORS 204 readbacks were identical.
   Production root bytes/pointer and Caddy configuration were unchanged;
   no API, provider, payment or Play activation occurred.
-- **Fresh browser evidence — Sol readback:** guest catalog/search/detail PASS
-  for synthetic truth, test-view routing, image display and non-bookable state.
-  This is not Google/provider, real-inventory, native or Mission-deployment proof.
-  Wide-desktop sizing defects observed there motivated the pending package.
-- **Responsive package — local PASS, not deployed:** Explore content is centered
-  at max 1200 px, featured cards bounded at 320×324; synthetic detail content
-  is max 960 px with desktop image max 640×480. Mobile/tablet baseline and
-  synthetic labels, disabled action and anonymous image opt-in remain intact.
-  [Widget proof](../../test/catalog_responsive_layout_test.dart): 390×844,
-  768×1024, 1920×1080 and 3840×2160; deterministic desktop red→green.
-  Luna: 35 focused Flutter and 21 static PASS; Sol independent review:
-  29 focused Flutter and 28 static PASS (separate overlapping runs, not additive).
-  Changed-scope analysis, consumer closure, privacy/retention validators,
-  secret scan and diff checks passed; only current Explore hash bindings refreshed.
+- **Fresh browser evidence — Sol readback:** at 1920 and 3840 px, content is
+  centered at exactly 1200 px and featured cards are 320×324; console has zero
+  warnings/errors. At 390 px, the visible featured card is about 104 px wide,
+  `Synthetische Katalogfixture` breaks inside words and `Testansicht öffnen` is
+  hidden. Desktop acceptance is green; mobile acceptance is **FIX**, not PASS.
+  Synthetic truth and non-bookable detail remain the accepted boundary; this
+  is not Google/provider, real-inventory, native or Mission-deployment proof.
+- **Mobile successor — Sol local PASS, commit pending:** at 390 px the row
+  has two complete 157.33 px cards plus 25% of a third, with a 320 px maximum.
+  Synthetic cards have a 280 px disclosure/action height floor and no implicit
+  margin that narrows the visible surface. Desktop content/detail bounds, synthetic labels,
+  disabled booking and anonymous image opt-in remain intact.
+  [Widget proof](../../test/catalog_responsive_layout_test.dart) observes actual
+  visible geometry, unsplit title words with shipped Roboto glyphs and initially
+  reachable title, full notice and action without scrolling the card. The matrix
+  is 390×844, 768×1024, 1920×1080 and 3840×2160. The old 390 px layout fails
+  the minimum-width assertion. Focused Flutter 40/40, changed-scope analyzer,
+  current-consumer closure (451 assertions across 50 test files), privacy and
+  retention validators, working-tree secret scan and diff checks passed.
+  Reverse-binding discovery found exactly two mutable Explore bindings
+  (privacy/retention); both were refreshed once after final source changes.
+  Historical evidence and existing fail-closed approvals remain unchanged.
 - **Google Web auth:** current release intentionally off. Source popup/session
   handling exists; verified Firebase Web options, authorized Staging domain,
   backend-project/runtime and provider bindings plus real Web-login proof remain
@@ -60,11 +60,11 @@ not current execution or release authority.
   default-off, with no real matching, region or provider effects. D3/D4 remains
   open with prior FIX. Per Sol UI handoff, the Gemini tab awaits a signed-in
   Pro Extended send; no new accepted answer exists. This gate does not block
-  the source-only responsive package.
-- **Exact next:** Sol commits/pushes responsive source/tests/current bindings
-  plus this capsule → automatic exact-head CI → build/seal and separately
-  authorized Staging Web successor promotion → fresh wide/mobile browser
-  acceptance → Google-Web activation package with its missing evidence gates.
+  the source-only mobile FIX.
+- **Exact next:** Sol reviews the mobile FIX and current bindings → authorized
+  commit/push and automatic exact-head CI → build/seal
+  and separately authorized Staging Web successor promotion → fresh wide/mobile
+  browser acceptance → Google-Web activation package with its missing evidence gates.
   No Production/Play change or pilot-complete claim follows from this sequence.
 
 ## Historical snapshots — retained evidence, superseded execution state

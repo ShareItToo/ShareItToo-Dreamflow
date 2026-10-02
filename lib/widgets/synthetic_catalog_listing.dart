@@ -14,6 +14,7 @@ class SyntheticCatalogCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Card(
+        margin: EdgeInsets.zero,
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: () => Navigator.of(context).push<void>(MaterialPageRoute(

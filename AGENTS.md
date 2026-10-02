@@ -383,6 +383,10 @@ discover a mechanically stale source hash.
   wrong-purpose or unapproved references before persistence.
 - After every review, Sol assigns Luna the next bounded task. A `FIX` must name
   the failed assertion and expected proof; it must not request a broad restart.
+- Responsive card comments such as "N full cards + a fraction" require tests
+  of visible card geometry in the viewport, including readable disclosures and
+  initially reachable actions. Never copy the production sizing formula as
+  the test oracle.
 - Authentication failure counters and lockouts must be proven committed even
   when the HTTP response is an error; never rely on a rolled-back exception
   path. Critical authentication changes require HTTP contract coverage plus
