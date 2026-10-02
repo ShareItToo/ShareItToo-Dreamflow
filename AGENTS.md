@@ -621,6 +621,9 @@ discover a mechanically stale source hash.
    chasing hashes across commits.
    Hash-bound source changes must update both manifests and every executable
    canonical hash constant, then pass the common consumer-closure gate.
+   Mutable executable hash tables must register their source bindings with
+   that gate; a passing manifest-only hash check is insufficient. Registered
+   constants must be checked before CI, alongside their owning consumer tests.
    Mentor/source-binding ratchet: mutable current inventories may be refreshed
    only against the current source they intentionally bind; historical evidence
    snapshots are immutable and must never be rewritten or rebound. Historical

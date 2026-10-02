@@ -121,6 +121,30 @@ function isCurrentManifest(path) {
     || currentEvidenceExceptions.has(path));
 }
 
+// Explicit registration distinguishes mutable executable hash tables from
+// historical snapshots. Parse only this literal tuple grammar; never eval code.
+export function executableSourceBindings(text, consumer) {
+  const entries = [];
+  for (const marker of text.matchAll(/^\/\/ current-source-hash-bindings: (\w+)\s*$/gmu)) {
+    const name = marker[1];
+    const declaration = new RegExp(`(?:export\\s+)?const ${name} = Object\\.freeze\\(\\[([\\s\\S]*?)\\n\\]\\);`, 'u');
+    const body = text.slice(marker.index + marker[0].length).match(declaration)?.[1];
+    if (body === undefined) fail('INVALID_EXECUTABLE_SOURCE_BINDING', consumer);
+    const tuple = /Object\.freeze\(\[\s*['"]([^'"\n]+)['"]\s*,\s*['"]([a-f0-9]{64})['"]\s*,?\s*\]\)/gu;
+    const matches = [...body.matchAll(tuple)];
+    if (!matches.length || body.replace(tuple, '').replace(/[\s,]/gu, '') !== '') {
+      fail('INVALID_EXECUTABLE_SOURCE_BINDING', consumer);
+    }
+    for (const match of matches) entries.push({ path: match[1], sha256: match[2] });
+  }
+  const seen = new Set();
+  for (const entry of entries) {
+    if (seen.has(entry.path)) fail('DUPLICATE_SOURCE_BINDING', entry.path, [consumer]);
+    seen.add(entry.path);
+  }
+  return entries;
+}
+
 function isHistoricalManifest(path) {
   return path.endsWith('.json') && path.startsWith('docs/evidence/') && !isCurrentManifest(path);
 }
@@ -197,6 +221,21 @@ export function checkCurrentConsumerClosure({ repositoryRoot = root, baseline = 
   const bindings = new Map();
   for (const manifest of manifests) {
     bindings.set(manifest, sourceBindings(parseJson(read(manifest), manifest), manifest));
+  }
+  const executableConsumers = paths.filter((path) => /^tool\/.+\.(?:mjs|js)$/u.test(path) && path !== ownPath);
+  for (const consumer of executableConsumers) {
+    const entries = executableSourceBindings(read(consumer), consumer);
+    if (entries.length) bindings.set(consumer, entries);
+  }
+  // A registered table or marker cannot disappear when updating its consumer.
+  for (const consumer of [...basePaths].filter((path) => changed.includes(path)
+    && /^tool\/.+\.(?:mjs|js)$/u.test(path) && path !== ownPath)) {
+    const previous = executableSourceBindings(git(canonicalRoot, ['show', `${base}:${consumer}`]), consumer);
+    for (const entry of previous) {
+      if (!(bindings.get(consumer) ?? []).some((current) => current.path === entry.path)) {
+        fail('REMOVED_CURRENT_BINDING', entry.path, [consumer]);
+      }
+    }
   }
   // A deleted inventory entry or complete manifest must not disappear from the
   // reverse graph before the gate sees it. Compare affected baseline edges too.

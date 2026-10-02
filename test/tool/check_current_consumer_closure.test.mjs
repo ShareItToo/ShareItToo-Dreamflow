@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import test from 'node:test';
-import { checkCurrentConsumerClosure, isApprovedHistoricalRepair, sourceBindings } from '../../tool/check_current_consumer_closure.mjs';
+import { checkCurrentConsumerClosure, executableSourceBindings, isApprovedHistoricalRepair, sourceBindings } from '../../tool/check_current_consumer_closure.mjs';
 
 const app = 'backend/src/app.js';
 const manifest = 'store/privacy-disclosures.json';
@@ -82,6 +82,54 @@ test('new nested current manifests and external repository bindings are discover
   assert.throws(f.check, { code: 'STALE_SOURCE_HASH' });
   f.json('docs/evidence/external-gates/new.json', { sourceBindings: { repository: [{ path: app, sha256: digest(readFileSync(join(f.directory, app))) }] } });
   assert.equal(f.check().currentMutableBindings.length, 3);
+});
+
+function executableTable(source, hash) {
+  return `// current-source-hash-bindings: repositorySources\nconst repositorySources = Object.freeze([\n  Object.freeze(['${source}', '${hash}']),\n]);\n`;
+}
+
+test('registered executable hashes fail before consumer execution even after manifest refresh', (t) => {
+  const f = fixture(t);
+  const consumer = 'tool/external_readiness.mjs';
+  f.put(consumer, executableTable(app, digest(readFileSync(join(f.directory, app)))));
+  f.put('test/tool/external_readiness.test.mjs', `import '../../${consumer}';\n`);
+  assert.ok(f.check().currentMutableBindings.some((binding) => binding.binding === consumer));
+  f.put(app, 'export const version = 2;\n');
+  f.bind();
+  assert.throws(f.check, (error) => error.code === 'STALE_SOURCE_HASH'
+    && error.source === app && error.consumers.includes(consumer));
+  f.put(consumer, executableTable(app, digest(readFileSync(join(f.directory, app)))));
+  const repaired = f.check();
+  assert.ok(repaired.currentCodeConsumers.some((entry) => entry.consumer === consumer
+    && entry.paths.includes(app)));
+  assert.ok(repaired.consumerTests.includes('test/tool/external_readiness.test.mjs'));
+});
+
+test('registered executable bindings cannot be malformed, duplicated, or removed', (t) => {
+  const f = fixture(t);
+  const consumer = 'tool/external_readiness.mjs';
+  const hash = digest(readFileSync(join(f.directory, app)));
+  f.put(consumer, executableTable(app, 'not-a-digest'));
+  assert.throws(f.check, { code: 'INVALID_EXECUTABLE_SOURCE_BINDING' });
+  const table = executableTable(app, hash);
+  f.put(consumer, table.replace('\n]);', `\nObject.freeze(['${app}', '${hash}']),\n]);`));
+  assert.throws(f.check, { code: 'DUPLICATE_SOURCE_BINDING' });
+  f.put(consumer, table);
+  f.put('test/tool/external_readiness.test.mjs', `import '../../${consumer}';\n`);
+  f.git('add', '.'); f.git('commit', '-qm', 'registered executable binding');
+  const baseline = f.git('rev-parse', 'HEAD');
+  const check = () => checkCurrentConsumerClosure({ repositoryRoot: f.directory, baseline });
+  assert.doesNotThrow(check);
+  f.put(consumer, table.replace('// current-source-hash-bindings: repositorySources\n', ''));
+  assert.throws(check, { code: 'REMOVED_CURRENT_BINDING' });
+});
+
+test('support scanner config constant is registered in the executable closure graph', () => {
+  const consumer = 'tool/validate_support_evidence_external_readiness.mjs';
+  const entries = executableSourceBindings(readFileSync(resolve(repo, consumer), 'utf8'), consumer);
+  const configBinding = entries.find((entry) => entry.path === 'backend/src/config.js');
+  assert.ok(configBinding);
+  assert.equal(configBinding.sha256, digest(readFileSync(resolve(repo, configBinding.path))));
 });
 
 test('invalid JSON, duplicate, missing and malformed hashes fail closed', (t) => {

@@ -18,10 +18,11 @@ const decisionKeys = Object.freeze([
   'operatorProcedureApproval',
   'signedCandidateAndEnvironmentBinding',
 ]);
+// current-source-hash-bindings: repositorySources
 const repositorySources = Object.freeze([
   Object.freeze([
     'backend/src/config.js',
-    '25d0f775b774cb37a62df4eacc3d4cb1ff4b702b66c7918526ad8df4d074acf8',
+    'b2a29054cdfc65e77c981d1d02c3a0af5f1b8c2a08cc536c58847d5f4c80f515',
   ]),
   Object.freeze([
     'backend/src/support_evidence_workflow.js',
