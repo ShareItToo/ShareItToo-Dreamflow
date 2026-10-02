@@ -2,81 +2,70 @@
 
 ## Current execution capsule — 2026-10-02
 
-This is the current execution entry point for ShareItToo/SIT. Read this capsule
-first; follow a source link only for the next bounded decision. All older
-Web/Android/P4/P5/P6 status and sequencing paragraphs below are historical
-snapshots, not current execution or release authority. Preserve their evidence.
+This is the current ShareItToo/SIT entry point. Follow only the next bounded
+source link. Everything below **Historical snapshots** is retained provenance,
+not current execution or release authority.
 
-- **Objective:** advance the additive Mission private-pilot source safely from
-  P6-A demand/revocation through the default-off P6-C2 owner participation API;
-  resolve the narrow D3/D4 gate before real matching or real-data activation.
-- **Authoritative sources:** [Mission masterplan](../product/SIT_MISSION_MASTERPLAN_2026-09-30.md)
-  for goal/acceptance; [P6-C2 owner API](SIT_MISSION_P6C2_OWNER_API_2026-10-02.md)
-  for the implemented boundary; [D3/D4 FIX record](SIT_GEMINI_MISSION_P6C_D3_D4_GATE_2026-10-02.md)
-  for the unresolved gate; [efficiency policy](SIT_CODEX_CONTEXT_CREDIT_EFFICIENCY_RULES_V1.md)
-  for bounded Sol/Luna work and exact-source evidence.
-- **Verified source checkpoint:** branch `codex/master-workflow-20260808`, clean
-  local HEAD and remote branch both
-  `4a67697e600b717f76df4682475086c50c8f1ad0` before this documentation commit.
-  This capsule's later docs-only commit is a distinct HEAD; CI below binds only
-  the recorded source checkpoint, not an inferred future commit.
-- **Candidate truth:** source-only; no new Web/Android release artifact or
-  exact-current runtime proof is attached. P6-C2 remains default-off and adds
-  no region, UI, matching, notification, provider or payment activation.
-  The P6-A recipient resolver is still injected/synthetic only.
-- **Included source/proofs:** expiry-stable P6-A command replay (`3594e6b8`),
-  booking-suspended safe release revocation (`7ef06f6e`), real HTTP create-budget
-  exhaustion without blocking lifecycle/replay (`c3849af3`), and disabled P6-C2
-  GET plus all four mutation actions failing closed (`4a67697e`).
-- **Decisive local evidence:** safe-revoke focused tests 13/13 and PG16 1/1;
-  limiter focused tests 16/16 and PG16 1/1; disabled-participation focused tests
-  5/5 and PG16 2/2. Counts are per package, not cumulative unique tests.
-  [Demand fixture](../../backend/test/mission_supply_demand_postgres.integration.test.js)
-  and [participation fixture](../../backend/test/mission_supply_participation_postgres.integration.test.js)
-  prove ownership, replay, unchanged effect counts and database cleanup.
-  Current-consumer closure, syntax, secret and diff checks passed; the revoke
-  package also refreshed/validated current privacy and retention app hashes.
-- **CI readback, 2026-10-02 16:02 UTC:** exact checkpoint `4a67697e…`
-  is **PASS**. [Regression 37028327458](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37028327458)
-  completed **SUCCESS** with Backend, PostgreSQL, Flutter and R10 clean
-  reproducibility green; API image publication was intentionally skipped.
-  [CodeQL 37028326971](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37028326971)
-  completed **SUCCESS**. Prior exact
-  `3594e6b8b0ec338b3a7d2611f610662f68e8d6f0` passed
-  [Regression 37025322015](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37025322015)
-  and [CodeQL 37025321668](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37025321668).
-  Prior success remains historical; the current PASS binds only `4a67697e…`.
-- **Phase-0 freshness readback, 2026-10-02 15:59–16:01 UTC:** the accepted
-  [Staging Web Phase-0 closure](STAGING_WEB_PHASE0_CLOSURE_2026-10-01.md)
-  remains the technical prerequisite evidence. Fresh read-only HTTP checks
-  observed API runtime `6c0ef70d…` in `test`, exact-origin CORS `204`, Web root
-  `200`, exactly one non-contractual synthetic catalog row and its referenced
-  image as `200 image/webp` with 1172 bytes. One preceding image request timed
-  out; immediate bounded health, catalog and image rechecks all returned `200`
-  in about 0.34 seconds. This is current HTTP/CORS evidence, not a repeated
-  browser-UI, provider-login, current-artifact, Mission-deployment, native,
-  Production or Play proof.
-- **Open blockers:** D3/D4, purpose-bound retention, region provenance,
-  real recipient selection and required professional review remain open.
-  The preceding Gemini answer is **FIX**. **SOL HANDOFF/UI STATE:** a corrected
-  prompt is prepared in the composer, not sent or accepted; this is not an
-  independently verified repository or Luna browser fact. Its local artifact
-  is `~/.codex/tmp/sit-gemini-p6c2-d3d4-prompt-20261002.md`, SHA-256
-  `f0ef4f9dd9560b3409618ef189ea5aa91a51bc0fc5d97b4393efce655cbc67c7`.
-  The visible composer now binds accepted code checkpoint `4a67697e…`,
-  includes the default-off P6-C2 owner API facts and visibly remains
-  `Pro Extended`; the old `d0642f96…` source binding is absent. The prompt
-  deliberately excludes a changing docs-only commit ID and binds the completed
-  exact-code Regression/CodeQL run IDs instead. Sending and reviewing the
-  answer remain separate gate actions.
-- **Exact next sequence:** (1) Send the already refreshed narrow Gemini D3/D4
-  source-fact capsule only after the required action-time confirmation; verify
-  `Pro Extended` immediately before send. (2) Review its answer independently
-  as PASS/FIX/NOT VERIFIED and preserve the complete fresh-source register.
-  (3) Assign only the next bounded source package supported by that decision;
-  separately finish the source-linked Web/native capability matrix.
-  No live deployment, Play publication, provider/payment activation or
-  pilot-complete claim follows from this capsule or these local/CI checks.
+- **Objective:** advance Mission source safely while using Staging Web for
+  fast, source-bound pilot acceptance. The current bounded package is desktop
+  responsiveness; real Mission matching/data activation remains separately gated.
+- **Authoritative sources:** [Mission masterplan](../product/SIT_MISSION_MASTERPLAN_2026-09-30.md),
+  [Web contract](STAGING_WEB_PILOT.md), [Web/native matrix](SIT_WEB_NATIVE_CAPABILITY_MATRIX_2026-10-02.md),
+  [P6-C2 boundary](SIT_MISSION_P6C2_OWNER_API_2026-10-02.md) and
+  [D3/D4 FIX record](SIT_GEMINI_MISSION_P6C_D3_D4_GATE_2026-10-02.md).
+  Older checkpoint statements in linked documents do not supersede this capsule.
+- **Source/candidate truth:** branch `codex/master-workflow-20260808`;
+  local HEAD and remote branch are
+  `ba49aecc9d83dfebe23ff9599ed53e186557d651`.
+  The worktree contains the Sol-accepted responsive package and this capsule;
+  neither has yet been committed, CI-proven or deployed as a successor.
+- **Exact-base CI:** [Regression 37041495708](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37041495708)
+  and [CodeQL 37041495750](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37041495750)
+  are completed **SUCCESS** for exact `ba49aecc…`; all four core Regression jobs
+  passed. These results do not cover the pending responsive/capsule commit.
+- **Live Staging Web:** source `ba49aecc…`, version `1.0.0+2026092905`,
+  sealed bootstrap v2; current manifest SHA-256
+  `092e726be9e23bdfaab27b66289e9399825267511698f40b957a0d192563a4cd`;
+  retained previous manifest
+  `b050417566e4cda220e07c94693d27fd47740fb818ea6bfc0616dc561e9bbfa3`.
+  Ordinary Web promotion passed; current/previous validate and no lock remains.
+  Five served files, including the main bundle, matched exact artifact bytes
+  with HTTP 200/no-store. The freshness notice is persistent and manual-reload
+  only; already-open legacy-v1 tabs need a manual reload to acquire the monitor.
+- **Unchanged runtime boundary:** API remains
+  `6c0ef70db2656df3e378add858d5f5157388127e` in test. Before/after API version,
+  one-row synthetic catalog and exact-origin CORS 204 readbacks were identical.
+  Production root bytes/pointer and Caddy configuration were unchanged;
+  no API, provider, payment or Play activation occurred.
+- **Fresh browser evidence — Sol readback:** guest catalog/search/detail PASS
+  for synthetic truth, test-view routing, image display and non-bookable state.
+  This is not Google/provider, real-inventory, native or Mission-deployment proof.
+  Wide-desktop sizing defects observed there motivated the pending package.
+- **Responsive package — local PASS, not deployed:** Explore content is centered
+  at max 1200 px, featured cards bounded at 320×324; synthetic detail content
+  is max 960 px with desktop image max 640×480. Mobile/tablet baseline and
+  synthetic labels, disabled action and anonymous image opt-in remain intact.
+  [Widget proof](../../test/catalog_responsive_layout_test.dart): 390×844,
+  768×1024, 1920×1080 and 3840×2160; deterministic desktop red→green.
+  Luna: 35 focused Flutter and 21 static PASS; Sol independent review:
+  29 focused Flutter and 28 static PASS (separate overlapping runs, not additive).
+  Changed-scope analysis, consumer closure, privacy/retention validators,
+  secret scan and diff checks passed; only current Explore hash bindings refreshed.
+- **Google Web auth:** current release intentionally off. Source popup/session
+  handling exists; verified Firebase Web options, authorized Staging domain,
+  backend-project/runtime and provider bindings plus real Web-login proof remain
+  required before a separately reviewed Google-only activation package.
+  Apple/Facebook stay off; account/session/MFA/allowlist gates stay authoritative.
+- **Mission/Gemini boundary:** P6-A resolver stays synthetic/injected; P6-C2 stays
+  default-off, with no real matching, region or provider effects. D3/D4 remains
+  open with prior FIX. Per Sol UI handoff, the Gemini tab awaits a signed-in
+  Pro Extended send; no new accepted answer exists. This gate does not block
+  the source-only responsive package.
+- **Exact next:** Sol commits/pushes responsive source/tests/current bindings
+  plus this capsule → automatic exact-head CI → build/seal and separately
+  authorized Staging Web successor promotion → fresh wide/mobile browser
+  acceptance → Google-Web activation package with its missing evidence gates.
+  No Production/Play change or pilot-complete claim follows from this sequence.
 
 ## Historical snapshots — retained evidence, superseded execution state
 

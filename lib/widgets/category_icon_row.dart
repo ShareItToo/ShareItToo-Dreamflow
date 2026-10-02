@@ -46,8 +46,12 @@ class _CategoryIconRowState extends State<CategoryIconRow> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, constraints) =>
+            _buildRow(context, constraints.maxWidth),
+      );
+
+  Widget _buildRow(BuildContext context, double width) {
     final textScaler = MediaQuery.textScalerOf(context);
     final textScale = (textScaler.scale(10.5) / 10.5).clamp(1.0, 3.0);
     // Match page horizontal padding (aligns with "Neue Anzeige" button in SearchHeader)

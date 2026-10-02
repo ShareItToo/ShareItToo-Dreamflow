@@ -1001,8 +1001,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
                                   const sidePad = 16.0;
                                   const gap = 10.0;
                                   final viewport = c.maxWidth;
-                                  final cardW =
-                                      (viewport - sidePad * 2 - gap * 2) / 3;
+                                  final cardW = min(
+                                      (viewport - sidePad * 2 - gap * 2) / 3,
+                                      320.0);
                                   // Keep the featured (upper) cards compact.
                                   // Image is 4:3 => height = width * 3/4.
                                   // Tighten the horizontal featured cards so they end right under the price.
@@ -1108,7 +1109,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                       );
                     }
 
-                    return NestedScrollView(
+                    final scrollView = NestedScrollView(
                       controller: _scrollController,
                       headerSliverBuilder: (context, innerBoxIsScrolled) {
                         return [
@@ -1328,6 +1329,14 @@ class _ExploreScreenState extends State<ExploreScreen> {
                                       items: customersLike),
                                 ],
                               ),
+                      ),
+                    );
+                    // Bound the whole scroll surface, including pinned headers.
+                    return Align(
+                      alignment: Alignment.topCenter,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 1200),
+                        child: scrollView,
                       ),
                     );
                   }),
