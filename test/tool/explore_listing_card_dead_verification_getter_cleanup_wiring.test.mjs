@@ -60,11 +60,11 @@ test('active content keeps verification badge and real rating display', () => {
 test('active content keeps details long press and favorite actions', () => {
   assert.match(
     content,
-    /ItemDetailsOverlay\.showFullPage\(context, item: item, fresh: true\)/,
+    /ItemDetailsOverlay\.showFullPage\(context, item: item, fresh: true, publicCatalogImage: true\)/,
   );
   assert.match(
     content,
-    /onLongPress: \(\) => showListingOptionsDialog\(context,/,
+    /onLongPress: \(\) => showListingOptionsDialog\(context,\s*publicCatalogImage: true,/,
   );
   assert.match(content, /contextType: ListingOptionsContext\.explore/);
   assert.match(content, /onWishlistChanged: onFavoriteToggle/);
