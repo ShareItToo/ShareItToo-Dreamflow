@@ -337,8 +337,31 @@ if (databaseUrl) {
          SELECT id, owner_id, 'P3-A-2026-10-01.1', 'P6-C2 private item', 'synthetic.container', 'good'
            FROM unnest($1::text[], $2::text[]) AS input(id, owner_id)`, [items, users],
       );
-      // Separate process proves the real HTTP surface remains closed with all older flags on.
+      const disabledGraph = async () => {
+        const counts = {};
+        for (const table of ['mission_supply_participations', 'mission_supply_participation_revisions', 'mission_supply_participation_commands', 'mission_supply_participation_item_revisions', 'mission_supply_participation_item_commands']) {
+          counts[table] = (await setup.query(
+            `SELECT count(*)::int AS count FROM ${table} WHERE owner_id = $1`, [owner],
+          )).rows[0].count;
+        }
+        return counts;
+      };
+      const disabledEffects = async () => (await setup.query(`SELECT
+        (SELECT count(*) FROM mission_supply_demands) AS demands,
+        (SELECT count(*) FROM listings) AS listings,
+        (SELECT count(*) FROM rental_requests) AS requests,
+        (SELECT count(*) FROM bookings) AS bookings,
+        (SELECT count(*) FROM platform_contracts) AS contracts,
+        (SELECT count(*) FROM payments) AS payments,
+        (SELECT count(*) FROM notifications) AS notifications,
+        (SELECT count(*) FROM notification_outbox) AS outbox`)).rows[0];
+      const disabledGraphBefore = await disabledGraph();
+      assert.ok(Object.values(disabledGraphBefore).every((count) => count === 0));
+      const disabledEffectsBefore = await disabledEffects();
+      // Separate process proves every real HTTP route remains closed with all
+      // older flags on, valid authentication, owned item and canonical payloads.
       const disabled = spawnSync(process.execPath, ['--input-type=module', '-e', `
+        import crypto from 'node:crypto';
         import http from 'node:http';
         import { createApp } from ${JSON.stringify(new URL('../src/app.js', import.meta.url).href)};
         import { pool } from ${JSON.stringify(new URL('../src/db.js', import.meta.url).href)};
@@ -346,14 +369,45 @@ if (databaseUrl) {
         const server = http.createServer(createApp());
         await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
         const token = signAccessToken({ id: ${JSON.stringify(owner)}, email: 'synthetic@example.invalid' }, { sessionId: ${JSON.stringify(sessions[0])} });
-        const response = await fetch('http://127.0.0.1:' + server.address().port + '/v1/mission-supply-participation', { headers: { Authorization: 'Bearer ' + token } });
-        console.log('P6C2_RESULT ' + JSON.stringify({status: response.status, body: await response.json()}));
+        const base = 'http://127.0.0.1:' + server.address().port + '/v1/mission-supply-participation';
+        const results = [];
+        for (const [action, suffix, body] of [
+          ['read', '', null],
+          ['activate', '', { expectedRevision: 0, status: 'active' }],
+          ['withdraw', '', { expectedRevision: 0, status: 'withdrawn' }],
+          ['confirm-item', ${JSON.stringify(`/items/${items[0]}`)}, {
+            expectedParticipationRevision: 0, expectedRevision: 0,
+            needKey: 'plant_container_equipment', availabilityStatus: 'confirmed_available',
+          }],
+          ['withdraw-item', ${JSON.stringify(`/items/${items[0]}`)}, {
+            expectedParticipationRevision: 0, expectedRevision: 0,
+            needKey: 'plant_container_equipment', availabilityStatus: 'withdrawn',
+          }],
+        ]) {
+          const response = await fetch(base + suffix, {
+            method: body ? 'POST' : 'GET',
+            headers: { Authorization: 'Bearer ' + token,
+              ...(body ? { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID() } : {}),
+            },
+            ...(body ? { body: JSON.stringify(body) } : {}),
+          });
+          results.push({ action, status: response.status,
+            cacheControl: response.headers.get('cache-control'), body: await response.json() });
+        }
+        console.log('P6C2_RESULT ' + JSON.stringify(results));
         await new Promise(resolve => server.close(resolve)); await pool.end();
       `], { env: { ...process.env, PLANNER_SUPPLY_PARTICIPATION_ENABLED: 'false' }, encoding: 'utf8', timeout: 20000 });
       assert.equal(disabled.status, 0, disabled.stderr);
       const disabledResult = JSON.parse(disabled.stdout.split('\n').find((line) => line.startsWith('P6C2_RESULT ')).slice(12));
-      assert.equal(disabledResult.status, 404);
-      assert.equal(disabledResult.body.error, 'mission_supply_participation_not_enabled');
+      assert.deepEqual(disabledResult.map((result) => result.action),
+        ['read', 'activate', 'withdraw', 'confirm-item', 'withdraw-item']);
+      for (const result of disabledResult) {
+        assert.equal(result.status, 404, result.action);
+        assert.equal(result.body.error, 'mission_supply_participation_not_enabled', result.action);
+        assert.equal(result.cacheControl, 'private, no-store', result.action);
+      }
+      assert.deepEqual(await disabledGraph(), disabledGraphBefore);
+      assert.deepEqual(await disabledEffects(), disabledEffectsBefore);
 
       const { createApp, eraseAccount } = await import('../src/app.js');
       const { pool, inTransaction } = await import('../src/db.js');
