@@ -71,6 +71,7 @@ for(const key of ['flutter-app-cache','flutter-temp-cache','flutter-app-manifest
 await self.registration.unregister();
 })()));
 `;
+// Immutable v1 bytes remain valid only for an existing current/rollback artifact.
 export const stagingBootstrap = `(async()=>{
 try {
 if(location.origin!=='${TARGET}')throw Error('staging_origin_required');
@@ -92,6 +93,86 @@ const script=document.createElement('script');script.src='/flutter_bootstrap.js'
 }catch(_){document.body.textContent='Staging konnte den Offline-Cache nicht sicher entfernen. Bitte diesen Tab schließen und Staging erneut öffnen.';}
 })();
 `;
+
+// Serialized into the sealed Staging bootstrap, never into Production or Dart.
+function monitorStagingRelease(expected) {
+  if (location.origin !== 'https://staging.shareittoo.com' || !expected ||
+      Object.keys(expected).sort().join(',') !== 'profileDigest,source,version' ||
+      typeof expected.source !== 'string' || !/^[a-f0-9]{40}$/.test(expected.source) ||
+      typeof expected.version !== 'string' || !/^\d+\.\d+\.\d+\+\d+$/.test(expected.version) ||
+      typeof expected.profileDigest !== 'string' || !/^[a-f0-9]{64}$/.test(expected.profileDigest)) return;
+  let timer = null; let inFlight = false; let notified = false;
+  let lastAttempt = -Infinity; let failures = 0;
+  const visible = () => document.visibilityState === 'visible';
+  const clearTimer = () => { if (timer !== null) clearTimeout(timer); timer = null; };
+  function schedule() {
+    clearTimer();
+    if (!notified && visible() && failures < 3) timer = setTimeout(check, 300000);
+  }
+  function notify() {
+    notified = true; clearTimer();
+    window.removeEventListener('focus', check);
+    document.removeEventListener('visibilitychange', visibilityChanged);
+    const notice = document.createElement('div');
+    notice.setAttribute('role', 'status');
+    notice.setAttribute('aria-live', 'polite');
+    notice.setAttribute('aria-atomic', 'true');
+    notice.textContent = 'Neue sichere Staging-Version verfügbar. Eingaben sichern und Seite manuell neu laden';
+    Object.assign(notice.style, { position: 'fixed', top: '12px', left: '12px', right: '12px',
+      zIndex: '2147483647', padding: '16px', background: '#fff', color: '#111',
+      border: '2px solid #333', borderRadius: '8px', font: '16px/1.5 sans-serif',
+      maxHeight: '40vh', overflow: 'auto' });
+    document.body.appendChild(notice);
+  }
+  async function check() {
+    if (notified || inFlight || !visible() || Date.now() - lastAttempt < 30000) return;
+    clearTimer(); inFlight = true; lastAttempt = Date.now();
+    const controller = new AbortController(); let deadline;
+    try {
+      const info = await Promise.race([
+        (async () => {
+          const response = await fetch('/staging-release.json', {
+            cache: 'no-store', credentials: 'omit', redirect: 'error', signal: controller.signal,
+          });
+          if (!response.ok || response.status !== 200 || response.redirected ||
+              response.url !== `${location.origin}/staging-release.json` ||
+              response.headers.get('content-type')?.split(';')[0].trim() !== 'application/json') throw Error('release_response_invalid');
+          const text = await response.text();
+          if (text.length > 4096) throw Error('release_response_oversized');
+          const value = JSON.parse(text);
+          if (!value || Array.isArray(value) || Object.keys(value).sort().join(',') !== 'profileDigest,source,target,version' ||
+              value.target !== location.origin || typeof value.source !== 'string' || !/^[a-f0-9]{40}$/.test(value.source) ||
+              typeof value.version !== 'string' || !/^\d+\.\d+\.\d+\+\d+$/.test(value.version) ||
+              typeof value.profileDigest !== 'string' || !/^[a-f0-9]{64}$/.test(value.profileDigest)) throw Error('release_identity_invalid');
+          return value;
+        })(),
+        new Promise((_, reject) => { deadline = setTimeout(() => {
+          controller.abort(); reject(Error('release_check_timeout'));
+        }, 8000); }),
+      ]);
+      failures = 0;
+      if (visible() && (info.source !== expected.source || info.version !== expected.version ||
+          info.profileDigest !== expected.profileDigest)) notify();
+    } catch (_) {
+      failures += 1; // Three automatic attempts maximum; focus/resume can retry later.
+    } finally {
+      clearTimeout(deadline); inFlight = false; schedule();
+    }
+  }
+  function visibilityChanged() { if (visible()) { void check(); schedule(); } else clearTimer(); }
+  window.addEventListener('focus', check);
+  document.addEventListener('visibilitychange', visibilityChanged);
+  void check();
+}
+
+export function stagingBootstrapFor(source, version) {
+  requireThat(sourcePattern.test(source), 'source_sha_invalid');
+  requireThat(/^\d+\.\d+\.\d+\+\d+$/.test(version), 'build_identity_invalid');
+  const identity = { source, version, profileDigest: sha256(JSON.stringify(profile(source, version))) };
+  return stagingBootstrap.replace('document.body.appendChild(script);',
+    `document.body.appendChild(script);\n(${monitorStagingRelease.toString()})(${JSON.stringify(identity)});`);
+}
+
 export function sealArtifact({ directory, source, version, flutterVersion, builderDigest }) {
   requireThat(sourcePattern.test(source) && /^\d+\.\d+\.\d+\+\d+$/.test(version), 'build_identity_invalid');
   const web = path.join(directory, 'web');
@@ -100,10 +181,10 @@ export function sealArtifact({ directory, source, version, flutterVersion, build
   const tag = '<script src="flutter_bootstrap.js" async></script>';
   requireThat(html.split(tag).length === 2, 'bootstrap_template_drift');
   fs.writeFileSync(index, html.replace(tag, '<script src="staging_bootstrap.js"></script>'));
-  fs.writeFileSync(path.join(web, 'staging_bootstrap.js'), stagingBootstrap);
+  fs.writeFileSync(path.join(web, 'staging_bootstrap.js'), stagingBootstrapFor(source, version));
   fs.writeFileSync(path.join(web, 'flutter_service_worker.js'), retirementWorker);
   fs.writeFileSync(path.join(web, 'staging-release.json'), `${JSON.stringify({ target: TARGET, source, version, profileDigest: sha256(JSON.stringify(profile(source, version))) })}\n`);
-  const manifest = { schemaVersion: 1, target: TARGET, api: `${TARGET}/api/v1`, source, version,
+  const manifest = { schemaVersion: 1, bootstrapContractVersion: 2, target: TARGET, api: `${TARGET}/api/v1`, source, version,
     sourceClean: true, mode: 'release', pwaStrategy: 'none', resourcesCdn: false,
     flutterVersion, builderDigest, profile: profile(source, version), files: inventory(web) };
   fs.writeFileSync(path.join(directory, 'staging-web-manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, { flag: 'wx', mode: 0o644 });
@@ -112,7 +193,8 @@ export function sealArtifact({ directory, source, version, flutterVersion, build
   validateArtifact(directory, manifestSha, source);
   return manifestSha;
 }
-export function validateArtifact(directory, expectedHash, expectedSource) {
+export function validateArtifact(directory, expectedHash, expectedSource, { mode = 'candidate' } = {}) {
+  requireThat(['candidate', 'current', 'rollback'].includes(mode), 'artifact_validation_mode_invalid');
   confinedDirectory(directory);
   requireThat(hashPattern.test(expectedHash), 'manifest_hash_required');
   requireThat(JSON.stringify(fs.readdirSync(directory).sort()) === JSON.stringify(['SHA256SUMS', 'staging-web-manifest.json', 'web']), 'artifact_outer_inventory');
@@ -123,6 +205,8 @@ export function validateArtifact(directory, expectedHash, expectedSource) {
   const bytes = fs.readFileSync(path.join(directory, 'staging-web-manifest.json'));
   requireThat(sha256(bytes) === expectedHash, 'manifest_hash_mismatch');
   const m = JSON.parse(bytes);
+  const legacy = !Object.hasOwn(m, 'bootstrapContractVersion');
+  requireThat(legacy ? mode !== 'candidate' : m.bootstrapContractVersion === 2, 'artifact_bootstrap_contract');
   requireThat(m.schemaVersion === 1 && m.target === TARGET && m.api === `${TARGET}/api/v1` && m.sourceClean === true &&
     m.mode === 'release' && m.pwaStrategy === 'none' && m.resourcesCdn === false &&
     sourcePattern.test(m.source) && (!expectedSource || m.source === expectedSource) &&
@@ -131,7 +215,7 @@ export function validateArtifact(directory, expectedHash, expectedSource) {
   const actual = inventory(path.join(directory, 'web'));
   requireThat(JSON.stringify(actual) === JSON.stringify(m.files), 'artifact_integrity_mismatch');
   for (const required of ['index.html', 'main.dart.js', 'manifest.json', 'flutter_bootstrap.js']) requireThat(actual[required], 'artifact_required_file_missing');
-  requireThat(fs.readFileSync(path.join(directory, 'web/staging_bootstrap.js'), 'utf8') === stagingBootstrap &&
+  requireThat(fs.readFileSync(path.join(directory, 'web/staging_bootstrap.js'), 'utf8') === (legacy ? stagingBootstrap : stagingBootstrapFor(m.source, m.version)) &&
     fs.readFileSync(path.join(directory, 'web/flutter_service_worker.js'), 'utf8') === retirementWorker &&
     fs.readFileSync(path.join(directory, 'web/index.html'), 'utf8').includes('<script src="staging_bootstrap.js"></script>'), 'artifact_cache_contract');
   requireThat(fs.readFileSync(path.join(directory, 'web/staging-release.json'), 'utf8') === `${JSON.stringify({ target: TARGET, source: m.source, version: m.version, profileDigest: sha256(JSON.stringify(m.profile)) })}\n`, 'artifact_served_identity');
@@ -145,7 +229,7 @@ function currentRelease(root, expectedHash) {
   requireThat(fs.lstatSync(current).isSymbolicLink(), 'current_not_symlink');
   const target = fs.readlinkSync(current);
   requireThat(target === `releases/${expectedHash}/web`, 'current_binding_mismatch');
-  validateArtifact(path.join(root, 'releases', expectedHash), expectedHash);
+  validateArtifact(path.join(root, 'releases', expectedHash), expectedHash, undefined, { mode: 'current' });
   return target;
 }
 function switchLink(root, name, target) {
@@ -164,14 +248,15 @@ export function deploy({ root, target, artifact, manifestHash, sourceRoot, sourc
   confinedDirectory(path.join(root, 'releases'));
   requireThat((fs.statSync(path.join(root, 'releases')).mode & 0o022) === 0 && fs.statSync(path.join(root, 'releases')).uid === process.getuid(), 'releases_permissions');
   cleanSource(sourceRoot, source);
-  validateArtifact(artifact, manifestHash, source);
+  const validationMode = rollback ? 'rollback' : 'candidate';
+  validateArtifact(artifact, manifestHash, source, { mode: validationMode });
   const previous = currentRelease(root, currentHash);
   requireThat(currentHash !== manifestHash, 'deployment_already_current');
   const destination = path.join(root, 'releases', manifestHash);
   const checkDestination = () => {
     if (rollback) {
       requireThat(fs.lstatSync(path.join(root, 'previous')).isSymbolicLink() && fs.readlinkSync(path.join(root, 'previous')) === `releases/${manifestHash}/web`, 'rollback_pointer_mismatch');
-      validateArtifact(destination, manifestHash, source);
+      validateArtifact(destination, manifestHash, source, { mode: 'rollback' });
     } else requireThat(!fs.existsSync(destination), 'release_collision');
   };
   checkDestination();
@@ -183,7 +268,7 @@ export function deploy({ root, target, artifact, manifestHash, sourceRoot, sourc
     requireThat(currentRelease(root, currentHash) === previous, 'current_changed');
     checkDestination();
     if (!rollback) fs.cpSync(artifact, destination, { recursive: true, errorOnExist: true, force: false });
-    validateArtifact(destination, manifestHash, source);
+    validateArtifact(destination, manifestHash, source, { mode: validationMode });
     fault('copied');
     // Write recovery pointer BEFORE atomic current replacement; never delete old releases.
     switchLink(root, 'previous', previous);

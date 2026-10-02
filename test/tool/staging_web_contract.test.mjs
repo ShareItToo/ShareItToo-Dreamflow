@@ -98,6 +98,43 @@ test('manual recovery uses same validated transaction, not unverified link retar
   assert.equal(fs.readlinkSync(path.join(f.root, 'current')), `releases/${f.old.hash}/web`);
   assert.equal(fs.readlinkSync(path.join(f.root, 'previous')), `releases/${f.candidate.hash}/web`);
 });
+
+function legacyArtifact(directory) {
+  const file = path.join(directory, 'staging-web-manifest.json');
+  const manifest = JSON.parse(fs.readFileSync(file));
+  delete manifest.bootstrapContractVersion;
+  fs.writeFileSync(path.join(directory, 'web/staging_bootstrap.js'), stagingBootstrap);
+  manifest.files['staging_bootstrap.js'] = sha256(stagingBootstrap);
+  fs.writeFileSync(file, `${JSON.stringify(manifest, null, 2)}\n`);
+  const hash = sha256(fs.readFileSync(file));
+  fs.writeFileSync(path.join(directory, 'SHA256SUMS'), `${hash}  staging-web-manifest.json\n${Object.entries(manifest.files).map(([name, digest]) => `${digest}  web/${name}\n`).join('')}`);
+  return hash;
+}
+
+test('existing exact legacy current remains promotable and its verified previous destination remains rollback-safe', (t) => {
+  const f = fixture(t);
+  const legacyHash = legacyArtifact(f.old.directory);
+  fs.cpSync(f.old.directory, path.join(f.root, 'releases', legacyHash), { recursive: true });
+  fs.unlinkSync(path.join(f.root, 'current'));
+  fs.symlinkSync(`releases/${legacyHash}/web`, path.join(f.root, 'current'));
+  const bytes = fs.readFileSync(path.join(f.root, 'releases', legacyHash, 'web/staging_bootstrap.js'));
+  assert.equal(deploy({ ...f.args, currentHash: legacyHash, execute: true }).status, 'deployed');
+  assert.equal(fs.readlinkSync(path.join(f.root, 'previous')), `releases/${legacyHash}/web`);
+  assert.equal(deploy({ ...f.args, artifact: f.old.directory, manifestHash: legacyHash,
+    currentHash: f.candidate.hash, rollback: true, execute: true }).status, 'deployed');
+  assert.deepEqual(fs.readFileSync(path.join(f.root, 'releases', legacyHash, 'web/staging_bootstrap.js')), bytes);
+});
+
+test('legacy candidate cannot be newly copied, including with a forged rollback request', (t) => {
+  const f = fixture(t); const legacyHash = legacyArtifact(f.candidate.directory);
+  const args = { ...f.args, manifestHash: legacyHash, execute: true };
+  assert.throws(() => deploy(args), /artifact_bootstrap_contract/u);
+  fs.symlinkSync(`releases/${legacyHash}/web`, path.join(f.root, 'previous'));
+  assert.throws(() => deploy({ ...args, rollback: true }), /ENOENT/u);
+  assert.equal(fs.existsSync(path.join(f.root, 'releases', legacyHash)), false);
+  assert.equal(fs.readlinkSync(path.join(f.root, 'current')), `releases/${f.old.hash}/web`);
+  assert.equal(fs.existsSync(path.join(f.root, '.deployment-lock')), false);
+});
 test('readback failure restores current and explicit rollback rejects a foreign recovery pointer', (t) => {
   const f = fixture(t);
   assert.throws(() => deploy({ ...f.args, execute: true, verify: () => { throw Error('readback_failed'); } }), /readback_failed/);
