@@ -1,5 +1,85 @@
 # SIT Pilot Phase Capsule — 2026-09-23
 
+## Current execution capsule — 2026-10-02
+
+This is the current execution entry point for ShareItToo/SIT. Read this capsule
+first; follow a source link only for the next bounded decision. All older
+Web/Android/P4/P5/P6 status and sequencing paragraphs below are historical
+snapshots, not current execution or release authority. Preserve their evidence.
+
+- **Objective:** advance the additive Mission private-pilot source safely from
+  P6-A demand/revocation through the default-off P6-C2 owner participation API;
+  resolve the narrow D3/D4 gate before real matching or real-data activation.
+- **Authoritative sources:** [Mission masterplan](../product/SIT_MISSION_MASTERPLAN_2026-09-30.md)
+  for goal/acceptance; [P6-C2 owner API](SIT_MISSION_P6C2_OWNER_API_2026-10-02.md)
+  for the implemented boundary; [D3/D4 FIX record](SIT_GEMINI_MISSION_P6C_D3_D4_GATE_2026-10-02.md)
+  for the unresolved gate; [efficiency policy](SIT_CODEX_CONTEXT_CREDIT_EFFICIENCY_RULES_V1.md)
+  for bounded Sol/Luna work and exact-source evidence.
+- **Verified source checkpoint:** branch `codex/master-workflow-20260808`, clean
+  local HEAD and remote branch both
+  `4a67697e600b717f76df4682475086c50c8f1ad0` before this documentation commit.
+  This capsule's later docs-only commit is a distinct HEAD; CI below binds only
+  the recorded source checkpoint, not an inferred future commit.
+- **Candidate truth:** source-only; no new Web/Android release artifact or
+  exact-current runtime proof is attached. P6-C2 remains default-off and adds
+  no region, UI, matching, notification, provider or payment activation.
+  The P6-A recipient resolver is still injected/synthetic only.
+- **Included source/proofs:** expiry-stable P6-A command replay (`3594e6b8`),
+  booking-suspended safe release revocation (`7ef06f6e`), real HTTP create-budget
+  exhaustion without blocking lifecycle/replay (`c3849af3`), and disabled P6-C2
+  GET plus all four mutation actions failing closed (`4a67697e`).
+- **Decisive local evidence:** safe-revoke focused tests 13/13 and PG16 1/1;
+  limiter focused tests 16/16 and PG16 1/1; disabled-participation focused tests
+  5/5 and PG16 2/2. Counts are per package, not cumulative unique tests.
+  [Demand fixture](../../backend/test/mission_supply_demand_postgres.integration.test.js)
+  and [participation fixture](../../backend/test/mission_supply_participation_postgres.integration.test.js)
+  prove ownership, replay, unchanged effect counts and database cleanup.
+  Current-consumer closure, syntax, secret and diff checks passed; the revoke
+  package also refreshed/validated current privacy and retention app hashes.
+- **CI readback, 2026-10-02 16:02 UTC:** exact checkpoint `4a67697e…`
+  is **PASS**. [Regression 37028327458](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37028327458)
+  completed **SUCCESS** with Backend, PostgreSQL, Flutter and R10 clean
+  reproducibility green; API image publication was intentionally skipped.
+  [CodeQL 37028326971](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37028326971)
+  completed **SUCCESS**. Prior exact
+  `3594e6b8b0ec338b3a7d2611f610662f68e8d6f0` passed
+  [Regression 37025322015](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37025322015)
+  and [CodeQL 37025321668](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37025321668).
+  Prior success remains historical; the current PASS binds only `4a67697e…`.
+- **Phase-0 freshness readback, 2026-10-02 15:59–16:01 UTC:** the accepted
+  [Staging Web Phase-0 closure](STAGING_WEB_PHASE0_CLOSURE_2026-10-01.md)
+  remains the technical prerequisite evidence. Fresh read-only HTTP checks
+  observed API runtime `6c0ef70d…` in `test`, exact-origin CORS `204`, Web root
+  `200`, exactly one non-contractual synthetic catalog row and its referenced
+  image as `200 image/webp` with 1172 bytes. One preceding image request timed
+  out; immediate bounded health, catalog and image rechecks all returned `200`
+  in about 0.34 seconds. This is current HTTP/CORS evidence, not a repeated
+  browser-UI, provider-login, current-artifact, Mission-deployment, native,
+  Production or Play proof.
+- **Open blockers:** D3/D4, purpose-bound retention, region provenance,
+  real recipient selection and required professional review remain open.
+  The preceding Gemini answer is **FIX**. **SOL HANDOFF/UI STATE:** a corrected
+  prompt is prepared in the composer, not sent or accepted; this is not an
+  independently verified repository or Luna browser fact. Its local artifact
+  is `~/.codex/tmp/sit-gemini-p6c2-d3d4-prompt-20261002.md`, SHA-256
+  `f0ef4f9dd9560b3409618ef189ea5aa91a51bc0fc5d97b4393efce655cbc67c7`.
+  The visible composer now binds accepted code checkpoint `4a67697e…`,
+  includes the default-off P6-C2 owner API facts and visibly remains
+  `Pro Extended`; the old `d0642f96…` source binding is absent. The prompt
+  deliberately excludes a changing docs-only commit ID and binds the completed
+  exact-code Regression/CodeQL run IDs instead. Sending and reviewing the
+  answer remain separate gate actions.
+- **Exact next sequence:** (1) Send the already refreshed narrow Gemini D3/D4
+  source-fact capsule only after the required action-time confirmation; verify
+  `Pro Extended` immediately before send. (2) Review its answer independently
+  as PASS/FIX/NOT VERIFIED and preserve the complete fresh-source register.
+  (3) Assign only the next bounded source package supported by that decision;
+  separately finish the source-linked Web/native capability matrix.
+  No live deployment, Play publication, provider/payment activation or
+  pilot-complete claim follows from this capsule or these local/CI checks.
+
+## Historical snapshots — retained evidence, superseded execution state
+
 ## Parent objective addendum — SIT Mission / Blue Ocean — 2026-09-30
 
 The authoritative top-level objective is the
