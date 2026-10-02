@@ -7,41 +7,50 @@ source link. Everything below **Historical snapshots** is retained provenance,
 not current execution or release authority.
 
 - **Objective:** advance Mission source safely while using Staging Web for
-  fast, source-bound pilot acceptance. Finalize the reviewed exact-name image
-  policy FIX after the c513 technical Web promotion; real Mission
-  matching/data activation remains separately gated.
+  fast, source-bound pilot acceptance. The exact-name image policy successor
+  and its responsive browser acceptance are closed at exact source 967. The
+  Google-Web activation prerequisite diagnosis is closed and awaits only its
+  named Gemini gate; independently, the dormant P7-A1 synthetic Quorum source
+  package is Sol-reviewed. Real Mission matching/data activation remains gated.
 - **Authoritative sources:** [Mission masterplan](../product/SIT_MISSION_MASTERPLAN_2026-09-30.md),
   [Web contract](STAGING_WEB_PILOT.md), [Web/native matrix](SIT_WEB_NATIVE_CAPABILITY_MATRIX_2026-10-02.md),
   [P6-C2 boundary](SIT_MISSION_P6C2_OWNER_API_2026-10-02.md) and
   [D3/D4 FIX record](SIT_GEMINI_MISSION_P6C_D3_D4_GATE_2026-10-02.md).
   Older checkpoint statements in linked documents do not supersede this capsule.
-- **Source/candidate truth:** branch `codex/master-workflow-20260808`, committed
-  and pushed at `c513d07fa88b88fe92f2a55bbaac721cd864b9b2`. The image policy FIX
-  below is Sol-reviewed local source, not yet a deployed fix. It requires its
-  own successor commit, automatic exact-head CI and fresh exact-source build.
-- **c513 exact-head CI:**
-  [Regression 37061518629](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37061518629)
-  and [CodeQL 37061518654](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37061518654)
-  completed **SUCCESS** for exact c513; all four required Regression jobs passed.
-- **Live Staging Web — technical promotion PASS:** source exact c513, manifest
-  `6d62474d66f59f495122340836c906cf022a62d6b2bc0f16981c19afc99069ff`, archive
-  `a4899066f98be547edf6325828611db937445b50f62b7102ef96c6039e342eb0`.
+- **Source/candidate truth:** the deployed Web source remains exact
+  `967958f6c6a4d580f4f05e6849b32991db233603` on branch
+  `codex/master-workflow-20260808`. The P7-A1 successor below changes only a
+  dormant synthetic read contract and its tests/runner; it is not deployed,
+  routeable, persisted, feature-flagged or evidence of real Mission completion.
+- **967 exact-head CI:**
+  [Regression 37066632738](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37066632738)
+  and [CodeQL 37066632784](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37066632784)
+  completed **SUCCESS** for exact 967; all four required Regression jobs passed.
+- **Live Staging Web — technical promotion PASS:** source exact 967, manifest
+  `73202bfa3e6b30d0ba0e0b3445cc927c379796fcaaca540069fe224cffa4590e`, archive
+  `e72e1ea5322632616c7a5e84ffdfccae4f8017c3ec8306a9983f5d1227935c2e`.
   One clean build, two smokes, seal, independent archive/extraction checks and
   one reversible Staging-only promotion passed. Static assets match manifest
-  hashes with `no-store`; previous remains e49d/3c1 and rollback preflight passed.
+  hashes with `no-store`; previous is c513/6d62474d and rollback preflight passed.
 - **Unchanged runtime boundary:** API remains
   `6c0ef70db2656df3e378add858d5f5157388127e` in test. Before/after API version,
   one-row synthetic catalog and exact-origin CORS 204 readbacks were identical.
   Production root bytes/pointer and Caddy configuration were unchanged;
   no API, provider, payment or Play activation occurred.
-- **Fresh 390px browser evidence — Sol FIX:** the synthetic illustration is
-  blank because the frontend rejects the server-bound storage name
-  `synthetic_web_catalog_placeholder_v1.webp`. Its live anonymous response is
+- **Responsive browser acceptance — Sol PASS:** fresh live Staging checks at
+  390x844, 768x1024, 1920x1080 and 3840x2160 render the dedicated synthetic
+  illustration in the detail view, preserve the full synthetic disclosure and
+  keep `Nicht buchbar – nur Katalogtest` disabled. Home and detail have no
+  horizontal overflow. At 1920 and 3840 the home content stays centered within
+  1,200 px and detail content within 920 px; the same detail geometry is stable
+  at both desktop widths. Accessibility exposes the image as
+  `Testillustration, kein aktueller Produkt- oder Zustandsnachweis`; current
+  browser console warnings/errors are empty. The live anonymous image remains
   HTTP 200 `image/webp`, 1,172 bytes, SHA
   `d5b762e354eff48a5a8b744ce144ab9edafdc1c8a85be96ec6bf40a135ad04bf`.
-  Technical promotion is not complete browser acceptance. Synthetic truth,
-  disabled booking and all provider/native/Mission boundaries remain intact.
-- **Mobile layout source proof — included in deployed c513:** at 390 px the row
+  Synthetic truth, disabled booking and all provider/native/Mission boundaries
+  remain intact.
+- **Mobile layout source proof — included in deployed 967:** at 390 px the row
   has two complete 157.33 px cards plus 25% of a third, with a 320 px maximum.
   Synthetic cards have a 280 px disclosure/action height floor and no implicit
   margin that narrows the visible surface. Desktop content/detail bounds, synthetic labels,
@@ -62,7 +71,7 @@ not current execution or release authority.
   The committed archive builder correctly refused five shipped CanvasKit WASM
   modes and then 16 USTAR-unrepresentable image names. That build is retained
   only as rejected compatibility evidence, never relabelled as a new candidate.
-- **Archive repair — included in deployed c513:**
+- **Archive repair — introduced in c513 and included in deployed 967:**
   [Node-only builder/readback](../../tool/staging_web_archive.mjs) preserves
   `0755` only for five exact manifest-bound, validated CanvasKit WASM paths.
   Canonical GNU LongName records are allowed only for safe manifest-bound paths
@@ -77,7 +86,7 @@ not current execution or release authority.
   retention and diff checks passed without changing approval state. No current
   source-inventory binding was affected. The d2cc artifact was not deployed;
   c513's separate exact-source promotion is recorded above.
-- **Image policy successor — Sol local PASS, no live fix yet:** exact string
+- **Image policy successor — source/runtime/browser PASS:** exact string
   equality accepts only the dedicated storage name at the configured managed
   upload URL. It grants no listing-photo authenticity. Existing explicit public
   image surfaces send no credentials; private guest/default surfaces remain
@@ -87,26 +96,75 @@ not current execution or release authority.
   action into view, asserts `hitTestable()` and taps it with missed-tap warnings
   fatal. The earlier warning-bearing tap is rejected evidence, not acceptance.
   Final exact two-file Flutter gate passed 15/15 with zero framework warnings
-  or exceptions; wiring 10/10 and analyzer/diff passed. The preceding focused
-  33-test functional gate and 424 consumer assertions passed. Only BackendConfig's
+  or exceptions; wiring, analyzer and diff passed. The preceding focused
+  functional gate and current-consumer closure passed. Only BackendConfig's
   current privacy binding was refreshed once; retention and historical evidence
-  remain unchanged. Working-tree secret scan and privacy/retention validators passed.
-- **Google Web auth:** current release intentionally off. Source popup/session
-  handling exists; verified Firebase Web options, authorized Staging domain,
-  backend-project/runtime and provider bindings plus real Web-login proof remain
-  required before a separately reviewed Google-only activation package.
+  remain unchanged. Working-tree secret scan and privacy/retention validators
+  passed. Exact-head CI, exact-source build/promotion and the fresh four-width
+  browser matrix above close this successor.
+- **Google Web auth — prerequisite diagnosis PASS; activation FIX:** fresh
+  read-only Firebase Management and Identity Toolkit readbacks against the
+  exact Staging-runtime project found zero registered Web apps and no
+  `staging.shareittoo.com` authorized-domain entry. The Google provider is
+  already enabled with client configuration present. Backend Firebase auth is
+  enabled; service-account, runtime and native Firebase project bindings match;
+  no auth emulator is configured. Runtime verifies exact audience and issuer,
+  and the focused source cluster passed 9/9. Source popup/session handling and
+  `/v1/auth/social` exist, but the current build profile intentionally keeps
+  Google Web off and no real Web token was tested. The smallest missing provider
+  package is exactly one Web-app registration plus only the Staging authorized
+  domain, followed by sanitized independent readback; no flag activation or
+  login belongs to that package. This access/security mutation is
+  `GEMINI_GATE_REQUIRED:SIT-GOOGLE-WEB-PREREQ-01`. The visible Gemini tab is
+  currently signed out on Flash-Lite, so no answer has been sent or accepted.
   Apple/Facebook stay off; account/session/MFA/allowlist gates stay authoritative.
 - **Mission/Gemini boundary:** P6-A resolver stays synthetic/injected; P6-C2 stays
   default-off, with no real matching, region or provider effects. D3/D4 remains
   open with prior FIX. Per Sol UI handoff, the Gemini tab awaits a signed-in
   Pro Extended send; no new accepted answer exists. This gate does not block
   the source-only image policy successor.
-- **Exact next:** commit/push this reviewed image policy FIX and
-  capsule → automatic exact-successor Regression and CodeQL success → one new
-  isolated exact-successor Web build/smoke/seal/checked archive → authorized
-  reversible Staging-only promotion with fresh pre/post readback → independent
-  Sol browser acceptance at 390/768/1920/3840 →
-  Google-Web activation package with its missing evidence gates.
+- **P6-A safe revoke — already closed:** commit
+  `7ef06f6e223d7d982b9ee206c3a4779da8054228`, already contained in 967,
+  allows an owner under booking-only suspension to revoke the owner's released
+  Mission demand while preserving account suspension, authentication, owner,
+  revision, idempotency and default-off boundaries. Fresh focused recheck passed
+  workflow/wiring 8/8 and the real PostgreSQL-16 HTTP matrix 1/1 with runner
+  cleanup; privacy/retention, consumer inventory, syntax, secret scan and diff
+  checks passed. No duplicate source change or hash refresh was made.
+- **P7 source map — Sol PASS; no runtime claim:** P2 Mission need/revision is
+  the existing durable root and P5 resolution revision plus slot is the existing
+  component identity. P4 fit is strictly same-owner; a foreign P6 Shelf release
+  has no P4 fit proof. P6 `released` is only purpose-/expiry-bound visibility,
+  never acceptance, quote, booking or contract. Existing G3/G5 booking,
+  handover/return, 4+4 evidence, QR-v3/six-digit fallback and dispute contracts
+  remain owner- and booking-specific, and no authoritative Mission-component to
+  Booking relation exists. Therefore P7-A1 adds only an unpersisted,
+  unrouteable synthetic read projection with explicit `unknown`/`not_bound`
+  axes and `bindingStatus: non_binding`; D1-D4 and all activation gates stay open.
+- **P7-A1 dormant synthetic Quorum — Sol source PASS:** the pure projection
+  binds the Mission root, current resolution revision, every component slot,
+  authoritative listing owner, exact released/revoked demand history and the
+  source digest before showing eleven separate lifecycle axes. Expired pending
+  demand remains `expired_no_response`; explicit rejected/revoked decisions are
+  preserved. Same-owner P4 Fit is never reused for a foreign P6 Shelf. Synthetic
+  4+4 handover/return evidence, QR-v3/six-digit fallback and lifecycle fixtures
+  remain visibly non-authentic and `non_binding`; missing or contradictory proof
+  cannot become complete. The workflow owns a repeatable-read/read-only
+  transaction and exposes its namespaced fixture adapter only under Node's test
+  context. A structural test proves that runtime/app/routes/jobs/flags do not
+  reference the package. Focused projection 16/16, runner 14/14 and PostgreSQL-16
+  1/1 passed with byte-equivalent public tables and verified cleanup. The prior
+  unchanged full Backend gate passed 1,928 tests with 23 regular skips and zero
+  failures; syntax and diff checks remain green. No migration, route, real
+  binding, provider call or combined payment was added.
+- **Exact next:** when the visible SIT Gemini account is signed in, verify
+  exactly Google AI Pro `Pro` with `Extended` and submit only gate
+  `SIT-GOOGLE-WEB-PREREQ-01`; on PASS, execute the bounded Web-app/domain
+  provider package and independently read it back before any flag activation.
+  Independently, commit and push the reviewed P7-A1 source package, then accept
+  only automatic Regression and CodeQL success on its exact successor head.
+  Do not deploy or wire P7-A1. D1/D2/D3/D4 stay open, and a blocked provider
+  lane must not stop the independent source/CI package.
   No Production/Play change or pilot-complete claim follows from this sequence.
 
 ## Historical snapshots — retained evidence, superseded execution state

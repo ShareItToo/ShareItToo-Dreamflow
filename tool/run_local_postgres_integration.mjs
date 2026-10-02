@@ -42,6 +42,9 @@ export const integrationTestGroups = Object.freeze({
   missionSupplyParticipation: Object.freeze([
     'backend/test/mission_supply_participation_postgres.integration.test.js',
   ]),
+  missionQuorumProjection: Object.freeze([
+    'backend/test/mission_quorum_projection_postgres.integration.test.js',
+  ]),
   privateShelf: Object.freeze([
     'backend/test/private_shelf_postgres.integration.test.js',
   ]),
@@ -76,8 +79,10 @@ export function integrationTestPlan({
   focusedMissionInventoryResolution = false,
   focusedMissionSupplyDemand = false,
   focusedMissionSupplyParticipation = false,
+  focusedMissionQuorumProjection = false,
   focusedPrivateShelf = false,
 } = {}) {
+  if (focusedMissionQuorumProjection) return [integrationTestGroups.missionQuorumProjection];
   if (focusedMissionInventoryResolution) {
     return [integrationTestGroups.missionInventoryResolution];
   }
@@ -117,6 +122,7 @@ export function integrationTestPlan({
     integrationTestGroups.missionInventoryResolution,
     integrationTestGroups.missionSupplyDemand,
     integrationTestGroups.missionSupplyParticipation,
+    integrationTestGroups.missionQuorumProjection,
     integrationTestGroups.stagingGoogleRegistration,
     integrationTestGroups.listingAi,
     integrationTestGroups.identity,
@@ -319,6 +325,8 @@ export async function runLocalPostgresIntegration({
     environment.SIT_POSTGRES_FOCUSED_MISSION_SUPPLY_DEMAND === '1';
   const focusedMissionSupplyParticipation =
     environment.SIT_POSTGRES_FOCUSED_MISSION_SUPPLY_PARTICIPATION === '1';
+  const focusedMissionQuorumProjection =
+    environment.SIT_POSTGRES_FOCUSED_MISSION_QUORUM_PROJECTION === '1';
   const focusedPrivateShelf = environment.SIT_POSTGRES_FOCUSED_PRIVATE_SHELF === '1';
   const integrationGroups = integrationTestPlan({
     focusedGoogleRegistration,
@@ -332,6 +340,7 @@ export async function runLocalPostgresIntegration({
     focusedMissionInventoryResolution,
     focusedMissionSupplyDemand,
     focusedMissionSupplyParticipation,
+    focusedMissionQuorumProjection,
     focusedPrivateShelf,
   });
 

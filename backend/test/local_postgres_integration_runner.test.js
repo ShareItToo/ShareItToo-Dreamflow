@@ -112,6 +112,7 @@ test('runs readiness, isolated database and integration before guaranteed cleanu
     ['backend/test/mission_inventory_resolution_postgres.integration.test.js'],
     ['backend/test/mission_supply_demand_postgres.integration.test.js'],
     ['backend/test/mission_supply_participation_postgres.integration.test.js'],
+    ['backend/test/mission_quorum_projection_postgres.integration.test.js'],
     ['backend/test/staging_google_registration.integration.test.js'],
     [
       'backend/test/listing_ai_lifetime_budget_migration.integration.test.js',
@@ -217,6 +218,12 @@ test('focused mission supply demand mode selects only the P6-A PostgreSQL suite'
 test('focused mission supply participation mode selects only the P6-C1 PostgreSQL suite', () => {
   assert.deepEqual(integrationTestPlan({ focusedMissionSupplyParticipation: true }), [
     ['backend/test/mission_supply_participation_postgres.integration.test.js'],
+  ]);
+});
+
+test('focused quorum projection mode selects only the P7-A1 PostgreSQL suite', () => {
+  assert.deepEqual(integrationTestPlan({ focusedMissionQuorumProjection: true }), [
+    ['backend/test/mission_quorum_projection_postgres.integration.test.js'],
   ]);
 });
 
