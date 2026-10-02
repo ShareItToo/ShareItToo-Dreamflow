@@ -28,6 +28,7 @@ if (!databaseUrl) {
     let applicationPool;
     let server;
     let lifecycleServer;
+    let limiterServer;
     try {
       await setupPool.query(await fs.readFile(new URL('../sql/schema.sql', import.meta.url), 'utf8'));
       const { runMigrations } = await import('../src/migrations.js');
@@ -909,6 +910,110 @@ if (!databaseUrl) {
       assert.deepEqual(await demandCounts(), countsAfterErasure);
       assert.equal(resolverCalls, resolverCallsAfterErasure);
 
+      // A fresh app bounds this fixture's budget; every request below uses the
+      // same listener and loopback client, with no store reset or restart.
+      limiterServer = http.createServer(createApp({ resolveMissionSupplyRecipient: resolver }));
+      await new Promise((resolve) => limiterServer.listen(0, '127.0.0.1', resolve));
+      const limiterBaseUrl = `http://127.0.0.1:${limiterServer.address().port}`;
+      const limiterGap = await insertGap(requesterId, 20);
+      const limitedGap = await insertGap(requesterId, 21);
+      const limiterCreate = (gap, key) => fetch(
+        `${limiterBaseUrl}/v1/mission-inventory-resolutions/${gap.resolutionId}/supply-demands`, {
+          method: 'POST', headers: json(requesterId, key),
+          body: JSON.stringify({
+            resolutionRevision: 1, slotKey: gap.slotKey,
+            purpose: 'mission_gap_supply_v1', expiresAt,
+          }),
+        },
+      );
+      const assertCreateBudget = (response, remaining) => {
+        const policy = response.headers.get('ratelimit-policy')?.split(',').find(
+          (entry) => /; q=10; w=900;/u.test(entry),
+        );
+        assert.ok(policy, 'the existing ten-request/fifteen-minute policy is exposed');
+        const name = policy.trim().split(';')[0];
+        const budget = response.headers.get('ratelimit')?.split(',').find(
+          (entry) => entry.trim().startsWith(`${name};`),
+        );
+        assert.ok(budget?.includes(`; r=${remaining}; t=`));
+      };
+      const limiterCountsBefore = await demandCounts();
+      const limiterResolverBefore = resolverCalls;
+      const limiterEffectsBefore = await effects();
+      let limiterDemand;
+      for (let request = 1; request <= 10; request += 1) {
+        const response = await limiterCreate(limiterGap, 'p6-limiter-create-0001');
+        assert.equal(response.status, request === 1 ? 201 : 200);
+        assertCreateBudget(response, 10 - request);
+        const result = await response.json();
+        assert.equal(result.replayed, request > 1);
+        if (request === 1) limiterDemand = result.demand;
+        else assert.deepEqual(result.demand, limiterDemand);
+      }
+      const limiterCountsAtLimit = await demandCounts();
+      assert.deepEqual(limiterCountsAtLimit, {
+        ...limiterCountsBefore,
+        demands: limiterCountsBefore.demands + 1,
+        commands: limiterCountsBefore.commands + 1,
+        revisions: limiterCountsBefore.revisions + 1,
+      });
+      assert.equal(resolverCalls, limiterResolverBefore + 1);
+      const limitedResponse = await limiterCreate(limitedGap, 'p6-limiter-rejected-0001');
+      assert.equal(limitedResponse.status, 429);
+      assertCreateBudget(limitedResponse, 0);
+      assert.match(limitedResponse.headers.get('retry-after'), /^[1-9][0-9]*$/u);
+      const limitedError = await limitedResponse.json();
+      assert.equal(limitedError.error, 'rate_limit_exceeded');
+      assert.equal(typeof limitedError.requestId, 'string');
+      assert.ok(limitedError.requestId.length > 0);
+      assert.deepEqual(await demandCounts(), limiterCountsAtLimit);
+      assert.equal(resolverCalls, limiterResolverBefore + 1);
+
+      for (const suffix of ['', `/${limiterDemand.demandId}`]) {
+        const response = await fetch(`${limiterBaseUrl}/v1/mission-supply-demands${suffix}`, {
+          headers: auth(recipientId),
+        });
+        assert.equal(response.status, 200);
+        assert.match(response.headers.get('cache-control'), /no-store/u);
+        const body = await response.json();
+        assert.ok((suffix ? [body.demand] : body.demands).some(
+          (demand) => demand.demandId === limiterDemand.demandId && demand.status === 'pending',
+        ));
+      }
+      const limiterCommand = (actor, action, raw, key) => fetch(
+        `${limiterBaseUrl}/v1/mission-supply-demands/${limiterDemand.demandId}/${action}`, {
+          method: 'POST', headers: json(actor, key), body: JSON.stringify(raw),
+        },
+      );
+      await expectError(limiterCommand(foreignId, 'respond',
+        { expectedRevision: 1, decision: 'release' }, 'p6-limiter-foreign-0001'),
+      404, 'mission_supply_demand_not_found');
+      for (const [action, raw, key, status, revision] of [
+        ['respond', { expectedRevision: 1, decision: 'release' }, 'p6-limiter-release-0001', 'released', 2],
+        ['revoke', { expectedRevision: 2 }, 'p6-limiter-revoke-0001', 'revoked', 3],
+      ]) {
+        const response = await limiterCommand(recipientId, action, raw, key);
+        assert.equal(response.status, 201);
+        const result = await response.json();
+        assert.equal(result.demand.status, status);
+        assert.equal(result.demand.revision, revision);
+        const countsAfterCommand = await demandCounts();
+        const replayResponse = await limiterCommand(recipientId, action, raw, key);
+        assert.equal(replayResponse.status, 200);
+        const replayResult = await replayResponse.json();
+        assert.equal(replayResult.replayed, true);
+        assert.deepEqual(replayResult.demand, result.demand);
+        assert.deepEqual(await demandCounts(), countsAfterCommand);
+      }
+      assert.deepEqual(await demandCounts(), {
+        ...limiterCountsAtLimit,
+        commands: limiterCountsAtLimit.commands + 2,
+        revisions: limiterCountsAtLimit.revisions + 2,
+        releases: limiterCountsAtLimit.releases + 1,
+      });
+      assert.equal(resolverCalls, limiterResolverBefore + 1);
+      assert.deepEqual(await effects(), limiterEffectsBefore);
+
       await assert.rejects(
         setupPool.query(await fs.readFile(
           new URL('../sql/migrations/103_mission_supply_demands.down.sql', import.meta.url),
@@ -918,6 +1023,7 @@ if (!databaseUrl) {
           && /mission_supply_demand_rows_active/u.test(error.message),
       );
     } finally {
+      if (limiterServer) await new Promise((resolve) => limiterServer.close(() => resolve()));
       if (lifecycleServer) {
         await new Promise((resolve) => lifecycleServer.close(() => resolve()));
       }
