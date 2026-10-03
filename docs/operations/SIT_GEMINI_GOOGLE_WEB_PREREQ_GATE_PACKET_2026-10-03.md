@@ -3,19 +3,26 @@
 Status: **PREPARED / NOT SENT**. Gate `SIT-GOOGLE-WEB-PREREQ-01` has no
 accepted Gemini decision in this package. Successor preparation date: 2026-10-03.
 This document is a review packet, not an execution instruction or live approval.
+Current outcome: the complete bounded Web-app/key/service **read seam is
+source-ready**, not a complete provider adapter or live prerequisite proof.
+`webCompatible` remains `false` with `keyCompatibility: 'not_assessed'`;
+authorized-domain CAS/all-writer proof is absent. Therefore this packet supplies
+**no A approval and no mutation, build, deploy or login authorization**.
 
 ## Exact boundary and authority
 
 - Project: ShareItToo/SIT; repository
   `ShareItToo/ShareItToo-Dreamflow`. All source paths below are relative.
 - Branch: `codex/master-workflow-20260808`; reviewed source predecessor:
-  `86cc23ac876ddb3c9b1c5818ac1996b9ce3939ab` (`86cc23ac`). This is the
+  `2fb38dcfa5a34429029def4c881e507d3b63c708` (`2fb38dcf`). This is the
   immutable implementation commit immediately preceding this documentation
   successor, not a claim that a future packet commit is its own source HEAD.
   Local Git resolves that predecessor and its registered bytes; no remote,
   deployment or clean-tree claim follows. The runner is
   `backend/ops/staging_google_web_prerequisites.mjs`, SHA-256
-  `e964986ae0a208f5205a6f54ec346fbd7fb9d37f969fef4e81ed7188d972c193`.
+  `bbb5574cbc7addc5f25e06cd09e6764b5701db95330ef1e435f7ba56b964169e`.
+  The read seam is `backend/ops/staging_google_web_read_adapter.mjs`, SHA-256
+  `9b90fb2524378938408ef89083aa371d42b2b01c829b0126b2042fb6994fa14c`.
 - Scope: prepare one access/security decision about exactly one Firebase Web
   app in the existing Staging-runtime Firebase project, plus addition of only
   `staging.shareittoo.com` to its existing authorized-domain set, followed by
@@ -44,13 +51,23 @@ outside this boundary mean C BLOCK; they are not silently added to the package.
 
 ## Ready-to-send question
 
-> Review only `SIT-GOOGLE-WEB-PREREQ-01`. Is the proposed smallest provider
-> mutation safe and sufficient as a prerequisite package: register exactly one
+> Review only `SIT-GOOGLE-WEB-PREREQ-01`, in verified Google AI Pro **Pro** mode
+> with **Extended** thinking. Freshly open every decisive official source below;
+> report its actual access status, displayed update/version and your access date.
+> Do not substitute prior answers, snippets or assumed local/provider access.
+> First assess the source-only read seam at predecessor `2fb38dcf`: its key
+> compatibility result is deliberately not assessed and no authorized-domain
+> CAS/all-writer proof exists. B may accept only this bounded source readiness;
+> C blocks mutation while either decisive gap remains. Is the future smallest
+> provider plan safe and sufficient only after those gaps are actually closed:
+> register exactly one
 > Firebase Web app in the already existing, freshly matched Staging-runtime
 > project and add only `staging.shareittoo.com` to its existing authorized
 > domains, then independently read back the exact delta while Google Web stays
 > disabled? Return exactly one decision: **A PASS**, **B PASS** or **C BLOCK**.
-> A means the narrow plan may proceed after the preserved fresh preflight;
+> Only A can authorize runner execution, and only after independent compatibility,
+> concurrency and preserved fresh preflight proofs. The present packet cannot
+> support A. An A on a future completed evidence set means the narrow plan may proceed;
 > it never means provider creation, domain change, authentication or release has
 > succeeded. B accepts only source-only preparation/contract readiness, lists
 > remaining execution proofs, and does not authorize any provider mutation.
@@ -98,6 +115,9 @@ repository document reports is not a verified fact about a current provider.
 | FACT — source | The bound Google Web path in `auth_service.dart` uses `signInWithPopup`, account selection and a fresh ID token, then the principal-bound remote transaction and `/auth/social` exchange. Web initialization uses memory persistence. | This does not claim Google is the only implemented Web provider. Wiring is source evidence, not a provider or login result. |
 | FACT — source | The default `tool/staging_web_contract.mjs` profile keeps all social/activation flags false. Its explicit `staging-google-web-v1` successor accepts a validated seven-field config plus independently reviewed digest and enables exactly Google and activation-validation; Apple/Facebook stay false. `backend/src/app.js` checks the transaction-resolved principal against the Staging allowlist before consequential writes and retains consent/MFA/session gates. | The optional build path exists; this packet neither invokes it nor changes any flag, allowlist, account, session or policy. |
 | FACT — source | `staging_google_web_prerequisites.mjs` implements an injected-adapter, default-read-only state machine, exact source/gate/baseline binding, protected journal, one create submission, guarded domain update and public-config export. | No live transport or CLI exists. Adapter completeness, provider concurrency guarantees and live effects remain unverified. |
+| FACT — source | Runner binding/journal schema 2 requires exhaustive ACTIVE+DELETED inventory attestation, a bound existing project-owned key, exact key UID in create, independent app get and SDK fingerprint equality, and full key-inventory/restriction digest preservation. Old schema state fails closed. | Key provisioning/fallback is forbidden. A syntactically accepted injected assertion is not independent provider evidence. |
+| FACT — source | The read adapter supplies exhaustive Web-app and key pagination, independent app/key gets, exact five-field SDK projection, authorized-domain/unrelated-config digest projection, and separate exact Service Usage gets for Identity Toolkit and Secure Token requiring ENABLED. It has six read methods, injected bounded transport, no network client/CLI/mutation method and sanitized errors. | Complete for this bounded read seam only: no complete runner snapshot, operational transport, provider/runtime/other-app attestations, key-compatibility approval or CAS/lease is supplied. Service enablement is a necessary condition, not sufficiency. |
+| FACT — current local checks | Reviewed service-read successor: focused 172/172 (75 adapter + 97 runner); backend 2,535 passed / 26 skipped / 0 failed (2,561 total); consumer closure 2,997/2,997 (4 manifests, 194 code consumers, 444 test files, 105 migrations). Syntax, changed-file secret scan, privacy validator and scoped diff check passed. | Retained logs were read for this refresh; tests were not rerun. Fixtures are synthetic/injected, not live provider, service, browser or credential evidence. Privacy approval remains false and final binary scan open. |
 | FACT — historical checks | The older packet at `75b7e19dba55579a2b1a8df0e6746e61b5c57874` recorded 14 focused tests on 2026-10-03 (3 wiring, 6 token, 5 service-account). The reviewed runner package recorded 59/59 focused; standard backend 2,422 passed / 26 skipped / 0 failed (2,448 total); consumer closure 2,992/2,992. | Local log summaries were checked in this documentation refresh; no tests were rerun here. Historical/synthetic proof is not live acceptance. |
 | INFERENCE | If the fresh independent baseline proves every stated prerequisite, one Web-app registration and one authorized-domain addition are the smallest missing provider prerequisites identified by this plan. | The baseline and sufficiency for later login remain unverified; do not infer either from source tests. |
 | PROPOSAL | Execute only the two changes after A and preserved preflight, then stop after independent sanitized readback. | No mutation happened during packet preparation. |
@@ -144,7 +164,7 @@ also exclude an already initialized mismatched named app or emulator mode.
 ## Preconditions, exact mutation and independent readback
 
 1. Sol verifies the current task's unchanged authorization, exact source bytes
-   and visible Gemini account/mode. The register binds predecessor `86cc23ac`,
+   and visible Gemini account/mode. The register binds predecessor `2fb38dcf`,
    not this future documentation commit. Before execution, explicitly rebind
    the reviewed gate to the actual checkout HEAD (the runner requires exact
    equality), runner digest, current baseline digest, evidence digest and expiry.
@@ -169,6 +189,14 @@ also exclude an already initialized mismatched named app or emulator mode.
    missing access, ambiguity, project/account mismatch, changed baseline,
    unconfirmed project sharing/blast radius, or stale evidence. Never create a
    duplicate app when a fresh read shows the prerequisite already exists.
+   Require `showDeleted=true` on every Web-app/key list page and exhaustion of
+   all page tokens; cycles, duplicates, foreign projects or partial inventories
+   fail closed. Firebase `apiKeyId` is the API Key UID, not an assumed resource
+   name suffix. Bind the existing key's UID, exact resource/project, independent
+   metadata get, restrictions digest and public key-string fingerprint; never
+   provision a key. Independently bind both required Auth services to the exact
+   project number and ENABLED state. Neither their enablement nor a matching
+   referrer string completes the still-OPEN SDK/key compatibility proof.
 3. An independently reviewed provider adapter must enforce bounded transport
    deadlines and no automatic mutation retries. It must prove either a
    provider-enforced conditional update (CAS against the observed revision) or
@@ -179,8 +207,9 @@ also exclude an already initialized mismatched named app or emulator mode.
    operational proof blocks the live lane. Review pagination, operation identity,
    public SDK retrieval, IAM scope and ancillary effects before accepting A.
    With A and all preconditions true, create one Web app only in that verified
-   existing project, using provider-issued identity. Add the exact bare host
-   `staging.shareittoo.com` once, preserving every pre-existing authorized
+   existing project, using provider-issued identity and the explicitly bound
+   existing `apiKeyId` (no omitted-key auto-selection/provisioning). Add only
+   the exact bare host `staging.shareittoo.com` once, preserving every pre-existing authorized
    domain and unrelated setting. For an API patch, constrain `updateMask` to
    `authorizedDomains` and derive the complete preserved set from immediate
    readback; do not overwrite it from the old capsule. No wildcard, root
@@ -242,13 +271,14 @@ also exclude an already initialized mismatched named app or emulator mode.
    allowlist/consent acceptance are separate evidence stages. Neither source
    tests, public config, A PASS nor a build proves deploy or successful login.
 
-## Historical official-source preparation register — fresh reviewer check required
+## Historical official-source preparation register — preserved, not acceptance
 
-The earlier packet records accesses to all six pages on **2026-10-03**. They
-were **not reopened in this source-only refresh**; the recorded OPENED/status
-dates below are historical observations, not current external verification.
-Their current content, availability and last-update dates remain NOT VERIFIED
-here. No platform/API claim is freshly certified by this update. Gemini must
+The earlier packet records accesses to all six pages on **2026-10-03**. This
+documentation edit performs no new browsing; these rows retain their original
+historical provenance. The later research register below separately records
+the freshly opened sources from the two bounded 2026-10-03 research packages.
+It supersedes overlapping preparation claims only to the extent stated, never
+as provider or Gemini acceptance. Gemini must
 freshly reopen every
 decisive page at send time and register its own access date/status, current
 version/last-update date and supported claim. An older last-update date does
@@ -272,24 +302,73 @@ screenshots as current primary proof. Missing source/access/freshness means
 `NOT VERIFIED` or `STALE`, and prevents A. A disagreement must identify the
 current source that supersedes the older claim.
 
-The six recorded pages do not by themselves prove conditional-update support,
-an all-writer lease, complete pagination, operation lookup or exact SDK-config
-retrieval semantics. The adapter review must freshly open the decisive official
-references for those operations and append their exact URLs, versions, dates
-and supported claims to its answer register. Missing references or unsupported
-concurrency semantics block A; no undocumented API behavior may be assumed.
+The six historical rows alone do not prove complete adapter behavior. The
+fresh read-seam research below establishes specific read schemas, not mutation
+concurrency, complete SDK compatibility, operation execution or live results.
+Missing decisive references or unsupported concurrency semantics still block A.
+
+## Fresh official-source research register — operator-supplied, Gemini must reopen
+
+Issuer for each row: official Firebase or Google Cloud documentation. Every
+direct URL below was OPENED successfully in the two bounded research packages
+on **2026-10-03 Europe/Berlin**; dates are displayed last-update dates in UTC,
+not invented publication dates. Identity Platform pages used the official-page
+Web reader after the research fetcher returned INVALID_ARGUMENT; no API or
+console was called. This register records research access, not an account,
+project, SDK execution or service-enable readback. Gemini must independently
+reopen decisive pages before any answer. A search result is not an opened source.
+
+| ID | Official title and direct URL | Version / displayed update | Class and supported claim |
+|---|---|---|---|
+| R1 | Firebase Management — [projects.webApps.list](https://firebase.google.com/docs/reference/firebase-management/rest/v1beta1/projects.webApps/list) | v1beta1; 2024-10-24 | FACT: showDeleted includes DELETED apps; short-lived page tokens must be exhausted, not persisted; pagination provides a consistent app view. |
+| R2 | Firebase Management — [projects.webApps.get](https://firebase.google.com/docs/reference/firebase-management/rest/v1beta1/projects.webApps/get) | v1beta1; 2024-10-24 | FACT: independent named-app GET and documented OAuth read scopes. |
+| R3 | Firebase Management — [projects.webApps.getConfig](https://firebase.google.com/docs/reference/firebase-management/rest/v1beta1/projects.webApps/getConfig) | v1beta1; 2024-11-01 | FACT: public SDK fields, projectNumber, optional/deprecated fields; apiKey is keyString, not key UID; adapter projects exactly five needed fields. |
+| R4 | Firebase Management — [WebApp resource](https://firebase.google.com/docs/reference/firebase-management/rest/v1beta1/projects.webApps/) | v1beta1; 2024-10-24 | FACT: appId is opaque; apiKeyId is key UID; omitted create key may auto-select/provision; app ETag is scoped to app updates, not Identity Config. |
+| R5 | Google Cloud API Keys — [keys.list](https://docs.cloud.google.com/api-keys/docs/reference/rest/v2/projects.locations.keys/list) | v2; 2025-06-26 | FACT: global project-owned key inventory, pagination, showDeleted covers recent deletions; no keyString; apikeys.keys.list permission. |
+| R6 | Google Cloud API Keys — [keys.get](https://docs.cloud.google.com/api-keys/docs/reference/rest/v2/projects.locations.keys/get) | v2; 2025-06-26 | FACT: exact resource metadata get without keyString; apikeys.keys.get permission. |
+| R7 | Google Cloud API Keys — [keys.getKeyString](https://docs.cloud.google.com/api-keys/docs/reference/rest/v2/projects.locations.keys/getKeyString) | v2; 2025-06-26 | FACT: separately retrieves keyString under apikeys.keys.getKeyString; adapter exposes only its digest outside the public SDK projection. |
+| R8 | Google Cloud API Keys — [keys.lookupKey](https://docs.cloud.google.com/api-keys/docs/reference/rest/v2/keys/lookupKey) | v2; 2025-06-26 | FACT: keyString query resolves parent/name, purged key may have no name; apikeys.keys.lookup required. Not implemented: verified list/get/UID binding avoids sending keyString in a query URL. |
+| R9 | Google Cloud API Keys — [Key / Restrictions / ApiTarget](https://docs.cloud.google.com/api-keys/docs/reference/rest/v2/projects.locations.keys) | v2; 2025-06-26 | FACT: UID differs from resource-name identity; only one client restriction type; service/method matching case-insensitive, empty methods allow all methods, suffix method wildcard. Key ETag does not prove Identity Config CAS. |
+| R10 | Identity Platform — [projects.getConfig](https://docs.cloud.google.com/identity-platform/docs/reference/rest/v2/projects/getConfig) | v2; 2025-05-30 | FACT: project Config GET, firebaseauth.configs.get; identitytoolkit or cloud-platform OAuth scope. |
+| R11 | Identity Platform — [Config](https://docs.cloud.google.com/identity-platform/docs/reference/rest/v2/Config) | v2; 2026-03-09 | FACT: authorizedDomains and separate auth/MFA/client/config fields. OPEN: no authorized-domain concurrency proof follows from this schema. |
+| R12 | Firebase — [IAM permissions](https://firebase.google.com/docs/projects/iam/permissions) | 2026-10-01 | FACT: firebase.clients.get retrieves app details/config; firebase.clients.list lists apps. This is not evidence of granted IAM. |
+| R13 | Google Cloud — [API keys / website restrictions](https://docs.cloud.google.com/docs/authentication/api-keys) | 2026-09-30 | FACT: limited subdomain/path wildcards, port matching, origin-only browser referrers can invalidate page-specific restrictions. No arbitrary JavaScript-regex equivalence is established. |
+| R14 | Google Cloud — [Adding restrictions to API keys](https://docs.cloud.google.com/api-keys/docs/add-restrictions-api-keys) | 2026-09-30 | FACT: domain and domain-path patterns, client/API restrictions and rejection on mismatch. Examples are not a complete popup referrer contract. |
+| R15 | Firebase — [Learn about and manage API keys](https://firebase.google.com/docs/projects/api-keys) | 2026-10-01 | FACT: Authentication maps to Identity Toolkit and Token Service; Firebase Management/Logging are listed for all products. OPEN: no exhaustive pinned-popup SDK method allowlist is supplied. |
+| R16 | Firebase — [Auth REST reference](https://firebase.google.com/docs/reference/rest/auth) | 2026-10-01 | FACT: OAuth credential exchange uses accounts:signInWithIdp; refresh uses securetoken v1/token with the API key. This is not the complete popup/helper request inventory. |
+| R17 | Firebase — [Google sign-in with JavaScript](https://firebase.google.com/docs/auth/web/google-signin) | 2026-10-01 | FACT: popup/provider flow and default Firebase auth-domain redirect mechanism; custom auth-domain setup is a separate change. |
+| R18 | Firebase — [Redirect best practices](https://firebase.google.com/docs/auth/web/redirect-best-practices) | 2026-10-01 | FACT: helper/iframe and storage context, popup alternative; OPEN: no exhaustive API-key referrer set for this pinned app is proven. |
+| R19 | Google Cloud Service Usage — [services.get](https://docs.cloud.google.com/service-usage/docs/reference/rest/v1/services/get) | v1; 2025-11-11 | FACT: exact service configuration/state GET; serviceusage.services.get; cloud-platform.read-only or cloud-platform OAuth scope. |
+| R20 | Google Cloud Service Usage — [services.list](https://docs.cloud.google.com/service-usage/docs/reference/rest/v1/services/list) | v1; 2025-11-11 | FACT: pagination, enabled/disabled filter, maximum page size 200; serviceusage.services.list. Not needed/implemented for the two exact gets. |
+| R21 | Google Cloud Service Usage — [Service / ServiceConfig / State](https://docs.cloud.google.com/service-usage/docs/reference/rest/v1/services) | v1; 2025-11-11 | FACT: name, parent, config and state; ENABLED distinct from DISABLED/UNSPECIFIED; config may be filtered in list but is available through get. |
+| R22 | Google Cloud API Keys — [Troubleshooting](https://docs.cloud.google.com/api-keys/docs/troubleshooting) | 2026-09-30 | FACT: permission-denied guidance; OPEN: this page does not establish popup/referrer compatibility. Broad API Keys Admin is not requested by this packet. |
+
+API Keys read methods R5-R8 document cloud-platform.read-only or cloud-platform
+OAuth scope; Firebase Management read methods R1-R3 also accept Firebase read
+scopes. These are documented possibilities, not granted permissions or a request
+to widen an account's privileges. The opened schemas establish neither an
+Identity Config CAS nor an independently enforceable all-writer lease.
+
+OPEN compatibility evidence: complete origin/referrer behavior of the exact
+pinned SDK popup/helper/token path, complete service/method coverage for any
+existing method-restricted key, and independently bound current restrictions
+and service readbacks. A literal Staging referrer plus two enabled services is
+not sufficient. Changing referrers/services/method restrictions, enabling APIs,
+provisioning keys or changing authDomain is WIDER CHANGE and outside this gate.
+The runner's narrower app-ID format check remains a local fail-closed policy,
+not a claim that the official opaque app-ID contract guarantees that format.
 
 ## Immutable repository source register
 
 Owner/issuer for every row: ShareItToo repository. Version: the exact reviewed
-source predecessor `86cc23ac876ddb3c9b1c5818ac1996b9ce3939ab`, not this packet's
+source predecessor `2fb38dcfa5a34429029def4c881e507d3b63c708`, not this packet's
 future commit or a deployment identity.
 Access: immutable local Git blob on 2026-10-03. Paths are relative
 to the verified root. Hashes are SHA-256 of complete file bytes, not excerpts.
-There are **23 tracked sources**. Rows are a local provenance register; Sol
+There are **25 tracked sources**. Rows are a local provenance register; Sol
 must not describe them as sources Gemini independently opened.
 
-All 23 hashes were recomputed from the exact predecessor Git blobs and matched
+All 25 hashes were recomputed from the exact predecessor Git blobs and matched
 to current source bytes during this refresh. The earlier `75b7e19d` packet
 binding and its earlier d1f target are superseded as current review inputs;
 historical audit
@@ -315,9 +394,11 @@ c822d43a0980846193e948b155133ecc2ad2754bcd80a98d01c8ddb58c6e2b00  backend/src/ap
 7f7db0f5e0e4b3a5adb97306c53ffc8f139c2324692b8493d80ea3b50a50b8a8  backend/test/firebase_social_auth.test.js
 a133153667b63a41e9c8284cd79fc20d2c109e53850e8621a35a555214f01478  backend/test/firebase_service_account.test.js
 35fdedc04694572db461deccb030e474328a6326e96e41153849086511ecb542  test/web_google_auth_test.dart
-71472890295d1fa37f9a3754d439eaf78b2eb7c5e3ad882957d21e92f7789b27  test/tool/staging_web_contract.test.mjs
-e964986ae0a208f5205a6f54ec346fbd7fb9d37f969fef4e81ed7188d972c193  backend/ops/staging_google_web_prerequisites.mjs
-d0f640a4ed633fc5d0cabb07358ce78533574fb03af47dd20b81bd36889d9da2  backend/test/staging_google_web_prerequisites.test.js
+11d28c6deea1bb6ef2a369718cf928b14b699a31fe3315040abd6e098cd938da  test/tool/staging_web_contract.test.mjs
+bbb5574cbc7addc5f25e06cd09e6764b5701db95330ef1e435f7ba56b964169e  backend/ops/staging_google_web_prerequisites.mjs
+7d861be662321f269085a3cc028063b429741ef649c9b6aafd7831db48dabbb8  backend/test/staging_google_web_prerequisites.test.js
+9b90fb2524378938408ef89083aa371d42b2b01c829b0126b2042fb6994fa14c  backend/ops/staging_google_web_read_adapter.mjs
+677178a206aee18c83ca5f62217672becb3981feafdcc74ba248f4456b19000d  backend/test/staging_google_web_read_adapter.test.js
 f81c97f12b1e8d1bdb704a422eb00e1dda9863748c328df6ec447790c71c4191  tool/build_staging_web.mjs
 33378a471d2771a606a8b818aa804fea92ec5175badab81b87fe8dbbbbb9cedb  test/tool/staging_web_google_profile.test.mjs
 1fea32813a3def7c94722ffd42d1ca6200b27b4d22864c98495018c291363395  docs/operations/STAGING_WEB_PILOT.md
@@ -329,6 +410,7 @@ configuration and principal handling; backend config/social/service account/app
 = project binding, token verification and security gates; package/lock = SDK
 version; Web contract/builder/pilot guide = default-off and optional bound
 schema-2 profile; prerequisite runner = source-only transition state machine;
+read adapter = bounded read normalizers and necessary service-enable evidence;
 test rows = historical focused proof and reviewable synthetic cases. No tests
 were executed in this documentation-only refresh. Hashing is not execution.
 
@@ -354,6 +436,7 @@ node --test test/tool/web_google_auth_wiring.test.mjs backend/test/firebase_soci
 
 The implementation package's final runner command was
 `node --test backend/test/staging_google_web_prerequisites.test.js` (59/59).
+This paragraph preserves the earlier runner package, not current schema-2 counts.
 Its retained local log basenames are `sit-google-prerequisite-runner-final.log`,
 `sit-google-prerequisite-backend-final.log` and
 `sit-google-prerequisite-consumers.log`; the coordinator holds their external
@@ -365,6 +448,32 @@ tampered journal shape, permissions/symlink/hardlink/path boundaries, config
 shape/digest and sanitized adapter/cleanup failures. The profile test command
 is `node --test test/tool/staging_web_google_profile.test.mjs`; its compiler
 seam is synthetic, not a Flutter build or provider login.
+
+Current predecessor evidence, retained from the reviewed source packages:
+
+```sh
+node --test backend/test/staging_google_web_read_adapter.test.js backend/test/staging_google_web_prerequisites.test.js
+# 172/172: 75 adapter + 97 runner; injected synthetic responses only.
+pnpm --dir backend test
+# 2,561 total; 2,535 passed, 26 skipped, 0 failed.
+node tool/check_current_consumer_closure.mjs --run-consumers
+# 2,997/2,997; 4 manifests, 194 code consumers, 444 test files, 105 migrations.
+pnpm --dir backend run check
+# PASS; changed-file secret scan, privacy validator and scoped diff also PASS.
+```
+
+Local log basenames: `sit-google-service-enablement-focused.log`,
+`sit-google-service-enablement-backend.log`,
+`sit-google-service-enablement-consumers.log`,
+`sit-google-service-enablement-syntax.log`,
+`sit-google-service-enablement-secrets.log` and
+`sit-google-service-enablement-privacy.log`; external locations remain with Sol.
+No provider state, IAM grant, full compatibility, concurrent-writer exclusion,
+real compilation or login is established. The earlier schema-2 handoff cluster
+also passed 264/264 (`sit-google-web-handoff-cluster.log`): sealed synthetic
+artifact, archive/system-tar extraction, existing-route v1-to-v2 fixture,
+identity mismatch and rollback pointer/readback distinction. It used no live
+gateway; automatic pointer restoration is not a verified served rollback.
 
 ## Required Gemini answer and handoff
 
