@@ -8,7 +8,9 @@ accepted Gemini decision in this package. Preparation date: 2026-10-03.
 - Project: ShareItToo/SIT; repository
   `ShareItToo/ShareItToo-Dreamflow`. All source paths below are relative.
 - Branch: `codex/master-workflow-20260808`; product/source HEAD:
-  `d1f12132b0be20878cff1d69fea7264c25ca0995`, copied from `git rev-parse HEAD`.
+  `75b7e19dba55579a2b1a8df0e6746e61b5c57874`, independently matched by
+  `git rev-parse HEAD`, the upstream ref and `git ls-remote --heads origin
+  codex/master-workflow-20260808` during this 2026-10-03 refresh.
 - Scope: prepare one access/security decision about exactly one Firebase Web
   app in the existing Staging-runtime Firebase project, plus addition of only
   `staging.shareittoo.com` to its existing authorized-domain set, followed by
@@ -17,11 +19,15 @@ accepted Gemini decision in this package. Preparation date: 2026-10-03.
   the current task instruction. Do not ask for permission again after exact
   account, mode, source and provider preflight and an accepted A decision.
   The preparation worker itself has no authority to send or mutate anything.
-- Current capsule, source-bound excerpts and hashes below are the technical
+- The source-bound excerpts, focused checks and hashes below are the technical
   handoff. Gemini is not assumed to have access to local files, private GitHub,
   provider consoles, runtime, credentials or prior conversations. Sol supplies
   the verified technical capsule; Gemini freshly opens official platform
   sources. Missing local access is not cured by pretending a path was opened.
+- The mutable phase capsule is excluded from the current source register and
+  was not read for this refresh. Neither its earlier provider/runtime reports
+  nor earlier UI observations establish today's account, project, domain,
+  Web-app inventory, deployment or emulator state.
 
 Excluded: app/build flag activation, deployment or build, real login/token test,
 Apple/Facebook, Production, Google Play, payment, API/runtime changes, account
@@ -49,8 +55,10 @@ Before sending, the coordinator must verify the visible correct SIT Google AI
 Pro account/thread and the selector **Pro** with **Extended**, immediately
 before submission. Signed-out state, Flash/Flash-Lite, another mode, or a Pro
 quota block means no send and no accepted answer; preserve the packet and wait.
-The capsule's earlier signed-out/Flash-Lite observation is historical, not a
-current UI assertion. No Gemini login or UI access was performed to prepare it.
+Earlier signed-out/Flash-Lite reports are historical, not a current UI
+assertion. No Gemini login, browser access or provider request was performed
+in this refresh. Existing user authorization remains intact; successful
+preflight and the accepted A decision do not require another permission ask.
 
 ## Evidence classes and decisive technical facts
 
@@ -59,14 +67,14 @@ repository document reports is not a verified fact about a current provider.
 
 | Class | Claim and decisive source | Limit |
 |---|---|---|
-| FACT — repository report | Capsule lines 110–125 record a fresh read-only Firebase Management/Identity Toolkit check: zero Web apps, staging domain missing, Google provider enabled with client configuration present, backend auth enabled, service-account/runtime/native projects matching and no emulator. | Historical report only. Raw provider evidence and its current locator were not supplied or independently reopened in this package; current live status is NOT VERIFIED. |
+| OPEN — live prerequisite baseline | Zero Web apps, staging domain missing, Google provider/client configuration present, backend auth enabled, matching runtime/service-account/native project and no emulator are required baseline checks for the proposed two-change plan. | None was queried in this refresh. All are NOT VERIFIED until the immediate independent read-only provider/runtime preflight with protected evidence; earlier capsule claims are not current proof. |
 | FACT — source | `backend/src/config.js` derives `firebaseProjectId` from `FIREBASE_PROJECT_ID`, supplies it to `socialAuth`; `firebase_social_auth.js` validates the service account against it and initializes the named auth app with the same project. `firebase_service_account.js` rejects another project. | Proves configured binding logic; does not reveal or verify today's project ID or running environment. |
 | FACT — source/SDK | `verifyFirebaseSocialToken` uses `auth.verifyIdToken(token, true)` outside its explicit injected test seam. Locked and locally installed `firebase-admin` is 14.2.0; its token verifier checks exact `aud === projectId` and `iss === 'https://securetoken.google.com/' + projectId`. | Injected unit verification is not a real signed-token/audience/issuer test. Live dependency bytes and emulator absence require runtime readback. |
 | FACT — source | `WebGooglePublicConfig.isBound` requires Web-app/sender/project shape, matching backend project, default project Firebase auth domain, exact Staging origin and an approved public-config SHA-256; `optionsFor` additionally requires Google/backend flags and exact Staging API URL. | Hashing guessed configuration is not approval or provider evidence. No real project ID, app ID, client ID or key is supplied here. |
 | FACT — source | `auth_service.dart` permits only Google on Web when ready; uses `signInWithPopup`, account selection and a fresh ID token, then the existing principal-bound remote transaction and `/auth/social` exchange. Web initialization uses memory persistence. | Existing wiring is dormant source; source readiness does not prove a provider client exists or login works. |
 | FACT — source | `tool/staging_web_contract.mjs` pins Google, Apple, Facebook and provider-activation validation flags to false. `backend/src/app.js` retains account-active/consent, Staging access/allowlist, MFA-challenge and session issuance paths. | No flag, allowlist, account, session or MFA policy may change in this package. |
-| FACT — focused check | On 2026-10-03, exact-source Web wiring 3/3, social-token unit 6/6 and service-account validation 5/5 passed (14 total, zero failures/skips). | Synthetic/local tests only. The capsule's earlier 9/9 is separate provenance, not a newly performed provider test. |
-| INFERENCE | Given a fresh reproduction of the capsule's provider state, one Web-app registration and one authorized-domain addition are the smallest currently identified missing provider prerequisites. | Not an assertion that all subsequent Web login prerequisites are satisfied. |
+| FACT — focused check | During this 2026-10-03 refresh, exact-source Web wiring 3/3, social-token unit 6/6 and service-account validation 5/5 passed again (14 total, zero failures/skips, exit 0). | Synthetic/local tests only; no signed live token, provider read or login was performed. |
+| INFERENCE | If the fresh independent baseline proves every stated prerequisite, one Web-app registration and one authorized-domain addition are the smallest missing provider prerequisites identified by this plan. | The baseline and sufficiency for later login remain unverified; do not infer either from source tests. |
 | PROPOSAL | Execute only the two changes after A and preserved preflight, then stop after independent sanitized readback. | No mutation happened during packet preparation. |
 | OPEN | Fresh account/project/runtime identity, Web-app/domain/provider state, emulator absence, provider behavior/side effects, OAuth consent status and actual login outcome. | Never invent values or convert these into facts from memory, snippets or an AI answer. OAuth consent/login remain outside this package. |
 
@@ -101,9 +109,9 @@ also exclude an already initialized mismatched named app or emulator mode.
    and visible Gemini account/mode. If HEAD or any decisive source differs,
    rebind/review the successor before sending; do not silently use this packet
    as current. Keep deployed Web, API runtime and repository HEAD identities
-   separate. The capsule reports Web `967958f6c6a4d580f4f05e6849b32991db233603`
-   and API `6c0ef70db2656df3e378add858d5f5157388127e`; neither is freshly
-   verified here.
+   separate. No current deployed Web/API identity is established by this
+   source refresh; obtain those identities in the immediate read-only preflight
+   instead of carrying forward historical capsule values.
 2. Before accepting A, obtain a current sanitized operator fact capsule with
    read time and protected evidence locator. Before mutation, repeat the
    identity and mutable-state check: correct authorized provider account;
@@ -132,6 +140,12 @@ also exclude an already initialized mismatched named app or emulator mode.
    `{staging.shareittoo.com}`. Verify no existing domain removal and unchanged
    Google client/provider configuration, other providers, MFA/access policy,
    app flags, runtime and deployment. Unexpected ancillary changes fail closed.
+   An uncertain domain update is reconciled by read-only lookup too; never
+   blindly replay a patch or reconstruct its preserved set from stale data.
+   If either mutation's final state remains ambiguous, report partial/unknown
+   completion and stop the mutating lane, preserving the original operation
+   identity privately. Do not undo a confirmed create or widen scope to force
+   a successful readback.
 6. Report only whitelisted booleans/counts, exact added hostname, timestamps,
    source/evidence hashes and private evidence locators. No tokens, cookies,
    account identifiers, client IDs/secrets, service-account values, OAuth codes,
@@ -142,10 +156,14 @@ also exclude an already initialized mismatched named app or emulator mode.
    a reviewed external public configuration/digest, login/cancel/logout and
    subsequent account/session/MFA acceptance are separate bounded work.
 
-## Official primary-source register
+## Historical official-source preparation register — fresh reviewer check required
 
-All six pages below were opened during preparation on **2026-10-03**. This
-records preparation access, not Gemini access. Gemini must freshly reopen every
+The earlier packet records accesses to all six pages on **2026-10-03**. They
+were **not reopened in this source-only refresh**; the recorded OPENED/status
+dates below are historical observations, not current external verification.
+Their current content, availability and last-update dates remain NOT VERIFIED
+here. No platform/API claim is freshly certified by this update. Gemini must
+freshly reopen every
 decisive page at send time and register its own access date/status, current
 version/last-update date and supported claim. An older last-update date does
 not itself make a freshly opened authoritative API reference obsolete; resolve
@@ -173,21 +191,19 @@ current source that supersedes the older claim.
 Owner/issuer for every row: ShareItToo repository. Version: exact HEAD above.
 Access: immutable local Git blob on 2026-10-03. Paths are relative
 to the verified root. Hashes are SHA-256 of complete file bytes, not excerpts.
-There are **19 tracked sources**. Rows are a local provenance register; Sol
+There are **18 tracked sources**. Rows are a local provenance register; Sol
 must not describe them as sources Gemini independently opened.
 
-Concurrent-worktree note: after initial capture, an independent package added
-an acceptance-outcome fixture rule to `AGENTS.md`. Its dirty bytes are outside
-this packet's source target and are not substituted for the recorded Git blob.
-The rule was read; it does not expand this provider package. Other concurrent
-Mission files are likewise excluded. Before send, Sol must review the final
-accepted successor HEAD and rebind this packet if its source target changes;
-the present register remains immutable d1f provenance, not a clean-tree claim.
+All 18 hashes were recomputed from the exact target commit and matched to
+current source bytes during this refresh. The previous d1f target and its
+concurrent-worktree note are superseded for this packet; historical audit
+records are not rewritten. The phase capsule is deliberately not an input.
+Before send, review any accepted successor and rebind if decisive bytes change;
+this register remains exact-source evidence, not a clean-tree or runtime claim.
 
 ```text
-1049df34c0a93cbac3b56b2021e368c7ba2838d4f74505d2a3e86a515c49dcbd  AGENTS.md
+124729bf8cf1a12eca02f769e3090fa13ba2f7fe17a6b859510795e4ecb028da  AGENTS.md
 685fb3387eb9c4a27a64faf2d397071f2f37abfe007e9dc000ade852d4a57bfa  docs/operations/SIT_CODEX_CONTEXT_CREDIT_EFFICIENCY_RULES_V1.md
-0c9b844842a2f32d41d762f93963e400f1521d85bc724a0fd0fa64d3b44ca6d0  docs/operations/SIT_PILOT_PHASE_CAPSULE_2026-09-23.md
 8b0117bd73268817e404eac265485a57549942145a3d12e16ea800bc167a40ea  lib/services/web_google_auth.dart
 f9d7c4cd29512d0e22dbe867260341537f3dff564e8fad6fe629d24bdbf230d5  lib/services/firebase_runtime.dart
 e2d8cb65e3d0fee369694165733c74e3b86fbf53b4b2091665488d1866a37922  lib/services/auth_service.dart
@@ -197,25 +213,28 @@ b2a29054cdfc65e77c981d1d02c3a0af5f1b8c2a08cc536c58847d5f4c80f515  backend/src/co
 5756f6ce32390c841336c3082d03f04bb73ec9f606bfda7a02fc6e26c82badc6  backend/src/firebase_service_account.js
 ac867635b2d02c992347416a0ba3f1f2b681b5902963728c99f89457703863e2  backend/src/app.js
 2c5fbdceda06da27acdd977cef4458e7a2629775a87b65a7c16f452617e08b3c  backend/package.json
-f41350e5684d8dad431221f9e7d046609fddd279ac271b8574f4ff195575ad9c  backend/pnpm-lock.yaml
+0a757fc74c04c83889b21a0969b498406cffde26eefdd7f9b4c75d08574f3982  backend/pnpm-lock.yaml
 6e936b68a9c691a07e06e757869fd5599668fbdb051859887313d65ae492cd7a  tool/staging_web_contract.mjs
 2b097d89aaa23253e578af1da1d7c77e899613f7f9faec0c35a6690e6b58eedd  test/tool/web_google_auth_wiring.test.mjs
 7f7db0f5e0e4b3a5adb97306c53ffc8f139c2324692b8493d80ea3b50a50b8a8  backend/test/firebase_social_auth.test.js
 a133153667b63a41e9c8284cd79fc20d2c109e53850e8621a35a555214f01478  backend/test/firebase_service_account.test.js
 986abc9768dde27812a56e5b21672c2665cb8f960800cecf5ca685259a73c736  test/web_google_auth_test.dart
-9280ab9d3196818a1dce91bdf9b93ef9489ae21962bb11018039a9bf419542e3  test/tool/staging_web_contract.test.mjs
+71472890295d1fa37f9a3754d439eaf78b2eb7c5e3ad882957d21e92f7789b27  test/tool/staging_web_contract.test.mjs
 ```
 
 Claim mapping: AGENTS/efficiency policy = authority and evidence routing;
-capsule = historical provider/runtime report; Web/runtime/auth/transaction =
+Web/runtime/auth/transaction =
 configuration and principal handling; backend config/social/service account/app
 = project binding, token verification and security gates; package/lock = SDK
 version; Web contract = inactive flags; test rows = focused proof and additional
-reviewable synthetic cases. Dart and profile test files were inspected, not
-executed in this documentation-only package.
+reviewable synthetic cases. Dart and profile test files are hash-bound, not
+executed in this documentation-only refresh. The three executed test files
+and exact command below define the 14-test evidence; inspection/hashing of
+the other tests does not count as their execution.
 
-The following **three installed dependency snapshots**, inspected locally on
-2026-10-03, are separate from Git source and live-runtime evidence. Issuer:
+The following **three installed dependency snapshots**, rechecked locally on
+2026-10-03 with unchanged SHA-256 values, are separate from Git source and
+live-runtime evidence. Issuer:
 Firebase Admin SDK; installed version 14.2.0 matches the manifest/lock. They
 explain SDK audience/issuer enforcement and the emulator-sensitive call path;
 they do not prove deployment integrity.
