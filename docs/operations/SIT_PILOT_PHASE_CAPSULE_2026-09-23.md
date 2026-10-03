@@ -12,8 +12,9 @@ not current execution or release authority.
   Google-Web activation prerequisite diagnosis is closed and awaits only its
   named Gemini gate. Independently, the dormant P7-A1 synthetic Quorum source
   package, its isolated P7-A2a Web-test presentation and the local-only P7-A2b
-  browser vertical-slice runner are Sol-reviewed. Real Mission matching/data
-  activation remains gated.
+  browser vertical-slice runner are closed as the synthetic P7 source/VERIFY
+  phase at exact `08636b6c`. The dormant D4 threat/abort contract is also
+  Sol-reviewed; real Mission matching/data activation remains gated.
 - **Authoritative sources:** [Mission masterplan](../product/SIT_MISSION_MASTERPLAN_2026-09-30.md),
   [Web contract](STAGING_WEB_PILOT.md), [Web/native matrix](SIT_WEB_NATIVE_CAPABILITY_MATRIX_2026-10-02.md),
   [P6-C2 boundary](SIT_MISSION_P6C2_OWNER_API_2026-10-02.md) and
@@ -208,15 +209,49 @@ not current execution or release authority.
   root were independently absent. No product, Staging, Play or deployment file
   changed. This proves the isolated P7 VERIFY vertical slice only; D1-D4 remain
   open and no real Mission, provider or payment was activated.
+- **P7-A2b exact-head CI and bounded P7 closure — PASS:** Regression
+  [37079218795](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37079218795)
+  completed successfully at exact
+  `08636b6ce5cd1011fb3faf8458e5ae4daae0d460`; backend, PostgreSQL-16,
+  Flutter/Android and clean-checkout reproducibility jobs all passed, while
+  publishing was correctly skipped. CodeQL
+  [37079218881](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37079218881)
+  also passed at the same head. The requirement-to-evidence closure found the
+  P7 objective, acceptance, exclusions and VERIFY clauses proven for the
+  explicitly synthetic, non-binding and unrouteable scope: complete slots,
+  separate owners/components, honest partial/timeout/replay/concurrency states,
+  component-level pickup/return/dispute, isolated PostgreSQL error matrix,
+  accessible 4+4/QR/six-digit Web slice and exact cleanup. This is not Staging,
+  real-data, contract, provider, payment or pilot-release evidence. D1-D4 stay
+  open.
+- **D4 dormant threat/abort contract — Sol source PASS:**
+  `mission_supply_safety_v1` is a pure, import-free and unrouteable recheck for
+  one already released, request-bound demand. It binds the server-supplied
+  requester/recipient, Mission and resolution revisions/digests/slot,
+  participation and Shelf item revisions, demand/release state, expiry,
+  bilateral-block result, rate-limit result and opaque support context. Missing,
+  stale, mismatched, withdrawn, unconfirmed, duplicate, conflicting, blocked,
+  rate-limited, revoked or expired evidence aborts in deterministic order.
+  Even the positive internal result remains `non_binding`; the only public-safe
+  shape is always `unavailable` and contains no identifiers, private media,
+  location or reason details. The focused suite passed 191/191; syntax, diff,
+  secret and no-consumer checks passed. The contract has no clock, randomness,
+  storage, network, resolver, route, job, flag or provider use. It does not
+  authenticate the origin/common snapshot of supplied verdicts and introduces
+  no thresholds, retention period, legal basis, selection, contact, reservation,
+  contract or payment. D3/D4 therefore remain open pending a fresh-source gate
+  and any required professional review.
 - **Exact next:** when the visible SIT Gemini account is signed in, verify
   exactly Google AI Pro `Pro` with `Extended` and submit only gate
   `SIT-GOOGLE-WEB-PREREQ-01`; on PASS, execute the bounded Web-app/domain
   provider package and independently read it back before any flag activation.
-  Independently, commit and push the reviewed P7-A2b runner, then accept only
-  automatic Regression and CodeQL success on its exact successor head. Next,
-  perform the bounded P7 closure audit against the masterplan and current
-  source/runtime evidence; do not deploy or wire P7. D1/D2/D3/D4 stay open,
-  and a blocked provider lane must not stop the independent source/CI package.
+  Independently, commit and push the reviewed unrouteable
+  `D4-SOURCE-THREAT-ABORT-CONTRACT`, then accept only automatic Regression and
+  CodeQL success on its exact successor head. Afterward prepare and submit the
+  current bounded D3/D4 contract to a fresh-source privacy/legal gate; never
+  invent retention terms or treat the older FIX as approval. D1/D2/D3/D4 stay
+  open, and a blocked provider lane must not stop the independent source/CI
+  package.
   No Production/Play change or pilot-complete claim follows from this sequence.
 
 ## Historical snapshots — retained evidence, superseded execution state
