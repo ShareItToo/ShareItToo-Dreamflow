@@ -1,10 +1,11 @@
 # Gemini gate packet — Mission D1/D2 dormant PG provenance reader
 
 Gate ID: `SIT-MISSION-D1D2-PG-READBACK-01`.
-Prepared 2026-10-03; **NOT SENT; no Gemini answer or approval exists here**.
+Refreshed 2026-10-03 under `REFRESH-GEMINI-MISSION-D1D2-PG-READBACK-02`;
+**NOT SENT; no Gemini answer or approval exists here**.
 Project: ShareItToo, repository root `.`, branch
 `codex/master-workflow-20260808`. Only target source:
-`0bc84d47cffc9fe6a04a540b04e2f6d81e11c481`.
+`0498b03282e6d2e9f269f1e942ba30e778d382ff`.
 D1/D2/D3/D4 remain **OPEN**.
 
 ## Sending boundary — operator instructions, not authorization to send now
@@ -24,12 +25,14 @@ Do not rename/modify source bytes or weaken those guards to attach the packet.
 
 Before sending: recheck the target commit, all hashes, visible mode and attachment
 availability; reopen O1–O3 and record actual access date. If the target moves,
-do not silently use another HEAD: scope and rebind a successor packet. The packet
-itself is not part of target HEAD and has no self-referential hash. Record its
-actual delivered-byte hash separately in the later gate receipt. Record exact
+do not silently use another HEAD: scope and rebind a successor packet. The target
+contains this packet's older revision; the refreshed delivery is separate from
+the target source register and has no self-referential hash. Record its actual
+delivered-byte hash separately in the later gate receipt. Record exact
 question/answer bytes and received attachments; no claim of local filesystem
-access by Gemini. The current capsule's older source-head line is historical
-relative to this target, not permission to substitute it.
+access by Gemini. R02 means only the capsule blob at the pinned target commit;
+its checkpoint/source-head lines are historical, not permission to substitute
+another source or an uncommitted capsule revision.
 
 ## Exact question to Gemini — choose A, B or C
 
@@ -91,6 +94,23 @@ not authenticated database provenance. Its supported positive fixture outcomes
 are **not** permission to emit positive outcomes from the proposed reader.
 Reported focused counts 43/43 and 76/76 are package evidence only, not fresh PG,
 server-origin, real-user or provider proof.
+
+**Version and history boundary:** V2-S/V2-T and every mention of readback v2
+here refer only to the D1/D2 synthetic server-readback envelope defined in R09,
+which is input to planning the proposed PostgreSQL reader. That envelope does
+not itself query PostgreSQL. The separate Quorum/display V2 and its browser
+proof are not this contract or the proposed reader; no browser or CI success
+establishes a persisted Mission-slot association, database provenance, effects,
+legal validity or permission for a positive-effect adapter. This gate continues
+to use R11/R12 as its existing PG-source reference; it does not replace that
+reader with a synthetic display fixture.
+
+R03 retains its original inspection heads and source-map history unchanged.
+Its earlier instruction to first specify a versioned phase/identity envelope
+has been fulfilled by the already existing R07–R09 source contract. Those
+historical next-step words are not a request to rebuild v2. The missing real
+association and server-origin/common-snapshot proof remain OPEN; this packet's
+bounded reader question is the successor question.
 
 **REPOSITORY FACT — actors/lifecycle:** R15:842–863,953–1003 creates a renter
 Booking/request and can persist a Platform-Contract while Booking is requested.
@@ -166,8 +186,12 @@ Any proposal claiming those stronger results must be FIX/BLOCK.
 
 ## Fresh official primary-source register
 
-Access date for O1–O3: **2026-10-03**, direct page opened successfully. No secondary
-sources or snippets were relied on. All three pages omit a page-specific
+Refresh access for O1–O3: **2026-10-03, 11:31 UTC**, all three direct pages freshly
+opened successfully during this refresh; decisive sections were read again.
+This is preparation access, not a claim that Gemini has opened them. The
+rechecked passages support the same bounded propositions below; no contradictory
+superseding text was found in those passages. No secondary sources or snippets
+were relied on. All three pages omit a page-specific
 publication/revision date; access time is not publication time. PostgreSQL's
 site news banner is not the manual section's document date. Version 16 is selected
 because this package's existing PG proof targets PG16, not because it is the
@@ -186,16 +210,17 @@ actual access result and do not support A with stale recollection.
 
 ## Exact repository source register
 
-All 29 entries were read from the exact target Git commit and compared byte-for-
-byte with the local checkout on 2026-10-03. Authority is the target repository,
-not public web availability. The reviewer must receive/read the exact bytes;
+All 29 hashes were recomputed from complete blobs at the exact target Git commit
+on 2026-10-03. R02 is taken only from that committed blob; no local capsule bytes
+are used as evidence. Authority is the target repository, not public web
+availability. The reviewer must receive/read the exact registered bytes;
 private repository access is not assumed. R06/R09 uniquely resolve their two
 source/test locator aliases. SHA-256 binds whole file bytes, not excerpts.
 
 | ID | Repository-relative locator | SHA-256 |
 | --- | --- | --- |
 | R01 | `AGENTS.md` | `124729bf8cf1a12eca02f769e3090fa13ba2f7fe17a6b859510795e4ecb028da` |
-| R02 | `docs/operations/SIT_PILOT_PHASE_CAPSULE_2026-09-23.md` | `17377ad10af3d05ce338a048a711832503426733dd63254e5d47fa30ffd6f265` |
+| R02 | `docs/operations/SIT_PILOT_PHASE_CAPSULE_2026-09-23.md` | `63e58ce5b2d95d63decbbc996afeddc648f5960b0a20579fb1cc45a18d46dff6` |
 | R03 | `docs/operations/SIT_MISSION_D1_D2_PG_ADAPTER_SOURCE_MAP_2026-10-03.md` | `e300e4c6a5ec5a699050f642d07b5382f5a9ec66f6c2272905de1127534db597` |
 | R04 | V1-S (source locator in R06) | `2cd7b94d9f32b082007a5e0d222ccb9b94b998fa6a565a97ee5175435ae4ce19` |
 | R05 | V1-T (test locator in R06) | `d632d1b2d9bfae573fcde93cea7cd56275eb60f9ffe4e253bb5a2d7e66373fde` |
@@ -241,5 +266,8 @@ Return exactly:
 `OPEN: D1/D2/D3/D4; no effect/legal/payment/retry/activation approval`.
 
 A reasoned B/C is preferable to a PASS supported by NOT VERIFIED material.
-No implementation, gate send, DB access, test execution, provider action,
-commit/push or deployment is part of preparing this packet.
+This documentation refresh checks source hashes, source/link locators, secrets,
+diffs and the two focused source-consumer boundaries. It performs no reader
+implementation, gate send, DB access, full regression, browser/provider action,
+commit/push or deployment. Earlier 43/43 and 76/76 package results remain
+historical evidence; the focused boundary checks do not repeat those suites.
