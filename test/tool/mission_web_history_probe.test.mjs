@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { validateSdkState, validateHistoryMatrix, artifactDigest, buildArguments,
   validateArtifact, classifyAsset, contract } from '../support/mission_web_history_build.mjs';
@@ -209,10 +211,30 @@ test('source selector accepts only exact event-specific 40hex heads without merg
   const block = workflow.match(/      - name: Validate exact source\n([\s\S]*?)      - uses: actions\/checkout/mu)?.[1];
   assert.ok(block);
   const script = block.split('        run: |\n')[1].split('\n').map(line => line.startsWith('          ') ? line.slice(10) : line).join('\n');
-  const run = (event, dispatch, pr) => execFileSync('/bin/bash', ['-e', '-u', '-o', 'pipefail', '-c', script], {
-    env: { EVENT_NAME: event, DISPATCH_SOURCE: dispatch, PR_HEAD: pr, GITHUB_OUTPUT: '/dev/stdout' },
-    encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 1000,
-  });
+  const run = (event, dispatch, pr) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'sit-history-file-command-'));
+    try {
+      fs.chmodSync(directory, 0o700);
+      const output = path.join(directory, 'github-output');
+      fs.writeFileSync(output, '', { flag: 'wx', mode: 0o600 });
+      assert.equal(fs.lstatSync(output).isFile(), true);
+      let stdout;
+      try {
+        stdout = execFileSync('/bin/bash', ['-e', '-u', '-o', 'pipefail', '-c', script], {
+          env: { EVENT_NAME: event, DISPATCH_SOURCE: dispatch, PR_HEAD: pr, GITHUB_OUTPUT: output },
+          encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 1000,
+        });
+      } catch (error) {
+        assert.equal(fs.readFileSync(output, 'utf8'), '');
+        throw error;
+      }
+      assert.equal(stdout, '');
+      return fs.readFileSync(output, 'utf8');
+    } finally {
+      fs.rmSync(directory, { recursive: true });
+      assert.equal(fs.existsSync(directory), false);
+    }
+  };
   assert.equal(run('pull_request', 'b'.repeat(40), head), `head=${head}\n`);
   assert.equal(run('workflow_dispatch', head, 'b'.repeat(40)), `head=${head}\n`);
   for (const values of [['push', head, head], ['pull_request_target', head, head],
