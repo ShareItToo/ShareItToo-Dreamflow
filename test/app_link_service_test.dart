@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lendify/services/app_link_service.dart';
 import 'package:lendify/services/auth_service.dart';
 import 'package:lendify/services/mission_web_location.dart';
+import 'package:lendify/services/web_path_strategy_stub.dart' as native_paths;
 
 class _FakePrincipalOwner implements AppLinkPrincipalOwner {
   @override
@@ -29,6 +30,107 @@ class _FakePrincipalOwner implements AppLinkPrincipalOwner {
 AppLinkTarget target(String raw) => AppLinkParser.parse(Uri.parse(raw))!;
 
 void main() {
+  test(
+      'early capture precedes path configuration and keeps only accepted targets',
+      () {
+    for (final host in [
+      'shareittoo.com',
+      'www.shareittoo.com',
+      'staging.shareittoo.com'
+    ]) {
+      final events = <String>[];
+      final snapshot = InitialWebAppLinkCapture.capture(
+        readLocation: () {
+          events.add('read');
+          return classifyMissionWebLocation(
+              browserSerializedHref: 'https://$host/mission');
+        },
+        readLegacyUri: () =>
+            throw StateError('must not normalize accepted Mission'),
+        configurePaths: () => events.add('configure'),
+      );
+      expect(events, ['read', 'configure']);
+      expect(snapshot.target?.uri.toString(), 'https://$host/mission');
+      expect(snapshot.target?.uri.path, '/mission');
+      expect(snapshot.target?.uri.hasFragment, false);
+      expect(snapshot.multiEntryHistoryVerified, false);
+    }
+  });
+  test(
+      'early rejection cannot be revived by path rewrites or normalized fallback',
+      () {
+    for (final raw in [
+      'https://shareittoo.com/#/mission',
+      'https://shareittoo.com/mission#/mission',
+      'https://shareittoo.com/mission#',
+      'https://shareittoo.com/mission?',
+      'https://shareittoo.com/%6dission',
+      'https://shareittoo.com/Mission',
+      'https://shareittoo.com:443/mission',
+      'https://user@shareittoo.com/mission',
+      'https://foreign.invalid/mission',
+      'https://shareittoo.com/a/../mission',
+    ]) {
+      var current = raw;
+      final snapshot = InitialWebAppLinkCapture.capture(
+        readLocation: () =>
+            classifyMissionWebLocation(browserSerializedHref: current),
+        readLegacyUri: () => Uri.parse(current),
+        configurePaths: () => current = 'https://shareittoo.com/mission',
+      );
+      expect(snapshot.target, null);
+      expect(snapshot.toString(), isNot(contains(raw)));
+      expect(snapshot.multiEntryHistoryVerified, false);
+    }
+  });
+  test('legacy capture precedes rewrite; native strategy is a no-op', () {
+    final events = <String>[];
+    final snapshot = InitialWebAppLinkCapture.capture(
+      readLocation: () {
+        events.add('read');
+        throw StateError('private');
+      },
+      readLegacyUri: () {
+        events.add('legacy');
+        return Uri.parse('https://shareittoo.com/listing/synthetic');
+      },
+      configurePaths: () => events.add('configure'),
+    );
+    expect(events, ['read', 'legacy', 'configure']);
+    expect(snapshot.target?.kind, AppLinkKind.listing);
+    expect(native_paths.configureCleanWebPaths, returnsNormally);
+    expect(prepareInitialWebAppLinks, returnsNormally);
+  });
+  testWidgets(
+      'captured cold ingress survives later rewrite and retains owner isolation',
+      (tester) async {
+    final snapshot = InitialWebAppLinkCapture.capture(
+      readLocation: () => classifyMissionWebLocation(
+          browserSerializedHref: 'https://shareittoo.com/mission'),
+      readLegacyUri: () => throw StateError('must not read'),
+      configurePaths: () {},
+    );
+    for (final stale in [false, true]) {
+      final owner = _FakePrincipalOwner(principalToken: 'synthetic', epoch: 1);
+      final pendingOwner = Completer<AppLinkPrincipalOwner>();
+      final controller = AppLinkController(
+          initialIsWeb: true,
+          initialWebCapture: snapshot,
+          readInitialBrowserLocation: () =>
+              throw StateError('late browser read forbidden'),
+          readInitialWebUri: () =>
+              throw StateError('late normalized read forbidden'),
+          capturePrincipalOwner: () => pendingOwner.future);
+      controller.initialize();
+      controller.initialize();
+      owner.current = !stale;
+      pendingOwner.complete(owner);
+      await tester.pump();
+      expect(controller.takePending()?.target.kind,
+          stale ? null : AppLinkKind.missionWebEntry);
+      controller.dispose();
+    }
+  });
   testWidgets(
       'initial target is dropped after an epoch change during owner readback',
       (tester) async {

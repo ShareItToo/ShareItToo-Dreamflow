@@ -9,7 +9,7 @@
     },
     {
       "path": "lib/main.dart",
-      "sha256": "742decf959322614dcc7adf05aa2102cebcaf43ea604cdcbd8e67c4f69b6a1c9"
+      "sha256": "1969c1b2cf0d156230709a3e1d44058233d04b1acd54304ed1ef63cb6b1f4cf5"
     },
     {
       "path": "lib/screens/privacy_info_screen.dart",
@@ -809,7 +809,7 @@
     },
     {
       "path": "lib/services/app_link_service.dart",
-      "sha256": "0668ceeba1468e36f226d11c5f6ed41e3d32cbf57483e65f8bfeb560dad1f5f7"
+      "sha256": "0e7819191d40d294809c9ad4dcfe12c3119319bf96a8c246741aad59d5c0d79c"
     },
     {
       "path": "lib/screens/app_link_destination_screen.dart",

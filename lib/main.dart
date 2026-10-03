@@ -29,6 +29,7 @@ final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
+  prepareInitialWebAppLinks();
   // Initialize bindings once in the same zone as runApp to avoid zone mismatch warnings.
   WidgetsFlutterBinding.ensureInitialized();
   ReleaseIdentity.validateCurrentBuild();

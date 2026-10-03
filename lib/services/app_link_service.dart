@@ -8,6 +8,8 @@ import 'backend_config.dart';
 import 'firebase_runtime.dart';
 import 'local_principal_scope.dart';
 import 'mission_web_location.dart';
+import 'web_path_strategy_stub.dart'
+    if (dart.library.html) 'web_path_strategy_web.dart' as web_paths;
 
 enum AppLinkKind {
   missionWebEntry,
@@ -28,6 +30,70 @@ class AppLinkTarget {
   final Uri uri;
 
   const AppLinkTarget({required this.kind, required this.uri, this.id});
+}
+
+/// Only accepted targets survive startup. Rejected browser hrefs are never kept.
+/// This is path-serialization preparation, not MultiEntry/history evidence.
+final class InitialWebAppLinkCapture {
+  final AppLinkTarget? target;
+  const InitialWebAppLinkCapture._(this.target);
+
+  bool get multiEntryHistoryVerified => false;
+
+  static InitialWebAppLinkCapture capture({
+    required MissionWebLocation Function() readLocation,
+    required Uri Function() readLegacyUri,
+    required void Function() configurePaths,
+  }) {
+    var location = MissionWebLocation.unavailable;
+    try {
+      location = readLocation();
+    } catch (_) {
+      // No rejected URL or reader error is retained or reported.
+    }
+    final host = switch (location.host) {
+      MissionWebLocationHost.primary => 'shareittoo.com',
+      MissionWebLocationHost.www => 'www.shareittoo.com',
+      MissionWebLocationHost.staging => 'staging.shareittoo.com',
+      null => null,
+    };
+    AppLinkTarget? target;
+    if (host != null) {
+      target = AppLinkTarget(
+          kind: AppLinkKind.missionWebEntry, uri: Uri.https(host, '/mission'));
+    } else {
+      try {
+        // The legacy parser has no Mission case, even after normalization.
+        target = AppLinkParser.parse(readLegacyUri());
+      } catch (_) {
+        // A missing legacy read is unavailable, never a synthetic Mission.
+      }
+    }
+    // Deliberately after both reads, before Flutter may rewrite the URL.
+    configurePaths();
+    return InitialWebAppLinkCapture._(target);
+  }
+}
+
+bool _initialWebCapturePrepared = false;
+InitialWebAppLinkCapture? _preparedInitialWebCapture;
+
+/// Called by production main before binding initialization or asynchronous work.
+/// No caller-supplied reader/target can replace production browser provenance.
+void prepareInitialWebAppLinks() {
+  if (!kIsWeb || _initialWebCapturePrepared) return;
+  _initialWebCapturePrepared = true;
+  _preparedInitialWebCapture = InitialWebAppLinkCapture.capture(
+    readLocation: readMissionWebLocation,
+    readLegacyUri: () => Uri.base,
+    configurePaths: web_paths.configureCleanWebPaths,
+  );
+}
+
+InitialWebAppLinkCapture? _takeInitialWebCapture() {
+  final capture = _preparedInitialWebCapture;
+  _preparedInitialWebCapture = null;
+  return capture;
 }
 
 /// Credential-free ownership boundary for one accepted app-link action.
@@ -289,6 +355,7 @@ class AppLinkController extends ChangeNotifier with WidgetsBindingObserver {
   final bool _initialIsWeb;
   final MissionWebLocation Function() _readInitialBrowserLocation;
   final Uri Function() _readInitialWebUri;
+  final InitialWebAppLinkCapture? _initialWebCapture;
   bool _initialized = false;
   bool _disposed = false;
   Future<void> _ingressQueue = Future<void>.value();
@@ -302,6 +369,7 @@ class AppLinkController extends ChangeNotifier with WidgetsBindingObserver {
     @visibleForTesting Uri Function()? readInitialWebUri,
     @visibleForTesting
     MissionWebLocation Function()? readInitialBrowserLocation,
+    @visibleForTesting InitialWebAppLinkCapture? initialWebCapture,
   })  : _inbox = inbox ?? AppLinkTargetInbox(),
         _initialIsWeb = kReleaseMode ? kIsWeb : (initialIsWeb ?? kIsWeb),
         _readInitialWebUri = kReleaseMode
@@ -310,6 +378,9 @@ class AppLinkController extends ChangeNotifier with WidgetsBindingObserver {
         _readInitialBrowserLocation = kReleaseMode
             ? readMissionWebLocation
             : (readInitialBrowserLocation ?? readMissionWebLocation),
+        _initialWebCapture = kReleaseMode
+            ? _takeInitialWebCapture()
+            : (initialWebCapture ?? _takeInitialWebCapture()),
         _takeNativePendingActionLink = takeNativePendingActionLink ??
             FirebaseRuntime.takeAndroidPendingActionLink,
         _capturePrincipalOwner =
@@ -322,26 +393,16 @@ class AppLinkController extends ChangeNotifier with WidgetsBindingObserver {
     _initialized = true;
     WidgetsBinding.instance.addObserver(this);
     if (_initialIsWeb) {
-      var location = MissionWebLocation.unavailable;
-      try {
-        location = _readInitialBrowserLocation();
-      } catch (_) {
-        // No rejected URL or reader error is retained or reported.
+      var target = _initialWebCapture?.target;
+      // Tests may model capture without initializing a browser. Release never
+      // re-reads a potentially rewritten URL when startup capture is absent.
+      if (_initialWebCapture == null && !kReleaseMode) {
+        target = InitialWebAppLinkCapture.capture(
+          readLocation: _readInitialBrowserLocation,
+          readLegacyUri: _readInitialWebUri,
+          configurePaths: () {},
+        ).target;
       }
-      final host = switch (location.host) {
-        MissionWebLocationHost.primary => 'shareittoo.com',
-        MissionWebLocationHost.www => 'www.shareittoo.com',
-        MissionWebLocationHost.staging => 'staging.shareittoo.com',
-        null => null,
-      };
-      // Only admitted browser metadata can introduce Mission. The legacy Uri
-      // parser deliberately has no Mission case: normalization cannot re-admit it.
-      final target = host != null
-          ? AppLinkTarget(
-              kind: AppLinkKind.missionWebEntry,
-              uri: Uri.https(host, '/mission'),
-            )
-          : AppLinkParser.parse(_readInitialWebUri());
       if (target != null) _captureTarget(target);
     } else {
       _capture(WidgetsBinding.instance.platformDispatcher.defaultRouteName);
