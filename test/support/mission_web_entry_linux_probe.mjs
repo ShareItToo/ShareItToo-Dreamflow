@@ -24,7 +24,33 @@ const command = (bin, args, options = {}) => execFileSync(bin, args, { encoding:
   maxBuffer: 1024 * 1024, stdio: ['pipe', 'pipe', 'pipe'], ...options }).trim();
 const rootCommand = (bin, args, options) => command('/usr/bin/sudo', ['-n', '--', bin, ...args], options);
 const hash = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
-const fail = code => ({ schemaVersion: 1, mode, status: 'fail', code: codes.has(code) ? code : 'probe_failure' });
+const fail = (code, diagnostic) => ({ schemaVersion: 1, mode, status: 'fail', code: codes.has(code) ? code : 'probe_failure',
+  ...(diagnostic ? { diagnostic } : {}) });
+const targetClasses = ['pageBlank', 'pageOther', 'browserUi', 'extension', 'serviceWorker', 'other'];
+const cleanupFields = ['processesAbsent', 'groupAbsent', 'namespaceRemoved', 'resolverRemoved', 'portClosed', 'profileRemoved'];
+export function validateTargetDiagnostic(value) {
+  check(value && typeof value === 'object' && !Array.isArray(value)
+    && Reflect.ownKeys(value).length === targetClasses.length
+    && targetClasses.every(key => Object.hasOwn(value, key) && Number.isInteger(value[key]) && value[key] >= 0 && value[key] <= 256)
+    && targetClasses.reduce((sum, key) => sum + value[key], 0) <= 256, 'probe_failure');
+  return Object.fromEntries(targetClasses.map(key => [key, value[key]]));
+}
+export function summarizeTargets(targets) {
+  check(Array.isArray(targets) && targets.length <= 256, 'probe_failure');
+  const summary = Object.fromEntries(targetClasses.map(key => [key, 0]));
+  for (const target of targets) {
+    const key = typeof target?.url === 'string' && target.url.startsWith('chrome-extension:') ? 'extension'
+      : target?.type === 'page' ? (target.url === 'about:blank' ? 'pageBlank' : 'pageOther')
+        : target?.type === 'browser_ui' ? 'browserUi' : target?.type === 'service_worker' ? 'serviceWorker' : 'other';
+    summary[key]++;
+  }
+  return validateTargetDiagnostic(summary);
+}
+function cleanupDiagnostic(value) {
+  return { ...Object.fromEntries(cleanupFields.map(key => [key, value?.[key] === true])),
+    exitClass: value?.exitSignal ? 'signal' : value?.exitCode === 0 ? 'normal'
+      : Number.isInteger(value?.exitCode) && value.exitCode > 0 ? 'nonzero' : 'unknown' };
+}
 export function parseArgs(args) {
   check(args.length === 3 && args[0] === '--linux-blank-preflight' && args[1] === '--source-head'
     && /^[a-f0-9]{40}$/u.test(args[2]), 'probe_arguments'); return args[2];
@@ -63,14 +89,13 @@ export function validateObservation(v, inventory) {
     && r.nestedPidNamespace === true && r.forbiddenFlags === false, 'probe_sandbox');
   check(v.externalTcp === 'ENETUNREACH' && v.loopback === 200, 'probe_network');
 }
-export function validateCleanup(v) {
-  check(v?.processesAbsent === true && v.groupAbsent === true && v.namespaceRemoved === true
-    && v.resolverRemoved === true && v.portClosed === true && v.profileRemoved === true
-    && v.exitCode === 0 && v.exitSignal === null, 'probe_cleanup');
+export function validateCleanup(v, requireNormalExit = true) {
+  check(cleanupFields.every(key => v?.[key] === true)
+    && (!requireNormalExit || (v.exitCode === 0 && v.exitSignal === null)), 'probe_cleanup');
 }
 export async function runProbe({ expectedHead, adapter, journal = () => {}, signal } = {}) {
   if (adapter && !process.env.NODE_TEST_CONTEXT) return fail('probe_test_hooks');
-  let sequence = 0; let code; let inventory; let activeStage;
+  let sequence = 0; let code; let inventory; let activeStage; let diagnostic;
   const emit = (phase, result) => {
     check(phases.includes(phase) && ['begin', 'confirmed', 'failed'].includes(result), 'probe_failure');
     journal(Object.freeze({ sequence: ++sequence, phase, result }));
@@ -85,14 +110,28 @@ export async function runProbe({ expectedHead, adapter, journal = () => {}, sign
       if (stage === 'observe') validateObservation(await active.observe(), inventory);
       abort(); emit(stage, 'confirmed');
     }
-  } catch (error) { code = codes.has(error?.message) ? error.message : 'probe_failure'; if (activeStage) emit(activeStage, 'failed'); }
+  } catch (error) {
+    code = codes.has(error?.message) ? error.message : 'probe_failure'; if (activeStage) emit(activeStage, 'failed');
+    if (code === 'probe_targets') {
+      try { diagnostic = validateTargetDiagnostic(active.targetDiagnostic?.()); }
+      catch { code = 'probe_failure'; }
+    }
+  }
   finally {
     emit('cleanup', 'begin');
-    try { validateCleanup(await active.cleanup()); emit('cleanup', 'confirmed'); }
-    catch { code = 'probe_cleanup'; emit('cleanup', 'failed'); }
+    let readback;
+    try {
+      readback = await active.cleanup(); validateCleanup(readback, false); emit('cleanup', 'confirmed');
+      // A nonzero/signalled exit after a primary failure is not a resource leak.
+      if (!code) { try { validateCleanup(readback); } catch { code = 'probe_cleanup'; } }
+    } catch {
+      code = 'probe_cleanup'; emit('cleanup', 'failed');
+      try { diagnostic = cleanupDiagnostic(readback ?? active.cleanupReadback?.()); }
+      catch { diagnostic = cleanupDiagnostic(); }
+    }
   }
   if (signal?.aborted && !code) code = 'probe_aborted';
-  if (code) return fail(code);
+  if (code) return fail(code, diagnostic);
   return { schemaVersion: 1, mode, status: 'pass', sourceHead: expectedHead, inventory: { ...contract, digests: { ...inventory.digests } },
     proof: { blankPage: true, rendererSandbox: true, loopback: true, externalTcp: 'ENETUNREACH' },
     cleanup: { processesAbsent: true, groupAbsent: true, namespaceRemoved: true, resolverRemoved: true,
@@ -109,7 +148,8 @@ function procStat(pid) {
 }
 function realAdapter(expectedHead, emit, signal) {
   let directory; let identity; let namespace; let resolver; let created = false; let resolverCreated = false; let resolverBaseCreated = false;
-  let child; let group; let workerIdentity; let childExit; let proof; let port; let inventory; let closing;
+  let child; let group; let workerIdentity; let childExit; let proof; let port; let inventory; let closing; let targetSummary;
+  let resourceReadback = Object.fromEntries(cleanupFields.map(key => [key, false]));
   const ip = args => rootCommand('/usr/sbin/ip', args);
   const groupMembers = () => fs.readdirSync('/proc').filter(name => /^\d+$/u.test(name)).filter(name => {
     try { return group && procStat(Number(name)).group === group; } catch { return false; }
@@ -130,6 +170,8 @@ function realAdapter(expectedHead, emit, signal) {
     routes6: JSON.parse(ip(['-n', namespace, '-j', '-6', 'route', 'show', 'table', 'all'])).filter(r => !loopbackRoute(r)),
     resolverEmpty: rootCommand('/usr/bin/stat', ['-c', '%s', `${resolver}/resolv.conf`]) === '0' });
   return {
+    targetDiagnostic: () => targetSummary,
+    cleanupReadback: () => resourceReadback,
     async inventory() {
       check(process.platform === 'linux' && process.env.GITHUB_ACTIONS === 'true' && !process.env.NODE_TEST_CONTEXT, 'probe_inventory');
       inventory = { platform: process.platform, arch: process.arch, imageOS: process.env.ImageOS,
@@ -191,6 +233,10 @@ function realAdapter(expectedHead, emit, signal) {
                 check(fs.readFileSync(`/proc/${row.pid}/cmdline`, 'utf8').includes(directory), 'probe_failure');
                 emit('launch', 'confirmed');
               } else if (row.event === 'phase') emit(row.phase, row.result);
+              else if (row.event === 'targets') {
+                check(!targetSummary && Object.keys(row).length === 2, 'probe_failure');
+                targetSummary = validateTargetDiagnostic(row.value);
+              }
               else if (row.event === 'port') { check(Number.isInteger(row.port) && row.port > 0 && row.port < 65536, 'probe_failure'); port = row.port; }
               else if (row.event === 'observation') {
                 check(!proof && Array.isArray(row.pids) && row.pids.length > 0, 'probe_sandbox');
@@ -251,8 +297,11 @@ function realAdapter(expectedHead, emit, signal) {
         const processesAbsent = (!created || ip(['netns', 'pids', namespace]) === '') && profileProcessRefs().length === 0;
         let portClosed = !port;
         if (created && port) portClosed = ip(['netns', 'exec', namespace, '/usr/bin/ss', '-ltnH', 'sport', '=', `:${port}`]) === '';
+        Object.assign(resourceReadback, { groupAbsent, processesAbsent, portClosed,
+          exitCode: !child ? 0 : childExit?.code ?? null, exitSignal: childExit?.signal ?? null });
         check(groupAbsent && processesAbsent && portClosed, 'probe_cleanup'); emit('terminate', 'confirmed');
         if (created) ip(['netns', 'delete', namespace]);
+        resourceReadback.namespaceRemoved = !namespace || !fs.existsSync(`/run/netns/${namespace}`);
         if (resolverCreated) {
           // An interrupted install may leave only the newly-owned empty directory.
           if (rootCommand('/usr/bin/find', [resolver, '-mindepth', '1', '-maxdepth', '1', '-name', 'resolv.conf']))
@@ -260,15 +309,15 @@ function realAdapter(expectedHead, emit, signal) {
           rootCommand('/usr/bin/rmdir', [resolver]);
         }
         if (resolverBaseCreated) rootCommand('/usr/bin/rmdir', ['/etc/netns']);
+        resourceReadback.resolverRemoved = !resolver || !fs.existsSync(resolver);
         if (directory) {
           const current = fs.lstatSync(directory);
           check(current.isDirectory() && !current.isSymbolicLink() && current.ino === identity.ino
             && current.dev === identity.dev && current.uid === process.getuid() && path.dirname(directory) === '/tmp', 'probe_cleanup');
           fs.rmSync(directory, { recursive: true });
         }
-        return { processesAbsent, groupAbsent, namespaceRemoved: !namespace || !fs.existsSync(`/run/netns/${namespace}`),
-          resolverRemoved: !resolver || !fs.existsSync(resolver), portClosed, profileRemoved: !directory || !fs.existsSync(directory),
-          exitCode: !child || (proof && childExit?.code === 0) ? 0 : null, exitSignal: childExit?.signal ?? null };
+        resourceReadback.profileRemoved = !directory || !fs.existsSync(directory);
+        return { ...resourceReadback };
       })();
     },
   };
@@ -334,6 +383,7 @@ async function worker(directory) {
     };
     const version = await cdp('Browser.getVersion');
     const targets = (await cdp('Target.getTargets')).targetInfos;
+    send({ event: 'targets', value: summarizeTargets(targets) });
     check(targets.length === 1 && targets[0].type === 'page' && targets[0].url === 'about:blank', 'probe_targets');
     const session = (await cdp('Target.attachToTarget', { targetId: targets[0].targetId, flatten: true })).sessionId;
     await cdp('Page.enable', {}, session); await cdp('Runtime.enable', {}, session);

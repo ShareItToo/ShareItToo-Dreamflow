@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { contract, parseArgs, validateInventory, validateNetwork, validateObservation,
-  validateCleanup, runProbe, launchArgs, privilegeArgs } from '../support/mission_web_entry_linux_probe.mjs';
+  validateCleanup, runProbe, launchArgs, privilegeArgs, summarizeTargets, validateTargetDiagnostic } from '../support/mission_web_entry_linux_probe.mjs';
 
 const sha = 'a'.repeat(40);
 const digests = () => ({ runnerSha256: '1'.repeat(64), chromeSha256: '2'.repeat(64), nodeSha256: '3'.repeat(64) });
@@ -72,6 +72,56 @@ test('every failure cleans up, never echoes payload and cleanup failure override
   for (const stage of ['inventory', 'prepare', 'observe']) { const f = fake({ [stage]: async () => { throw Error('private URL or account'); } }); const r = await runProbe({ expectedHead: sha, adapter: f.adapter }); assert.equal(r.status, 'fail'); assert.equal(f.calls.at(-1), 'cleanup'); assert.doesNotMatch(JSON.stringify(r), /private|account|URL/); }
   const f = fake({ cleanup: async () => { throw Error('private'); } }); assert.equal((await runProbe({ expectedHead: sha, adapter: f.adapter })).code, 'probe_cleanup');
 });
+test('primary target failure survives complete resource cleanup and real-shaped exit 1', async () => {
+  const diagnostic = { pageBlank: 1, pageOther: 0, browserUi: 1, extension: 0, serviceWorker: 0, other: 0 };
+  for (const code of ['probe_targets', 'probe_timeout', 'probe_sandbox']) {
+    const f = fake({ observe: async () => { throw Error(code); }, targetDiagnostic: () => diagnostic,
+      cleanup: async () => ({ ...cleanup(), exitCode: 1 }) });
+    const result = await runProbe({ expectedHead: sha, adapter: f.adapter });
+    assert.equal(result.code, code);
+    assert.deepEqual(Object.keys(result), code === 'probe_targets'
+      ? ['schemaVersion', 'mode', 'status', 'code', 'diagnostic'] : ['schemaVersion', 'mode', 'status', 'code']);
+    if (code === 'probe_targets') { assert.deepEqual(result.diagnostic, diagnostic); assert.notEqual(result.diagnostic, diagnostic); }
+  }
+  const abnormal = fake({ cleanup: async () => ({ ...cleanup(), exitCode: 1 }) });
+  const result = await runProbe({ expectedHead: sha, adapter: abnormal.adapter });
+  assert.equal(result.status, 'fail'); assert.equal(result.code, 'probe_cleanup'); assert.equal(result.diagnostic, undefined);
+  const signalled = fake({ observe: async () => { throw Error('probe_timeout'); },
+    cleanup: async () => ({ ...cleanup(), exitCode: null, exitSignal: 'SIGTERM' }) });
+  assert.equal((await runProbe({ expectedHead: sha, adapter: signalled.adapter })).code, 'probe_timeout');
+  for (const key of ['processesAbsent', 'groupAbsent', 'namespaceRemoved', 'resolverRemoved', 'portClosed', 'profileRemoved']) {
+    const missing = cleanup(); delete missing[key];
+    const f = fake({ observe: async () => { throw Error('probe_timeout'); }, cleanup: async () => missing });
+    const result = await runProbe({ expectedHead: sha, adapter: f.adapter });
+    assert.equal(result.code, 'probe_cleanup'); assert.equal(result.diagnostic[key], false);
+  }
+});
+test('target diagnostics are only six bounded counts, never URLs or identifiers', () => {
+  const summary = summarizeTargets([{ type: 'page', url: 'about:blank' }, { type: 'page', url: 'https://private.invalid' },
+    { type: 'browser_ui', url: 'chrome://private' }, { type: 'service_worker', url: 'chrome-extension://private/' },
+    { type: 'service_worker', url: 'https://private.invalid' }, { type: 'unknown', url: 'private' }]);
+  assert.deepEqual(summary, { pageBlank: 1, pageOther: 1, browserUi: 1, extension: 1, serviceWorker: 1, other: 1 });
+  assert.doesNotMatch(JSON.stringify(summary), /private|url|targetId|pid|path/);
+  for (const value of [undefined, [], { ...summary, url: 'private' }, { ...summary, pageBlank: -1 },
+    { ...summary, pageBlank: 257 }, { ...summary, pageBlank: 256 }, { ...summary, pageBlank: 0.5 },
+    { ...summary, pageBlank: '1' }, { ...summary, [Symbol('private')]: 0 }])
+    assert.throws(() => validateTargetDiagnostic(value));
+  for (const key of Object.keys(summary)) { const value = { ...summary }; delete value[key]; assert.throws(() => validateTargetDiagnostic(value)); }
+});
+test('resource failure overrides primary only with fixed cleanup booleans and exit class', async () => {
+  const f = fake({ observe: async () => { throw Error('probe_targets'); },
+    cleanup: async () => ({ ...cleanup(), portClosed: false, exitCode: 1, private: 'secret' }) });
+  const result = await runProbe({ expectedHead: sha, adapter: f.adapter });
+  assert.equal(result.code, 'probe_cleanup');
+  assert.deepEqual(result.diagnostic, { processesAbsent: true, groupAbsent: true, namespaceRemoved: true,
+    resolverRemoved: true, portClosed: false, profileRemoved: true, exitClass: 'nonzero' });
+  assert.doesNotMatch(JSON.stringify(result), /secret|private|exitCode|exitSignal/);
+});
+test('malformed target summary fails closed without exposing its contents', async () => {
+  const f = fake({ observe: async () => { throw Error('probe_targets'); }, targetDiagnostic: () => ({ url: 'secret' }) });
+  const result = await runProbe({ expectedHead: sha, adapter: f.adapter });
+  assert.equal(result.code, 'probe_failure'); assert.equal(result.diagnostic, undefined);
+});
 test('abort before launch and during observation cleans without positive result', async () => {
   const controller = new AbortController(); controller.abort(); const early = fake();
   assert.equal((await runProbe({ expectedHead: sha, adapter: early.adapter, signal: controller.signal })).code, 'probe_aborted');
@@ -107,6 +157,8 @@ test('real execution is explicitly gated; tests and regression only exercise fak
   assert.match(source, /launcherAbsent/);
   assert.match(source, /resolverBaseCreated/);
   assert.match(source, /hash\(item\.file\) === item\.digest/);
+  assert.match(source, /send\(\{ event: 'targets', value: summarizeTargets\(targets\) \}\);\s+check\(targets\.length === 1 && targets\[0\]\.type === 'page' && targets\[0\]\.url === 'about:blank'/);
+  assert.match(source, /targetSummary = validateTargetDiagnostic\(row\.value\)/);
   assert.match(source, /'route', 'show', 'table', 'all'/);
   assert.doesNotMatch(source, /--no-sandbox|--disable-setuid-sandbox|--ignore-certificate-errors/);
   const suite = fs.readFileSync(import.meta.filename, 'utf8'); assert.doesNotMatch(suite, /execFileSync\(|spawn\(/);
