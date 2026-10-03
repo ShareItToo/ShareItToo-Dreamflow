@@ -61,6 +61,24 @@ function descriptorTracker(t) {
   t.mock.method(fs, 'closeSync', fd => { close(fd); descriptors.delete(fd); });
   return descriptors;
 }
+function sameIdentity(a, b) {
+  return ['dev', 'ino', 'mode', 'uid', 'gid', 'nlink', 'size', 'mtimeNs', 'ctimeNs']
+    .every((key) => a[key] === b[key]);
+}
+function captureStableFile(file, afterPathCheck = () => {}) {
+  const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+  try {
+    const before = fs.fstatSync(fd, { bigint: true });
+    const pathBefore = fs.lstatSync(file, { bigint: true });
+    if (!before.isFile() || !sameIdentity(before, pathBefore)) throw Error('bootstrap_test_file_changed');
+    afterPathCheck();
+    const bytes = fs.readFileSync(fd);
+    const after = fs.fstatSync(fd, { bigint: true });
+    const pathAfter = fs.lstatSync(file, { bigint: true });
+    if (!sameIdentity(before, after) || !sameIdentity(after, pathAfter)) throw Error('bootstrap_test_file_changed');
+    return { bytes, stat: after };
+  } finally { fs.closeSync(fd); }
+}
 function changeFile(f, file, variant) {
   if (variant === 'permissions') fs.chmodSync(file, 0o666);
   else if (variant === 'hardlink') fs.linkSync(file, path.join(f.temp, 'extra-link'));
@@ -205,16 +223,33 @@ test('default bootstrap preflight validates exact gateway truth without filesyst
 test('first Web install preserves file-bind inode and owner-only real gateway backup; no fake prior Web', (t) => {
   const f = fixture(t);
   assert.equal(bootstrap({ ...f.args, execute: true }).status, 'bootstrap-passed');
-  assert.equal(fs.statSync(f.config).ino, f.manifest.hostFile.inode);
-  assert.equal(fs.readFileSync(f.config, 'utf8'), f.candidate);
+  const config = captureStableFile(f.config);
+  assert.equal(config.stat.ino, BigInt(f.manifest.hostFile.inode));
+  assert.equal(config.bytes.toString('utf8'), f.candidate);
   assert.equal(fs.readlinkSync(path.join(f.root, 'current')), `releases/${f.manifest.artifactHash}/web`);
   assert.equal(fs.existsSync(path.join(f.root, 'previous')), false);
   assert.equal(f.reloads(), 1);
-  assert.equal(fs.statSync(f.backupPath).mode & 0o777, 0o600);
+  const backup = captureStableFile(f.backupPath);
+  assert.equal(Number(backup.stat.mode & 0o777n), 0o600);
   const evidence = path.join(f.backupDirectory, `${f.manifest.runId}.json`);
-  assert.equal(fs.statSync(evidence).mode & 0o777, 0o600);
-  assert.equal(JSON.parse(fs.readFileSync(evidence)).status, 'bootstrap-passed');
+  const journal = captureStableFile(evidence);
+  assert.equal(Number(journal.stat.mode & 0o777n), 0o600);
+  assert.equal(JSON.parse(journal.bytes).status, 'bootstrap-passed');
 });
+for (const variant of ['replacement', 'growth', 'permission']) {
+  test(`descriptor-bound bootstrap snapshot rejects concurrent ${variant}`, (t) => {
+    const f = fixture(t);
+    const mutate = () => {
+      if (variant === 'replacement') {
+        fs.renameSync(f.backupPath, path.join(f.temp, 'retained-backup'));
+        fs.writeFileSync(f.backupPath, f.gateway, { mode: 0o600 });
+      }
+      if (variant === 'growth') fs.appendFileSync(f.backupPath, 'growth');
+      if (variant === 'permission') fs.chmodSync(f.backupPath, 0o644);
+    };
+    assert.throws(() => captureStableFile(f.backupPath, mutate), /bootstrap_test_file_changed/);
+  });
+}
 for (const phase of ['copy', 'copied', 'config-install', 'config-installed', 'reload', 'reloaded', 'readback', 'verified']) {
   test(`${phase} failure restores exact gateway, config inode, permissions and absent current`, (t) => {
     const f = fixture(t);
