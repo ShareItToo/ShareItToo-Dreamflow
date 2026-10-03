@@ -38,6 +38,11 @@ test('exact staging profile, no real-money/local-QA/provider expansion', () => {
   assert.equal(p.SIT_STAGE_A_PILOT_ID, '');
   for (const key of ['SIT_SOCIAL_PROVIDER_ACTIVATION_VALIDATED', 'SIT_BOOKING_GROUPS_TECHNICAL_UI_ENABLED', 'SIT_PLANNER_TECHNICAL_UI_ENABLED', 'SIT_SUPPLY_ENRICHMENT_TECHNICAL_UI_ENABLED', 'SIT_LISTING_SETS_TECHNICAL_UI_ENABLED']) assert.equal(p[key], 'false', key);
   assert.equal(p.SIT_BACKEND_ENABLED, 'true');
+  // D6 is not activated by the existing signed staging build contract.
+  assert.equal(Object.hasOwn(p, 'SIT_MISSION_WEB_PREVIEW_ENABLED'), false);
+  const missionConfig = fs.readFileSync(path.join(repo, 'lib/config/mission_web_entry_config.dart'), 'utf8');
+  assert.match(missionConfig, /SIT_MISSION_WEB_PREVIEW_ENABLED/);
+  assert.match(missionConfig, /defaultValue: false/);
 });
 test('preflight has no filesystem mutation; execution preserves validated rollback and exact bytes', (t) => {
   const f = fixture(t); const before = fs.readdirSync(f.root);

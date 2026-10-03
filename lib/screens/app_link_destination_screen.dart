@@ -8,6 +8,7 @@ import 'package:lendify/screens/booking_detail_screen.dart';
 import 'package:lendify/screens/login_screen.dart';
 import 'package:lendify/screens/message_thread_screen.dart';
 import 'package:lendify/screens/notifications_screen.dart';
+import 'package:lendify/screens/mission_web_entry_screen.dart';
 import 'package:lendify/screens/ongoing_owner_detail_screen.dart';
 import 'package:lendify/screens/request_detail_screen.dart';
 import 'package:lendify/screens/payment_checkout_screen.dart';
@@ -75,10 +76,15 @@ class _AppLinkHostState extends State<AppLinkHost> {
         return;
       }
       route = MaterialPageRoute<void>(
-        builder: (_) => AppLinkDestinationScreen(
-          target: action.target,
-          owner: action.owner,
-        ),
+        settings: action.target.kind == AppLinkKind.missionWebEntry
+            ? const RouteSettings(name: '/mission')
+            : null,
+        builder: (_) => action.target.kind == AppLinkKind.missionWebEntry
+            ? const MissionWebEntryScreen()
+            : AppLinkDestinationScreen(
+                target: action.target,
+                owner: action.owner,
+              ),
       );
       _activeOwnedRoute = route;
       _activeOwner = action.owner;
@@ -335,6 +341,8 @@ class _AppLinkDestinationScreenState extends State<AppLinkDestinationScreen> {
   @override
   Widget build(BuildContext context) {
     switch (widget.target.kind) {
+      case AppLinkKind.missionWebEntry:
+        return const MissionWebEntryScreen();
       case AppLinkKind.listing:
         return FutureBuilder<Item?>(
           future: _listing,
@@ -362,7 +370,8 @@ class _AppLinkDestinationScreenState extends State<AppLinkDestinationScreen> {
                 onAction: _retryListing,
               );
             }
-            return LinkedListingDetailsScreen(item: item, publicCatalogImage: true);
+            return LinkedListingDetailsScreen(
+                item: item, publicCatalogImage: true);
           },
         );
       case AppLinkKind.profile:

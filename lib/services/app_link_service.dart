@@ -9,6 +9,7 @@ import 'firebase_runtime.dart';
 import 'local_principal_scope.dart';
 
 enum AppLinkKind {
+  missionWebEntry,
   listing,
   profile,
   booking,
@@ -175,11 +176,23 @@ class AppLinkParser {
     'staging.shareittoo.com',
   };
 
+  /// Matches exact supplied URL text. Legacy parsing has no Mission case.
+  /// Uri.base/RouteInformation may already normalize aliases or default ports;
+  /// this parser cannot attest the original browser URL's spelling.
+  static AppLinkTarget? parseRaw(String raw, {bool isWeb = kIsWeb}) {
+    if (isWeb &&
+        _allowedWebHosts.any((host) => raw == 'https://$host/mission')) {
+      return AppLinkTarget(
+          kind: AppLinkKind.missionWebEntry, uri: Uri.parse(raw));
+    }
+    final uri = Uri.tryParse(raw);
+    return uri == null ? null : parse(uri);
+  }
+
   static AppLinkTarget? parse(Uri uri) {
     if (uri.userInfo.isNotEmpty) return null;
     final isCustom = uri.scheme.toLowerCase() == 'shareittoo';
-    final isWeb =
-        (uri.scheme == 'https' || uri.scheme == 'http') &&
+    final isWeb = (uri.scheme == 'https' || uri.scheme == 'http') &&
         _allowedWebHosts.contains(uri.host.toLowerCase());
     if (!isCustom && !isWeb) return null;
 
@@ -281,12 +294,11 @@ class AppLinkController extends ChangeNotifier with WidgetsBindingObserver {
     AppLinkTargetInbox? inbox,
     Future<Uri?> Function()? takeNativePendingActionLink,
     Future<AppLinkPrincipalOwner> Function()? capturePrincipalOwner,
-  }) : _inbox = inbox ?? AppLinkTargetInbox(),
-       _takeNativePendingActionLink =
-           takeNativePendingActionLink ??
-           FirebaseRuntime.takeAndroidPendingActionLink,
-       _capturePrincipalOwner =
-           capturePrincipalOwner ?? LocalAppLinkPrincipalOwner.capture;
+  })  : _inbox = inbox ?? AppLinkTargetInbox(),
+        _takeNativePendingActionLink = takeNativePendingActionLink ??
+            FirebaseRuntime.takeAndroidPendingActionLink,
+        _capturePrincipalOwner =
+            capturePrincipalOwner ?? LocalAppLinkPrincipalOwner.capture;
 
   PrincipalBoundAppLinkTarget? takePending() => _inbox.takePending();
 
@@ -339,8 +351,7 @@ class AppLinkController extends ChangeNotifier with WidgetsBindingObserver {
 
   void _capture(String raw, {Future<AppLinkPrincipalOwner>? startedOwner}) {
     if (_disposed || raw.isEmpty || raw == '/') return;
-    final uri = Uri.tryParse(raw);
-    final target = uri == null ? null : AppLinkParser.parse(uri);
+    final target = AppLinkParser.parseRaw(raw);
     if (target == null) return;
 
     // Calling the async capture now records AuthService.sessionEpoch before

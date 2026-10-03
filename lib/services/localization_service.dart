@@ -98,6 +98,29 @@ class LocalizationController extends ChangeNotifier {
   }
 
   static const Map<String, String> _de = {
+    'missionWeb.title': 'Vorhaben planen',
+    'missionWeb.synthetic':
+        'Synthetisches Beispiel – Änderungen gelten nur für diese Ansicht.',
+    'missionWeb.nonBinding': 'Unverbindlicher Plan',
+    'missionWeb.noReservation': 'Keine Reservierung',
+    'missionWeb.noGroupBooking': 'Keine Gesamtbuchung',
+    'missionWeb.unavailable':
+        'Der Mission-Web-Einstieg ist derzeit nicht verfügbar.',
+    'missionWeb.required': 'Erforderliche Einheiten',
+    'missionWeb.optional': 'Optionale Einheiten',
+    'missionWeb.quantity': 'Anzahl',
+    'missionWeb.assigned': 'Zugeordnet',
+    'missionWeb.gap': 'Lücke',
+    'missionWeb.unknownFit': 'Eignung unbekannt',
+    'missionWeb.source': 'Quelle',
+    'missionWeb.correct': 'Beispielanzahl ändern (1–3)',
+    'missionWeb.reset': 'Beispiel zurücksetzen',
+    'missionWeb.incomplete': 'Unvollständig',
+    'missionWeb.readback': 'Neuprüfung erforderlich',
+    'missionWeb.clarification': 'Klärung erforderlich',
+    'missionWeb.exampleSource': 'Festes synthetisches Ansichtsbeispiel v1',
+    'missionWeb.container': 'Beispielbehälter',
+    'missionWeb.tool': 'Beispielwerkzeug',
     // Navigation
     'Entdecken': 'Entdecken',
     'Mietkorb': 'Mietkorb',
@@ -327,6 +350,28 @@ class LocalizationController extends ChangeNotifier {
   };
 
   static const Map<String, String> _en = {
+    'missionWeb.title': 'Plan a project',
+    'missionWeb.synthetic':
+        'Synthetic example – changes apply only to this view.',
+    'missionWeb.nonBinding': 'Non-binding plan',
+    'missionWeb.noReservation': 'No reservation',
+    'missionWeb.noGroupBooking': 'No combined booking',
+    'missionWeb.unavailable': 'The Mission web entry is currently unavailable.',
+    'missionWeb.required': 'Required units',
+    'missionWeb.optional': 'Optional units',
+    'missionWeb.quantity': 'Quantity',
+    'missionWeb.assigned': 'Assigned',
+    'missionWeb.gap': 'Gap',
+    'missionWeb.unknownFit': 'Suitability unknown',
+    'missionWeb.source': 'Source',
+    'missionWeb.correct': 'Change example quantity (1–3)',
+    'missionWeb.reset': 'Reset example',
+    'missionWeb.incomplete': 'Incomplete',
+    'missionWeb.readback': 'Recheck required',
+    'missionWeb.clarification': 'Clarification required',
+    'missionWeb.exampleSource': 'Fixed synthetic display example v1',
+    'missionWeb.container': 'Example container',
+    'missionWeb.tool': 'Example tool',
     // Navigation
     'Entdecken': 'Discover',
     'Mietkorb': 'Rental cart',

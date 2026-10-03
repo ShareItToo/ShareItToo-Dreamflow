@@ -26,6 +26,19 @@ class _FakePrincipalOwner implements AppLinkPrincipalOwner {
 AppLinkTarget target(String raw) => AppLinkParser.parse(Uri.parse(raw))!;
 
 void main() {
+  test('raw ingress preserves legacy links while Mission remains web-only', () {
+    expect(
+        AppLinkParser.parseRaw('shareittoo://booking/booking-123', isWeb: false)
+            ?.kind,
+        AppLinkKind.booking);
+    expect(
+        AppLinkParser.parseRaw('https://shareittoo.com/mission', isWeb: false),
+        null);
+    expect(
+        AppLinkParser.parseRaw('https://shareittoo.com/mission', isWeb: true)
+            ?.kind,
+        AppLinkKind.missionWebEntry);
+  });
   test(
     'settles an existing backend session before initial link ownership',
     () async {
@@ -175,7 +188,8 @@ void main() {
     );
   });
 
-  test('accepts only the bounded custom-scheme Crashlytics diagnostic link', () {
+  test('accepts only the bounded custom-scheme Crashlytics diagnostic link',
+      () {
     final diagnostic = AppLinkParser.parse(
       Uri.parse('shareittoo://qa/crashlytics/b11-android-2026081027'),
     );
