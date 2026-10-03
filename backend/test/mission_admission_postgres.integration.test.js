@@ -37,6 +37,7 @@ if (!databaseUrl) {
     const legacyId = `d8-quarantined-${crypto.randomUUID()}`;
     const listingId = `d8-listing-${crypto.randomUUID()}`;
     const activeListingId = `d8-active-${crypto.randomUUID()}`;
+    const catalogControlId = `d8-catalog-control-${crypto.randomUUID()}`;
     const quoteId = `quote_${crypto.randomUUID()}`;
     const futureDate = (days) => new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
     const startDate = futureDate(30), endDate = futureDate(32);
@@ -122,10 +123,11 @@ if (!databaseUrl) {
       return result;
     };
     const effects = async () => (await setup.query(`SELECT
-      (SELECT count(*) FROM payments) AS payments,
-      (SELECT count(*) FROM notifications) AS notifications,
-      (SELECT count(*) FROM notification_outbox) AS outbox,
-      (SELECT count(*) FROM uploads) AS uploads`)).rows[0];
+      (SELECT count(*) FROM payments p JOIN bookings b ON b.id=p.booking_id
+        WHERE b.owner_id=ANY($1::text[]) OR b.renter_id=ANY($1::text[])) AS payments,
+      (SELECT count(*) FROM notifications WHERE user_id=ANY($1::text[])) AS notifications,
+      (SELECT count(*) FROM notification_outbox WHERE user_id=ANY($1::text[])) AS outbox,
+      (SELECT count(*) FROM uploads WHERE owner_id=ANY($1::text[])) AS uploads`, [users])).rows[0];
     try {
       await setup.query(await fs.readFile(new URL('../sql/schema.sql', import.meta.url), 'utf8'));
       const { runMigrations } = await import('../src/migrations.js');
@@ -140,6 +142,15 @@ if (!databaseUrl) {
         await setup.query(`INSERT INTO listings(id,owner_id,payload,is_active,status,catalog_version,price_per_day_minor,currency,moderation_status,title,description,category_id,condition,city,country,latitude,longitude,min_days,max_days)
           VALUES($1,$2,$3,true,'active',1,1500,'EUR','active','D8 synthetic listing','Synthetic fixture description','cat3','good','Berlin','Deutschland',52.52,13.4,1,30)`, [id, owner, JSON.stringify({ title: 'D8 synthetic listing', pricePerDay: 15, city: 'Berlin', country: 'Deutschland', photos: [] })]);
       }
+      // Other suites retain valid public inventory around Heilbronn. Keep a
+      // run-owned positive control there even in a fresh focused run; D8's
+      // gap-only fixture must use an explicitly separate search area.
+      await setup.query(`INSERT INTO listings(id,owner_id,payload,is_active,status,catalog_version,catalog_revision,price_per_day_minor,currency,moderation_status,title,description,category_id,subcategory,condition,city,country,latitude,longitude,min_days,max_days,availability_timezone,protection_model)
+        VALUES($1,$2,$3,true,'active',1,1,1500,'EUR','active','D8 synthetic catalog control','Synthetic test inventory only','cat7','Pflanzkisten','good','Heilbronn','Deutschland',49.14123,9.22123,1,30,'Europe/Berlin','none')`,
+      [catalogControlId, foreign, JSON.stringify({ title: 'D8 synthetic catalog control', pricePerDay: 15, city: 'Heilbronn', country: 'Deutschland', photos: ['/uploads/d8-synthetic.webp'] })]);
+      await setup.query(`INSERT INTO uploads(owner_id,storage_name,mime_type,byte_size,purpose,visibility,listing_id,content_sha256,content_scan_status)
+        VALUES($1,$2,'image/webp',1,'listing_image','public',$3,repeat('d',64),'passed')`,
+      [foreign, `${crypto.randomUUID()}-d8-synthetic.webp`, catalogControlId]);
       await setup.query(`UPDATE listings SET is_active=false,status='ended' WHERE id=$1`, [listingId]);
       await setup.query(`INSERT INTO rental_requests(id,item_id,owner_id,renter_id,status,payload)
         VALUES($1,$2,$3,$4,'completed','{"quote":{"totalMinor":99999},"itemId":"stale"}'),($5,$6,$3,$4,'pending','{}')`, [historyId, listingId, owner, renter, legacyId, activeListingId]);
@@ -189,8 +200,20 @@ if (!databaseUrl) {
       };
       const fit = (await post(renter, `mission-needs/${mission.missionNeedId}/fit-checks`, fitRaw)).fitCheck;
       const gapMission = (await post(renter, 'mission-needs', { ...missionRaw, title: 'D8 gap only' })).missionNeed;
+      const gapLocation = { latitudeE5: 0, longitudeE5: 0, radiusKm: 1, sourceVersion: 'd8-isolated-origin-v1', ownerConfirmed: true };
+      Object.assign(process.env, env);
+      const { resolveBoundedMissionCandidates } = await import('../src/planner_inventory_workflow.js');
+      const candidatesAt = (latitude, longitude, radiusKm) => resolveBoundedMissionCandidates(setup, {
+        actorId: renter, itemType: 'plant_container_equipment', startDate, endDate,
+        latitude, longitude, radiusKm,
+      });
+      const catalogControl = await candidatesAt(49.14123, 9.22123, 25);
+      assert.ok(catalogControl.candidates.some((candidate) => candidate.listingId === catalogControlId));
+      const gapCandidates = await candidatesAt(gapLocation.latitudeE5 / 100000, gapLocation.longitudeE5 / 100000, gapLocation.radiusKm);
+      assert.equal(gapCandidates.supported, true);
+      assert.deepEqual(gapCandidates.candidates, [], 'D8 gap search area must exclude retained public inventory');
       const resolutionRaw = { missionRevision: gapMission.revision, missionPayloadDigest: gapMission.payloadDigest, startDate, endDate,
-        location: { latitudeE5: 4914000, longitudeE5: 922000, radiusKm: 25, sourceVersion: 'd8-origin-v1', ownerConfirmed: true } };
+        location: gapLocation };
       const resolution = (await post(renter, `mission-needs/${gapMission.missionNeedId}/inventory-resolutions`, resolutionRaw)).resolution;
       const gaps = resolution.storedResolution.slots.filter((slot) => slot.status === 'gap');
       assert.equal(gaps.length, 2);
