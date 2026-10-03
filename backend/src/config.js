@@ -19,6 +19,7 @@ import { normalizeIdentityVerificationTransport } from './identity_verification_
 import { readStagingAccessConfiguration } from './staging_access_gate.js';
 import { readSyntheticCatalogConfiguration } from './staging_synthetic_catalog.js';
 import { readStagingGoogleRegistrationConfiguration } from './staging_google_registration.js';
+import { readStagingPasswordEnrollmentConfiguration } from './staging_password_enrollment.js';
 import { readMissionSupplyParticipationEnabled } from './mission_supply_participation_workflow.js';
 
 function required(name) {
@@ -42,6 +43,7 @@ const deploymentEnvironment = (process.env.DEPLOYMENT_ENVIRONMENT ?? process.env
   .trim()
   .toLowerCase();
 const stagingAccess = readStagingAccessConfiguration(process.env);
+const stagingPasswordEnrollment = readStagingPasswordEnrollmentConfiguration(process.env, { stagingAccess });
 const mfaSecretConfiguration = readMfaEncryptionKeyConfiguration(process.env, {
   deploymentEnvironment,
 });
@@ -455,6 +457,7 @@ export const config = Object.freeze({
   deploymentEnvironment,
   stagingAccess,
   stagingGoogleRegistration,
+  stagingPasswordEnrollment,
   syntheticCatalog: readSyntheticCatalogConfiguration(process.env, stagingAccess),
   bookingPilotMode,
   bookingPilotEnabled: bookingPilotMode !== 'off',

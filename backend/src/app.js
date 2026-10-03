@@ -31,6 +31,11 @@ import {
   revokeSessionByRefreshToken,
 } from './auth_session_actions.js';
 import { config } from './config.js';
+import {
+  resolveStagingPasswordEnrollment,
+  reserveStagingPasswordEnrollment,
+  StagingPasswordEnrollmentError,
+} from './staging_password_enrollment.js';
 import { technicalSandboxHealthProjection } from './technical_sandbox_config.js';
 import {
   listingAiCapability,
@@ -2716,8 +2721,26 @@ export function createApp({
   }));
 
   app.post('/v1/auth/register', registrationLimiter, asyncRoute(async (req, res) => {
-    assertStagingRegistrationClosed();
     const email = normalizeEmail(req.body?.email);
+    let passwordEnrollment = null;
+    if (config.stagingAccess.enabled && config.stagingPasswordEnrollment.enabled) {
+      try {
+        passwordEnrollment = resolveStagingPasswordEnrollment(config.stagingPasswordEnrollment, {
+          token: req.body?.enrollmentToken,
+          email,
+          authorizationPresent: req.get('authorization') !== undefined,
+        });
+      } catch (error) {
+        if (!(error instanceof StagingPasswordEnrollmentError)) throw error;
+        throw new HttpError(403, error.code);
+      }
+    } else {
+      assertStagingRegistrationClosed();
+      if (req.body?.enrollmentToken !== undefined) {
+        throw new HttpError(403, 'staging_password_enrollment_unavailable');
+      }
+    }
+    res.set('Cache-Control', 'private, no-store');
     const password = req.body?.password;
     const displayName = safeText(req.body?.displayName, 80);
     const registrationActionLabel = safeText(req.body?.registrationActionLabel, 80);
@@ -2734,13 +2757,17 @@ export function createApp({
       throw new HttpError(400, 'registration_action_label_mismatch');
     }
     const passwordHash = await hashPassword(password);
-    const userId = crypto.randomUUID();
+    const userId = passwordEnrollment?.userId ?? crypto.randomUUID();
     let verificationUser = null;
     let registrationSession = null;
 
     await inTransaction(async (client) => {
-      const existing = await client.query('SELECT * FROM users WHERE email = $1', [email]);
+      if (passwordEnrollment) await reserveStagingPasswordEnrollment(client, passwordEnrollment);
+      const existing = passwordEnrollment
+        ? await client.query('SELECT * FROM users WHERE email = $1 OR id = $2', [email, userId])
+        : await client.query('SELECT * FROM users WHERE email = $1', [email]);
       if (existing.rowCount) {
+        if (passwordEnrollment) throw new StagingPasswordEnrollmentError();
         const user = existing.rows[0];
         if (!user.email_verified_at && !user.deactivated_at && user.account_status === 'active') {
           verificationUser = user;
@@ -2780,6 +2807,11 @@ export function createApp({
         userAgent: req.get('user-agent'),
         ipAddress: requestIp(req),
       });
+    }).catch((error) => {
+      if (passwordEnrollment && (error instanceof StagingPasswordEnrollmentError || error?.code === '23505')) {
+        throw new HttpError(403, 'staging_password_enrollment_unavailable');
+      }
+      throw error;
     });
     if (verificationUser) {
       try {

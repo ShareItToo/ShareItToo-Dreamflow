@@ -4,6 +4,18 @@
   "approvalAllowed": false,
   "sourceInventory": [
     {
+      "path": "backend/src/staging_password_enrollment.js",
+      "sha256": "ab5689a26b0bd2014c4bf079ac8f7f9fe40b58b705b3907a2e37eba3bbb6d3a8"
+    },
+    {
+      "path": "backend/sql/migrations/105_staging_password_enrollment_redemptions.up.sql",
+      "sha256": "ea7faad705d7669fa56f1d5cf96f26ce6f559e2059bf8b2387d846307bb5dbe7"
+    },
+    {
+      "path": "backend/sql/migrations/105_staging_password_enrollment_redemptions.down.sql",
+      "sha256": "2e3795b71a83b344cc1e1516340d69c424a44ec0c28915f079810d3fc668c27d"
+    },
+    {
       "path": "lib/widgets/support_principal_controller.dart",
       "sha256": "d7b8be389b09ec64656bafe1fc9e54ddc5bdf58b8602b3e76db266a665544d33"
     },
@@ -33,7 +45,7 @@
     },
     {
       "path": "backend/src/app.js",
-      "sha256": "ac867635b2d02c992347416a0ba3f1f2b681b5902963728c99f89457703863e2"
+      "sha256": "ed66b274d8d26ab142bf51d2b04440eb7c6d78e43a08e90f8215b301d18d0647"
     },
     {
       "path": "backend/src/rate_limit_policy.js",
@@ -45,7 +57,7 @@
     },
     {
       "path": "backend/src/credential_cleanup.js",
-      "sha256": "bf0b51a9acbda223ab0fc87aa212737f76f9f852f929ce24dd4b00fae8393700"
+      "sha256": "c50edfb53dfe3f706d1fcfe8ec8e291407d298e52f0611a8dd184f479f6401b6"
     },
     {
       "path": "backend/src/moderation_workflow.js",
@@ -81,7 +93,7 @@
     },
     {
       "path": "backend/src/retention_inventory.js",
-      "sha256": "43675aa57cc62ec5823c4466053c38e096557ab61023c5d7909af95376da5b09"
+      "sha256": "7298a775da927381a284502851ed6b9c5ca4e4b40dbdd33c2ab0eda24125c24a"
     },
     {
       "path": "backend/src/privacy_export.js",
@@ -265,7 +277,7 @@
     },
     {
       "path": "backend/src/config.js",
-      "sha256": "b2a29054cdfc65e77c981d1d02c3a0af5f1b8c2a08cc536c58847d5f4c80f515"
+      "sha256": "9759813ec5af32956a2485beaf7aeeb39420eec33c19c382a0c2c937f0bc82d8"
     },
     {
       "path": "backend/src/notifications.js",
@@ -801,7 +813,19 @@
     },
     {
       "path": "lib/services/firebase_runtime.dart",
-      "sha256": "f9d7c4cd29512d0e22dbe867260341537f3dff564e8fad6fe629d24bdbf230d5"
+      "sha256": "f427159aa20ba071d0e764b85c981db98059564d1ec4ea9ac3838c3ef2447249"
+    },
+    {
+      "path": "lib/services/web_facebook_auth.dart",
+      "sha256": "d80cd5a3099aad21156a37a6cf046e4a7fd42f6fc55c54459f58baa0287ec5d0"
+    },
+    {
+      "path": "lib/services/web_facebook_auth_config.dart",
+      "sha256": "6fb02396106727656873dbf46be25d22cbb76702b112134e1c6d068e7e2642f1"
+    },
+    {
+      "path": "lib/services/web_firebase_auth_startup.dart",
+      "sha256": "6ea27d167c1c37cbed0fa07e6cdbd56168d86472bf400995e3be042ee2835606"
     },
     {
       "path": "lib/services/firebase_service_preferences.dart",

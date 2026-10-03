@@ -84,6 +84,28 @@ test('parses and pins PostgreSQL major version 16', () => {
   assert.throws(() => parsePostgresMajor('unknown'), /version_unparseable/);
 });
 
+test('password enrollment is included in standard PG execution and has a focused route', () => {
+  const target = 'backend/test/staging_password_enrollment_postgres.integration.test.js';
+  assert.deepEqual(integrationTestPlan({ focusedPasswordEnrollment: true }), [[target]]);
+  assert.equal(integrationTestPlan().flat().filter((entry) => entry === target).length, 1);
+});
+
+test('notifications use the standard PG plan and their focused environment route', async (t) => {
+  const target = 'backend/test/notification_lifecycle_postgres.integration.test.js';
+  assert.deepEqual(integrationTestPlan({ focusedNotifications: true }), [[target]]);
+  assert.equal(integrationTestPlan().flat().filter((entry) => entry === target).length, 1);
+  const fixture = await fakeFixture(t);
+  const result = await runLocalPostgresIntegration({
+    repositoryRoot: fixture.root,
+    postgresBinDir: fixture.bin,
+    nodeBin: path.join(fixture.bin, 'node'),
+    environment: { ...fixture.environment, SIT_POSTGRES_FOCUSED_NOTIFICATIONS: '1' },
+    temporaryBase: fixture.temporaryBase,
+  });
+  assert.deepEqual(result.integrationTests, [target]);
+  assert.deepEqual(await readdir(fixture.temporaryBase), []);
+});
+
 test('rejects cleanup targets outside the scoped runner prefix', () => {
   assert.throws(() => assertSafeTempRoot(os.tmpdir()), /unsafe_postgres_temp_root/);
   assert.throws(
@@ -114,6 +136,8 @@ test('runs readiness, isolated database and integration before guaranteed cleanu
     ['backend/test/mission_supply_participation_postgres.integration.test.js'],
     ['backend/test/mission_quorum_projection_postgres.integration.test.js'],
     ['backend/test/staging_google_registration.integration.test.js'],
+    ['backend/test/staging_password_enrollment_postgres.integration.test.js'],
+    ['backend/test/notification_lifecycle_postgres.integration.test.js'],
     [
       'backend/test/listing_ai_lifetime_budget_migration.integration.test.js',
       'backend/test/listing_ai_attempt_postgres.integration.test.js',

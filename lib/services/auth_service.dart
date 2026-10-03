@@ -20,6 +20,7 @@ import 'firebase_runtime.dart';
 import 'remote_auth_attempt_transaction.dart';
 import 'shared_persistence_sync.dart';
 import 'web_google_auth.dart';
+import 'web_facebook_auth.dart';
 
 class _SocialSdkAcquisition {
   String? firebaseUid;
@@ -174,6 +175,13 @@ class AuthService {
   /// The UI and token acquisition enforce this gate before any SDK call.
   static bool socialProviderEnabled(AuthSocialProvider provider) {
     if (kIsWeb) {
+      if (provider == AuthSocialProvider.facebook) {
+        return webFacebookControlAvailable(
+          isWeb: kIsWeb,
+          facebookEnabled: _facebookSocialAuthEnabled,
+          configurationReady: FirebaseRuntime.webFacebookConfigurationReady,
+        );
+      }
       return provider == AuthSocialProvider.google &&
           _googleSocialAuthEnabled &&
           FirebaseRuntime.webGoogleReady;
@@ -1504,6 +1512,24 @@ class AuthService {
       );
     }
     if (kIsWeb) {
+      if (provider == AuthSocialProvider.facebook) {
+        try {
+          return await acquireWebFacebookToken(
+            auth: FirebaseAuth.instance,
+            available: () => FirebaseRuntime.webFacebookConfigurationReady,
+            requireCurrent: requireCurrent,
+            acquired: (uid) => acquisition.firebaseUid = uid,
+          );
+        } on WebFacebookAuthFailure catch (error) {
+          if (error.cancelled) throw const _SocialSignInCancelled();
+          throw _SocialProviderUnavailable(error.code);
+        } on RemoteAuthAttemptSuperseded {
+          rethrow;
+        } catch (_) {
+          // Includes SDK-instance acquisition failures before the adapter.
+          throw const _SocialProviderUnavailable('popup_unavailable');
+        }
+      }
       try {
         return await acquireWebGoogleToken(
           available: provider == AuthSocialProvider.google &&

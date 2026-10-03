@@ -21,6 +21,12 @@ export const integrationDatabaseUser = 'sit_runner';
 // Each group runs against the same isolated database, so groups stay
 // sequential while suites inside a group may use Node's normal test runner.
 export const integrationTestGroups = Object.freeze({
+  notificationLifecycle: Object.freeze([
+    'backend/test/notification_lifecycle_postgres.integration.test.js',
+  ]),
+  passwordEnrollment: Object.freeze([
+    'backend/test/staging_password_enrollment_postgres.integration.test.js',
+  ]),
   stagingWebFixture: Object.freeze([
     'backend/test/staging_web_fixture_postgres.integration.test.js',
   ]),
@@ -68,6 +74,8 @@ export const integrationTestGroups = Object.freeze({
 });
 
 export function integrationTestPlan({
+  focusedNotifications = false,
+  focusedPasswordEnrollment = false,
   focusedGoogleRegistration = false,
   focusedLegacySchema = false,
   focusedIdentity = false,
@@ -82,6 +90,8 @@ export function integrationTestPlan({
   focusedMissionQuorumProjection = false,
   focusedPrivateShelf = false,
 } = {}) {
+  if (focusedNotifications) return [integrationTestGroups.notificationLifecycle];
+  if (focusedPasswordEnrollment) return [integrationTestGroups.passwordEnrollment];
   if (focusedMissionQuorumProjection) return [integrationTestGroups.missionQuorumProjection];
   if (focusedMissionInventoryResolution) {
     return [integrationTestGroups.missionInventoryResolution];
@@ -124,6 +134,8 @@ export function integrationTestPlan({
     integrationTestGroups.missionSupplyParticipation,
     integrationTestGroups.missionQuorumProjection,
     integrationTestGroups.stagingGoogleRegistration,
+    integrationTestGroups.passwordEnrollment,
+    integrationTestGroups.notificationLifecycle,
     integrationTestGroups.listingAi,
     integrationTestGroups.identity,
     integrationTestGroups.mfa,
@@ -328,7 +340,11 @@ export async function runLocalPostgresIntegration({
   const focusedMissionQuorumProjection =
     environment.SIT_POSTGRES_FOCUSED_MISSION_QUORUM_PROJECTION === '1';
   const focusedPrivateShelf = environment.SIT_POSTGRES_FOCUSED_PRIVATE_SHELF === '1';
+  const focusedPasswordEnrollment = environment.SIT_POSTGRES_FOCUSED_PASSWORD_ENROLLMENT === '1';
+  const focusedNotifications = environment.SIT_POSTGRES_FOCUSED_NOTIFICATIONS === '1';
   const integrationGroups = integrationTestPlan({
+    focusedNotifications,
+    focusedPasswordEnrollment,
     focusedGoogleRegistration,
     focusedLegacySchema,
     focusedIdentity,

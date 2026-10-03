@@ -28,7 +28,7 @@ const requireFromBackend = createRequire(
   new URL('../backend/package.json', import.meta.url),
 );
 
-export const r9RequiredMigrationCount = 104;
+export const r9RequiredMigrationCount = 105;
 export const r9SyntheticAccountCount = 12;
 export const r9SyntheticListingCount = 6;
 export const r9ResultClassification = 'LOCAL_ISOLATED_DATABASE_RECOVERY_PROOF';
@@ -111,6 +111,10 @@ const rollbackGuardExpectations = Object.freeze([
     filename: '104_mission_supply_participation.down.sql',
     message: 'mission_supply_participation_rows_active',
   }),
+  Object.freeze({
+    filename: '105_staging_password_enrollment_redemptions.down.sql',
+    message: 'staging_password_enrollment_active_redemptions',
+  }),
 ]);
 
 function fail(message) {
@@ -190,7 +194,7 @@ async function readMigrationPlan(root) {
   }
   if (plan.length !== r9RequiredMigrationCount
       || plan[0]?.filename !== '001_b3_foundation.up.sql'
-      || plan.at(-1)?.filename !== '104_mission_supply_participation.up.sql') {
+      || plan.at(-1)?.filename !== '105_staging_password_enrollment_redemptions.up.sql') {
     fail('r9_migration_inventory_unexpected');
   }
   return Object.freeze(plan);
@@ -991,6 +995,10 @@ async function assertRollbackGuardRefusals(pool, root) {
            )`,
         );
       }
+      if (guard.filename === '105_staging_password_enrollment_redemptions.down.sql') {
+        await client.query(`INSERT INTO staging_password_enrollment_redemptions (token_digest, expires_at)
+          VALUES (repeat('e', 64), now() + interval '1 hour')`);
+      }
       try {
         await client.query(sql);
       } catch (error) {
@@ -1062,7 +1070,7 @@ async function closePools(pools) {
 
 export function validateR9Observation(value, {
   requiredMigrationCount = r9RequiredMigrationCount,
-  requiredLastMigration = '104_mission_supply_participation.up.sql',
+  requiredLastMigration = '105_staging_password_enrollment_redemptions.up.sql',
   requiredRollbackGuards = rollbackGuardExpectations,
 } = {}) {
   if (value?.schemaVersion !== 1

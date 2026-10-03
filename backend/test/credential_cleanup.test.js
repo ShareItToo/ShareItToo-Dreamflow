@@ -32,7 +32,8 @@ test('purges only expired or already consumed credential material', async () => 
     scrubbedBookingChallenges: 4,
   });
   assert.match(statements[0], /DELETE FROM staging_google_registration_replays[\s\S]*expires_at <= now\(\)/u);
-  const statement = statements[1];
+  assert.match(statements[1], /DELETE FROM staging_password_enrollment_redemptions[\s\S]*expires_at <= now\(\)/u);
+  const statement = statements[2];
   assert.match(statement, /DELETE FROM auth_action_tokens[\s\S]*expires_at <= now\(\)/u);
   assert.match(statement, /DELETE FROM refresh_tokens[\s\S]*expires_at <= now\(\)/u);
   assert.match(statement, /DELETE FROM staff_elevations[\s\S]*expires_at <= now\(\)/u);
@@ -53,7 +54,7 @@ test('cleanup worker starts immediately and bounds its interval', async () => {
   });
   await new Promise((resolve) => setImmediate(resolve));
   stop();
-  assert.equal(calls, 2);
+  assert.equal(calls, 3);
   assert.equal(credentialCleanupIntervalMs, 6 * 60 * 60 * 1000);
   assert.throws(
     () => startCredentialCleanupWorker({ intervalMs: 59_999 }),

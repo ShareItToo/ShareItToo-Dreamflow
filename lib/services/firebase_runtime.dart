@@ -16,6 +16,8 @@ import 'local_principal_scope.dart';
 import 'release_identity.dart';
 import 'shared_persistence_sync.dart';
 import 'web_google_auth.dart';
+import 'web_facebook_auth_config.dart';
+import 'web_firebase_auth_startup.dart';
 
 const controlledCrashDiagnosticCustomKeys = <String>{
   'sit_release_commit',
@@ -97,6 +99,36 @@ bool shouldRecordUnhandledErrorAsFatal(Object error) {
 }
 
 class FirebaseRuntimeConfig {
+  // Separate, empty-by-default Facebook inputs. Google approval never grants
+  // Facebook readiness; no provider evidence or IDs are bundled by default.
+  static const webFacebookConfig = WebFacebookPublicConfig(
+    projectId: String.fromEnvironment('SIT_FACEBOOK_WEB_PROJECT_ID'),
+    messagingSenderId: String.fromEnvironment('SIT_FACEBOOK_WEB_SENDER_ID'),
+    appId: String.fromEnvironment('SIT_FACEBOOK_WEB_APP_ID'),
+    apiKey: String.fromEnvironment('SIT_FACEBOOK_WEB_API_KEY'),
+    authDomain: String.fromEnvironment('SIT_FACEBOOK_WEB_AUTH_DOMAIN'),
+    backendProjectId:
+        String.fromEnvironment('SIT_FACEBOOK_WEB_BACKEND_PROJECT_ID'),
+    authorizedOrigin: String.fromEnvironment('SIT_FACEBOOK_WEB_ORIGIN'),
+    approvedDigest: String.fromEnvironment('SIT_FACEBOOK_WEB_CONFIG_SHA256'),
+  );
+  static WebFirebaseAuthSelection get webAuthSelection => selectWebFirebaseAuth(
+        googleConfig: webGoogleConfig,
+        facebookConfig: webFacebookConfig,
+        googleEnabled: const bool.fromEnvironment('SIT_SOCIAL_GOOGLE_ENABLED'),
+        facebookEnabled:
+            const bool.fromEnvironment('SIT_SOCIAL_FACEBOOK_ENABLED'),
+        activationValidated:
+            const bool.fromEnvironment('SIT_SOCIAL_PROVIDER_ACTIVATION_VALIDATED'),
+        backendEnabled: BackendConfig.enabled,
+        apiBaseUrl: BackendConfig.apiBaseUrl,
+        origin: Uri.base.origin,
+        facebookReadinessJson:
+            const String.fromEnvironment('SIT_FACEBOOK_WEB_READINESS_JSON'),
+        facebookReadinessDigest:
+            const String.fromEnvironment('SIT_FACEBOOK_WEB_READINESS_SHA256'),
+        now: DateTime.now().toUtc(),
+      );
   static const webGoogleConfig = WebGooglePublicConfig(
     projectId: projectId,
     messagingSenderId: messagingSenderId,
@@ -145,12 +177,7 @@ class FirebaseRuntimeConfig {
 
   static FirebaseOptions? get currentOptions {
     if (kIsWeb) {
-      return webGoogleConfig.optionsFor(
-        googleEnabled: const bool.fromEnvironment('SIT_SOCIAL_GOOGLE_ENABLED'),
-        backendEnabled: BackendConfig.enabled,
-        apiBaseUrl: BackendConfig.apiBaseUrl,
-        origin: Uri.base.origin,
-      );
+      return webAuthSelection.options;
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
@@ -350,14 +377,20 @@ class FirebaseRuntime {
   static final EpochBoundSerialOperationQueue _pushOperationQueue =
       EpochBoundSerialOperationQueue();
   static bool _initialized = false;
-  static bool _webGoogleInitialized = false;
+  static bool _webAuthInitialized = false;
   static bool get webGoogleReady =>
       kIsWeb &&
       webGoogleControlAvailable(
         googleEnabled: const bool.fromEnvironment('SIT_SOCIAL_GOOGLE_ENABLED'),
-        optionsBound: FirebaseRuntimeConfig.currentOptions != null,
-        initialized: _webGoogleInitialized,
+        optionsBound: FirebaseRuntimeConfig.webAuthSelection.google,
+        initialized: _webAuthInitialized,
       );
+  /// Configuration readiness only. Facebook UI/acquisition remains disabled
+  /// until the separately reviewed FB-W2 package exists.
+  static bool get webFacebookConfigurationReady =>
+      kIsWeb &&
+      _webAuthInitialized &&
+      FirebaseRuntimeConfig.webAuthSelection.facebook;
   static bool _pushEnabled = false;
   // Foreground delivery is account-session scoped even though the native FCM
   // token is installation scoped. A logout closes this gate synchronously;
@@ -402,17 +435,15 @@ class FirebaseRuntime {
     return _initialization ??= _initialize(prepareWebAuth: prepareWebAuth);
   }
 
-  static Future<void> ensureFirebaseApp() async {
-    final options = FirebaseRuntimeConfig.currentOptions;
+  static Future<void> ensureFirebaseApp() =>
+      _ensureBoundFirebaseApp(FirebaseRuntimeConfig.currentOptions);
+
+  static Future<void> _ensureBoundFirebaseApp(FirebaseOptions? options) async {
     if (options == null) return;
     if (Firebase.apps.isNotEmpty) {
       if (kIsWeb) {
         final actual = Firebase.app().options;
-        if (actual.projectId != options.projectId ||
-            actual.appId != options.appId ||
-            actual.apiKey != options.apiKey ||
-            actual.authDomain != options.authDomain ||
-            actual.messagingSenderId != options.messagingSenderId) {
+        if (!sameWebFirebaseApp(actual, options)) {
           throw StateError('web_firebase_app_binding_mismatch');
         }
       }
@@ -424,11 +455,11 @@ class FirebaseRuntime {
   static Future<bool> _initialize(
       {Future<void> Function()? prepareWebAuth}) async {
     if (kIsWeb) {
-      _webGoogleInitialized = false;
-      _webGoogleInitialized = prepareWebAuth != null &&
-          await prepareWebGoogleAuth(
-            options: FirebaseRuntimeConfig.currentOptions,
-            initializeBoundApp: ensureFirebaseApp,
+      _webAuthInitialized = false;
+      _webAuthInitialized = prepareWebAuth != null &&
+          await prepareWebFirebaseAuth(
+            selection: FirebaseRuntimeConfig.webAuthSelection,
+            initializeBoundApp: _ensureBoundFirebaseApp,
             useMemoryPersistence: prepareWebAuth,
           );
       // Auth-only Web initialization never enables native push/Crashlytics.
