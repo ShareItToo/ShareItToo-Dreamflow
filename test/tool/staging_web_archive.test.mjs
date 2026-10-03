@@ -48,6 +48,27 @@ function checksum(bytes, offset = 0) {
   const sum = bytes.subarray(offset, offset + 512).reduce((a, b) => a + b, 0);
   bytes.write(`${sum.toString(8).padStart(6, '0')}\0 `, offset + 148, 'ascii');
 }
+function sameIdentity(a, b) {
+  return ['dev', 'ino', 'mode', 'uid', 'gid', 'nlink', 'size', 'mtimeNs', 'ctimeNs']
+    .every((key) => a[key] === b[key]);
+}
+function captureStableEntry(file, { afterOpen } = {}) {
+  const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+  try {
+    const descriptorBefore = fs.fstatSync(fd, { bigint: true });
+    if (!descriptorBefore.isDirectory() && !descriptorBefore.isFile()) {
+      throw Error('archive_test_source_changed');
+    }
+    afterOpen?.();
+    const bytes = descriptorBefore.isDirectory() ? null : fs.readFileSync(fd);
+    const descriptorAfter = fs.fstatSync(fd, { bigint: true });
+    const pathAfter = fs.lstatSync(file, { bigint: true });
+    if (!sameIdentity(descriptorBefore, descriptorAfter) || !sameIdentity(descriptorAfter, pathAfter)) {
+      throw Error('archive_test_source_changed');
+    }
+    return { stat: descriptorAfter, bytes };
+  } finally { fs.closeSync(fd); }
+}
 function editHeader(f, edit, index = 0) {
   const bytes = fs.readFileSync(f.archive);
   const offset = entries(bytes)[index].offset;
@@ -91,8 +112,9 @@ test('manifest-bound CanvasKit WASM preserves 0755 through CLI, USTAR and indepe
   const tar = spawnSync('tar', ['-xf', f.archive, '-C', extracted], { encoding: 'utf8' });
   assert.equal(tar.status, 0, tar.stderr); assert.equal(tar.stderr, '');
   for (const name of canvasKitPaths) {
-    assert.equal(fs.lstatSync(path.join(extracted, 'web', name)).mode & 0o7777, 0o755);
-    assert.deepEqual(fs.readFileSync(path.join(extracted, 'web', name)), wasm);
+    const captured = captureStableEntry(path.join(extracted, 'web', name));
+    assert.equal(Number(captured.stat.mode & 0o7777n), 0o755);
+    assert.deepEqual(captured.bytes, wasm);
   }
   validateArtifact(extracted, f.manifestHash);
   assert.equal(verifyArchive(extracted, f.manifestHash, f.archive).archiveHash, proof.archiveHash);
@@ -273,8 +295,8 @@ for (const suffix of ['/', '///']) {
   test(`CLI refuses inside output with artifact trailing separator ${JSON.stringify(suffix)} without changing artifact`, (t) => {
     const f = fixture(t);
     const capture = () => fs.readdirSync(f.artifact, { recursive: true }).sort().map((name) => {
-      const file = path.join(f.artifact, name); const stat = fs.lstatSync(file);
-      return [name, stat.mode, stat.mtimeMs, stat.isDirectory() ? 'directory' : sha256(fs.readFileSync(file))];
+      const { stat, bytes } = captureStableEntry(path.join(f.artifact, name));
+      return [name, stat.mode, stat.mtimeNs, stat.isDirectory() ? 'directory' : sha256(bytes)];
     });
     const before = capture();
     const archive = path.join(f.artifact, 'out.tar');
@@ -283,6 +305,19 @@ for (const suffix of ['/', '///']) {
     assert.equal(fs.existsSync(archive), false);
     assert.deepEqual(capture(), before);
     validateArtifact(f.artifact, f.manifestHash);
+  });
+}
+for (const variant of ['replacement', 'growth', 'permission']) {
+  test(`descriptor-bound fixture snapshot rejects concurrent ${variant}`, (t) => {
+    const f = fixture(t); const file = path.join(f.artifact, 'web/main.dart.js');
+    const hooks = {};
+    if (variant === 'replacement') hooks.afterOpen = () => {
+      fs.renameSync(file, path.join(f.temp, 'retained-main.dart.js'));
+      fs.writeFileSync(file, 'synthetic compiled bytes', { mode: 0o644 });
+    };
+    if (variant === 'growth') hooks.afterOpen = () => fs.appendFileSync(file, 'growth');
+    if (variant === 'permission') hooks.afterOpen = () => fs.chmodSync(file, 0o600);
+    assert.throws(() => captureStableEntry(file, hooks), /archive_test_source_changed/);
   });
 }
 test('CLI permits outside sibling with matching artifact name prefix', (t) => {
