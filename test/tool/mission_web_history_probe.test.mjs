@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { validateSdkState, validateHistoryMatrix, artifactDigest, buildArguments,
   validateArtifact, classifyAsset, classifyBlockedRequest, networkReasonKeys, validateNetworkDiagnostic,
   isolateGoogleRegistrationGraph, validateIsolatedRegistrant, isolationScope,
-  contract } from '../support/mission_web_history_build.mjs';
+  contract, inventoryTree, readHistoryFile } from '../support/mission_web_history_build.mjs';
 import { runProbe, parseArgs, launchArgs, privilegeArgs, ownsBuildGroup, preloadHistoryAssetResponses } from '../support/mission_web_history_probe.mjs';
 
 function assetFixture(t) {
@@ -23,6 +23,119 @@ function assetFixture(t) {
   a.artifactDigest = artifactDigest(a.files);
   return { root, file: path.join(root, 'assets/icon.png'), bytes, artifact: a };
 }
+
+const historyReaders = [
+  ['source', 'history_source', f => readHistoryFile(f.root, 'assets/icon.png')],
+  ['isolation', 'history_isolation', f => readHistoryFile(f.root, 'assets/icon.png', 'history_isolation')],
+  ['inventory', 'history_artifact', f => inventoryTree(f.root)],
+];
+test('descriptor-bound history reads preserve exact bytes and the existing inventory/digest format', t => {
+  const f = assetFixture(t); const open = fs.openSync; const read = fs.readSync; const opened = []; const closed = [];
+  const close = fs.closeSync;
+  t.mock.method(fs, 'openSync', (file, flags) => {
+    assert.ok(flags & fs.constants.O_NOFOLLOW); assert.ok(flags & fs.constants.O_NONBLOCK);
+    const fd = open(file, flags); opened.push(fd); return fd;
+  });
+  t.mock.method(fs, 'closeSync', fd => { close(fd); closed.push(fd); });
+  t.mock.method(fs, 'readFileSync', () => { throw Error('path reads forbidden'); });
+  t.mock.method(fs, 'readSync', (fd, buffer, offset, length, position) => read(fd, buffer, offset, Math.min(3, length), position));
+  assert.deepEqual(readHistoryFile(f.root, 'assets/icon.png'), f.bytes);
+  assert.deepEqual(readHistoryFile(f.root, 'assets/icon.png', 'history_isolation'), f.bytes);
+  assert.deepEqual(inventoryTree(f.root), f.artifact.files);
+  const expected = f.artifact.files.map(file => ({ path: file.path, sha256: file.sha256, bytes: file.bytes }));
+  assert.equal(artifactDigest(inventoryTree(f.root)), artifactDigest(expected));
+  assert.deepEqual(closed.toSorted(), opened.toSorted());
+});
+
+for (const [label, code, consume] of historyReaders) {
+  for (const variant of ['symlink', 'parent-symlink', 'root-symlink', 'hardlink', 'permissions', 'parent-permissions', 'oversize']) {
+    test(`${label} reader rejects unsafe ${variant} with no path diagnostics`, t => {
+      const f = assetFixture(t);
+      if (variant === 'symlink') { fs.renameSync(f.file, `${f.file}.old`); fs.symlinkSync(`${f.file}.old`, f.file); }
+      if (variant === 'parent-symlink' || variant === 'root-symlink') {
+        const directory = variant === 'root-symlink' ? f.root : path.dirname(f.file);
+        fs.renameSync(directory, `${directory}.old`); fs.symlinkSync(`${directory}.old`, directory, 'dir');
+      }
+      if (variant === 'hardlink') fs.linkSync(f.file, `${f.file}.linked`);
+      if (variant === 'permissions') fs.chmodSync(f.file, 0o666);
+      if (variant === 'parent-permissions') fs.chmodSync(path.dirname(f.file), 0o777);
+      if (variant === 'oversize') fs.truncateSync(f.file, 64 * 1024 * 1024 + 1);
+      let reads = 0; t.mock.method(fs, 'readSync', () => { reads++; throw Error('unexpected read'); });
+      assert.throws(() => consume(f), { message: code }); assert.equal(reads, 0);
+    });
+  }
+  for (const variant of ['file-open', 'file-read', 'parent-open', 'parent-read', 'growth', 'truncate', 'mode', 'parent-mode']) {
+    test(`${label} reader fails closed on deterministic ${variant} race`, t => {
+      const f = assetFixture(t); const open = fs.openSync; const read = fs.readSync;
+      const opened = []; const closed = []; const close = fs.closeSync;
+      let changed = false; let total = 0;
+      const mutate = () => {
+        changed = true;
+        if (variant === 'file-open' || variant === 'file-read') { fs.renameSync(f.file, `${f.file}.old`); fs.writeFileSync(f.file, f.bytes); }
+        if (variant === 'parent-open' || variant === 'parent-read') {
+          const directory = path.dirname(f.file); fs.renameSync(directory, `${directory}.old`); fs.symlinkSync(`${directory}.old`, directory, 'dir');
+        }
+        if (variant === 'growth') fs.appendFileSync(f.file, Buffer.alloc(32768));
+        if (variant === 'truncate') fs.truncateSync(f.file, 1);
+        if (variant === 'mode' || variant === 'parent-mode') {
+          const target = variant === 'mode' ? f.file : path.dirname(f.file);
+          fs.chmodSync(target, (fs.statSync(target).mode & 0o777) === 0o700 ? 0o500 : 0o700);
+        }
+      };
+      t.mock.method(fs, 'openSync', (target, ...args) => {
+        const fd = open(target, ...args); opened.push(fd);
+        if (!changed && ((variant === 'file-open' && target === f.file)
+          || (variant === 'parent-open' && target === path.dirname(f.file)))) mutate();
+        return fd;
+      });
+      t.mock.method(fs, 'closeSync', fd => { close(fd); closed.push(fd); });
+      t.mock.method(fs, 'readSync', (fd, buffer, offset, length, position) => {
+        if (!changed) mutate(); assert.ok(buffer.length <= f.bytes.length);
+        const count = read(fd, buffer, offset, length, position); total += count; return count;
+      });
+      assert.throws(() => consume(f), { message: code }); assert.equal(changed, true);
+      assert.ok(total <= f.bytes.length + 1); assert.deepEqual(closed.toSorted(), opened.toSorted());
+    });
+  }
+  test(`${label} reader sanitizes raw read and close errors and attempts every descriptor close`, t => {
+    const f = assetFixture(t); const open = fs.openSync; const close = fs.closeSync;
+    const opened = []; const closed = [];
+    t.mock.method(fs, 'openSync', (...args) => { const fd = open(...args); opened.push(fd); return fd; });
+    t.mock.method(fs, 'readSync', () => { throw Error('https://outside.invalid /private/path'); });
+    t.mock.method(fs, 'closeSync', fd => { close(fd); closed.push(fd); throw Error('/private/close'); });
+    assert.throws(() => consume(f), { message: code });
+    assert.deepEqual(closed.toSorted(), opened.toSorted());
+  });
+}
+
+test('history reads reject traversal, absolute paths, alternate separators and uncontrolled error codes before opening a leaf', t => {
+  const f = assetFixture(t); const open = fs.openSync; const opened = [];
+  t.mock.method(fs, 'openSync', (file, ...args) => { opened.push(file); return open(file, ...args); });
+  for (const name of ['../outside', 'assets/../../outside', '/etc/passwd', 'assets//icon.png', './assets/icon.png', 'assets\\icon.png', 'assets/icon.png\0']) {
+    assert.throws(() => readHistoryFile(f.root, name), { message: 'history_source' });
+  }
+  assert.throws(() => readHistoryFile(f.root, 'assets/icon.png', '/private/error'), { message: 'history_source' });
+  // The trusted root may be opened before relative-name validation; no leaf is opened.
+  assert.deepEqual(opened, Array(7).fill(f.root));
+});
+
+test('inventory rejects directory replacement and additions during enumeration', t => {
+  const f = assetFixture(t); const list = fs.readdirSync;
+  t.mock.method(fs, 'readdirSync', (...args) => {
+    const entries = list(...args); fs.writeFileSync(path.join(f.root, 'unexpected'), 'not in the captured listing'); return entries;
+  });
+  assert.throws(() => inventoryTree(f.root), { message: 'history_artifact' });
+});
+
+test('source copy, generated isolation text and source readbacks all consume the descriptor-bound primitive', () => {
+  const source = fs.readFileSync('test/support/mission_web_history_build.mjs', 'utf8');
+  assert.match(source, /const bytes = readHistoryFile\(root, name\);/u);
+  assert.match(source, /const readRegular = name => readHistoryFile\(project, name, 'history_isolation'\)\.toString\('utf8'\)/u);
+  assert.match(source, /digest\(readHistoryFile\(project, source.path\)\)/u);
+  assert.match(source, /digest\(readHistoryFile\(root, source.path\)\)/u);
+  assert.doesNotMatch(source, /readFileSync\(original|readFileSync\(file[,)]/u);
+  assert.ok(source.includes("!text.replaceAll('\\\\/', '/').includes('accounts.google.com/gsi/client')"));
+});
 
 test('asset requests select exact preloaded bytes and MIME with no request-time fs access', t => {
   const f = assetFixture(t); const response = preloadHistoryAssetResponses(f.root, f.artifact);
@@ -410,7 +523,8 @@ test('strict mode, Linux isolation, deadlines and external cleanup remain source
   assert.match(source, /validateObservation\(row\.value, inventory, artifact\)/u);
   const build = fs.readFileSync('test/support/mission_web_history_build.mjs', 'utf8');
   assert.match(build, /'pub', 'get', '--enforce-lockfile'/u);
-  assert.match(build, /source\.path\)\)\) === source\.sha256/u);
+  assert.match(build, /digest\(readHistoryFile\(project, source\.path\)\) === source\.sha256/u);
+  assert.match(build, /digest\(readHistoryFile\(root, source\.path\)\) === source\.sha256/u);
 });
 test('build cleanup refuses PID/PGID reuse and requires a surviving observed start identity', () => {
   const identity = { id: 101, start: '1000', known: [{ pid: 101, start: '1000' }, { pid: 102, start: '1001' }] };

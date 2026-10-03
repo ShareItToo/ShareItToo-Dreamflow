@@ -124,16 +124,97 @@ export function validateNetworkDiagnostic(value, previous) {
   }
   return detached;
 }
-export function inventoryTree(root) {
-  const files = [];
-  const walk = prefix => {
-    for (const name of fs.readdirSync(path.join(root, prefix)).sort()) {
-      const relative = prefix ? `${prefix}/${name}` : name; const file = path.join(root, relative);
-      const stat = fs.lstatSync(file); check(!stat.isSymbolicLink(), 'history_artifact');
-      if (stat.isDirectory()) walk(relative);
-      else { check(stat.isFile() && stat.nlink === 1, 'history_artifact'); files.push({ path: relative, sha256: digest(fs.readFileSync(file)), bytes: stat.size }); }
+// Test-support reads only: hold parent identities until every consumed byte is
+// validated. Never authorize a later path read using an earlier lstat result.
+function withHistoryReadTree(root, code, consume) {
+  const directories = new Map(); const descriptors = [];
+  const same = (a, b) => ['dev', 'ino', 'mode', 'uid', 'gid', 'nlink', 'size', 'mtimeNs', 'ctimeNs'].every(key => a[key] === b[key]);
+  const lstat = file => fs.lstatSync(file, { bigint: true });
+  const fstat = fd => fs.fstatSync(fd, { bigint: true });
+  const parts = name => {
+    check(typeof name === 'string' && name.length > 0 && name.length <= 4096 && !path.isAbsolute(name)
+      && !name.includes('\\') && !name.includes('\0')
+      && !name.split('/').some(part => !part || part === '.' || part === '..')
+      && name.split('/').length <= 128, code);
+    return name.split('/');
+  };
+  const stable = () => {
+    for (const [file, entry] of directories) check(same(entry.before, fstat(entry.fd)) && same(entry.before, lstat(file)), code);
+    check(fs.realpathSync(root) === root, code);
+  };
+  const directory = name => {
+    let file = root;
+    for (const part of ['', ...(name ? parts(name) : [])]) {
+      if (part) file = path.join(file, part);
+      if (directories.has(file)) continue;
+      check(directories.size < 10000, code);
+      const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+      descriptors.push(fd); const before = fstat(fd);
+      check(before.isDirectory() && before.uid === BigInt(process.getuid())
+        && (before.mode & 0o0022n) === 0n && same(before, lstat(file)), code);
+      directories.set(file, { fd, before });
     }
-  }; walk(''); return files.sort((a,b) => a.path < b.path ? -1 : 1);
+    stable(); return file;
+  };
+  const read = name => {
+    const components = parts(name); directory(components.slice(0, -1).join('/'));
+    const file = path.join(root, name);
+    const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+    try {
+      const before = fstat(fd);
+      check(before.isFile() && before.uid === BigInt(process.getuid())
+        && before.nlink === 1n && (before.mode & 0o7022n) === 0n
+        && before.size >= 0n && before.size <= 64n * 1024n * 1024n && same(before, lstat(file)), code);
+      stable();
+      const bytes = Buffer.alloc(Number(before.size)); let offset = 0;
+      while (offset < bytes.length) {
+        const count = fs.readSync(fd, bytes, offset, bytes.length - offset, offset);
+        check(count > 0, code); offset += count;
+      }
+      check(fs.readSync(fd, Buffer.alloc(1), 0, 1, bytes.length) === 0
+        && same(before, fstat(fd)) && same(before, lstat(file)), code);
+      stable(); return bytes;
+    } finally { fs.closeSync(fd); }
+  };
+  try {
+    check(typeof root === 'string' && path.isAbsolute(root) && root !== '/'
+      && path.normalize(root) === root && fs.realpathSync(root) === root, code);
+    directory('');
+    const result = consume({ read, list: name => {
+      const file = directory(name); const entries = fs.readdirSync(file, { withFileTypes: true });
+      check(entries.length < 10000, code); stable(); return entries.sort((a, b) => a.name < b.name ? -1 : 1);
+    } });
+    stable(); return result;
+  } catch { throw Error(code); }
+  finally {
+    let failed = false;
+    for (const fd of descriptors.reverse()) { try { fs.closeSync(fd); } catch { failed = true; } }
+    check(!failed, code);
+  }
+}
+
+export function readHistoryFile(root, name, code = 'history_source') {
+  check(['history_source', 'history_isolation'].includes(code), 'history_source');
+  return withHistoryReadTree(root, code, tree => tree.read(name));
+}
+
+export function inventoryTree(root) {
+  return withHistoryReadTree(root, 'history_artifact', tree => {
+    const files = []; let total = 0; let entries = 0;
+    const walk = prefix => {
+      for (const entry of tree.list(prefix)) {
+        check(++entries < 10000, 'history_artifact');
+        const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+        if (entry.isDirectory()) walk(relative);
+        else {
+          check(entry.isFile(), 'history_artifact'); const bytes = tree.read(relative);
+          total += bytes.length; check(total <= 256 * 1024 * 1024, 'history_artifact');
+          files.push({ path: relative, sha256: digest(bytes), bytes: bytes.length });
+        }
+      }
+    };
+    walk(''); return files.sort((a,b) => a.path < b.path ? -1 : 1);
+  });
 }
 
 // Flutter 3.41.7 findPlugins follows PackageGraph's reachable dependency graph.
@@ -213,8 +294,7 @@ export async function buildArtifact(directory, sourceHead, emit, signal, ownGrou
   const sources = [];
   for (const name of names) {
     check(!path.isAbsolute(name) && !name.split('/').includes('..'), 'history_source');
-    const original = path.join(root, name); check(fs.lstatSync(original).isFile() && !fs.lstatSync(original).isSymbolicLink(), 'history_source');
-    const bytes = fs.readFileSync(original); const destination = path.join(project, name);
+    const bytes = readHistoryFile(root, name); const destination = path.join(project, name);
     fs.mkdirSync(path.dirname(destination), { recursive: true }); fs.writeFileSync(destination, bytes, { flag: 'wx', mode: 0o600 });
     sources.push({ path: name, sha256: digest(bytes) });
   }
@@ -242,11 +322,7 @@ export async function buildArtifact(directory, sourceHead, emit, signal, ownGrou
       const ok = code === 0 && killed === null && !timedOut; emit(phase, ok ? 'confirmed' : 'failed'); ok ? resolve() : reject(Error('history_build')); });
   });
   await run(['pub', 'get', '--enforce-lockfile'], 'locked-dependencies');
-  const readRegular = name => {
-    const file = path.join(project, name); const stat = fs.lstatSync(file);
-    check(stat.isFile() && !stat.isSymbolicLink() && stat.nlink === 1, 'history_isolation');
-    return fs.readFileSync(file, 'utf8');
-  };
+  const readRegular = name => readHistoryFile(project, name, 'history_isolation').toString('utf8');
   emit('registration-isolation', 'begin');
   let graphBefore; let graphAfter; let configBefore; let registrantBefore;
   try {
@@ -278,8 +354,8 @@ export async function buildArtifact(directory, sourceHead, emit, signal, ownGrou
       packageConfigSha256: digest(configBefore), registrantSha256: digest(registrantAfter) };
     emit('registration-verify', 'confirmed');
   } catch { emit('registration-verify', 'failed'); throw Error('history_isolation'); }
-  for (const source of sources) check(digest(fs.readFileSync(path.join(project, source.path))) === source.sha256
-    && digest(fs.readFileSync(path.join(root, source.path))) === source.sha256, 'history_source');
+  for (const source of sources) check(digest(readHistoryFile(project, source.path)) === source.sha256
+    && digest(readHistoryFile(root, source.path)) === source.sha256, 'history_source');
   check(git('status', '--porcelain', '--untracked-files=all').length === 0, 'history_source');
   const files = inventoryTree(path.join(project, 'build/web'));
   const artifact = validateArtifact({ schemaVersion: 2, sourceHead, sourceDigest: digest(JSON.stringify(sources)),
