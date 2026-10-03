@@ -65,7 +65,7 @@ export function verifyFixtureRunnerSourceFiles({ source, sourceRoot, runtimeBack
     .map((name) => ({ name, checksum: hash(readStablePrivateFile(resolve(directory, name), {
       encoding: null, mode: 0, code: 'fixture_runner_source_path',
     })) }));
-  check(ledger.length === 104 && source.schemaCount === 104 && fixtureDigest(ledger) === source.ledgerDigest, 'fixture_runner_ledger_drift');
+  check(ledger.length === 105 && source.schemaCount === 105 && fixtureDigest(ledger) === source.ledgerDigest, 'fixture_runner_ledger_drift');
 }
 
 export function fixtureRunnerFingerprint(record) {
@@ -318,7 +318,7 @@ export async function runFixtureContainer({ binding, args, source = readAdapterS
         && hash(JSON.stringify(result.draft)) === result.manifestDigest, 'fixture_runner_draft_result');
       validateFixtureManifest(result.draft.preflight); validateFixtureEnvironment(result.draft.preflight, expectedEnv);
       check(result.draft.sourceCommit === source.commit && fixtureDigest(result.draft.sourceHashes) === fixtureDigest(source.hashes)
-        && result.draft.ledgerDigest === source.ledgerDigest && result.draft.schemaCount === 104
+        && result.draft.ledgerDigest === source.ledgerDigest && result.draft.schemaCount === 105
         && fixtureDigest(result.draft.preflight.photo) === fixtureDigest({ ...draftPhoto, file: `${inputRoot}/${fixturePhotoFileName(draftPhoto)}` }), 'fixture_runner_draft_result');
     } else if (binding.kind === 'sit-green-web-fixture-bootstrap') {
       exact(result, ['status', 'runtimeActivated']);
@@ -355,7 +355,7 @@ export async function runFixtureContainer({ binding, args, source = readAdapterS
 
 export function prepareFixtureRunnerInput({ manifest: draft, photoBytes, source }) {
   check(draft?.kind === 'sit-staging-web-fixture-adapter' && draft.schemaVersion === 1
-    && ['activate', 'cleanup'].includes(draft.operation) && source.schemaCount === 104, 'fixture_runner_input_manifest');
+    && ['activate', 'cleanup'].includes(draft.operation) && source.schemaCount === 105, 'fixture_runner_input_manifest');
   check(fixturePhotoBytesValid(draft.preflight?.photo, photoBytes), 'fixture_runner_input_photo');
   // Canonical in-container path stays byte-identical across activation/cleanup;
   // fresh host directories must never silently change the audit scope.
