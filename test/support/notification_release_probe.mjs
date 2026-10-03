@@ -122,6 +122,63 @@ async function command(bin, args, cwd, timeout = 180000) {
   });
 }
 
+// Snapshot a source through retained, no-follow descriptors. Pathname checks
+// alone cannot authorize the later copy into the private test checkout.
+export function readProbeSourceFile(sourceRoot, name) {
+  const descriptors = []; const directories = [];
+  const same = (a, b) => ['dev', 'ino', 'mode', 'uid', 'gid', 'nlink', 'size', 'mtimeNs', 'ctimeNs']
+    .every(key => a[key] === b[key]);
+  const lstat = file => fs.lstatSync(file, { bigint: true });
+  const fstat = fd => fs.fstatSync(fd, { bigint: true });
+  const open = (file, flags) => {
+    const fd = fs.openSync(file, flags | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+    descriptors.push(fd); return fd;
+  };
+  const stableDirectories = () => {
+    for (const entry of directories) check(same(entry.before, fstat(entry.fd))
+      && same(entry.before, lstat(entry.file)), 'source-file-changed');
+    check(fs.realpathSync(sourceRoot) === sourceRoot, 'source-file-changed');
+  };
+  try {
+    check(typeof sourceRoot === 'string' && path.isAbsolute(sourceRoot)
+      && path.normalize(sourceRoot) === sourceRoot && sourceRoot !== '/'
+      && fs.realpathSync(sourceRoot) === sourceRoot
+      && typeof name === 'string' && name.length > 0 && !path.isAbsolute(name)
+      && !name.split('/').some(part => !part || part === '.' || part === '..'), 'source-file');
+    let directory = sourceRoot;
+    for (const part of ['', ...name.split('/').slice(0, -1)]) {
+      directory = part ? path.join(directory, part) : directory;
+      const fd = open(directory, fs.constants.O_RDONLY | fs.constants.O_DIRECTORY);
+      const before = fstat(fd);
+      check(before.isDirectory() && same(before, lstat(directory)), 'source-file');
+      directories.push({ file: directory, fd, before });
+    }
+    const file = path.join(sourceRoot, name);
+    const fd = open(file, fs.constants.O_RDONLY); const before = fstat(fd);
+    check(before.isFile() && before.nlink === 1n && before.uid === BigInt(process.getuid())
+      && (before.mode & 0o7022n) === 0n && before.size <= 16n * 1024n * 1024n,
+    'source-file');
+    check(same(before, lstat(file)), 'source-file-changed'); stableDirectories();
+    const bytes = Buffer.alloc(Number(before.size)); let offset = 0;
+    while (offset < bytes.length) {
+      const count = fs.readSync(fd, bytes, offset, bytes.length - offset, offset);
+      check(count > 0, 'source-file-changed'); offset += count;
+    }
+    check(fs.readSync(fd, Buffer.alloc(1), 0, 1, bytes.length) === 0
+      && same(before, fstat(fd)) && same(before, lstat(file)), 'source-file-changed');
+    stableDirectories(); return bytes;
+  } catch (error) {
+    if (['source-file', 'source-file-changed'].includes(error?.message)) throw error;
+    throw Error('source-file');
+  } finally {
+    let closeFailed = false;
+    for (const fd of descriptors.reverse()) {
+      try { fs.closeSync(fd); } catch { closeFailed = true; }
+    }
+    check(!closeFailed, 'source-file');
+  }
+}
+
 async function build(directory) {
   const checkout = path.join(directory, 'checkout'); fs.mkdirSync(checkout);
   const sourceHead = git('rev-parse', 'HEAD').trim();
@@ -130,13 +187,11 @@ async function build(directory) {
     'test/support/test_builders.dart', 'test/support/notification_release_harness.dart')
     .split('\0').filter(Boolean))].sort();
   const sources = names.map(name => {
-    const source = path.join(root, name); const stat = fs.lstatSync(source);
-    check(stat.isFile() && !stat.isSymbolicLink(), 'source-file');
-    const bytes = fs.readFileSync(source); const target = path.join(checkout, name);
+    const bytes = readProbeSourceFile(root, name); const target = path.join(checkout, name);
     fs.mkdirSync(path.dirname(target), { recursive: true }); fs.writeFileSync(target, bytes, { flag: 'wx' });
     return { path: name, sha256: hash(bytes) };
   });
-  check(sources.every(s => hash(fs.readFileSync(path.join(root, s.path))) === s.sha256), 'source-copy-race');
+  check(sources.every(s => hash(readProbeSourceFile(root, s.path)) === s.sha256), 'source-copy-race');
   fs.mkdirSync(path.join(checkout, 'web'));
   fs.writeFileSync(path.join(checkout, 'web/index.html'), '<!doctype html><html lang="de"><head><base href="/"><meta charset="UTF-8"><link rel="icon" href="data:,"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><script src="flutter_bootstrap.js" defer></script></body></html>');
   fs.writeFileSync(path.join(checkout, 'web/flutter_bootstrap.js'), '{{flutter_js}}\n{{flutter_build_config}}\n_flutter.loader.load({config:{canvasKitBaseUrl:"canvaskit/"}});\n');
@@ -161,7 +216,7 @@ async function build(directory) {
   check(registrants.length === 1, 'registrant-count');
   const registrantAfter = read(path.join(checkout, '.dart_tool/flutter_build', registrants[0]));
   validateIsolatedRegistrant(registrantBefore, registrantAfter, files.filter(f => /\.(js|html)$/u.test(f.path)).map(f => read(path.join(web, f.path))));
-  check(read(graphPath) === after && sources.every(s => hash(fs.readFileSync(path.join(checkout, s.path))) === s.sha256), 'build-source-drift');
+  check(read(graphPath) === after && sources.every(s => hash(readProbeSourceFile(checkout, s.path)) === s.sha256), 'build-source-drift');
   return { web, files, sourceHead, sources, sourceDigest: hash(JSON.stringify(sources)),
     artifactDigest: artifactDigest(files), buildArgs: args,
     registrationIsolation: { scope: 'temporary-test-checkout-only', before: hash(before), after: hash(after), registrant: hash(registrantAfter) } };

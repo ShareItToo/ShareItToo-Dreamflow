@@ -1,10 +1,101 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import fs from 'node:fs';
-import { assetName, checkMatrix, readOwnedBrowserVersion } from '../support/notification_release_probe.mjs';
+import os from 'node:os';
+import path from 'node:path';
+import { assetName, checkMatrix, readOwnedBrowserVersion, readProbeSourceFile } from '../support/notification_release_probe.mjs';
 
 const origin = 'http://127.0.0.1:49152';
 const files = new Set(['index.html', 'main.dart.js', 'canvaskit/canvaskit.wasm']);
+function sourceFixture(t) {
+  const outer = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sit-notification-source-')));
+  t.after(() => fs.rmSync(outer, { recursive: true, force: true }));
+  const root = path.join(outer, 'source'); fs.mkdirSync(root, { mode: 0o700 });
+  const parent = path.join(root, 'nested'); fs.mkdirSync(parent, { mode: 0o700 });
+  const file = path.join(parent, 'fixture.dart'); const bytes = Buffer.from('synthetic source bytes');
+  fs.writeFileSync(file, bytes, { mode: 0o600 });
+  return { root, parent, file, name: 'nested/fixture.dart', bytes };
+}
+
+test('source snapshot reads exact bytes on a retained descriptor, including short reads', (t) => {
+  const f = sourceFixture(t); const original = fs.readSync; const descriptors = [];
+  fs.chmodSync(f.file, 0o644); // Ordinary repository files need not be private 0600 files.
+  t.mock.method(fs, 'readSync', (fd, buffer, offset, length, position) => {
+    descriptors.push(fd); return original(fd, buffer, offset, Math.min(length, 3), position);
+  });
+  assert.deepEqual(readProbeSourceFile(f.root, f.name), f.bytes);
+  assert.equal(new Set(descriptors).size, 1); assert.ok(descriptors.length > 2);
+});
+
+for (const variant of ['symlink', 'directory-symlink', 'hardlink', 'writable', 'directory', 'oversized', 'traversal']) {
+  test(`source snapshot rejects ${variant} before reading`, (t) => {
+    const f = sourceFixture(t); let name = f.name;
+    if (variant === 'symlink') { fs.renameSync(f.file, `${f.file}.original`); fs.symlinkSync(`${f.file}.original`, f.file); }
+    if (variant === 'directory-symlink') { fs.renameSync(f.parent, `${f.parent}.original`); fs.symlinkSync(`${f.parent}.original`, f.parent, 'dir'); }
+    if (variant === 'hardlink') fs.linkSync(f.file, `${f.file}.linked`);
+    if (variant === 'writable') fs.chmodSync(f.file, 0o666);
+    if (variant === 'directory') { fs.unlinkSync(f.file); fs.mkdirSync(f.file); }
+    if (variant === 'oversized') fs.truncateSync(f.file, 16 * 1024 * 1024 + 1);
+    if (variant === 'traversal') name = '../outside';
+    let reads = 0; t.mock.method(fs, 'readSync', () => { reads++; throw Error('unexpected read'); });
+    assert.throws(() => readProbeSourceFile(f.root, name), { message: 'source-file' });
+    assert.equal(reads, 0);
+  });
+}
+
+for (const variant of ['file-open', 'parent-open', 'file-replacement', 'parent-replacement', 'parent-alias', 'root-replacement', 'growth', 'truncate', 'same-size-write', 'mode', 'hardlink']) {
+  test(`source snapshot fails closed on ${variant} race`, (t) => {
+    const f = sourceFixture(t); const originalOpen = fs.openSync; const originalRead = fs.readSync;
+    let changed = false; let totalRead = 0;
+    const mutate = () => {
+      changed = true;
+      if (variant === 'file-open' || variant === 'file-replacement') {
+        fs.renameSync(f.file, `${f.file}.old`); fs.writeFileSync(f.file, f.bytes, { mode: 0o600 });
+      } else if (variant === 'parent-open' || variant === 'parent-replacement') {
+        fs.renameSync(f.parent, `${f.parent}.old`); fs.mkdirSync(f.parent, { mode: 0o700 }); fs.writeFileSync(f.file, f.bytes, { mode: 0o600 });
+      } else if (variant === 'parent-alias') {
+        fs.renameSync(f.parent, `${f.parent}.old`); fs.symlinkSync(`${f.parent}.old`, f.parent, 'dir');
+      } else if (variant === 'root-replacement') {
+        fs.renameSync(f.root, `${f.root}.old`); fs.mkdirSync(f.root, { mode: 0o700 });
+        fs.mkdirSync(f.parent, { mode: 0o700 }); fs.writeFileSync(f.file, f.bytes, { mode: 0o600 });
+      } else if (variant === 'growth') fs.appendFileSync(f.file, Buffer.alloc(32768));
+      else if (variant === 'truncate') fs.truncateSync(f.file, 1);
+      else if (variant === 'same-size-write') fs.writeFileSync(f.file, Buffer.alloc(f.bytes.length, 65));
+      else if (variant === 'mode') fs.chmodSync(f.file, 0o644);
+      else if (variant === 'hardlink') fs.linkSync(f.file, `${f.file}.linked`);
+    };
+    t.mock.method(fs, 'openSync', (target, ...args) => {
+      const fd = originalOpen(target, ...args);
+      if (!changed && ((variant === 'file-open' && target === f.file) || (variant === 'parent-open' && target === f.parent))) mutate();
+      return fd;
+    });
+    t.mock.method(fs, 'readSync', (fd, buffer, offset, length, position) => {
+      if (!changed) mutate();
+      assert.ok(buffer.length <= f.bytes.length);
+      const count = originalRead(fd, buffer, offset, length, position); totalRead += count; return count;
+    });
+    assert.throws(() => readProbeSourceFile(f.root, f.name), { message: /^(?:source-file|source-file-changed)$/u });
+    assert.equal(changed, true); assert.ok(totalRead <= f.bytes.length + 1);
+    if (variant.endsWith('-open')) assert.equal(totalRead, 0);
+  });
+}
+
+for (const operation of ['openSync', 'readSync', 'closeSync']) {
+  test(`source ${operation} failure is sanitized and releases acquired descriptors`, (t) => {
+    const f = sourceFixture(t); const originalOpen = fs.openSync; const originalClose = fs.closeSync;
+    const opened = []; const closed = [];
+    t.mock.method(fs, 'openSync', (...args) => {
+      if (operation === 'openSync') throw Error('/private/synthetic/source');
+      const fd = originalOpen(...args); opened.push(fd); return fd;
+    });
+    t.mock.method(fs, 'closeSync', fd => {
+      originalClose(fd); closed.push(fd); if (operation === 'closeSync') throw Error('/private/synthetic/source');
+    });
+    if (operation === 'readSync') t.mock.method(fs, 'readSync', () => { throw Error('/private/synthetic/source'); });
+    assert.throws(() => readProbeSourceFile(f.root, f.name), { message: 'source-file' });
+    assert.deepEqual(closed.toSorted(), opened.toSorted());
+  });
+}
 const versionUrl = `${origin}/json/version`;
 const debuggerUrl = 'ws://127.0.0.1:49152/devtools/browser/123e4567-e89b-12d3-a456-426614174000';
 const versionInfo = { Browser: 'Chrome/154.0.8037.57', webSocketDebuggerUrl: debuggerUrl };
