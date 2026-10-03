@@ -6,6 +6,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { validateSdkState, validateHistoryMatrix, artifactDigest, buildArguments,
   validateArtifact, classifyAsset, classifyBlockedRequest, networkReasonKeys, validateNetworkDiagnostic,
+  isolateGoogleRegistrationGraph, validateIsolatedRegistrant, isolationScope,
   contract } from '../support/mission_web_history_build.mjs';
 import { runProbe, parseArgs, launchArgs, privilegeArgs, ownsBuildGroup } from '../support/mission_web_history_probe.mjs';
 
@@ -18,7 +19,9 @@ const matrix = () => [row('mission', state(1, 1, 0)), row('root', state(2, 0, 0)
 const head = 'a'.repeat(40);
 const artifact = () => {
   const files = ['flutter_bootstrap.js', 'index.html', 'main.dart.js'].map(path => ({ path, sha256: 'b'.repeat(64), bytes: 1 }));
-  return { schemaVersion: 1, sourceHead: head, sourceDigest: 'c'.repeat(64),
+  return { schemaVersion: 2, sourceHead: head, sourceDigest: 'c'.repeat(64), isolation: isolationScope,
+    isolationHashes: { graphBeforeSha256: '6'.repeat(64), graphAfterSha256: '7'.repeat(64),
+      packageConfigSha256: '8'.repeat(64), registrantSha256: '9'.repeat(64) },
     sourceHashes: { harness: 'd'.repeat(64), router: 'e'.repeat(64), controller: 'f'.repeat(64), host: '1'.repeat(64) },
     lockSha256: '2'.repeat(64), toolchain: { ...contract }, files, artifactDigest: artifactDigest(files) };
 };
@@ -33,10 +36,74 @@ const fake = overrides => ({
     evaluated: true, workerPrivileges: true, externalTcp: 'ENETUNREACH', loopback: 200,
     renderers: [{ uid: 1001, gid: 1001, seccomp: 2, filters: 1, noNewPrivs: 1,
       capabilities: '0000000000000000', nestedPidNamespace: true, forbiddenFlags: false }],
-    historyMatrix: matrix(), blockedUnexpected: 0, artifactDigest: artifact().artifactDigest,
-    sourceDigest: artifact().sourceDigest, sourceHead: head }),
+    historyMatrix: matrix(), blockedUnexpected: 0, networkCounts: networkCounts(), artifactDigest: artifact().artifactDigest,
+    sourceDigest: artifact().sourceDigest, sourceHead: head, isolation: isolationScope,
+    isolationHashes: artifact().isolationHashes }),
   cleanup: async () => ({ processesAbsent: true, groupAbsent: true, namespaceRemoved: true, resolverRemoved: true,
     portClosed: true, profileRemoved: true, exitCode: 0, exitSignal: null }), ...overrides,
+});
+
+const graphFixture = () => ({ roots: ['lendify'], packages: [
+  { name: 'lendify', version: '1.0.0', dependencies: ['google_sign_in'], devDependencies: [] },
+  { name: 'google_sign_in', version: '7.2.0', dependencies: ['flutter', 'google_sign_in_android',
+    'google_sign_in_ios', 'google_sign_in_platform_interface', 'google_sign_in_web'] },
+  { name: 'google_sign_in_web', version: '1.1.3', dependencies: ['google_identity_services_web'] },
+  { name: 'google_identity_services_web', version: '0.3.3+1', dependencies: [] },
+  ...['flutter', 'google_sign_in_android', 'google_sign_in_ios', 'google_sign_in_platform_interface']
+    .map(name => ({ name, version: '1.0.0', dependencies: [] })),
+], configVersion: 1 });
+test('test-only graph isolation removes exactly one reviewed edge and retains every package and other byte', () => {
+  const before = graphFixture(); const text = JSON.stringify(before, null, 2);
+  const isolated = isolateGoogleRegistrationGraph(text);
+  const expected = structuredClone(before); expected.packages[1].dependencies.pop();
+  assert.equal(isolated, JSON.stringify(expected, null, 2));
+  assert.equal(JSON.stringify(before, null, 2), text);
+  assert.equal(JSON.parse(isolated).packages[2].name, 'google_sign_in_web');
+  const sdkNative = graphFixture();
+  sdkNative.packages[0].dependencies.push('_flutterfire_internals');
+  sdkNative.packages.push({ name: '_flutterfire_internals', version: '1.3.76', dependencies: [] });
+  assert.doesNotThrow(() => isolateGoogleRegistrationGraph(JSON.stringify(sdkNative, null, 2)));
+  for (const mutate of [g => g.configVersion = 2, g => g.extra = true, g => g.roots.push('other'),
+    g => g.packages.push(g.packages[1]), g => g.packages[1].dependencies.push('google_sign_in_web'),
+    g => g.packages[1].dependencies.pop(), g => g.packages[1].version = '7.3.0',
+    g => g.packages[2].version = '1.1.4', g => g.packages[2].name = 'google_sign_in_web_lookalike',
+    g => g.packages[0].devDependencies.push('google_sign_in_web'),
+    g => g.packages[0].dependencies.push('google_sign_in_web'), g => g.packages[0].extra = 'private',
+    g => g.packages.push(null)]) {
+    const changed = graphFixture(); mutate(changed);
+    assert.throws(() => isolateGoogleRegistrationGraph(JSON.stringify(changed, null, 2)), /^Error: history_isolation$/u);
+  }
+  for (const malformed of ['{', text.replace('"configVersion": 1', '"configVersion": 1, "configVersion": 1'),
+    isolated]) assert.throws(() => isolateGoogleRegistrationGraph(malformed), /^Error: history_isolation$/u);
+});
+test('generated registration changes only exact GIS lines and executable assets retain no loader endpoint', () => {
+  const before = "// Flutter web plugin registrant file.\nimport 'package:google_sign_in_web/google_sign_in_web.dart';\nvoid registerPlugins() {\n  Other.registerWith(registrar);\n  GoogleSignInPlugin.registerWith(registrar);\n}\n";
+  const after = before.replace("import 'package:google_sign_in_web/google_sign_in_web.dart';\n", '')
+    .replace('  GoogleSignInPlugin.registerWith(registrar);\n', '');
+  assert.doesNotThrow(() => validateIsolatedRegistrant(before, after, ['compiled local app']));
+  for (const candidate of [before, after.replace('Other.registerWith', 'OtherChanged.registerWith'),
+    `${after}// GoogleSignInPlugin`, after.replace('Other.registerWith(registrar);', '')]) {
+    assert.throws(() => validateIsolatedRegistrant(before, candidate, ['compiled local app']), /^Error: history_isolation$/u);
+  }
+  for (const code of ['https://accounts.google.com/gsi/client', 'https:\\/\\/accounts.google.com\\/gsi\\/client'])
+    assert.throws(() => validateIsolatedRegistrant(before, after, [code]), /^Error: history_isolation$/u);
+  const value = artifact(); delete value.isolation;
+  assert.throws(() => validateArtifact(value), /^Error: history_artifact$/u);
+  const wrongScope = artifact(); wrongScope.isolation = 'full-auth-proof';
+  assert.throws(() => validateArtifact(wrongScope), /^Error: history_artifact$/u);
+  for (const mutate of [v => v.isolationHashes.graphAfterSha256 = v.isolationHashes.graphBeforeSha256,
+    v => v.isolationHashes.path = 'private', v => delete v.isolationHashes.registrantSha256,
+    v => v.toolchain.packageGraphSha256 = '0'.repeat(64),
+    v => v.toolchain.pluginDiscoverySha256 = '0'.repeat(64), v => v.toolchain.webTargetSha256 = '0'.repeat(64)]) {
+    const changed = artifact(); mutate(changed);
+    assert.throws(() => validateArtifact(changed), /^Error: history_artifact$/u);
+  }
+  const source = fs.readFileSync('test/support/mission_web_history_build.mjs', 'utf8');
+  assert.ok(source.indexOf("await run(['pub', 'get', '--enforce-lockfile']") < source.indexOf('graphAfter = isolateGoogleRegistrationGraph(graphBefore)'));
+  assert.ok(source.indexOf('graphAfter = isolateGoogleRegistrationGraph(graphBefore)') < source.indexOf("await run(buildArguments, 'flutter-build')"));
+  assert.match(source, /readRegular\('\.dart_tool\/package_config\.json'\) === configBefore/u);
+  assert.match(source, /readRegular\('\.dart_tool\/package_graph\.json'\) === graphAfter/u);
+  assert.equal((source.match(/verifyToolSources\(\);/gu) ?? []).length, 2);
 });
 
 test('exact SDK envelope and nested application cursor are different contracts', () => {
@@ -190,9 +257,10 @@ test('sanitized proof binds artifact/source/toolchain but never emits raw histor
   const journal = [];
   const result = await runProbe({ expectedHead: head, adapter: fake(), journal: row => journal.push(row) });
   assert.equal(result.status, 'pass');
-  assert.equal(result.evidenceClass, 'exact-production-code-harness'); assert.equal(result.fullAppRoot, false);
+  assert.equal(result.evidenceClass, 'exact-production-navigation-code-harness'); assert.equal(result.fullAppRoot, false);
   assert.equal(result.artifact.artifactDigest, artifact().artifactDigest);
-  assert.deepEqual(Object.keys(result.artifact).sort(), ['sourceDigest', 'sourceHashes', 'lockSha256', 'toolchain', 'artifactDigest', 'fileCount'].sort());
+  assert.equal(result.isolation, isolationScope); assert.equal(result.providerBootstrap, false); assert.equal(result.googleAuth, false);
+  assert.deepEqual(Object.keys(result.artifact).sort(), ['sourceDigest', 'sourceHashes', 'lockSha256', 'toolchain', 'artifactDigest', 'fileCount', 'isolationHashes'].sort());
   assert.doesNotMatch(JSON.stringify(result), /https:|127\.0\.0|sdkState|serialCount|"instance"|"entry"|\/tmp\/|"pid"|"port"/u);
   assert.deepEqual(journal.map(v => v.sequence), journal.map((_,i) => i + 1));
   assert.deepEqual(journal.filter(v => v.result === 'begin').map(v => v.phase), ['inventory', 'build', 'prepare', 'observe', 'cleanup']);
@@ -210,7 +278,9 @@ test('build/network/matrix failures are stable and always clean up; abnormal exi
     ['inventory', v => v.clean = false], ['inventory', v => v.chrome = 'wrong'],
     ['build', v => v.sourceHead = 'b'.repeat(40)], ['build', v => v.files[0].sha256 = '0'.repeat(64)],
     ['prepare', v => v.links.push('eth0')], ['prepare', v => v.routes4.push({})],
-    ['observe', v => v.blockedUnexpected = 1], ['observe', v => v.historyMatrix[2].sdkState.serialCount = 2],
+    ['observe', v => v.blockedUnexpected = 1], ['observe', v => v.networkCounts.google_identity_script = 1],
+    ['observe', v => v.isolationHashes.graphAfterSha256 = '0'.repeat(64)],
+    ['observe', v => v.historyMatrix[2].sdkState.serialCount = 2],
     ['observe', v => v.artifactDigest = '0'.repeat(64)], ['observe', v => v.sourceHead = '0'.repeat(40)],
     ['observe', v => v.renderers[0].seccomp = 0], ['cleanup', v => v.profileRemoved = false],
   ]) {

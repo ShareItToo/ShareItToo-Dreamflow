@@ -5,7 +5,11 @@ import { createHash } from 'node:crypto';
 import { execFileSync, spawn } from 'node:child_process';
 
 export const contract = Object.freeze({ flutter: '3.41.7', dart: '3.11.5',
-  framework: 'cc0734ac716fbb8b90f3f9db8020958b1553afa7', engine: '59aa584fdf100e6c78c785d8a5b565d1de4b48ab' });
+  framework: 'cc0734ac716fbb8b90f3f9db8020958b1553afa7', engine: '59aa584fdf100e6c78c785d8a5b565d1de4b48ab',
+  packageGraphSha256: '61e04e4e6db25721b7c7671c9d90ba6d693fec4f195c91dfcd463f34b7ac28dd',
+  pluginDiscoverySha256: '6383dd6e69c220884c126b72f78c57781bd311a9b9b70229d4c15d0cd1ef1242',
+  webTargetSha256: '21cb8705af8d7dc59185b178afca1b58e40907479deddf51ec000e89f205ed48' });
+export const isolationScope = 'test-only-google-web-registration-isolation-v1';
 const check = (ok, code) => { if (!ok) throw Error(code); };
 const digest = value => createHash('sha256').update(value).digest('hex');
 const exact = (v, keys) => v && typeof v === 'object' && !Array.isArray(v)
@@ -44,7 +48,10 @@ export function validateHistoryMatrix(rows) {
 export const artifactDigest = files => digest(JSON.stringify(files));
 export function validateArtifact(a) {
   check(exact(a, ['schemaVersion', 'sourceHead', 'sourceDigest', 'sourceHashes', 'lockSha256',
-    'toolchain', 'files', 'artifactDigest']) && a.schemaVersion === 1 && /^[a-f0-9]{40}$/u.test(a.sourceHead)
+    'toolchain', 'files', 'artifactDigest', 'isolation', 'isolationHashes']) && a.schemaVersion === 2 && /^[a-f0-9]{40}$/u.test(a.sourceHead)
+    && a.isolation === isolationScope && exact(a.isolationHashes, ['graphBeforeSha256', 'graphAfterSha256', 'packageConfigSha256', 'registrantSha256'])
+    && Object.values(a.isolationHashes).every(v => /^[a-f0-9]{64}$/u.test(v))
+    && a.isolationHashes.graphBeforeSha256 !== a.isolationHashes.graphAfterSha256
     && [a.sourceDigest, a.lockSha256, a.artifactDigest].every(v => /^[a-f0-9]{64}$/u.test(v))
     && exact(a.sourceHashes, ['harness', 'router', 'controller', 'host'])
     && Object.values(a.sourceHashes).every(v => /^[a-f0-9]{64}$/u.test(v))
@@ -129,6 +136,58 @@ export function inventoryTree(root) {
   }; walk(''); return files.sort((a,b) => a.path < b.path ? -1 : 1);
 }
 
+// Flutter 3.41.7 findPlugins follows PackageGraph's reachable dependency graph.
+// Only registration discovery is isolated; package configuration and all source
+// packages remain intact for compilation. This is never a product workaround.
+export function isolateGoogleRegistrationGraph(text) {
+  let graph; try { graph = JSON.parse(text); } catch { throw Error('history_isolation'); }
+  check(typeof text === 'string' && text.length < 16 * 1024 * 1024
+    && text === JSON.stringify(graph, null, 2) && exact(graph, ['roots', 'packages', 'configVersion'])
+    && graph.configVersion === 1 && JSON.stringify(graph.roots) === '["lendify"]'
+    && Array.isArray(graph.packages) && graph.packages.length > 3 && graph.packages.length < 2000, 'history_isolation');
+  const names = new Map(); const validNames = values => Array.isArray(values) && values.length < 1000
+    && values.every(v => typeof v === 'string' && /^[a-z_][a-z0-9_]*$/u.test(v)) && new Set(values).size === values.length;
+  for (const p of graph.packages) {
+    check(p && typeof p === 'object' && !Array.isArray(p), 'history_isolation');
+    check(exact(p, Object.hasOwn(p, 'devDependencies') ? ['name', 'version', 'dependencies', 'devDependencies'] : ['name', 'version', 'dependencies'])
+      && typeof p.name === 'string' && /^[a-z_][a-z0-9_]*$/u.test(p.name) && !names.has(p.name)
+      && typeof p.version === 'string' && /^[A-Za-z0-9.+-]+$/u.test(p.version)
+      && validNames(p.dependencies) && (!Object.hasOwn(p, 'devDependencies') || validNames(p.devDependencies)), 'history_isolation');
+    names.set(p.name, p);
+  }
+  for (const p of graph.packages) for (const name of [...p.dependencies, ...(p.devDependencies ?? [])])
+    check(names.has(name), 'history_isolation');
+  const parent = names.get('google_sign_in'); const root = names.get('lendify');
+  check(parent?.version === '7.2.0' && names.get('google_sign_in_web')?.version === '1.1.3'
+    && names.get('google_identity_services_web')?.version === '0.3.3+1'
+    && root?.dependencies.includes('google_sign_in') && Array.isArray(root.devDependencies)
+    && JSON.stringify(parent.dependencies) === '["flutter","google_sign_in_android","google_sign_in_ios","google_sign_in_platform_interface","google_sign_in_web"]', 'history_isolation');
+  const incoming = graph.packages.flatMap(p => [
+    ...p.dependencies.filter(n => n === 'google_sign_in_web').map(() => `${p.name}:dependencies`),
+    ...(p.devDependencies ?? []).filter(n => n === 'google_sign_in_web').map(() => `${p.name}:devDependencies`)]);
+  check(JSON.stringify(incoming) === '["google_sign_in:dependencies"]', 'history_isolation');
+  const index = parent.dependencies.indexOf('google_sign_in_web'); parent.dependencies.splice(index, 1);
+  const queue = [...root.dependencies, ...root.devDependencies]; const reachable = new Set();
+  while (queue.length) { const name = queue.pop(); if (reachable.has(name)) continue;
+    reachable.add(name); queue.push(...names.get(name).dependencies); }
+  check(!reachable.has('google_sign_in_web'), 'history_isolation');
+  const isolated = JSON.stringify(graph, null, 2);
+  parent.dependencies.splice(index, 0, 'google_sign_in_web');
+  check(JSON.stringify(graph, null, 2) === text, 'history_isolation');
+  return isolated;
+}
+
+export function validateIsolatedRegistrant(before, after, executableTexts) {
+  const lines = ["import 'package:google_sign_in_web/google_sign_in_web.dart';\n", '  GoogleSignInPlugin.registerWith(registrar);\n'];
+  check(typeof before === 'string' && typeof after === 'string' && before.startsWith('// Flutter web plugin registrant file.')
+    && lines.every(line => before.split(line).length === 2), 'history_isolation');
+  check(after === lines.reduce((text, line) => text.replace(line, ''), before)
+    && !/google_sign_in_web|GoogleSignInPlugin/u.test(after)
+    && Array.isArray(executableTexts) && executableTexts.length > 0
+    && executableTexts.every(text => typeof text === 'string'
+      && !/accounts\.google\.com\/gsi\/client/u.test(text.replaceAll('\\/', '/'))), 'history_isolation');
+}
+
 // Provision/build precedes network namespace entry. Source and lock are exact;
 // there is no download fallback after entering the namespace.
 export async function buildArtifact(directory, sourceHead, emit, signal, ownGroup = () => {}) {
@@ -139,6 +198,12 @@ export async function buildArtifact(directory, sourceHead, emit, signal, ownGrou
   const version = JSON.parse(fs.readFileSync(path.join(flutterRoot, 'bin/cache/flutter.version.json'), 'utf8'));
   check(version.frameworkVersion === contract.flutter && version.dartSdkVersion === contract.dart
     && version.frameworkRevision === contract.framework && version.engineRevision === contract.engine, 'history_toolchain');
+  const verifyToolSources = () => {
+    for (const [name, expected] of [['package_graph.dart', contract.packageGraphSha256],
+      ['flutter_plugins.dart', contract.pluginDiscoverySha256], ['build_system/targets/web.dart', contract.webTargetSha256]])
+      check(digest(fs.readFileSync(path.join(flutterRoot, 'packages/flutter_tools/lib/src', name))) === expected, 'history_toolchain');
+  };
+  verifyToolSources();
   const project = path.join(directory, 'checkout'); fs.mkdirSync(project, { mode: 0o700 });
   const names = git('ls-files', '-z', '--', 'lib', 'assets', 'pubspec.yaml', 'pubspec.lock',
     'test/support/mission_web_history_harness.dart', 'test/support/mission_web_history_build.mjs',
@@ -177,12 +242,48 @@ export async function buildArtifact(directory, sourceHead, emit, signal, ownGrou
       const ok = code === 0 && killed === null && !timedOut; emit(phase, ok ? 'confirmed' : 'failed'); ok ? resolve() : reject(Error('history_build')); });
   });
   await run(['pub', 'get', '--enforce-lockfile'], 'locked-dependencies');
+  const readRegular = name => {
+    const file = path.join(project, name); const stat = fs.lstatSync(file);
+    check(stat.isFile() && !stat.isSymbolicLink() && stat.nlink === 1, 'history_isolation');
+    return fs.readFileSync(file, 'utf8');
+  };
+  emit('registration-isolation', 'begin');
+  let graphBefore; let graphAfter; let configBefore; let registrantBefore;
+  try {
+    graphBefore = readRegular('.dart_tool/package_graph.json');
+    graphAfter = isolateGoogleRegistrationGraph(graphBefore);
+    configBefore = readRegular('.dart_tool/package_config.json');
+    const config = JSON.parse(configBefore);
+    check(config.configVersion === 2 && ['google_sign_in', 'google_sign_in_web', 'google_identity_services_web'].every(name =>
+      config.packages.filter(p => p.name === name && typeof p.rootUri === 'string' && p.packageUri === 'lib/').length === 1), 'history_isolation');
+    registrantBefore = readRegular('.dart_tool/dartpad/web_plugin_registrant.dart');
+    fs.writeFileSync(path.join(project, '.dart_tool/package_graph.json'), graphAfter);
+    emit('registration-isolation', 'confirmed');
+  } catch { emit('registration-isolation', 'failed'); throw Error('history_isolation'); }
   await run(buildArguments, 'flutter-build');
+  emit('registration-verify', 'begin');
+  let isolationHashes;
+  try {
+    check(readRegular('.dart_tool/package_graph.json') === graphAfter
+      && readRegular('.dart_tool/package_config.json') === configBefore, 'history_isolation');
+    verifyToolSources();
+    const candidates = fs.readdirSync(path.join(project, '.dart_tool/flutter_build'), { recursive: true })
+      .filter(name => /^[a-f0-9]{32}\/web_plugin_registrant\.dart$/u.test(name));
+    check(candidates.length === 1, 'history_isolation');
+    const registrantAfter = readRegular(`.dart_tool/flutter_build/${candidates[0]}`);
+    const executableTexts = inventoryTree(path.join(project, 'build/web')).filter(file => /\.(?:js|html)$/u.test(file.path))
+      .map(file => readRegular(`build/web/${file.path}`));
+    validateIsolatedRegistrant(registrantBefore, registrantAfter, executableTexts);
+    isolationHashes = { graphBeforeSha256: digest(graphBefore), graphAfterSha256: digest(graphAfter),
+      packageConfigSha256: digest(configBefore), registrantSha256: digest(registrantAfter) };
+    emit('registration-verify', 'confirmed');
+  } catch { emit('registration-verify', 'failed'); throw Error('history_isolation'); }
   for (const source of sources) check(digest(fs.readFileSync(path.join(project, source.path))) === source.sha256
     && digest(fs.readFileSync(path.join(root, source.path))) === source.sha256, 'history_source');
   check(git('status', '--porcelain', '--untracked-files=all').length === 0, 'history_source');
   const files = inventoryTree(path.join(project, 'build/web'));
-  const artifact = validateArtifact({ schemaVersion: 1, sourceHead, sourceDigest: digest(JSON.stringify(sources)),
+  const artifact = validateArtifact({ schemaVersion: 2, sourceHead, sourceDigest: digest(JSON.stringify(sources)),
+    isolation: isolationScope, isolationHashes,
     sourceHashes, lockSha256: find('pubspec.lock'), toolchain: { ...contract }, files, artifactDigest: artifactDigest(files) });
   fs.writeFileSync(path.join(directory, 'artifact.json'), JSON.stringify(artifact), { flag: 'wx', mode: 0o600 });
   return artifact;

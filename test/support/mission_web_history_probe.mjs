@@ -2,7 +2,7 @@
 // Namespace/privilege/cleanup mechanics are a bounded copy of the accepted blank infrastructure; its source is unchanged.
 import http from 'node:http';
 import { buildArtifact, validateArtifact, validateHistoryMatrix, classifyAsset, classifyBlockedRequest,
-  networkReasonKeys, validateNetworkDiagnostic, inventoryTree, artifactDigest } from './mission_web_history_build.mjs';
+  networkReasonKeys, validateNetworkDiagnostic, isolationScope, inventoryTree, artifactDigest } from './mission_web_history_build.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import net from 'node:net';
@@ -20,9 +20,9 @@ const mode = 'linux-history-harness';
 export const inventoryPhases = Object.freeze(['environment', 'chrome-version', 'git-identity', 'git-status', 'binary-check', 'byte-hash']);
 const phases = ['inventory', 'prepare', 'launch', 'cdp-connect', 'Browser.getVersion', 'Target.getTargets',
   'Target.attachToTarget', 'Page.enable', 'Runtime.enable', 'Runtime.evaluate', 'SystemInfo.getProcessInfo',
-  'build', 'locked-dependencies', 'flutter-build', 'asset-server', 'Network.enable', 'Fetch.enable', 'Fetch.requestPaused', 'Fetch.fulfillRequest', 'Fetch.failRequest', 'Page.navigate', 'Page.reload', 'Page.getNavigationHistory', 'Page.navigateToHistoryEntry', 'Accessibility.enable', 'Accessibility.getFullAXTree', 'Input.dispatchMouseEvent', 'history-matrix', 'history-stale-seed', 'network', 'Browser.close', 'observe', 'terminate', 'cleanup', ...inventoryPhases];
+  'build', 'locked-dependencies', 'registration-isolation', 'registration-verify', 'flutter-build', 'asset-server', 'Network.enable', 'Fetch.enable', 'Fetch.requestPaused', 'Fetch.fulfillRequest', 'Fetch.failRequest', 'Page.navigate', 'Page.reload', 'Page.getNavigationHistory', 'Page.navigateToHistoryEntry', 'Accessibility.enable', 'Accessibility.getFullAXTree', 'Input.dispatchMouseEvent', 'history-matrix', 'history-stale-seed', 'network', 'Browser.close', 'observe', 'terminate', 'cleanup', ...inventoryPhases];
 const codes = new Set(['probe_arguments', 'probe_inventory', 'probe_network', 'probe_targets', 'probe_sandbox',
-  'history_state', 'history_matrix', 'history_serial', 'history_artifact', 'history_source', 'history_toolchain', 'history_build', 'history_network', 'probe_version', 'probe_cleanup', 'probe_timeout', 'probe_aborted', 'probe_failure', 'probe_test_hooks']);
+  'history_state', 'history_matrix', 'history_serial', 'history_artifact', 'history_source', 'history_toolchain', 'history_build', 'history_isolation', 'history_network', 'probe_version', 'probe_cleanup', 'probe_timeout', 'probe_aborted', 'probe_failure', 'probe_test_hooks']);
 const check = (ok, code) => { if (!ok) throw Error(code); };
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 export function classifyCommandFailure(error) {
@@ -113,14 +113,16 @@ export function validateNetwork(v) {
 }
 export function validateObservation(v, inventory, artifact) {
   check(v?.artifactDigest === artifact.artifactDigest && v.sourceDigest === artifact.sourceDigest
-    && v.sourceHead === artifact.sourceHead, 'history_artifact');
+    && v.sourceHead === artifact.sourceHead && v.isolation === isolationScope
+    && JSON.stringify(v.isolationHashes) === JSON.stringify(artifact.isolationHashes), 'history_artifact');
   check(v?.browser === `Chrome/${contract.chrome}` && v.protocol === '1.3' && v.httpStatus === 200, 'probe_version');
   validateTargetInventory(v.targetCounts);
   check(v.evaluated === true && v.workerPrivileges === true && v.renderers?.length > 0, 'probe_sandbox');
   for (const r of v.renderers) check(r.uid === inventory.uid && r.gid === inventory.gid && r.seccomp === 2
     && r.filters >= 1 && r.noNewPrivs === 1 && r.capabilities === '0000000000000000'
     && r.nestedPidNamespace === true && r.forbiddenFlags === false, 'probe_sandbox');
-  validateHistoryMatrix(v.historyMatrix); check(v.blockedUnexpected === 0, 'history_network');
+  validateHistoryMatrix(v.historyMatrix); check(v.blockedUnexpected === 0
+    && Object.values(validateNetworkDiagnostic(v.networkCounts)).every(count => count === 0), 'history_network');
   check(v.externalTcp === 'ENETUNREACH' && v.loopback === 200, 'probe_network');
 }
 export function validateCleanup(v, requireNormalExit = true) {
@@ -172,9 +174,11 @@ export async function runProbe({ expectedHead, adapter, journal = () => {}, sign
   if (signal?.aborted && !code) code = 'probe_aborted';
   if (code) return fail(code, code === 'history_network' ? networkDiagnostic : diagnostic);
   return { schemaVersion: 1, mode, status: 'pass', sourceHead: expectedHead, inventory: { ...contract, digests: { ...inventory.digests } },
-    evidenceClass: 'exact-production-code-harness', fullAppRoot: false,
+    evidenceClass: 'exact-production-navigation-code-harness', fullAppRoot: false,
+    isolation: isolationScope, providerBootstrap: false, googleAuth: false,
     artifact: { sourceDigest: artifact.sourceDigest, sourceHashes: artifact.sourceHashes, lockSha256: artifact.lockSha256,
-      toolchain: artifact.toolchain, artifactDigest: artifact.artifactDigest, fileCount: artifact.files.length },
+      toolchain: artifact.toolchain, artifactDigest: artifact.artifactDigest, fileCount: artifact.files.length,
+      isolationHashes: artifact.isolationHashes },
     proof: { rendererSandbox: true, loopback: true, externalTcp: 'ENETUNREACH', defaultOff: true,
       sdkEnvelopeAndNestedCursor: true, coldPushBackForwardReload: true, duplicateSuppressed: true,
       staleCursor: 'adversarial-browser-history-entry-rejected' },
@@ -361,6 +365,7 @@ function realAdapter(expectedHead, emit, signal) {
                     capabilities: s.CapEff, nestedPidNamespace: s.NSpid?.split(/\s+/u).length >= 2,
                     forbiddenFlags: /--(?:no-sandbox|disable-\S*sandbox|ignore-certificate-errors)/u.test(cmd) };
                 });
+                check(Object.values(networkSummary).every(count => count === 0), 'history_network');
                 validateObservation(row.value, inventory, artifact); proof = row.value;
                 // Keep renderers alive until the external controller verified /proc.
                 child.stdin.end('verified\n');
@@ -631,7 +636,8 @@ async function worker(directory) {
       value: { browser: version.product, protocol: version.protocolVersion, httpStatus: response.status,
         targetCounts: summarizeTargets(targets), evaluated: result.result?.value === 2,
         workerPrivileges, externalTcp, loopback: response.status, historyMatrix, blockedUnexpected,
-        artifactDigest: artifact.artifactDigest, sourceDigest: artifact.sourceDigest, sourceHead: artifact.sourceHead } });
+        artifactDigest: artifact.artifactDigest, sourceDigest: artifact.sourceDigest, sourceHead: artifact.sourceHead,
+        isolation: artifact.isolation, isolationHashes: artifact.isolationHashes, networkCounts } });
     await acknowledgement;
     await cdp('Browser.close');
     for (let i = 0; i < 30 && !exited; i++) await delay(100);
