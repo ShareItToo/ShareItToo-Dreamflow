@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import test from 'node:test';
 
 const packageJsonUrl = new URL('../package.json', import.meta.url);
@@ -20,10 +21,38 @@ function atLeast(actual, minimum) {
 }
 
 function lockfileVersions(lockfile, packageName) {
-  const escapedName = packageName.replaceAll('/', '\\/');
-  const matcher = new RegExp(`^  ${escapedName}@(\\d+\\.\\d+\\.\\d+):`, 'gmu');
+  const escapedName = packageName.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+  const matcher = new RegExp(`^  ['"]?${escapedName}@(\\d+\\.\\d+\\.\\d+)['"]?:`, 'gmu');
   return [...lockfile.matchAll(matcher)].map((match) => match[1]);
 }
+
+function assertBusboyFloor(lockfile) {
+  const versions = lockfileVersions(lockfile, '@fastify/busboy');
+  assert.ok(versions.length >= 2, 'Busboy package and snapshot records must be present');
+  for (const version of versions) {
+    assert.ok(atLeast(parseVersion(version, 'Busboy'), [3, 2, 1]),
+      `@fastify/busboy@${version} regresses GHSA-xjh9-v7x6-24jw / GHSA-x8mw-p69m-v3mx`);
+  }
+}
+
+test('Firebase transitive Busboy lock and installed resolution retain both reviewed advisory floors', async () => {
+  assertBusboyFloor(await readFile(lockfileUrl, 'utf8'));
+  const require = createRequire(import.meta.url);
+  const firebaseRequire = createRequire(require.resolve('firebase-admin'));
+  const installed = firebaseRequire('@fastify/busboy/package.json');
+  assert.ok(atLeast(parseVersion(installed.version, 'installed Busboy'), [3, 2, 1]));
+});
+
+test('Busboy floor rejects missing, mixed and vulnerable package or snapshot records', () => {
+  const record = (version) => `  '@fastify/busboy@${version}': {}\n`;
+  assertBusboyFloor(record('3.2.1') + record('3.2.1'));
+  for (const version of ['1.0.0', '3.1.0', '3.2.0']) {
+    assert.throws(() => assertBusboyFloor(record(version) + record('3.2.1')), /regresses/u);
+    assert.throws(() => assertBusboyFloor(record('3.2.1') + record(version)), /regresses/u);
+  }
+  assert.throws(() => assertBusboyFloor(''), /must be present/u);
+  assert.throws(() => assertBusboyFloor(record('3.2.1')), /must be present/u);
+});
 
 test('backend image and mail dependencies retain the reviewed advisory floors', async () => {
   const packageJson = JSON.parse(await readFile(packageJsonUrl, 'utf8'));

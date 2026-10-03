@@ -25,7 +25,7 @@ not current execution or release authority.
   `967958f6c6a4d580f4f05e6849b32991db233603` on branch
   `codex/master-workflow-20260808`. The closed synthetic P7 source/VERIFY head
   is `08636b6ce5cd1011fb3faf8458e5ae4daae0d460`. Current non-deployed source
-  head `177a0628fd349bf2f4f6a1d26501c3c6236c3c50` contains the pure,
+  head `244e4511848cba795f4827ebfdec9ca5909a32dd` contains the pure,
   unrouteable D4 threat/abort contract, synthetic D1/D2 acceptance-outcome
   diagnostic and v2 server-readback envelope. None is a server-origin,
   contract, payment, persistence or coordination adapter. None of these
@@ -37,7 +37,17 @@ not current execution or release authority.
   and CodeQL
   [37083356038](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37083356038)
   both **SUCCESS**. This is exact-738 source CI, not a CI/deployment claim for
-  current local 177 or a Mission/contract/payment activation.
+  current local 244 or a Mission/contract/payment activation.
+- **Exact-244 CI — FIX; narrow dependency successor locally PASS:** Sol verified
+  audit/R10 failed on high advisories `GHSA-xjh9-v7x6-24jw` and
+  `GHSA-x8mw-p69m-v3mx`; Backend 2,249 pass/23 skip and PostgreSQL proof were
+  green. [Security-fix record](SIT_FASTIFY_BUSBOY_SECURITY_FIX_2026-10-03.md):
+  only locked `@fastify/busboy` **3.2.0 → 3.2.1**; Firebase Admin 14.2.0 and
+  package declarations unchanged, no override or suppression. Red-first floor
+  guard now 4/4; frozen install, fresh production audit, complete Backend
+  **2,251 pass/23 skip**, syntax, consumer **39/39**, secret/diff checks passed.
+  This is an uncommitted local successor, not patched live runtime or green
+  exact-head successor CI. Do not retry unchanged 244.
 - **Critical disk incident — Sol cleanup/natural-health closure PASS:**
   [alert diagnosis](SIT_CRITICAL_ALERT_SPAM_SOURCE_MAP_2026-10-03.md) verified
   a real disk failure, valid cooldown/marker and roughly hourly delivery.
@@ -321,8 +331,11 @@ not current execution or release authority.
   domain may be added before sanitized independent readback. Current provider
   state remains `NOT VERIFIED`; packet preparation is not an A/PASS, provider
   mutation, login proof, activation or release.
-- **Exact next:** disk incident closed; no further cleanup or alert-source fix.
-  The D1/D2 source map, v2 envelope and PG gate packet are prepared. Do not implement
+- **Exact next:** Sol reviews the narrow Busboy lock/floor successor; only after
+  the source fix may a new exact-head CI run close audit/R10. Then resume the
+  paused source-only D5 measurement map. Disk incident remains closed; no more
+  cleanup or alert-source fix. The D1/D2 source map, v2 envelope and PG gate
+  packet are prepared. Do not implement
   or wire the PostgreSQL reader before its narrow gate. When the visible SIT
   Gemini account is signed in, verify exactly
   Google AI Pro `Pro` with `Extended`, then submit
