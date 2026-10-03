@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-google-web-provider-read-only-preflight",
+  "status": "current_read_only_preflight_complete",
+  "readStartedAtUtc": "2026-10-03T12:21:44.877Z",
+  "readCompletedAtUtc": "2026-10-03T12:21:45.975Z",
+  "sourceHead": "75b7e19dba55579a2b1a8df0e6746e61b5c57874",
+  "gatePacketCommit": "30e03ed5860b8108f04e62b00ba92163799c7fcc",
+  "runtime": {
+    "service": "shareittoo-staging-api",
+    "appCommit": "6c0ef70db2656df3e378add858d5f5157388127e",
+    "appVersion": "0.1.0-6c0ef70db265",
+    "image": "ghcr.io/shareittoo/shareittoo-api:6c0ef70db2656df3e378add858d5f5157388127e@sha256:16a90e4fbc3710e37c9e319fe5db545d6da6348448848c94c6bfc661eac47357"
+  },
+  "readBoundary": {
+    "liveRead": true,
+    "mutationsSubmitted": false,
+    "projectCredentialMatch": true,
+    "backendAuthEnabled": true,
+    "emulatorAbsent": true,
+    "webApps": {
+      "httpStatus": 200,
+      "count": 0
+    },
+    "authorizedDomains": {
+      "httpStatus": 200,
+      "count": 3,
+      "stagingPresent": false,
+      "namesRedacted": true
+    },
+    "googleProvider": {
+      "httpStatus": 200,
+      "enabled": true,
+      "clientConfigured": true,
+      "clientIdRedacted": true
+    }
+  },
+  "sanitizedProviderReadSha256": "656659d12ed3de99f18fe5f76be7be7c977019fc290cbcf7c89cbb89534eb6cb",
+  "method": {
+    "credentialSource": "existing read-only-capable staging service-account mount",
+    "credentialBytesStored": false,
+    "accessTokenStored": false,
+    "projectIdentifierStored": false,
+    "clientIdentifierStored": false,
+    "providerPayloadStored": false,
+    "operations": [
+      "Firebase Management projects.webApps.list",
+      "Identity Toolkit projects.config.get",
+      "Identity Toolkit defaultSupportedIdpConfigs.get for google.com"
+    ]
+  },
+  "interpretation": {
+    "fact": "The exact two-change prerequisite baseline in SIT-GOOGLE-WEB-PREREQ-01 was observed at the recorded time.",
+    "open": "Gemini A/B/C decision, provider mutations, independent post-mutation readback, public Web configuration review, flag activation and real login remain separate.",
+    "notProved": [
+      "provider mutation completion",
+      "successful Google Web login",
+      "runtime flag activation",
+      "deployment completion",
+      "pilot readiness"
+    ]
+  }
+}
