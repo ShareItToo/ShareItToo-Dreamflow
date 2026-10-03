@@ -1,5 +1,5 @@
-// Source-only orchestration contract. There is deliberately no CLI or live
-// transport. An independently reviewed adapter must supply complete paginated
+// Source-only orchestration contract. Live credentials and transport remain in
+// the separately reviewed staging_google_web_live_adapter.mjs. Any adapter must supply complete paginated
 // inventories, full-config digests (including secret-bearing provider fields,
 // never their values), and enforce the supplied conditional/exclusive guard.
 import fs from 'node:fs';
@@ -10,12 +10,14 @@ import { TARGET, bindGoogleWebConfig, readGoogleWebConfig, confinedDirectory, sh
 
 const root = path.resolve(fileURLToPath(new URL('../../', import.meta.url)));
 const host = 'staging.shareittoo.com';
-const schemaVersion = 2;
+export const STAGING_GOOGLE_WEB_DISPLAY_NAME = 'ShareItToo Staging Web';
+const schemaVersion = 3;
 const hashPattern = /^[a-f0-9]{64}$/u;
 const ownFile = fileURLToPath(import.meta.url);
 const phases = ['ready', 'create_intent', 'create_pending', 'app_verified', 'domain_intent', 'domain_verified', 'export_intent', 'complete'];
 const errors = new WeakSet();
 function fail(code) { const error = new Error(code); errors.add(error); throw error; }
+export const isStagingGoogleWebPrerequisiteError = (error) => errors.has(error);
 function requireThat(ok, code) { if (!ok) fail(code); }
 function keys(value, expected) {
   return value && Object.getPrototypeOf(value) === Object.prototype
@@ -62,9 +64,10 @@ function snapshot(value, binding) {
     && new Set(value.authorizedDomains).size === value.authorizedDomains.length, 'domain_inventory_invalid');
   requireThat(Array.isArray(value.webApps) && value.webApps.length < 1000, 'app_inventory_invalid');
   for (const app of value.webApps) {
-    requireThat(keys(app, ['appId', 'projectId', 'state', 'apiKeyId']) && app.projectId === binding.projectId
+    requireThat(keys(app, ['appId', 'projectId', 'state', 'apiKeyId', 'displayName']) && app.projectId === binding.projectId
       && new RegExp(`^1:${binding.projectNumber}:web:[a-f0-9]{16,64}$`, 'u').test(app.appId)
       && typeof app.apiKeyId === 'string' && /^[A-Za-z0-9_-]{1,200}$/u.test(app.apiKeyId)
+      && app.displayName === STAGING_GOOGLE_WEB_DISPLAY_NAME
       && ['ACTIVE', 'DELETED'].includes(app.state), 'app_inventory_invalid');
   }
   requireThat(new Set(value.webApps.map((app) => app.appId)).size === value.webApps.length, 'app_inventory_invalid');
@@ -72,17 +75,24 @@ function snapshot(value, binding) {
 }
 
 function validateBinding(binding, now) {
-  requireThat(keys(binding, ['schemaVersion', 'projectId', 'projectNumber', 'origin', 'sourceCommit', 'runnerDigest', 'baselineDigest', 'apiKey', 'gate']), 'binding_shape_invalid');
+  requireThat(keys(binding, ['schemaVersion', 'projectId', 'projectNumber', 'origin', 'displayName',
+    'firebaseAccountEmailSha256', 'sourceCommit', 'runnerDigest', 'baselineDigest', 'apiKey', 'domainLeaseVerifier', 'gate']), 'binding_shape_invalid');
   requireThat(binding.schemaVersion === schemaVersion && /^[a-z][a-z0-9-]{4,28}[a-z0-9]$/u.test(binding.projectId)
     && /^[0-9]{6,20}$/u.test(binding.projectNumber) && binding.origin === TARGET
+    && binding.displayName === STAGING_GOOGLE_WEB_DISPLAY_NAME
+    && hashPattern.test(binding.firebaseAccountEmailSha256 ?? '')
     && /^[a-f0-9]{40}$/u.test(binding.sourceCommit) && hashPattern.test(binding.baselineDigest), 'binding_invalid');
   apiKeyBinding(binding.apiKey, binding.projectId);
+  requireThat(keys(binding.domainLeaseVerifier, ['algorithm', 'publicKeySha256'])
+    && binding.domainLeaseVerifier.algorithm === 'Ed25519'
+    && hashPattern.test(binding.domainLeaseVerifier.publicKeySha256 ?? ''), 'domain_lease_verifier_invalid');
   requireThat(binding.runnerDigest === sha256(fs.readFileSync(ownFile))
     && binding.sourceCommit === execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(), 'source_binding_invalid');
   const gate = binding.gate;
-  requireThat(keys(gate, ['id', 'decision', 'sourceCommit', 'runnerDigest', 'baselineDigest', 'evidenceDigest', 'expiresAt'])
+  requireThat(keys(gate, ['id', 'decision', 'firebaseAccountEmailSha256', 'sourceCommit', 'runnerDigest', 'baselineDigest', 'evidenceDigest', 'expiresAt'])
     && gate.id === 'SIT-GOOGLE-WEB-PREREQ-01' && ['pending', 'A PASS'].includes(gate.decision)
     && gate.sourceCommit === binding.sourceCommit && gate.runnerDigest === binding.runnerDigest
+    && gate.firebaseAccountEmailSha256 === binding.firebaseAccountEmailSha256
     && gate.baselineDigest === binding.baselineDigest && hashPattern.test(gate.evidenceDigest)
     && typeof gate.expiresAt === 'string' && Number.isFinite(Date.parse(gate.expiresAt))
     && Date.parse(gate.expiresAt) > now(), 'gate_binding_invalid');
@@ -165,7 +175,8 @@ function append(file, previous, state) {
   return readJournal(file);
 }
 function expectedSnapshot(baseline, appId, withDomain) {
-  return { ...baseline, webApps: appId ? [{ appId, projectId: baseline.projectId, state: 'ACTIVE', apiKeyId: baseline.apiKey.apiKeyId }] : [],
+  return { ...baseline, webApps: appId ? [{ appId, projectId: baseline.projectId, state: 'ACTIVE', apiKeyId: baseline.apiKey.apiKeyId,
+    displayName: STAGING_GOOGLE_WEB_DISPLAY_NAME }] : [],
     authorizedDomains: [...baseline.authorizedDomains, ...(withDomain ? [host] : [])].sort() };
 }
 function sameSnapshot(actual, expected, { compareRevision = false } = {}) {
@@ -178,7 +189,8 @@ function sameSnapshot(actual, expected, { compareRevision = false } = {}) {
  * readSnapshot must enumerate ACTIVE + DELETED apps with showDeleted=true on
  * every page until nextPageToken is exhausted; never persist short-lived tokens.
  * It must independently verify the bound existing project-owned key, its web
- * restrictions and fingerprint. createWebApp must send the exact apiKeyId;
+ * restrictions and fingerprint. createWebApp must send the exact apiKeyId and
+ * canonical displayName;
  * omission/fallback/automatic key provisioning is forbidden. readWebApp is an
  * independent webApps.get response, not a cached list or operation response.
  * acquireDomainGuard, patchAuthorizedDomains. Guard acquisition must prove
@@ -226,7 +238,8 @@ export async function runStagingGoogleWebPrerequisites({ binding, adapter, journ
       requireThat(sameSnapshot(observed, baseline, { compareRevision: true }), 'baseline_stale');
       validateBinding(binding, now);
       save({ phase: 'create_intent' });
-      const operation = await adapter.createWebApp({ projectId: binding.projectId, apiKeyId: binding.apiKey.apiKeyId });
+      const operation = await adapter.createWebApp({ projectId: binding.projectId, apiKeyId: binding.apiKey.apiKeyId,
+        displayName: binding.displayName });
       requireThat(keys(operation, ['name']) && /^operations\/[A-Za-z0-9_-]{1,200}$/u.test(operation.name), 'operation_invalid');
       save({ phase: 'create_pending', operation: operation.name });
     } else if (state.phase === 'create_intent') fail('create_outcome_unknown');

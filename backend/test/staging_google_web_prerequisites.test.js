@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { runStagingGoogleWebPrerequisites as run, prerequisiteSnapshotDigest, assertPrerequisiteOutputPath } from '../ops/staging_google_web_prerequisites.mjs';
+import { runStagingGoogleWebPrerequisites as run, prerequisiteSnapshotDigest, assertPrerequisiteOutputPath,
+  STAGING_GOOGLE_WEB_DISPLAY_NAME } from '../ops/staging_google_web_prerequisites.mjs';
 import { sha256, readGoogleWebConfig, profile } from '../../tool/staging_web_contract.mjs';
 
 function fixture(t) {
@@ -23,15 +24,20 @@ function fixture(t) {
     authConfigDigest: 'a'.repeat(64), providerConfigDigest: 'b'.repeat(64),
     otherAppsDigest: 'c'.repeat(64), runtimeDigest: 'd'.repeat(64), revision: 'revision-before',
   };
-  const binding = { schemaVersion: 2, apiKey, projectId: snapshot.projectId, projectNumber: snapshot.projectNumber,
-    origin: 'https://staging.shareittoo.com', sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+  const binding = { schemaVersion: 3, apiKey, projectId: snapshot.projectId, projectNumber: snapshot.projectNumber,
+    origin: 'https://staging.shareittoo.com', displayName: STAGING_GOOGLE_WEB_DISPLAY_NAME,
+    firebaseAccountEmailSha256: sha256('contact@shareittoo.com'),
+    sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
     runnerDigest: sha256(fs.readFileSync(new URL('../ops/staging_google_web_prerequisites.mjs', import.meta.url))),
-    baselineDigest: prerequisiteSnapshotDigest(snapshot) };
+    baselineDigest: prerequisiteSnapshotDigest(snapshot),
+    domainLeaseVerifier: { algorithm: 'Ed25519', publicKeySha256: '7'.repeat(64) } };
   binding.gate = { id: 'SIT-GOOGLE-WEB-PREREQ-01', decision: 'A PASS', sourceCommit: binding.sourceCommit,
+    firebaseAccountEmailSha256: binding.firebaseAccountEmailSha256,
     runnerDigest: binding.runnerDigest, baselineDigest: binding.baselineDigest, evidenceDigest: 'e'.repeat(64),
     expiresAt: new Date(Date.now() + 60_000).toISOString() };
   const appId = `1:${snapshot.projectNumber}:web:${'a'.repeat(32)}`;
-  const app = { appId, projectId: snapshot.projectId, state: 'ACTIVE', apiKeyId: apiKey.apiKeyId };
+  const app = { appId, projectId: snapshot.projectId, state: 'ACTIVE', apiKeyId: apiKey.apiKeyId,
+    displayName: STAGING_GOOGLE_WEB_DISPLAY_NAME };
   const sdk = { projectId: snapshot.projectId, messagingSenderId: snapshot.projectNumber, appId,
     apiKey: publicKey, authDomain: `${snapshot.projectId}.firebaseapp.com` };
   const calls = { create: 0, operation: 0, app: 0, patch: 0, sdk: 0 };
@@ -41,7 +47,8 @@ function fixture(t) {
   const adapter = {
     async readSnapshot() { return structuredClone(snapshot); },
     async createWebApp(request) {
-      calls.create++; assert.deepEqual(request, { projectId: binding.projectId, apiKeyId: binding.apiKey.apiKeyId });
+      calls.create++; assert.deepEqual(request, { projectId: binding.projectId, apiKeyId: binding.apiKey.apiKeyId,
+        displayName: STAGING_GOOGLE_WEB_DISPLAY_NAME });
       assert.equal(latest().phase, 'create_intent');
       assert.equal(fs.statSync(journalFile).mode & 0o777, 0o600);
       return { name: 'operations/synthetic-create' };
@@ -91,7 +98,7 @@ test('one create and one guarded patch preserve all domains/config and export co
   assert.equal(profile(f.binding.sourceCommit, '1.0.0+123', bound).SIT_SOCIAL_GOOGLE_ENABLED, 'true');
   assert.equal(profile(f.binding.sourceCommit, '1.0.0+123').SIT_SOCIAL_GOOGLE_ENABLED, 'false');
   assert.equal(f.latest().phase, 'complete');
-  assert.equal(f.latest().schemaVersion, 2); assert.equal(f.calls.app, 2);
+  assert.equal(f.latest().schemaVersion, 3); assert.equal(f.calls.app, 2);
   assert.equal(fs.statSync(f.configFile).mode & 0o777, 0o600);
   assert.ok(!fs.readFileSync(f.journalFile, 'utf8').includes(f.sdk.apiKey));
   assert.ok(!JSON.stringify(result).includes(f.sdk.apiKey));
@@ -329,14 +336,20 @@ test('rehashed extra fields in an earlier journal record are rejected too', asyn
   assert.equal(f.calls.create, 1); assert.equal(f.calls.patch, 1);
 });
 
-for (const variant of ['version', 'missingKey', 'foreignKey', 'rawKey']) {
-  test(`version-2 binding rejects ${variant} before provider reads`, async (t) => {
+for (const variant of ['version', 'missingKey', 'foreignKey', 'rawKey', 'displayName', 'accountHash',
+  'gateAccountHash', 'leaseAlgorithm', 'leaseKey']) {
+  test(`version-3 binding rejects ${variant} before provider reads`, async (t) => {
     const f = fixture(t); let reads = 0;
     f.adapter.readSnapshot = async () => { reads++; return f.snapshot; };
-    if (variant === 'version') f.binding.schemaVersion = 1;
+    if (variant === 'version') f.binding.schemaVersion = 2;
     if (variant === 'missingKey') delete f.binding.apiKey;
     if (variant === 'foreignKey') f.binding.apiKey.projectId = 'foreign-project';
     if (variant === 'rawKey') f.binding.apiKey.keyString = f.sdk.apiKey;
+    if (variant === 'displayName') f.binding.displayName = 'ShareItToo Staging Web Drift';
+    if (variant === 'accountHash') f.binding.firebaseAccountEmailSha256 = 'invalid';
+    if (variant === 'gateAccountHash') f.binding.gate.firebaseAccountEmailSha256 = 'f'.repeat(64);
+    if (variant === 'leaseAlgorithm') f.binding.domainLeaseVerifier.algorithm = 'RSA';
+    if (variant === 'leaseKey') f.binding.domainLeaseVerifier.publicKeySha256 = 'invalid';
     await assert.rejects(f.invoke({ execute: true }), (error) => !error.message.includes(f.sdk.apiKey));
     assert.equal(reads, 0); assert.equal(f.calls.create, 0); assert.deepEqual(fs.readdirSync(f.directory), []);
   });
@@ -348,8 +361,8 @@ for (const variant of ['missingVersion', 'oldVersion', 'oldBinding']) {
     const records = fs.readFileSync(f.journalFile, 'utf8').trimEnd().split('\n').map(JSON.parse);
     for (const [index, record] of records.entries()) {
       if (variant === 'missingVersion') delete record.state.schemaVersion;
-      if (variant === 'oldVersion') record.state.schemaVersion = 1;
-      if (variant === 'oldBinding') record.state.binding.schemaVersion = 1;
+      if (variant === 'oldVersion') record.state.schemaVersion = 2;
+      if (variant === 'oldBinding') record.state.binding.schemaVersion = 2;
       record.previous = index === 0 ? null : records[index - 1].digest;
       record.digest = prerequisiteSnapshotDigest(record.state);
     }

@@ -20,7 +20,8 @@ function fixture() {
     displayName: 'synthetic', restrictions, etag: 'synthetic-etag', annotations: { purpose: 'synthetic' } };
   // appId is opaque per the official schema, unlike the runner's narrower policy.
   const appId = 'synthetic:opaque:web-app';
-  const app = { name: `projects/${projectId}/webApps/${appId}`, appId, projectId, apiKeyId, state: 'ACTIVE', etag: 'synthetic-app-etag' };
+  const app = { name: `projects/${projectId}/webApps/${appId}`, appId, projectId, apiKeyId, state: 'ACTIVE',
+    displayName: 'ShareItToo Staging Web', etag: 'synthetic-app-etag' };
   const deleted = { ...app, name: `projects/${projectId}/webApps/deleted-app`, appId: 'deleted-app', state: 'DELETED' };
   const sdk = { projectId, projectNumber, messagingSenderId: projectNumber, appId, apiKey: publicKey,
     authDomain: `${projectId}.firebaseapp.com`, measurementId: 'synthetic-measurement', storageBucket: 'synthetic-bucket' };
@@ -179,7 +180,8 @@ test('bounded pagination and total items fail instead of returning partial inven
 });
 test('independent webApps.get and SDK config have exact runner projections; extra optional SDK fields do not escape', async () => {
   const f = fixture();
-  assert.deepEqual(await f.adapter.readWebApp(f.request), { appId: f.app.appId, projectId: f.app.projectId, state: 'ACTIVE', apiKeyId: f.app.apiKeyId });
+  assert.deepEqual(await f.adapter.readWebApp(f.request), { appId: f.app.appId, projectId: f.app.projectId, state: 'ACTIVE',
+    apiKeyId: f.app.apiKeyId, displayName: 'ShareItToo Staging Web' });
   const result = await f.adapter.readSdkConfig(f.request);
   assert.deepEqual(Object.keys(result), ['projectId', 'messagingSenderId', 'appId', 'apiKey', 'authDomain']);
   assert.equal(result.apiKey, f.publicKey);
@@ -217,7 +219,7 @@ test('explicit null and duplicate domains are not silently treated as an empty c
     await assert.rejects(f.adapter.readProjectConfig(), { message: 'project_config_invalid' });
   }
 });
-test('key UID is distinct from resource ID; list/get/getKeyString bind full inventory and restrictions without compatibility claim', async () => {
+test('key UID is distinct from resource ID; list/get/getKeyString bind full inventory and reject incompatible Web restrictions', async () => {
   const f = fixture(); const result = await f.adapter.readApiKeyInventory();
   assert.equal(result.apiKey.apiKeyId, f.key.uid); assert.notEqual(f.key.uid, f.key.name.split('/').at(-1));
   assert.equal(result.apiKey.keyFingerprint, sha(f.publicKey));
@@ -225,12 +227,32 @@ test('key UID is distinct from resource ID; list/get/getKeyString bind full inve
   assert.equal(result.apiKey.restrictionsDigest, digest(f.key.restrictions));
   assert.equal(result.keyInventoryDigest, digest([f.key]));
   assert.equal(result.apiKey.exists, true); assert.equal(result.apiKey.webCompatible, false);
-  assert.equal(result.keyCompatibility, 'not_assessed');
+  assert.equal(result.keyCompatibility, 'incompatible');
   assert.deepEqual(result.keyInventory, { showDeleted: true, exhausted: true, nextPageToken: '' });
   assert.deepEqual(f.calls.map((v) => v.resource), [f.keyResource, `/v2/${f.key.name}`, `/v2/${f.key.name}/keyString`]);
   assert.equal(JSON.stringify(result).includes(f.publicKey), false);
   assert.equal(JSON.stringify(f.calls).includes(f.publicKey), false);
   assert.equal(JSON.stringify(result).includes('allowedReferrers'), false);
+});
+test('key compatibility is true only for exact staging browser origin and both auth services', async () => {
+  const f = fixture();
+  f.key.restrictions.browserKeyRestrictions.allowedReferrers = ['https://staging.shareittoo.com/*'];
+  f.key.restrictions.apiTargets = [
+    { service: 'identitytoolkit.googleapis.com' },
+    { service: 'securetoken.googleapis.com' },
+  ];
+  f.binding.apiKey.restrictionsDigest = digest(f.key.restrictions);
+  const adapter = create({ ...f.binding, transport: f.transport });
+  const result = await adapter.readApiKeyInventory();
+  assert.equal(result.apiKey.webCompatible, true);
+  assert.equal(result.keyCompatibility, 'verified-browser-origin-and-auth-services');
+  f.key.restrictions.browserKeyRestrictions.allowedReferrers = ['https://staging.shareittoo.com.evil.invalid/*'];
+  f.binding.apiKey.restrictionsDigest = digest(f.key.restrictions);
+  assert.equal((await create({ ...f.binding, transport: f.transport }).readApiKeyInventory()).apiKey.webCompatible, false);
+  f.key.restrictions.browserKeyRestrictions.allowedReferrers = ['https://staging.shareittoo.com/*'];
+  f.key.restrictions.apiTargets[0].methods = ['google.cloud.identitytoolkit.v1.AuthenticationService.SignInWithIdp'];
+  f.binding.apiKey.restrictionsDigest = digest(f.key.restrictions);
+  assert.equal((await create({ ...f.binding, transport: f.transport }).readApiKeyInventory()).apiKey.webCompatible, false);
 });
 for (const variant of ['foreignProject', 'duplicateUid', 'duplicateName', 'deleted', 'absent', 'drift', 'restrictions', 'fingerprint', 'rawMetadataKey', 'restrictionUnion', 'unknownRestriction']) {
   test(`key inventory refuses unsafe binding: ${variant}`, async () => {

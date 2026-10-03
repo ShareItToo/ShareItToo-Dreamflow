@@ -45,12 +45,14 @@ function restrictions(value = {}) {
   return value;
 }
 
-export function createStagingGoogleWebReadAdapter({ projectId, projectNumber, apiKey, transport, timeoutMs = 10000 } = {}) {
+export function createStagingGoogleWebReadAdapter({ projectId, projectNumber, apiKey,
+  origin = 'https://staging.shareittoo.com', transport, timeoutMs = 10000 } = {}) {
   check(typeof projectId === 'string' && /^[a-z][a-z0-9-]{4,28}[a-z0-9]$/u.test(projectId)
     && typeof projectNumber === 'string' && /^[0-9]{6,20}$/u.test(projectNumber)
     && fields(apiKey, ['apiKeyId', 'projectId', 'keyFingerprint', 'restrictionsDigest'])
     && apiKey.projectId === projectId && uid(apiKey.apiKeyId)
     && /^[a-f0-9]{64}$/u.test(apiKey.keyFingerprint) && /^[a-f0-9]{64}$/u.test(apiKey.restrictionsDigest)
+    && origin === 'https://staging.shareittoo.com'
     && typeof transport === 'function' && Number.isInteger(timeoutMs) && timeoutMs > 0 && timeoutMs <= 30000, 'read_binding_invalid');
   apiKey = structuredClone(apiKey);
   const safe = (fn) => async (...args) => {
@@ -75,7 +77,8 @@ export function createStagingGoogleWebReadAdapter({ projectId, projectNumber, ap
       && text(value.appId) && (!expected || value.appId === expected)
       && value.projectId === projectId && value.name === `projects/${projectId}/webApps/${value.appId}`
       && uid(value.apiKeyId) && ['ACTIVE', 'DELETED'].includes(value.state), 'web_app_invalid');
-    return { appId: value.appId, projectId, state: value.state, apiKeyId: value.apiKeyId };
+    return { appId: value.appId, projectId, state: value.state, apiKeyId: value.apiKeyId,
+      displayName: value.displayName ?? '' };
   }
   function appRequest(value) {
     check(fields(value, ['projectId', 'appId']) && value.projectId === projectId && text(value.appId), 'web_app_request_invalid');
@@ -164,10 +167,18 @@ export function createStagingGoogleWebReadAdapter({ projectId, projectNumber, ap
       check(restrictionsDigest === apiKey.restrictionsDigest, 'key_restrictions_mismatch');
       const value = await get('apikeys', `/v2/${selected.name}/keyString`);
       check(fields(value, ['keyString']) && text(value.keyString) && hash(value.keyString) === apiKey.keyFingerprint, 'key_fingerprint_mismatch');
+      const allowedReferrers = observed.restrictions?.browserKeyRestrictions?.allowedReferrers ?? [];
+      const apiTargets = observed.restrictions?.apiTargets;
+      const unrestrictedTargets = new Set((apiTargets ?? [])
+        .filter((target) => !Object.hasOwn(target, 'methods')).map((target) => target.service));
+      const webCompatible = allowedReferrers.includes(`${origin}/*`)
+        && (!apiTargets || ['identitytoolkit.googleapis.com', 'securetoken.googleapis.com']
+          .every((service) => unrestrictedTargets.has(service)));
       // keys.lookupKey is intentionally unnecessary: name+UID are independently
       // checked via list/get. Do not send keyString in a query URL.
-      return { apiKey: { ...apiKey, exists: true, webCompatible: false }, keyInventoryDigest: digest(inventory),
-        keyCompatibility: 'not_assessed', keyInventory: { showDeleted: true, exhausted: true, nextPageToken: '' } };
+      return { apiKey: { ...apiKey, exists: true, webCompatible }, keyInventoryDigest: digest(inventory),
+        keyCompatibility: webCompatible ? 'verified-browser-origin-and-auth-services' : 'incompatible',
+        keyInventory: { showDeleted: true, exhausted: true, nextPageToken: '' } };
     }),
   });
 }
