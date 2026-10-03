@@ -579,30 +579,152 @@ test('bounded PR paths and manual dispatch bind checkout and runner to one valid
   const worker = source.slice(source.indexOf('async function worker(directory)'));
   assert.doesNotMatch(worker, /pub get|npm |curl |wget |flutter build/u);
 });
+// The shell may append bytes, but may not replace the already opened output or
+// change its owner/permissions. Capture must not reopen the post-shell pathname.
+function captureHistoryOutput(directory, action) {
+  const descriptors = [];
+  const identity = ['dev', 'ino', 'mode', 'uid', 'gid', 'nlink'];
+  const metadata = [...identity, 'size', 'mtimeNs', 'ctimeNs'];
+  const same = (a, b, fields = metadata) => fields.every(key => a[key] === b[key]);
+  const fstat = fd => fs.fstatSync(fd, { bigint: true });
+  const lstat = file => fs.lstatSync(file, { bigint: true });
+  const requireThat = ok => { if (!ok) throw Error('history_output_capture'); };
+  const open = (file, flags) => {
+    const fd = fs.openSync(file, flags | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+    descriptors.push(fd); return fd;
+  };
+  try {
+    requireThat(typeof directory === 'string' && path.isAbsolute(directory) && directory !== '/'
+      && path.normalize(directory) === directory && fs.realpathSync(directory) === directory);
+    const parent = open(directory, fs.constants.O_RDONLY | fs.constants.O_DIRECTORY);
+    const parentBefore = fstat(parent);
+    requireThat(parentBefore.isDirectory() && parentBefore.uid === BigInt(process.getuid())
+      && (parentBefore.mode & 0o7777n) === 0o700n && same(parentBefore, lstat(directory)));
+    const file = path.join(directory, 'github-output'); const fd = open(file, fs.constants.O_RDONLY);
+    const before = fstat(fd);
+    requireThat(before.isFile() && before.uid === BigInt(process.getuid()) && before.nlink === 1n
+      && (before.mode & 0o7777n) === 0o600n && before.size === 0n && same(before, lstat(file)));
+    const stableParent = () => requireThat(same(parentBefore, fstat(parent))
+      && same(parentBefore, lstat(directory)) && fs.realpathSync(directory) === directory);
+    stableParent();
+    const value = action();
+    stableParent(); const ready = fstat(fd);
+    requireThat(same(before, ready, identity) && same(ready, lstat(file)) && ready.size >= 0n && ready.size <= 4096n);
+    const bytes = Buffer.alloc(Number(ready.size)); let offset = 0;
+    while (offset < bytes.length) {
+      const count = fs.readSync(fd, bytes, offset, bytes.length - offset, offset);
+      requireThat(count > 0); offset += count;
+    }
+    requireThat(fs.readSync(fd, Buffer.alloc(1), 0, 1, bytes.length) === 0
+      && same(ready, fstat(fd)) && same(ready, lstat(file)));
+    stableParent(); return { value, bytes: bytes.toString('utf8') };
+  } catch { throw Error('history_output_capture'); }
+  finally {
+    let failed = false;
+    for (const fd of descriptors.reverse()) { try { fs.closeSync(fd); } catch { failed = true; } }
+    if (failed) throw Error('history_output_capture');
+  }
+}
+
+function outputFixture(t) {
+  const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sit-history-output-')));
+  fs.chmodSync(directory, 0o700);
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const file = path.join(directory, 'github-output'); fs.writeFileSync(file, '', { flag: 'wx', mode: 0o600 });
+  return { directory, file };
+}
+
+test('output oracle captures bounded appended bytes through the original descriptor, including short reads', t => {
+  const f = outputFixture(t); const read = fs.readSync; const open = fs.openSync; const opened = []; const closed = [];
+  const close = fs.closeSync;
+  t.mock.method(fs, 'readFileSync', () => { throw Error('path read forbidden'); });
+  t.mock.method(fs, 'openSync', (file, flags, ...args) => {
+    if (typeof flags === 'number') {
+      assert.ok(flags & fs.constants.O_NOFOLLOW); assert.ok(flags & fs.constants.O_NONBLOCK);
+      const fd = open(file, flags, ...args); opened.push(fd); return fd;
+    }
+    return open(file, flags, ...args);
+  });
+  t.mock.method(fs, 'closeSync', fd => { close(fd); closed.push(fd); });
+  t.mock.method(fs, 'readSync', (fd, buffer, offset, length, position) => read(fd, buffer, offset, Math.min(3, length), position));
+  assert.deepEqual(captureHistoryOutput(f.directory, () => { fs.appendFileSync(f.file, 'head=synthetic\n'); return 'completed'; }),
+    { value: 'completed', bytes: 'head=synthetic\n' });
+  assert.ok(opened.every(fd => closed.includes(fd)));
+});
+
+for (const variant of ['replacement', 'symlink', 'hardlink', 'permissions', 'parent-permissions', 'oversize',
+  'read-replacement', 'read-growth', 'read-truncate', 'read-permissions']) {
+  test(`output oracle rejects ${variant} without exposing paths`, t => {
+    const f = outputFixture(t); const read = fs.readSync;
+    let changed = false;
+    const mutate = () => {
+      changed = true;
+      if (variant.endsWith('replacement') || variant === 'symlink') {
+        fs.renameSync(f.file, path.join(f.directory, 'old'));
+        if (variant === 'symlink') fs.symlinkSync('old', f.file); else fs.writeFileSync(f.file, 'unchanged', { mode: 0o600 });
+      }
+      if (variant === 'hardlink') fs.linkSync(f.file, path.join(f.directory, 'linked'));
+      if (variant === 'permissions' || variant === 'read-permissions') fs.chmodSync(f.file, 0o644);
+      if (variant === 'parent-permissions') fs.chmodSync(f.directory, 0o755);
+      if (variant === 'oversize' || variant === 'read-growth') fs.appendFileSync(f.file, Buffer.alloc(4097));
+      if (variant === 'read-truncate') fs.truncateSync(f.file, 1);
+    };
+    t.mock.method(fs, 'readSync', (fd, buffer, ...args) => {
+      if (!changed && variant.startsWith('read-')) mutate();
+      assert.ok(buffer.length <= 'unchanged'.length); return read(fd, buffer, ...args);
+    });
+    assert.throws(() => captureHistoryOutput(f.directory, () => {
+      fs.appendFileSync(f.file, 'unchanged'); if (!variant.startsWith('read-')) mutate();
+    }), { message: 'history_output_capture' });
+    assert.equal(changed, true);
+  });
+}
+
+for (const variant of ['open-replacement', 'initial-symlink', 'initial-mode', 'read-error', 'close-error']) {
+  test(`output oracle fails closed on ${variant} and closes every retained descriptor`, t => {
+    const f = outputFixture(t); const open = fs.openSync; const close = fs.closeSync;
+    const opened = []; const closed = []; let replaced = false;
+    if (variant === 'initial-symlink') { fs.renameSync(f.file, path.join(f.directory, 'old')); fs.symlinkSync('old', f.file); }
+    if (variant === 'initial-mode') fs.chmodSync(f.file, 0o644);
+    t.mock.method(fs, 'openSync', (file, ...args) => {
+      const fd = open(file, ...args); opened.push(fd);
+      if (!replaced && variant === 'open-replacement' && file === f.file) {
+        replaced = true; fs.renameSync(file, path.join(f.directory, 'old')); fs.writeFileSync(file, '', { mode: 0o600 });
+      }
+      return fd;
+    });
+    t.mock.method(fs, 'closeSync', fd => { close(fd); closed.push(fd); if (variant === 'close-error') throw Error('/private/close'); });
+    if (variant === 'read-error') t.mock.method(fs, 'readSync', () => { throw Error('https://outside.invalid /private/path'); });
+    assert.throws(() => captureHistoryOutput(f.directory, () => undefined), { message: 'history_output_capture' });
+    assert.deepEqual(closed.toSorted(), opened.toSorted());
+  });
+}
+
 test('source selector accepts only exact event-specific 40hex heads without merge fallback or payload output', () => {
   const workflow = fs.readFileSync('.github/workflows/mission-web-history-proof.yml', 'utf8');
   const block = workflow.match(/      - name: Validate exact source\n([\s\S]*?)      - uses: actions\/checkout/mu)?.[1];
   assert.ok(block);
   const script = block.split('        run: |\n')[1].split('\n').map(line => line.startsWith('          ') ? line.slice(10) : line).join('\n');
   const run = (event, dispatch, pr) => {
-    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'sit-history-file-command-'));
+    const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sit-history-file-command-')));
     try {
       fs.chmodSync(directory, 0o700);
       const output = path.join(directory, 'github-output');
       fs.writeFileSync(output, '', { flag: 'wx', mode: 0o600 });
-      assert.equal(fs.lstatSync(output).isFile(), true);
-      let stdout;
-      try {
-        stdout = execFileSync('/bin/bash', ['-e', '-u', '-o', 'pipefail', '-c', script], {
-          env: { EVENT_NAME: event, DISPATCH_SOURCE: dispatch, PR_HEAD: pr, GITHUB_OUTPUT: output },
-          encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 1000,
-        });
-      } catch (error) {
-        assert.equal(fs.readFileSync(output, 'utf8'), '');
-        throw error;
+      const captured = captureHistoryOutput(directory, () => {
+        try {
+          return { stdout: execFileSync('/bin/bash', ['-e', '-u', '-o', 'pipefail', '-c', script], {
+            env: { EVENT_NAME: event, DISPATCH_SOURCE: dispatch, PR_HEAD: pr, GITHUB_OUTPUT: output },
+            encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 1000,
+          }) };
+        } catch (error) { return { error }; }
+      });
+      if (captured.value.error) {
+        assert.equal(captured.bytes, '');
+        throw captured.value.error;
       }
-      assert.equal(stdout, '');
-      return fs.readFileSync(output, 'utf8');
+      assert.equal(captured.value.stdout, '');
+      return captured.bytes;
     } finally {
       fs.rmSync(directory, { recursive: true });
       assert.equal(fs.existsSync(directory), false);
