@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lendify/services/app_link_service.dart';
 import 'package:lendify/services/auth_service.dart';
+import 'package:lendify/services/mission_web_location.dart';
 
 class _FakePrincipalOwner implements AppLinkPrincipalOwner {
   @override
@@ -13,6 +14,7 @@ class _FakePrincipalOwner implements AppLinkPrincipalOwner {
   @override
   final int epoch;
   bool current = true;
+  Future<bool> Function()? readCurrent;
 
   _FakePrincipalOwner({required this.principalToken, required this.epoch});
 
@@ -20,12 +22,204 @@ class _FakePrincipalOwner implements AppLinkPrincipalOwner {
   bool get isCurrentEpoch => current;
 
   @override
-  Future<bool> isCurrent() async => current;
+  Future<bool> isCurrent() async =>
+      readCurrent == null ? current : await readCurrent!();
 }
 
 AppLinkTarget target(String raw) => AppLinkParser.parse(Uri.parse(raw))!;
 
 void main() {
+  testWidgets(
+      'initial target is dropped after an epoch change during owner readback',
+      (tester) async {
+    final readback = Completer<bool>();
+    final owner = _FakePrincipalOwner(principalToken: 'synthetic-a', epoch: 1)
+      ..readCurrent = (() => readback.future);
+    final controller = AppLinkController(
+      initialIsWeb: true,
+      readInitialBrowserLocation: () => classifyMissionWebLocation(
+          browserSerializedHref: 'https://shareittoo.com/mission'),
+      capturePrincipalOwner: () async => owner,
+    );
+    controller.initialize();
+    await tester.pump();
+    owner.current = false;
+    readback.complete(true);
+    await tester.pump();
+    expect(controller.takePending(), null);
+    controller.dispose();
+  });
+  testWidgets('initial browser metadata admits all three exact hosts once',
+      (tester) async {
+    for (final host in [
+      'shareittoo.com',
+      'www.shareittoo.com',
+      'staging.shareittoo.com'
+    ]) {
+      var reads = 0;
+      var captures = 0;
+      final owner =
+          _FakePrincipalOwner(principalToken: 'synthetic-owner', epoch: 1);
+      final controller = AppLinkController(
+        initialIsWeb: true,
+        readInitialWebUri: () => Uri.parse('https://foreign.invalid/mission'),
+        readInitialBrowserLocation: () {
+          reads++;
+          return classifyMissionWebLocation(
+              browserSerializedHref: 'https://$host/mission');
+        },
+        capturePrincipalOwner: () async {
+          captures++;
+          return owner;
+        },
+      );
+      controller.initialize();
+      controller.initialize();
+      expect(captures, 1);
+      await tester.pump();
+      final pending = controller.takePending();
+      expect(pending?.target.kind, AppLinkKind.missionWebEntry);
+      expect(pending?.target.uri.toString(), 'https://$host/mission');
+      expect(pending?.target.id, null);
+      expect(pending?.owner, same(owner));
+      expect(reads, 1);
+      controller.dispose();
+    }
+  });
+
+  testWidgets(
+      'rejected browser bytes and reader failure cannot re-enter via normalized Mission URI',
+      (tester) async {
+    for (final raw in <String?>[
+      null,
+      'https://shareittoo.com/%6dission',
+      'https://shareittoo.com:443/mission',
+      'https://shareittoo.com/a/../mission',
+      'https://shareittoo.com/mission?',
+      'https://shareittoo.com/mission#',
+      'https://shareittoo.com/mission?q=synthetic',
+      'https://foreign.invalid/mission',
+      'https://shareittoo.com/Mission',
+      'https://shareittoo.com//mission',
+      'reader_failure',
+    ]) {
+      var captures = 0;
+      var notifications = 0;
+      final controller = AppLinkController(
+        initialIsWeb: true,
+        readInitialWebUri: () => Uri.parse('https://shareittoo.com/mission'),
+        readInitialBrowserLocation: () {
+          if (raw == 'reader_failure') {
+            throw StateError('synthetic rejected detail');
+          }
+          return classifyMissionWebLocation(browserSerializedHref: raw);
+        },
+        capturePrincipalOwner: () async {
+          captures++;
+          return _FakePrincipalOwner(principalToken: 'synthetic', epoch: 1);
+        },
+      )..addListener(() {
+          notifications++;
+        });
+      controller.initialize();
+      await tester.pump();
+      expect(controller.takePending(), null, reason: raw);
+      expect(captures, 0);
+      expect(notifications, 0);
+      controller.dispose();
+    }
+  });
+
+  testWidgets(
+      'legacy Web and native initial links remain supported without native browser reads',
+      (tester) async {
+    for (final web in [true, false]) {
+      final binding = tester.binding.platformDispatcher;
+      binding.defaultRouteNameTestValue = 'shareittoo://notifications';
+      var reads = 0;
+      final controller = AppLinkController(
+        initialIsWeb: web,
+        readInitialWebUri: () =>
+            Uri.parse('https://shareittoo.com/listing/synthetic-item'),
+        readInitialBrowserLocation: () {
+          reads++;
+          return MissionWebLocation.unavailable;
+        },
+        capturePrincipalOwner: () async =>
+            _FakePrincipalOwner(principalToken: 'synthetic', epoch: 1),
+      );
+      controller.initialize();
+      await tester.pump();
+      expect(controller.takePending()?.target.kind,
+          web ? AppLinkKind.listing : AppLinkKind.notifications);
+      expect(reads, web ? 1 : 0);
+      controller.dispose();
+      binding.clearDefaultRouteNameTestValue();
+    }
+  });
+
+  testWidgets(
+      'initial capture is ordered before later ingress despite reverse completion',
+      (tester) async {
+    final first = Completer<AppLinkPrincipalOwner>();
+    final second = Completer<AppLinkPrincipalOwner>();
+    var captures = 0;
+    final seen = <AppLinkKind>[];
+    final controller = AppLinkController(
+      initialIsWeb: true,
+      readInitialBrowserLocation: () => classifyMissionWebLocation(
+          browserSerializedHref: 'https://shareittoo.com/mission'),
+      capturePrincipalOwner: () =>
+          ++captures == 1 ? first.future : second.future,
+    );
+    controller
+        .addListener(() => seen.add(controller.takePending()!.target.kind));
+    controller.initialize();
+    await controller.didPushRouteInformation(
+        RouteInformation(uri: Uri.parse('shareittoo://notifications')));
+    expect(captures, 2);
+    second.complete(_FakePrincipalOwner(principalToken: 'synthetic', epoch: 1));
+    await tester.pump();
+    expect(seen, isEmpty);
+    first.complete(_FakePrincipalOwner(principalToken: 'synthetic', epoch: 1));
+    await tester.pump();
+    expect(seen, [AppLinkKind.missionWebEntry, AppLinkKind.notifications]);
+    controller.dispose();
+  });
+
+  testWidgets(
+      'initial capture drops stale owner and disposed readback; disposed initialization reads nothing',
+      (tester) async {
+    for (final disposeEarly in [false, true]) {
+      final capture = Completer<AppLinkPrincipalOwner>();
+      final owner =
+          _FakePrincipalOwner(principalToken: 'synthetic-a', epoch: 1);
+      final controller = AppLinkController(
+        initialIsWeb: true,
+        readInitialBrowserLocation: () => classifyMissionWebLocation(
+            browserSerializedHref: 'https://shareittoo.com/mission'),
+        capturePrincipalOwner: () => capture.future,
+      );
+      controller.initialize();
+      if (disposeEarly) {
+        controller.dispose();
+      } else {
+        owner.current = false;
+      }
+      capture.complete(owner);
+      await tester.pump();
+      expect(controller.takePending(), null);
+      if (!disposeEarly) controller.dispose();
+    }
+    final disposed = AppLinkController(
+      initialIsWeb: true,
+      readInitialBrowserLocation: () => throw StateError('must not read'),
+      readInitialWebUri: () => throw StateError('must not read'),
+      capturePrincipalOwner: () => throw StateError('must not capture'),
+    )..dispose();
+    expect(disposed.initialize, returnsNormally);
+  });
+
   test('raw ingress preserves legacy links while Mission remains web-only', () {
     expect(
         AppLinkParser.parseRaw('shareittoo://booking/booking-123', isWeb: false)

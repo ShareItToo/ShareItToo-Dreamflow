@@ -7,6 +7,7 @@ import 'auth_service.dart';
 import 'backend_config.dart';
 import 'firebase_runtime.dart';
 import 'local_principal_scope.dart';
+import 'mission_web_location.dart';
 
 enum AppLinkKind {
   missionWebEntry,
@@ -285,6 +286,9 @@ class AppLinkController extends ChangeNotifier with WidgetsBindingObserver {
   final AppLinkTargetInbox _inbox;
   final Future<Uri?> Function() _takeNativePendingActionLink;
   final Future<AppLinkPrincipalOwner> Function() _capturePrincipalOwner;
+  final bool _initialIsWeb;
+  final MissionWebLocation Function() _readInitialBrowserLocation;
+  final Uri Function() _readInitialWebUri;
   bool _initialized = false;
   bool _disposed = false;
   Future<void> _ingressQueue = Future<void>.value();
@@ -294,7 +298,18 @@ class AppLinkController extends ChangeNotifier with WidgetsBindingObserver {
     AppLinkTargetInbox? inbox,
     Future<Uri?> Function()? takeNativePendingActionLink,
     Future<AppLinkPrincipalOwner> Function()? capturePrincipalOwner,
+    @visibleForTesting bool? initialIsWeb,
+    @visibleForTesting Uri Function()? readInitialWebUri,
+    @visibleForTesting
+    MissionWebLocation Function()? readInitialBrowserLocation,
   })  : _inbox = inbox ?? AppLinkTargetInbox(),
+        _initialIsWeb = kReleaseMode ? kIsWeb : (initialIsWeb ?? kIsWeb),
+        _readInitialWebUri = kReleaseMode
+            ? (() => Uri.base)
+            : (readInitialWebUri ?? (() => Uri.base)),
+        _readInitialBrowserLocation = kReleaseMode
+            ? readMissionWebLocation
+            : (readInitialBrowserLocation ?? readMissionWebLocation),
         _takeNativePendingActionLink = takeNativePendingActionLink ??
             FirebaseRuntime.takeAndroidPendingActionLink,
         _capturePrincipalOwner =
@@ -303,13 +318,34 @@ class AppLinkController extends ChangeNotifier with WidgetsBindingObserver {
   PrincipalBoundAppLinkTarget? takePending() => _inbox.takePending();
 
   void initialize() {
-    if (_initialized) return;
+    if (_disposed || _initialized) return;
     _initialized = true;
     WidgetsBinding.instance.addObserver(this);
-    final raw = kIsWeb
-        ? Uri.base.toString()
-        : WidgetsBinding.instance.platformDispatcher.defaultRouteName;
-    _capture(raw);
+    if (_initialIsWeb) {
+      var location = MissionWebLocation.unavailable;
+      try {
+        location = _readInitialBrowserLocation();
+      } catch (_) {
+        // No rejected URL or reader error is retained or reported.
+      }
+      final host = switch (location.host) {
+        MissionWebLocationHost.primary => 'shareittoo.com',
+        MissionWebLocationHost.www => 'www.shareittoo.com',
+        MissionWebLocationHost.staging => 'staging.shareittoo.com',
+        null => null,
+      };
+      // Only admitted browser metadata can introduce Mission. The legacy Uri
+      // parser deliberately has no Mission case: normalization cannot re-admit it.
+      final target = host != null
+          ? AppLinkTarget(
+              kind: AppLinkKind.missionWebEntry,
+              uri: Uri.https(host, '/mission'),
+            )
+          : AppLinkParser.parse(_readInitialWebUri());
+      if (target != null) _captureTarget(target);
+    } else {
+      _capture(WidgetsBinding.instance.platformDispatcher.defaultRouteName);
+    }
     final firebasePending = FirebaseRuntime.takePendingActionLink();
     if (firebasePending != null) _capture(firebasePending.toString());
     _firebaseActionSubscription ??= FirebaseRuntime.actionLinks.listen(
@@ -353,6 +389,12 @@ class AppLinkController extends ChangeNotifier with WidgetsBindingObserver {
     if (_disposed || raw.isEmpty || raw == '/') return;
     final target = AppLinkParser.parseRaw(raw);
     if (target == null) return;
+    _captureTarget(target, startedOwner: startedOwner);
+  }
+
+  void _captureTarget(AppLinkTarget target,
+      {Future<AppLinkPrincipalOwner>? startedOwner}) {
+    if (_disposed) return;
 
     // Calling the async capture now records AuthService.sessionEpoch before
     // its first storage await. Queue only the completion so concurrent native

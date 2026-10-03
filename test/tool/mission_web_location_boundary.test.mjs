@@ -8,10 +8,12 @@ const files = [
   'lib/services/mission_web_location_stub.dart',
   'test/mission_web_location_test.dart',
   'test/tool/mission_web_location_boundary.test.mjs',
+  'lib/services/app_link_service.dart',
+  'test/app_link_service_test.dart',
 ];
 const read = (path) => readFileSync(new URL(path, root), 'utf8');
 
-test('D6 location has only its exact five unrouteable consumers', () => {
+test('D6 location has only its exact observation and initial-ingress consumers', () => {
   for (const directory of ['lib', 'backend/src', 'backend/test', 'backend/ops', 'tool', 'scripts', 'web', 'test']) {
     for (const name of readdirSync(new URL(`${directory}/`, root), { recursive: true })) {
       const path = `${directory}/${name}`;
@@ -19,6 +21,21 @@ test('D6 location has only its exact five unrouteable consumers', () => {
       assert.doesNotMatch(read(path), /mission_web_location|MissionWebLocation|readMissionWebLocation/u, path);
     }
   }
+});
+
+test('initial integration uses metadata and legacy-only fallback, with no history extension or activation', () => {
+  const source = read('lib/services/app_link_service.dart');
+  const initial = source.slice(source.indexOf('  void initialize()'), source.indexOf('  @override\n  Future<bool> didPushRouteInformation'));
+  assert.match(initial, /if \(_disposed \|\| _initialized\) return;/u);
+  assert.match(initial, /if \(_initialIsWeb\)/u);
+  assert.equal((initial.match(/_readInitialBrowserLocation\(\)/gu) ?? []).length, 1);
+  assert.match(initial, /AppLinkParser\.parse\(_readInitialWebUri\(\)\)/u);
+  assert.doesNotMatch(initial, /parseRaw|Uri\.base\.toString|history|pushState|replaceState|addEventListener|print\(|debugPrint/u);
+  assert.match(source, /_initialIsWeb = kReleaseMode \? kIsWeb/u);
+  assert.match(source, /@visibleForTesting\s+MissionWebLocation Function\(\)\? readInitialBrowserLocation/u);
+  assert.match(source, /_readInitialBrowserLocation = kReleaseMode\s*\? readMissionWebLocation\s*:\s*\(readInitialBrowserLocation \?\? readMissionWebLocation\)/u);
+  assert.match(source, /Future<bool> didPushRouteInformation\(\s*RouteInformation routeInformation,\s*\) async \{\s*_capture\(routeInformation\.uri\.toString\(\)\);\s*return true;\s*\}/u);
+  assert.doesNotMatch(source, /fromEnvironment|SIT_|pushState|replaceState|addEventListener/u);
 });
 
 test('web adapter only observes serialized href; stub cannot fabricate one', () => {

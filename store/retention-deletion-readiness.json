@@ -809,7 +809,7 @@
     },
     {
       "path": "lib/services/app_link_service.dart",
-      "sha256": "1206ec4fce074259987680311293f8e9ba80218c22e817cf82774959268e1500"
+      "sha256": "0668ceeba1468e36f226d11c5f6ed41e3d32cbf57483e65f8bfeb560dad1f5f7"
     },
     {
       "path": "lib/screens/app_link_destination_screen.dart",
