@@ -1,0 +1,42 @@
+name: mission-web-history-proof
+
+# Reviewed manual successor only. Normal regression discovers its fake tests;
+# adding this file must never trigger a real browser job on a pull request.
+on:
+  workflow_dispatch:
+    inputs:
+      source_head:
+        description: Exact reviewed source commit (40 lowercase hexadecimal characters)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mission-web-history-proof-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-production-code-harness:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_head }}
+          persist-credentials: false
+      - name: Fake-only successor contract
+        run: node --test test/tool/mission_web_history_probe.test.mjs test/tool/mission_web_entry_boundary.test.mjs test/tool/web_app_router_boundary.test.mjs test/tool/mission_web_location_boundary.test.mjs
+      # Provisioning is outside the executor namespace. The runner verifies the
+      # exact framework/engine/Dart revisions and enforced source lock before
+      # building; it enters the no-route namespace only after binding artifacts.
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.41.7
+          channel: stable
+          cache: true
+      - name: Build then one isolated exact-code history proof
+        env:
+          EXPECTED_SOURCE_HEAD: ${{ inputs.source_head }}
+        run: node test/support/mission_web_history_probe.mjs --linux-history-harness --source-head "$EXPECTED_SOURCE_HEAD"

@@ -49,7 +49,9 @@ test('only the production bootstrap, owned-route host and exact tests consume br
     'lib/screens/app_link_destination_screen.dart', 'test/web_app_router_test.dart',
     'test/tool/web_app_router_boundary.test.mjs', 'test/tool/mission_web_location_boundary.test.mjs',
     'tool/validate_privacy_disclosures.mjs', 'tool/validate_retention_deletion_readiness.mjs',
-    'test/tool/validate_privacy_disclosures.test.mjs', 'test/tool/validate_retention_deletion_readiness.test.mjs']);
+    'test/tool/validate_privacy_disclosures.test.mjs', 'test/tool/validate_retention_deletion_readiness.test.mjs',
+    'test/support/mission_web_history_harness.dart', 'test/support/mission_web_history_build.mjs',
+    'test/tool/mission_web_history_probe.test.mjs']);
   for (const directory of ['lib', 'backend/src', 'test', 'web', 'tool']) {
     for (const name of readdirSync(new URL(`../../${directory}/`, import.meta.url), { recursive: true })) {
       const path = `${directory}/${name}`;
