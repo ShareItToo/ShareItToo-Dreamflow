@@ -5,7 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { validateSdkState, validateHistoryMatrix, artifactDigest, buildArguments,
-  validateArtifact, classifyAsset, contract } from '../support/mission_web_history_build.mjs';
+  validateArtifact, classifyAsset, classifyBlockedRequest, networkReasonKeys, validateNetworkDiagnostic,
+  contract } from '../support/mission_web_history_build.mjs';
 import { runProbe, parseArgs, launchArgs, privilegeArgs, ownsBuildGroup } from '../support/mission_web_history_probe.mjs';
 
 const instance = n => String(n).repeat(32);
@@ -84,6 +85,67 @@ test('request classifier admits only exact locally bound asset requests', () => 
     ['https://shareittoo.com/api/v1', 'Fetch'], ['https://shareittoo.com/missing.js', 'Script'],
     ['https://shareittoo.com/main.dart.js?secret', 'Script'], ['ws://shareittoo.com/', 'WebSocket'],
     ['https://shareittoo.com/%6dission', 'Document']]) assert.equal(classifyAsset(url, type, files), null);
+});
+const networkCounts = () => Object.fromEntries(networkReasonKeys.map(key => [key, 0]));
+test('blocked requests have only deterministic coarse reasons; admission is unchanged', () => {
+  const files = new Set(['index.html', 'main.dart.js']);
+  const request = { method: 'GET', url: 'https://shareittoo.com/main.dart.js', type: 'Script' };
+  assert.equal(classifyBlockedRequest(request, files), null);
+  for (const [change, reason] of [
+    [{ method: 'PRIVATE_METHOD' }, 'non_get'], [{ responseStatusCode: 302 }, 'response_stage'],
+    [{ type: 'WebSocket' }, 'websocket'], [{ type: 'PRIVATE_TYPE' }, 'unsupported_type'],
+    [{ url: 'http://private.invalid/private-path?private-query' }, 'non_https_scheme'],
+    [{ url: 'https://private.invalid/private-path?private-query' }, 'foreign_origin'],
+    [{ url: 'https://shareittoo.com/main.dart.js?' }, 'query_or_fragment'],
+    [{ url: 'https://shareittoo.com/main.dart.js#' }, 'query_or_fragment'],
+    [{ url: 'https://shareittoo.com/%70rivate' }, 'unsafe_path'],
+    [{ url: 'https://shareittoo.com/a/../main.dart.js' }, 'unsafe_path'],
+    [{ url: 'https://shareittoo.com/private-path' }, 'untracked_asset'],
+    [{ type: 'Document', url: 'https://shareittoo.com/main.dart.js' }, 'unsafe_path'],
+  ]) {
+    const value = { ...request, ...change };
+    assert.equal(classifyBlockedRequest(value, files), reason);
+    assert.ok(value.method !== 'GET' || value.responseStatusCode || classifyAsset(value.url, value.type, files) === null);
+  }
+});
+test('network aggregates are exact detached bounded counts, with monotone single-block updates', () => {
+  assert.deepEqual(networkReasonKeys, ['non_get', 'response_stage', 'unsupported_type', 'non_https_scheme',
+    'foreign_origin', 'query_or_fragment', 'unsafe_path', 'untracked_asset', 'websocket']);
+  const initial = networkCounts(); const next = { ...initial, untracked_asset: 1 };
+  assert.deepEqual(validateNetworkDiagnostic(next, initial), next);
+  const detached = validateNetworkDiagnostic(next); next.untracked_asset = 2; assert.equal(detached.untracked_asset, 1);
+  for (const mutate of [v => v.url = 'https://private.invalid/private-path', v => delete v.websocket,
+    v => v.non_get = -1, v => v.non_get = 0.5, v => v.non_get = 4097,
+    v => { v.non_get = 4096; v.websocket = 1; }, v => v.non_get = 'GET',
+    v => Object.defineProperty(v, 'non_get', { get() { throw Error('private'); } })]) {
+    const value = networkCounts(); mutate(value);
+    assert.throws(() => validateNetworkDiagnostic(value), /^Error: probe_failure$/u);
+  }
+  assert.throws(() => validateNetworkDiagnostic(initial, next), /^Error: probe_failure$/u);
+  assert.throws(() => validateNetworkDiagnostic(next, initial), /^Error: probe_failure$/u);
+});
+test('only primary history_network may expose validated aggregate, never raw request data', async () => {
+  const counts = { ...networkCounts(), foreign_origin: 1, untracked_asset: 1 };
+  const networkDiagnostic = () => counts;
+  const adapter = fake({ observe: async () => { throw Error('history_network'); }, networkDiagnostic });
+  const result = await runProbe({ expectedHead: head, adapter });
+  assert.equal(result.code, 'history_network'); assert.deepEqual(result.diagnostic, counts);
+  assert.doesNotMatch(JSON.stringify(result), /private|https:|"host"|"path"|query=|"requestId"|"port"|"pid"|GET|Script/u);
+  const originalCleanup = adapter.cleanup;
+  adapter.cleanup = async () => ({ ...await originalCleanup(), profileRemoved: false });
+  const cleanupFailure = await runProbe({ expectedHead: head, adapter });
+  assert.equal(cleanupFailure.code, 'probe_cleanup'); assert.equal(cleanupFailure.diagnostic?.foreign_origin, undefined);
+  assert.equal((await runProbe({ expectedHead: head, adapter: fake({ networkDiagnostic }) })).diagnostic, undefined);
+  const otherFailure = await runProbe({ expectedHead: head, adapter: fake({
+    observe: async () => { throw Error('history_matrix'); }, networkDiagnostic }) });
+  assert.equal(otherFailure.code, 'history_matrix'); assert.equal(otherFailure.diagnostic, undefined);
+  const invalid = await runProbe({ expectedHead: head, adapter: fake({ observe: adapter.observe,
+    networkDiagnostic: () => ({ ...counts, url: 'https://private.invalid/private-path' }) }) });
+  assert.equal(invalid.code, 'probe_failure'); assert.equal(invalid.diagnostic, undefined);
+  const source = fs.readFileSync('test/support/mission_web_history_probe.mjs', 'utf8');
+  assert.match(source, /send\(\{ event: 'network', value: validateNetworkDiagnostic\(networkCounts\) \}\)/u);
+  assert.match(source, /networkSummary = validateNetworkDiagnostic\(row\.value, networkSummary\)/u);
+  assert.match(source, /Fetch\.failRequest/u);
 });
 test('harness uses production classes, not test route hooks or a replacement router', () => {
   const source = fs.readFileSync('test/support/mission_web_history_harness.dart', 'utf8');

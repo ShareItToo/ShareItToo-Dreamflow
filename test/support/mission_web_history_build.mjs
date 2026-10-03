@@ -69,6 +69,42 @@ export function classifyAsset(url, type, files) {
   return /^[a-zA-Z0-9_.\-/]+$/u.test(name) && !name.split('/').some(p => !p || p === '.' || p === '..')
     && files.has(name) ? name : null;
 }
+// Diagnostic precedence only; this never grants request admission.
+export const networkReasonKeys = Object.freeze(['non_get', 'response_stage', 'unsupported_type',
+  'non_https_scheme', 'foreign_origin', 'query_or_fragment', 'unsafe_path', 'untracked_asset', 'websocket']);
+export function classifyBlockedRequest({ method, url, type, responseStatusCode }, files) {
+  if (method !== 'GET') return 'non_get';
+  if (responseStatusCode) return 'response_stage';
+  if (type === 'WebSocket') return 'websocket';
+  if (!['Document', 'Script', 'Stylesheet', 'Font', 'Image', 'Fetch', 'XHR', 'Other'].includes(type)) return 'unsupported_type';
+  if (typeof url !== 'string' || !url.startsWith('https://')) return 'non_https_scheme';
+  if (!url.startsWith('https://shareittoo.com/')) return 'foreign_origin';
+  if (/[?#]/u.test(url)) return 'query_or_fragment';
+  const name = url.slice('https://shareittoo.com/'.length);
+  if (type === 'Document' && name !== '' && name !== 'mission') return 'unsafe_path';
+  if (!(type === 'Document' && name === '') && (!/^[a-zA-Z0-9_.\-/]+$/u.test(name)
+    || name.split('/').some(p => !p || p === '.' || p === '..'))) return 'unsafe_path';
+  return classifyAsset(url, type, files) ? null : 'untracked_asset';
+}
+export function validateNetworkDiagnostic(value, previous) {
+  check(value && Object.getPrototypeOf(value) === Object.prototype
+    && Reflect.ownKeys(value).length === networkReasonKeys.length, 'probe_failure');
+  const detached = {};
+  for (const key of networkReasonKeys) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    check(descriptor && Object.hasOwn(descriptor, 'value') && descriptor.enumerable
+      && Number.isSafeInteger(descriptor.value) && descriptor.value >= 0 && descriptor.value <= 4096, 'probe_failure');
+    detached[key] = descriptor.value;
+  }
+  const total = v => Object.values(v).reduce((sum, count) => sum + count, 0);
+  check(total(detached) <= 4096, 'probe_failure');
+  if (previous !== undefined) {
+    const before = validateNetworkDiagnostic(previous);
+    check(networkReasonKeys.every(key => detached[key] >= before[key])
+      && total(detached) === total(before) + 1, 'probe_failure');
+  }
+  return detached;
+}
 export function inventoryTree(root) {
   const files = [];
   const walk = prefix => {

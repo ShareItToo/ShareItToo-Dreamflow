@@ -1,7 +1,8 @@
 // Versioned exact-production-code history harness; not AppRoot or staging proof.
 // Namespace/privilege/cleanup mechanics are a bounded copy of the accepted blank infrastructure; its source is unchanged.
 import http from 'node:http';
-import { buildArtifact, validateArtifact, validateHistoryMatrix, classifyAsset, inventoryTree, artifactDigest } from './mission_web_history_build.mjs';
+import { buildArtifact, validateArtifact, validateHistoryMatrix, classifyAsset, classifyBlockedRequest,
+  networkReasonKeys, validateNetworkDiagnostic, inventoryTree, artifactDigest } from './mission_web_history_build.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import net from 'node:net';
@@ -128,7 +129,7 @@ export function validateCleanup(v, requireNormalExit = true) {
 }
 export async function runProbe({ expectedHead, adapter, journal = () => {}, signal } = {}) {
   if (adapter && !process.env.NODE_TEST_CONTEXT) return fail('probe_test_hooks');
-  let sequence = 0; let code; let inventory; let artifact; let activeStage; let diagnostic;
+  let sequence = 0; let code; let inventory; let artifact; let activeStage; let diagnostic; let networkDiagnostic;
   const emit = (phase, result) => {
     check(phases.includes(phase) && ['begin', 'confirmed', 'failed'].includes(result), 'probe_failure');
     journal(Object.freeze({ sequence: ++sequence, phase, result }));
@@ -150,6 +151,10 @@ export async function runProbe({ expectedHead, adapter, journal = () => {}, sign
       try { diagnostic = validateTargetDiagnostic(active.targetDiagnostic?.()); }
       catch { code = 'probe_failure'; }
     }
+    if (code === 'history_network') {
+      try { networkDiagnostic = validateNetworkDiagnostic(active.networkDiagnostic?.()); }
+      catch { code = 'probe_failure'; }
+    }
   }
   finally {
     emit('cleanup', 'begin');
@@ -165,7 +170,7 @@ export async function runProbe({ expectedHead, adapter, journal = () => {}, sign
     }
   }
   if (signal?.aborted && !code) code = 'probe_aborted';
-  if (code) return fail(code, diagnostic);
+  if (code) return fail(code, code === 'history_network' ? networkDiagnostic : diagnostic);
   return { schemaVersion: 1, mode, status: 'pass', sourceHead: expectedHead, inventory: { ...contract, digests: { ...inventory.digests } },
     evidenceClass: 'exact-production-code-harness', fullAppRoot: false,
     artifact: { sourceDigest: artifact.sourceDigest, sourceHashes: artifact.sourceHashes, lockSha256: artifact.lockSha256,
@@ -230,6 +235,7 @@ function realAdapter(expectedHead, emit, signal) {
     };
   };
   let child; let group; let workerIdentity; let childExit; let proof; let port; let inventory; let closing; let targetSummary;
+  let networkSummary = Object.fromEntries(networkReasonKeys.map(key => [key, 0]));
   let resourceReadback = Object.fromEntries(cleanupFields.map(key => [key, false]));
   const ip = args => rootCommand('/usr/sbin/ip', args);
   const groupMembers = () => fs.readdirSync('/proc').filter(name => /^\d+$/u.test(name)).filter(name => {
@@ -253,6 +259,7 @@ function realAdapter(expectedHead, emit, signal) {
     resolverEmpty: rootCommand('/usr/bin/stat', ['-c', '%s', `${resolver}/resolv.conf`]) === '0' });
   return {
     targetDiagnostic: () => targetSummary,
+    networkDiagnostic: () => networkSummary,
     cleanupReadback: () => resourceReadback,
     async inventory() {
       runInventoryPhases(emit, {
@@ -336,6 +343,10 @@ function realAdapter(expectedHead, emit, signal) {
               else if (row.event === 'targets') {
                 check(!targetSummary && Object.keys(row).length === 2, 'probe_failure');
                 targetSummary = validateTargetDiagnostic(row.value);
+              }
+              else if (row.event === 'network') {
+                check(Object.keys(row).length === 2, 'probe_failure');
+                networkSummary = validateNetworkDiagnostic(row.value, networkSummary);
               }
               else if (row.event === 'port') { check(Number.isInteger(row.port) && row.port > 0 && row.port < 65536, 'probe_failure'); port = row.port; }
               else if (row.event === 'observation') {
@@ -454,6 +465,12 @@ async function worker(directory) {
   process.stdin.on('error', () => rejectAcknowledgement(Error('probe_failure')));
   let assetServer; let browser; let socket; let exited; let port; let nextId = 0;
   let onEvent = () => {}; let failedRequest = false; let blockedUnexpected = 0; const pending = new Map();
+  const networkCounts = Object.fromEntries(networkReasonKeys.map(key => [key, 0]));
+  const recordBlock = reason => {
+    check(networkReasonKeys.includes(reason), 'probe_failure');
+    networkCounts[reason]++; blockedUnexpected++; failedRequest = true;
+    send({ event: 'network', value: validateNetworkDiagnostic(networkCounts) });
+  };
   const watchdog = setTimeout(() => { process.exitCode = 1; rejectAcknowledgement(Error('probe_timeout')); browser?.kill('SIGKILL'); socket?.close(); }, 50000);
   try {
     browser = spawn(chrome, launchArgs(directory), { stdio: ['ignore', 'ignore', 'ignore'], env: process.env });
@@ -523,13 +540,14 @@ async function worker(directory) {
     check(local.status === 200, 'history_network'); await local.arrayBuffer(); phase('asset-server', 'confirmed');
     const requests = new Set();
     onEvent = event => {
-      if (event.method === 'Network.webSocketCreated') { blockedUnexpected++; failedRequest = true; }
+      if (event.method === 'Network.webSocketCreated') recordBlock('websocket');
       if (event.method !== 'Fetch.requestPaused') return;
       const fulfill = async () => {
         phase('Fetch.requestPaused', 'begin');
         const request = event.params; const name = classifyAsset(request.request?.url, request.resourceType, new Set(files.keys()));
         if (!name || request.request?.method !== 'GET' || request.responseStatusCode) {
-          blockedUnexpected++; failedRequest = true;
+          recordBlock(classifyBlockedRequest({ method: request.request?.method, url: request.request?.url,
+            type: request.resourceType, responseStatusCode: request.responseStatusCode }, new Set(files.keys())));
           await cdp('Fetch.failRequest', { requestId: request.requestId, errorReason: 'BlockedByClient' }, session);
         } else {
           const response = await fetch(`http://127.0.0.1:${assetPort}/${name}`, { redirect: 'error', signal: AbortSignal.timeout(3000) });
