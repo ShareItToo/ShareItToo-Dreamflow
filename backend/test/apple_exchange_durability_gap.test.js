@@ -397,6 +397,16 @@ test('current social route is ledger-first for v2 and blocks enrolled legacy bef
   assert.match(configSource, /requireOwnershipFileSecrets: appleOwnershipProfileRequested/u);
 });
 
+test('MFA completion keeps the delivery row as its sole Apple replacement lock', () => {
+  const source = fs.readFileSync(new URL('../src/apple_ownership.js', import.meta.url), 'utf8');
+  const start = source.indexOf('export async function completeAppleMfaDelivery');
+  const end = source.indexOf('export async function drainAppleOwnershipCleanup', start);
+  const completion = source.slice(start, end);
+  assert.match(completion, /UPDATE apple_ownership_deliveries AS delivery/u);
+  assert.match(completion, /SELECT \* FROM apple_ownership_attempts WHERE id=\$1/u);
+  assert.doesNotMatch(completion, /apple_ownership_attempts[^']*FOR UPDATE/u);
+});
+
 test('migration is multi-material, fail-closed on down, and separates active reservations from cleanup', () => {
   const up = fs.readFileSync(new URL('../sql/migrations/106_apple_ownership_v2.up.sql', import.meta.url), 'utf8');
   const down = fs.readFileSync(new URL('../sql/migrations/106_apple_ownership_v2.down.sql', import.meta.url), 'utf8');

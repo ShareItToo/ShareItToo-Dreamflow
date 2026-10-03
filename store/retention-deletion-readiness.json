@@ -21,7 +21,7 @@
     },
     {
       "path": "backend/src/apple_ownership.js",
-      "sha256": "71c8aa2fd60d2df8e7676b1c9de0a3e147b249dddafa97ec3c6b4fd00cdcf953"
+      "sha256": "37d0dbd92bf6b8f22135cbc5354c11d1d20739ac54a13b4d1c4de22400a751ee"
     },
     {
       "path": "backend/src/apple_revocation.js",

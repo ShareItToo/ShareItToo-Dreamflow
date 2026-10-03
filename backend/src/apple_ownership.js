@@ -786,8 +786,12 @@ export async function completeAppleMfaDelivery(client, { challengeId, sessionId,
   );
   if (result.rowCount) {
     requireConfiguration(configuration);
+    // The delivery update above already serializes completion with replacement.
+    // MFA completion holds the user lock first, while replacement holds the
+    // attempt lock first; taking the attempt lock here would invert that order
+    // and can deadlock the two otherwise valid requests.
     const attempt = (await client.query(
-      'SELECT * FROM apple_ownership_attempts WHERE id=$1 FOR UPDATE',
+      'SELECT * FROM apple_ownership_attempts WHERE id=$1',
       [result.rows[0].attempt_id],
     )).rows[0];
     const profile = attempt && resolveProfile(configuration, attempt);
