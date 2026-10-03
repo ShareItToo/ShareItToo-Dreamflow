@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
+import { readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -13,6 +14,22 @@ import {
 } from '../../tool/run_r9_database_recovery.mjs';
 
 const hash = 'a'.repeat(64);
+
+test('R9 rollback quote fixes ordered issuance and expiry independently of the database clock', () => {
+  const runner = readFileSync(new URL('../../tool/run_r9_database_recovery.mjs', import.meta.url), 'utf8');
+  const quoteInsert = runner.match(/INSERT INTO booking_quotes \(([\s\S]*?)\) VALUES \(([\s\S]*?)\)`/u);
+  assert.ok(quoteInsert, 'the exact-time rollback guard must insert its quote fixture');
+  const columns = quoteInsert[1].split(',').map((value) => value.trim());
+  const values = quoteInsert[2].split(',').map((value) => value.trim());
+  assert.equal(columns.length, values.length);
+  const row = Object.fromEntries(columns.map((column, index) => [column, values[index]]));
+  for (const column of ['issued_at', 'expires_at']) {
+    assert.match(row[column] ?? '', /^'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z'$/u,
+      `${column} must be an explicit synthetic instant, never DEFAULT now()`);
+  }
+  assert.ok(Date.parse(row.issued_at.slice(1, -1)) < Date.parse(row.expires_at.slice(1, -1)),
+    'the synthetic quote must satisfy issued_at < expires_at at any runner date');
+});
 
 function passedObservation() {
   return {

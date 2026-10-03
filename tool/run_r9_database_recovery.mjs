@@ -784,13 +784,13 @@ async function assertRollbackGuardRefusals(pool, root) {
              id, renter_id, listing_id, rental_start_date, rental_end_date,
              rental_timezone, starts_at, ends_at, catalog_revision,
              availability_revision, quote_version, currency, total_minor,
-             quote_payload, quote_hash, expires_at, time_snapshot_version,
+             quote_payload, quote_hash, issued_at, expires_at, time_snapshot_version,
              handover_at, return_at
            ) VALUES (
              'quote_00000000-0000-4000-8000-000000000096', 'r9-user-001',
              'r9-listing-001', '2026-10-01', '2026-10-02', 'Europe/Berlin',
              '2026-10-01T10:00:00Z', '2026-10-02T10:00:00Z', 1, 1, 1,
-             'EUR', 1000, '{}'::jsonb, $1, '2026-10-03T10:00:00Z',
+             'EUR', 1000, '{}'::jsonb, $1, '2026-10-03T09:00:00Z', '2026-10-03T10:00:00Z',
              'booking-time-v1', '2026-10-01T10:00:00Z', '2026-10-01T11:00:00Z'
            )`,
           ['c'.repeat(64)],
