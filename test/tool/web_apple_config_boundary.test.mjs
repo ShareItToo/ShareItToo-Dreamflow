@@ -1,42 +1,40 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import path from 'node:path';
 import test from 'node:test';
 import { profile } from '../../tool/staging_web_contract.mjs';
 
 const root = new URL('../../', import.meta.url);
 const read = (file) => fs.readFileSync(new URL(file, root), 'utf8');
 
-test('Apple W1 has no production Dart consumer or provider coupling', () => {
-  const configPath = 'lib/services/web_apple_auth_config.dart';
-  function inspect(directory) {
-    for (const entry of fs.readdirSync(new URL(directory, root), { withFileTypes: true })) {
-      const file = path.posix.join(directory, entry.name);
-      if (entry.isDirectory()) inspect(file);
-      else if (file.endsWith('.dart') && file !== configPath) {
-        assert.doesNotMatch(read(file), /web_apple_auth_config|WebApplePublicConfig/, file);
-      }
-    }
-  }
-  inspect('lib');
-  const source = read(configPath);
-  assert.doesNotMatch(source, /web_google_auth|web_facebook_auth|fromEnvironment|firebase_auth|signInWith|initializeApp|currentUser|sessionEpoch/);
-  assert.match(source, /bool appleEnabled = false/);
-  assert.match(source, /bool activationValidated = false/);
-  assert.match(source, /bool backendEnabled = false/);
+test('direct Apple config cannot borrow historical Firebase callback approval', () => {
+  const source = read('lib/services/web_apple_auth_config.dart');
+  assert.match(source, /class WebAppleDirectPublicConfig/u);
+  assert.match(source, /evidence\['schemaVersion'\] == 2/u);
+  assert.match(source, /evidence\['platform'\] == 'web_direct'/u);
+  assert.match(source, /evidence\['callbackUrl'\] == redirectUri/u);
+  assert.match(source, /backendAppleServicesIdSha256/u);
+  assert.match(source, /backendAppleOwnershipConfigured/u);
+  assert.match(source, /backendAppleAcquisitionEnabled/u);
+  assert.match(source, /backendAppleRedirectUriSha256/u);
+  assert.match(source, /class WebApplePublicConfig/u);
+  assert.match(source, /https:\/\/\$authDomain\/__\/auth\/handler/u);
 });
 
-test('staging profile still cannot activate Apple or ship W1 evidence', () => {
+test('runtime consumer remains independently gated and defaults empty', () => {
+  const runtime = read('lib/services/firebase_runtime.dart');
+  const startup = read('lib/services/web_firebase_auth_startup.dart');
+  const auth = read('lib/services/auth_service.dart');
+  for (const key of ['SIT_APPLE_WEB_CLIENT_ID', 'SIT_APPLE_WEB_REDIRECT_URI', 'SIT_APPLE_WEB_READINESS_JSON', 'SIT_APPLE_WEB_READINESS_SHA256']) {
+    assert.match(runtime, new RegExp(key, 'u'));
+  }
+  assert.match(startup, /appleEnabled && apple == null/u);
+  assert.match(startup, /sameWebFirebaseApp\(google, apple\.firebaseOptions\)/u);
+  assert.match(auth, /_appleSocialAuthEnabled &&[\s\S]*_socialProviderActivationValidated &&[\s\S]*FirebaseRuntime\.webAppleReady/u);
+});
+
+test('checked-in staging profile cannot activate or configure Apple', () => {
   const candidate = profile('a'.repeat(40), '1.0.0+2026092905');
   assert.equal(candidate.SIT_SOCIAL_APPLE_ENABLED, 'false');
   assert.equal(candidate.SIT_SOCIAL_PROVIDER_ACTIVATION_VALIDATED, 'false');
   assert.ok(Object.keys(candidate).every((key) => !key.startsWith('SIT_APPLE_WEB_')));
-});
-
-test('W1 documentation preserves acquisition, revocation and live gaps', () => {
-  const doc = read('docs/operations/SIT_APPLE_WEB_W1_CONFIG_CONTRACT_2026-10-03.md');
-  for (const required of ['NOT VERIFIED', 'code exchange', 'revocation', '24 hours', 'existing_allowlisted_accounts_only']) {
-    assert.ok(doc.includes(required), required);
-  }
-  assert.doesNotMatch(doc, /\/Users\/|\/home\//);
 });

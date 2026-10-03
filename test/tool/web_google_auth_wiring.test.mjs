@@ -10,7 +10,7 @@ test('Web Google uses popup before native SDK path and preserves backend/princip
   for (const token of ['acquireWebGoogleToken(', 'signInWithPopup(', "'prompt': 'select_account'", 'user.getIdToken(true)', 'acquisition.firebaseUid = uid']) assert.ok(acquisition.includes(token), token);
   const exchange = auth.slice(auth.indexOf('static Future<AuthResult> _signInWithSocialProviderOwned('), auth.indexOf('static AuthFailure classifySocialBackendError'));
   for (const token of ['RemoteAuthAttemptTransaction<', "path: '/auth/social'", "'idToken': idToken", "'termsAccepted': termsAccepted", 'discardRemote: _discardIssuedRemoteSession', 'persistedCurrent: _authResultSessionDefinitelyCurrent', 'shouldCleanUpPhoneIdentity(', 'await FirebaseAuth.instance.signOut()']) assert.ok(exchange.includes(token), token);
-  const gate = auth.slice(auth.indexOf('static bool socialProviderEnabled('), auth.indexOf('static bool socialProviderEnabled(') + 600);
+  const gate = auth.slice(auth.indexOf('static bool socialProviderEnabled('), auth.indexOf('static Future<void> ensureSeeded('));
   assert.match(gate, /if \(kIsWeb\)[\s\S]*provider == AuthSocialProvider.google[\s\S]*FirebaseRuntime.webGoogleReady/);
 });
 test('Web initialization is auth-only, memory-persistent and cannot enable native device services', () => {

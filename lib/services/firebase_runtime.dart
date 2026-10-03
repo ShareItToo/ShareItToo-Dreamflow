@@ -15,6 +15,7 @@ import 'firebase_service_preferences.dart';
 import 'local_principal_scope.dart';
 import 'release_identity.dart';
 import 'shared_persistence_sync.dart';
+import 'web_apple_auth_config.dart';
 import 'web_google_auth.dart';
 import 'web_facebook_auth_config.dart';
 import 'web_firebase_auth_startup.dart';
@@ -99,6 +100,21 @@ bool shouldRecordUnhandledErrorAsFatal(Object error) {
 }
 
 class FirebaseRuntimeConfig {
+  // Direct Apple Web inputs are independent and empty by default. They are
+  // absent from every checked-in release profile.
+  static const webAppleDirectConfig = WebAppleDirectPublicConfig(
+    projectId: String.fromEnvironment('SIT_APPLE_WEB_PROJECT_ID'),
+    messagingSenderId: String.fromEnvironment('SIT_APPLE_WEB_SENDER_ID'),
+    appId: String.fromEnvironment('SIT_APPLE_WEB_APP_ID'),
+    apiKey: String.fromEnvironment('SIT_APPLE_WEB_API_KEY'),
+    authDomain: String.fromEnvironment('SIT_APPLE_WEB_AUTH_DOMAIN'),
+    backendProjectId:
+        String.fromEnvironment('SIT_APPLE_WEB_BACKEND_PROJECT_ID'),
+    authorizedOrigin: String.fromEnvironment('SIT_APPLE_WEB_ORIGIN'),
+    clientId: String.fromEnvironment('SIT_APPLE_WEB_CLIENT_ID'),
+    redirectUri: String.fromEnvironment('SIT_APPLE_WEB_REDIRECT_URI'),
+    approvedDigest: String.fromEnvironment('SIT_APPLE_WEB_CONFIG_SHA256'),
+  );
   // Separate, empty-by-default Facebook inputs. Google approval never grants
   // Facebook readiness; no provider evidence or IDs are bundled by default.
   static const webFacebookConfig = WebFacebookPublicConfig(
@@ -118,8 +134,8 @@ class FirebaseRuntimeConfig {
         googleEnabled: const bool.fromEnvironment('SIT_SOCIAL_GOOGLE_ENABLED'),
         facebookEnabled:
             const bool.fromEnvironment('SIT_SOCIAL_FACEBOOK_ENABLED'),
-        activationValidated:
-            const bool.fromEnvironment('SIT_SOCIAL_PROVIDER_ACTIVATION_VALIDATED'),
+        activationValidated: const bool.fromEnvironment(
+            'SIT_SOCIAL_PROVIDER_ACTIVATION_VALIDATED'),
         backendEnabled: BackendConfig.enabled,
         apiBaseUrl: BackendConfig.apiBaseUrl,
         origin: Uri.base.origin,
@@ -127,6 +143,12 @@ class FirebaseRuntimeConfig {
             const String.fromEnvironment('SIT_FACEBOOK_WEB_READINESS_JSON'),
         facebookReadinessDigest:
             const String.fromEnvironment('SIT_FACEBOOK_WEB_READINESS_SHA256'),
+        appleConfig: webAppleDirectConfig,
+        appleEnabled: const bool.fromEnvironment('SIT_SOCIAL_APPLE_ENABLED'),
+        appleReadinessJson:
+            const String.fromEnvironment('SIT_APPLE_WEB_READINESS_JSON'),
+        appleReadinessDigest:
+            const String.fromEnvironment('SIT_APPLE_WEB_READINESS_SHA256'),
         now: DateTime.now().toUtc(),
       );
   static const webGoogleConfig = WebGooglePublicConfig(
@@ -385,12 +407,18 @@ class FirebaseRuntime {
         optionsBound: FirebaseRuntimeConfig.webAuthSelection.google,
         initialized: _webAuthInitialized,
       );
+
   /// Configuration readiness only. Facebook UI/acquisition remains disabled
   /// until the separately reviewed FB-W2 package exists.
   static bool get webFacebookConfigurationReady =>
       kIsWeb &&
       _webAuthInitialized &&
       FirebaseRuntimeConfig.webAuthSelection.facebook;
+  static bool get webAppleReady =>
+      kIsWeb &&
+      _webAuthInitialized &&
+      FirebaseRuntimeConfig.webAuthSelection.apple &&
+      FirebaseRuntimeConfig.webAuthSelection.appleDirect?.isValid == true;
   static bool _pushEnabled = false;
   // Foreground delivery is account-session scoped even though the native FCM
   // token is installation scoped. A logout closes this gate synchronously;

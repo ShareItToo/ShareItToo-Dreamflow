@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../config/private_pilot_config.dart';
 import '../models/mfa.dart';
 import '../utils/registration_consent_bundle.dart';
+import 'apple_web_v2_client.dart';
 import 'backend_config.dart';
 import 'backend_http.dart';
 import 'backend_realtime_service.dart';
@@ -19,6 +20,7 @@ import 'blue_ocean_draft_recovery_service.dart';
 import 'firebase_runtime.dart';
 import 'remote_auth_attempt_transaction.dart';
 import 'shared_persistence_sync.dart';
+import 'web_apple_auth.dart';
 import 'web_google_auth.dart';
 import 'web_facebook_auth.dart';
 import 'staging_password_enrollment_client.dart';
@@ -176,6 +178,11 @@ class AuthService {
   /// The UI and token acquisition enforce this gate before any SDK call.
   static bool socialProviderEnabled(AuthSocialProvider provider) {
     if (kIsWeb) {
+      if (provider == AuthSocialProvider.apple) {
+        return _appleSocialAuthEnabled &&
+            _socialProviderActivationValidated &&
+            FirebaseRuntime.webAppleReady;
+      }
       if (provider == AuthSocialProvider.facebook) {
         return webFacebookControlAvailable(
           isWeb: kIsWeb,
@@ -1404,6 +1411,12 @@ class AuthService {
     if (!socialProviderEnabled(provider)) {
       return const AuthResult.failure(AuthFailure.providerUnavailable);
     }
+    if (kIsWeb && provider == AuthSocialProvider.apple) {
+      return _signInWithWebAppleOwned(
+        expectedSessionEpoch: expectedSessionEpoch,
+        isActionCurrent: isActionCurrent,
+      );
+    }
     final sdkOperationEpoch = ++_providerSdkOperationGeneration;
     final acquisition = _SocialSdkAcquisition();
     try {
@@ -1555,6 +1568,132 @@ class AuthService {
     }
   }
 
+  static Future<AuthResult> _signInWithWebAppleOwned({
+    required int expectedSessionEpoch,
+    required bool Function()? isActionCurrent,
+  }) async {
+    final sdkOperationEpoch = ++_providerSdkOperationGeneration;
+    final acquisition = _SocialSdkAcquisition();
+    void requireCurrent() {
+      if (!_authAttemptPreflightCurrent(
+          expectedSessionEpoch, isActionCurrent)) {
+        throw const RemoteAuthAttemptSuperseded();
+      }
+    }
+
+    try {
+      await FirebaseRuntime.ensureFirebaseApp();
+      requireCurrent();
+      final direct = FirebaseRuntimeConfig.webAuthSelection.appleDirect;
+      if (!FirebaseRuntime.webAppleReady ||
+          direct == null ||
+          Firebase.apps.isEmpty) {
+        throw const _SocialProviderUnavailable();
+      }
+      return await RemoteAuthAttemptTransaction<AppleWebV2Material,
+              Map<String, dynamic>, AuthResult>()
+          .run(
+        preflightCurrent: () => _authAttemptPreflightCurrent(
+          expectedSessionEpoch,
+          isActionCurrent,
+        ),
+        actionCurrent: () => _authAttemptActionCurrent(isActionCurrent),
+        acquire: () => acquireWebAppleMaterial(
+          config: direct,
+          available: () => FirebaseRuntime.webAppleReady,
+          requireCurrent: requireCurrent,
+          popup: openConfiguredWebApplePopup,
+          signInToFirebase: (appleIdToken, rawNonce) async {
+            requireCurrent();
+            final credential = await FirebaseAuth.instance.signInWithCredential(
+              OAuthProvider('apple.com').credential(
+                idToken: appleIdToken,
+                rawNonce: rawNonce,
+              ),
+            );
+            final user = credential.user;
+            if (user == null) {
+              throw const WebAppleAuthFailure('missing_firebase_user');
+            }
+            return WebAppleFirebaseIdentity(
+              uid: user.uid,
+              readFreshToken: () async {
+                final result = await user.getIdTokenResult(true);
+                return WebAppleFirebaseToken(
+                  token: result.token,
+                  signInProvider: result.signInProvider,
+                );
+              },
+            );
+          },
+          currentFirebaseUid: () => FirebaseAuth.instance.currentUser?.uid,
+          acquired: (uid) => acquisition.firebaseUid = uid,
+        ),
+        invokeRemote: (material) => exchangeAppleWebV2(
+          material: material,
+          request: (body) => BackendHttp.requestJsonResponse(
+            method: 'POST',
+            path: '/auth/social',
+            body: body,
+          ),
+          createOpaqueId: createAppleWebOpaqueId,
+          requireCurrent: requireCurrent,
+        ),
+        persist: (response) async {
+          final rawSession = response['session'];
+          if (rawSession is Map) {
+            return AuthResult.success(
+              session: await _saveRemoteSession(
+                Map<String, dynamic>.from(rawSession),
+                expectedGeneration: expectedSessionEpoch,
+              ),
+            );
+          }
+          final challenge = _parseMfaChallenge(response);
+          if (response['mfaRequired'] == true && challenge != null) {
+            return AuthResult.mfaRequired(challenge);
+          }
+          throw const BackendException(502, 'invalid_apple_session_response');
+        },
+        discardRemote: _discardAppleIssuedRemoteSession,
+        persistedCurrent: _authResultSessionDefinitelyCurrent,
+        discardPersisted: _discardPersistedAuthResult,
+      );
+    } on RemoteAuthAttemptSuperseded {
+      return const AuthResult.failure(AuthFailure.principalChanged);
+    } on WebAppleAuthFailure catch (error) {
+      if (error.cancelled) {
+        return const AuthResult.failure(AuthFailure.socialCancelled);
+      }
+      if (error.code == 'popup_blocked') {
+        return const AuthResult.failure(AuthFailure.socialPopupBlocked);
+      }
+      return const AuthResult.failure(AuthFailure.providerUnavailable);
+    } on AppleWebV2Failure catch (error) {
+      return AuthResult.failure(classifySocialBackendError(error.code));
+    } on BackendException catch (error) {
+      return AuthResult.failure(classifySocialBackendError(error.code));
+    } on _DiscardedRefreshResult {
+      return const AuthResult.failure(AuthFailure.network);
+    } catch (_) {
+      return _authAttemptPreflightCurrent(expectedSessionEpoch, isActionCurrent)
+          ? const AuthResult.failure(AuthFailure.network)
+          : const AuthResult.failure(AuthFailure.principalChanged);
+    } finally {
+      try {
+        if (acquisition.firebaseUid != null &&
+            shouldCleanUpPhoneIdentity(
+              attemptEpoch: sdkOperationEpoch,
+              currentAttemptEpoch: _providerSdkOperationGeneration,
+              signedInUid: acquisition.firebaseUid,
+              currentUid: FirebaseAuth.instance.currentUser?.uid,
+            )) {
+          await FirebaseAuth.instance.signOut();
+        }
+      } catch (_) {}
+    }
+  }
+
   @visibleForTesting
   static AuthFailure classifySocialBackendError(String code) => switch (code) {
         'staging_account_not_allowlisted' ||
@@ -1592,8 +1731,39 @@ class AuthService {
         'social_auth_unavailable' ||
         'apple_revocation_unavailable' ||
         'apple_revocation_exchange_unavailable' ||
-        'apple_revocation_exchange_claim_lost' =>
+        'apple_revocation_exchange_claim_lost' ||
+        'apple_ownership_unavailable' ||
+        'apple_ownership_paused' ||
+        'apple_ownership_provider_unavailable' ||
+        'apple_ownership_status_unavailable' ||
+        'apple_ownership_pending' ||
+        'apple_attempt_unavailable' ||
+        'apple_ownership_receipt_expired' ||
+        'apple_ownership_status_rate_limited' ||
+        'apple_ownership_binding_unavailable' ||
+        'apple_ownership_coordination_unavailable' ||
+        'apple_ownership_crypto_unavailable' ||
+        'apple_ownership_delivery_unavailable' ||
+        'apple_ownership_material_unreadable' ||
+        'apple_ownership_profile_unavailable' ||
+        'apple_ownership_upgrade_required' ||
+        'apple_session_delivery_unavailable' ||
+        'apple_session_delivery_uncertain' =>
           AuthFailure.providerUnavailable,
+        'apple_ownership_not_eligible' => AuthFailure.pilotAccountDenied,
+        'apple_ownership_principal_conflict' ||
+        'apple_ownership_unresolved' ||
+        'apple_ownership_exchange_unresolved' ||
+        'apple_ownership_cleanup_required' ||
+        'apple_ownership_closed' ||
+        'apple_ownership_request_conflict' ||
+        'apple_authorization_code_reused' ||
+        'apple_ownership_material_conflict' ||
+        'apple_ownership_late_material_conflict' ||
+        'apple_ownership_not_ready' ||
+        'apple_delivery_superseded' ||
+        'apple_session_delivery_exhausted' =>
+          AuthFailure.socialIdentityConflict,
         'account_not_active' => AuthFailure.accountNotActive,
         _ => AuthFailure.network,
       };
@@ -1921,6 +2091,15 @@ class AuthService {
       path: '/auth/logout',
       body: {'refreshToken': refreshToken},
     );
+  }
+
+  static Future<void> _discardAppleIssuedRemoteSession(
+    Map<String, dynamic> response,
+  ) async {
+    final session = response['session'];
+    if (session is Map) {
+      await _discardIssuedRemoteSession(Map<String, dynamic>.from(session));
+    }
   }
 
   static Future<bool> _authResultSessionDefinitelyCurrent(

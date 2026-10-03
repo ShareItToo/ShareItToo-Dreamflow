@@ -24,6 +24,20 @@ class BackendBinaryResponse {
   const BackendBinaryResponse({required this.bytes, required this.headers});
 }
 
+class BackendJsonResponse {
+  final int statusCode;
+  final Map<String, dynamic> body;
+  final Duration? retryAfter;
+
+  const BackendJsonResponse({
+    required this.statusCode,
+    required this.body,
+    this.retryAfter,
+  });
+
+  bool get isSuccess => statusCode >= 200 && statusCode < 300;
+}
+
 class BackendHttp {
   static Future<BackendBinaryResponse> requestBytes({
     required String path,
@@ -55,6 +69,34 @@ class BackendHttp {
   }
 
   static Future<Map<String, dynamic>> requestJson({
+    required String method,
+    required String path,
+    String? accessToken,
+    Object? body,
+    Map<String, String> additionalHeaders = const <String, String>{},
+    Duration timeout = const Duration(seconds: 20),
+  }) async {
+    final response = await requestJsonResponse(
+      method: method,
+      path: path,
+      accessToken: accessToken,
+      body: body,
+      additionalHeaders: additionalHeaders,
+      timeout: timeout,
+    );
+    if (!response.isSuccess) {
+      throw BackendException(
+        response.statusCode,
+        response.body['error']?.toString() ?? 'request_failed',
+        details: response.body['details'],
+      );
+    }
+    return response.body;
+  }
+
+  /// Returns status and bounded response headers so protocols with explicit
+  /// 202/409/410 states can classify them without replaying a request.
+  static Future<BackendJsonResponse> requestJsonResponse({
     required String method,
     required String path,
     String? accessToken,
@@ -110,13 +152,17 @@ class BackendHttp {
       }
     }
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw BackendException(
-        response.statusCode,
-        decoded['error']?.toString() ?? 'request_failed',
-        details: decoded['details'],
-      );
-    }
-    return decoded;
+    return BackendJsonResponse(
+      statusCode: response.statusCode,
+      body: decoded,
+      retryAfter: _boundedRetryAfter(response.headers['retry-after']),
+    );
+  }
+
+  static Duration? _boundedRetryAfter(String? raw) {
+    final seconds = int.tryParse(raw?.trim() ?? '');
+    return seconds != null && seconds >= 1 && seconds <= 300
+        ? Duration(seconds: seconds)
+        : null;
   }
 }

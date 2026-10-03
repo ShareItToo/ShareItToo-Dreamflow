@@ -26,20 +26,15 @@ test('all provider SDK imports and mutations remain in the exact reviewed auth s
   walk('lib');
   assert.deepEqual(found.sort(), [
     'lib/services/auth_service.dart',
-    'lib/services/web_apple_auth.dart',
     'lib/services/web_facebook_auth.dart',
   ]);
-  assert.equal([...auth.matchAll(/FirebaseAuth\.instance\.signOut\(/gu)].length, 3);
-  assert.equal([...auth.matchAll(/FirebaseAuth\.instance\.signInWith(?:Credential|Provider)\(/gu)].length, 4);
-  for (const [file, provider] of [
-    ['lib/services/web_apple_auth.dart', 'AppleAuthProvider'],
-    ['lib/services/web_facebook_auth.dart', 'FacebookAuthProvider'],
-  ]) {
-    const source = read(file);
-    assert.equal([...source.matchAll(/signInWithPopup\(/gu)].length, 1, file);
-    assert.match(source, new RegExp(`${provider}\\(`, 'u'));
-    assert.doesNotMatch(source, /signOut\(|GoogleSignIn|flutter_facebook_auth/u);
-  }
+  assert.equal([...auth.matchAll(/FirebaseAuth\.instance\.signOut\(/gu)].length, 4);
+  assert.equal([...auth.matchAll(/FirebaseAuth\.instance\.signInWith(?:Credential|Provider)\(/gu)].length, 5);
+  const facebook = read('lib/services/web_facebook_auth.dart');
+  assert.equal([...facebook.matchAll(/signInWithPopup\(/gu)].length, 1);
+  assert.match(facebook, /FacebookAuthProvider\(/u);
+  assert.doesNotMatch(facebook, /signOut\(|GoogleSignIn|flutter_facebook_auth/u);
+  assert.doesNotMatch(read('lib/services/web_apple_auth.dart'), /firebase_auth|signInWithPopup|signOut\(/u);
 });
 
 test('social and phone acquire the same queue and retain it through awaited cleanup', () => {

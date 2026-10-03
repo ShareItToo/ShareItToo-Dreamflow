@@ -1,5 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 
+import 'web_apple_auth_config.dart';
+import 'web_apple_browser_bridge.dart';
 import 'web_facebook_auth_config.dart';
 import 'web_google_auth.dart';
 
@@ -8,8 +10,12 @@ class WebFirebaseAuthSelection {
   final FirebaseOptions? options;
   final bool google;
   final bool facebook;
-  const WebFirebaseAuthSelection._(this.options, this.google, this.facebook);
-  static const unavailable = WebFirebaseAuthSelection._(null, false, false);
+  final bool apple;
+  final WebAppleDirectConfig? appleDirect;
+  const WebFirebaseAuthSelection._(
+      this.options, this.google, this.facebook, this.apple, this.appleDirect);
+  static const unavailable =
+      WebFirebaseAuthSelection._(null, false, false, false, null);
 }
 
 bool sameWebFirebaseApp(FirebaseOptions a, FirebaseOptions b) =>
@@ -31,6 +37,10 @@ WebFirebaseAuthSelection selectWebFirebaseAuth({
   required String facebookReadinessJson,
   required String facebookReadinessDigest,
   required DateTime now,
+  WebAppleDirectPublicConfig appleConfig = const WebAppleDirectPublicConfig(),
+  bool appleEnabled = false,
+  String appleReadinessJson = '',
+  String appleReadinessDigest = '',
 }) {
   final google = googleConfig.optionsFor(
     googleEnabled: googleEnabled,
@@ -48,16 +58,38 @@ WebFirebaseAuthSelection selectWebFirebaseAuth({
     approvedReadinessDigest: facebookReadinessDigest,
     now: now,
   );
+  final apple = appleConfig.configurationFor(
+    appleEnabled: appleEnabled,
+    activationValidated: activationValidated,
+    backendEnabled: backendEnabled,
+    apiBaseUrl: apiBaseUrl,
+    origin: origin,
+    readinessJson: appleReadinessJson,
+    approvedReadinessDigest: appleReadinessDigest,
+    now: now,
+  );
   // A requested but unbound provider must not silently borrow the other's app.
   if ((googleEnabled && google == null) ||
       (facebookEnabled && facebook == null) ||
+      (appleEnabled && apple == null) ||
       (google != null &&
           facebook != null &&
-          !sameWebFirebaseApp(google, facebook))) {
+          !sameWebFirebaseApp(google, facebook)) ||
+      (google != null &&
+          apple != null &&
+          !sameWebFirebaseApp(google, apple.firebaseOptions)) ||
+      (facebook != null &&
+          apple != null &&
+          !sameWebFirebaseApp(facebook, apple.firebaseOptions))) {
     return WebFirebaseAuthSelection.unavailable;
   }
   return WebFirebaseAuthSelection._(
-      google ?? facebook, google != null, facebook != null);
+    google ?? facebook ?? apple?.firebaseOptions,
+    google != null,
+    facebook != null,
+    apple != null,
+    apple?.direct,
+  );
 }
 
 Future<bool> prepareWebFirebaseAuth({

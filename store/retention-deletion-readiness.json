@@ -841,7 +841,43 @@
     },
     {
       "path": "lib/services/firebase_runtime.dart",
-      "sha256": "f427159aa20ba071d0e764b85c981db98059564d1ec4ea9ac3838c3ef2447249"
+      "sha256": "837303da10279fa5b23f1727267dd9055b290f6b9fcbfd4d08b7634a047c35e8"
+    },
+    {
+      "path": "lib/services/auth_service.dart",
+      "sha256": "3b893dbaee7009005a1ebcb8e3155ee2bfe505c1136c8604763daed04377875a"
+    },
+    {
+      "path": "lib/services/backend_http.dart",
+      "sha256": "cc4cc242fd3a4dc0c13941de9b95e26ae2634945b6dca5ed7a9c92931d0d4f1d"
+    },
+    {
+      "path": "lib/services/apple_web_v2_client.dart",
+      "sha256": "fd1e8029dcf240df00b0be08e23b552cfab3a6c7309d6086305bfd109fc5ab43"
+    },
+    {
+      "path": "lib/services/web_apple_auth.dart",
+      "sha256": "e3500fe3020df2ea1aa6ea6b6d4a418d0459b9be215acd1e24125926ab35a35a"
+    },
+    {
+      "path": "lib/services/web_apple_auth_config.dart",
+      "sha256": "4e56018eb5b30e7943df3eb177bc38b99efe75900b7f16e696de3181cde295dd"
+    },
+    {
+      "path": "lib/services/web_apple_browser_bridge.dart",
+      "sha256": "d1e4229978f9dece82be4fdbc9c30dbd242876b0eb1e2763b1a3ce20165571ea"
+    },
+    {
+      "path": "lib/services/web_apple_browser_bridge_stub.dart",
+      "sha256": "94e5e3a4be8131c50113a79b8c037c05b318568fcb612ac522514e1a4689f0c4"
+    },
+    {
+      "path": "lib/services/web_apple_browser_bridge_web.dart",
+      "sha256": "7c9e9a8d35e5ff05713fb596069e8e19fbb5dc79ad4dbdaa04f1fc2c72c255a8"
+    },
+    {
+      "path": "lib/services/web_apple_browser_types.dart",
+      "sha256": "9ccf107a7106fc1e161fd4c50b99f8f7959e66e7c635cce40556752f9ecff2d3"
     },
     {
       "path": "lib/services/web_facebook_auth.dart",
@@ -853,7 +889,7 @@
     },
     {
       "path": "lib/services/web_firebase_auth_startup.dart",
-      "sha256": "6ea27d167c1c37cbed0fa07e6cdbd56168d86472bf400995e3be042ee2835606"
+      "sha256": "0999c7fa1571c7d1ebbd16383afce00dc806770a8fc83027b84e13817f071c17"
     },
     {
       "path": "lib/services/firebase_service_preferences.dart",

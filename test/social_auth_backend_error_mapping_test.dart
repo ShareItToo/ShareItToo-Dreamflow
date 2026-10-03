@@ -104,6 +104,43 @@ void main() {
     }
   });
 
+  test('Apple v2 ownership terminal failures retain exact safe categories', () {
+    for (final code in [
+      'apple_ownership_exchange_unresolved',
+      'apple_ownership_request_conflict',
+      'apple_authorization_code_reused',
+      'apple_ownership_material_conflict',
+      'apple_ownership_late_material_conflict',
+      'apple_ownership_not_ready',
+      'apple_delivery_superseded',
+      'apple_session_delivery_exhausted',
+    ]) {
+      expect(
+        AuthService.classifySocialBackendError(code),
+        AuthFailure.socialIdentityConflict,
+        reason: code,
+      );
+    }
+    for (final code in [
+      'apple_attempt_unavailable',
+      'apple_ownership_receipt_expired',
+      'apple_ownership_status_rate_limited',
+      'apple_ownership_binding_unavailable',
+      'apple_ownership_coordination_unavailable',
+      'apple_ownership_crypto_unavailable',
+      'apple_ownership_delivery_unavailable',
+      'apple_ownership_material_unreadable',
+      'apple_ownership_profile_unavailable',
+      'apple_ownership_upgrade_required',
+    ]) {
+      expect(
+        AuthService.classifySocialBackendError(code),
+        AuthFailure.providerUnavailable,
+        reason: code,
+      );
+    }
+  });
+
   test('unknown social backend failures remain non-specific', () {
     expect(
       AuthService.classifySocialBackendError('synthetic_unknown_error'),
