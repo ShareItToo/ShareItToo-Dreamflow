@@ -45,9 +45,14 @@ function harness() {
       assert.equal(values[0], 'apple');
       assert.equal(values[1], subject);
       assert.equal(values[2], uid);
-      assert.equal(values[5], 'refresh_token');
-      assert.match(values[6], /^v1\./);
-      durable.ciphertext = values[6];
+      if (values[5] === null) {
+        assert.equal(values[6], null);
+        assert.match(sql, /apple_revocation_material_ciphertext = COALESCE\(\$7, apple_revocation_material_ciphertext\)/);
+      } else {
+        assert.equal(values[5], 'refresh_token');
+        assert.match(values[6], /^v1\./);
+        durable.ciphertext = values[6];
+      }
       return { rows: [], rowCount: 1 };
     }
     throw new Error('unexpected_synthetic_sql');
@@ -176,6 +181,16 @@ test('GAP reproduced: concurrent duplicate delivery calls exchange twice', async
   assert.equal(h.calls.exchange, 2);
   assert.equal(h.calls.issued, 1);
   assert.equal(h.calls.commits, 1);
+});
+
+test('existing boundary: Apple without code can issue a session outside material acquisition', async () => {
+  const h = harness();
+  await h.run(null);
+  assert.equal(h.calls.exchange, 0);
+  assert.equal(h.calls.issued, 0);
+  assert.equal(h.calls.commits, 1);
+  assert.equal(h.durable.sessions, 1);
+  assert.equal(h.durable.ciphertext, h.originalMaterial);
 });
 
 test('GAP reproduced: successful new code overwrites prior owned material', async () => {
