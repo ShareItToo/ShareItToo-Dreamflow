@@ -157,9 +157,8 @@ test('foreign Caddy bytes after the bound read are rejected before descriptor tr
     const count = read(...args); if (args[0] === target && count === 0) readCompleted = true; return count;
   });
   t.mock.method(fs, 'lstatSync', (file, ...args) => {
-    const stat = lstat(file, ...args);
     if (file === f.config && readCompleted && !changed) { changed = true; fs.writeFileSync(file, 'foreign-content'); }
-    return stat;
+    return lstat(file, ...args);
   });
   assert.throws(() => bootstrap({ ...f.args, execute: true }), /bootstrap_rollback_failed_manual_recovery_required/);
   assert.equal(changed, true); assert.equal(fs.readFileSync(f.config, 'utf8'), 'foreign-content');
@@ -174,7 +173,7 @@ test('existing journal writes use the original descriptor and preserve its inode
     if (at === 'copy') identity = fs.statSync(evidence).ino;
   } }).status, 'bootstrap-passed');
   assert.equal(journalOpens, 1); assert.equal(fs.statSync(evidence).ino, identity);
-  assert.equal(JSON.parse(fs.readFileSync(evidence)).status, 'bootstrap-passed');
+  assert.equal(JSON.parse(privateFile(evidence).toString('utf8')).status, 'bootstrap-passed');
   assert.equal(fs.statSync(f.config).ino, f.manifest.hostFile.inode); assert.equal(descriptors.size, 0);
 });
 test('private descriptor close failures have stable sanitized errors', t => {
