@@ -251,6 +251,14 @@ const sourcePaths = [
   'store/g2-data-lifecycle.json',
 ];
 
+const appleOwnershipSourcePaths = Object.freeze([
+  'backend/src/apple_ownership.js',
+  'backend/src/apple_revocation.js',
+  'backend/src/apple_revocation_secret_files.js',
+  'backend/sql/migrations/106_apple_ownership_v2.up.sql',
+  'backend/sql/migrations/106_apple_ownership_v2.down.sql',
+]);
+
 const decisionKeys = [
   'inactiveAccountPeriod',
   'transactionalRecordPeriod',
@@ -517,7 +525,7 @@ function assertDecisionPreparation(root, evidenceTexts) {
   }
 }
 
-function assertSourceContracts(root, sourceTexts) {
+function assertSourceContracts(root, sourceTexts, { requireAppleOwnershipContracts }) {
   const app = text(root, sourceTexts, 'backend/src/app.js');
   for (const marker of [
     'DELETE FROM notification_preferences WHERE user_id = $1',
@@ -762,83 +770,85 @@ function assertSourceContracts(root, sourceTexts) {
   if (!inventory.includes("'securityAudit', 'support_deadline_watchdog_state'")) {
     fail('Retention inventory is missing operational dataset support_deadline_watchdog_state.');
   }
-  for (const dataset of [
-    'apple_ownership_enrollments',
-    'apple_ownership_attempts',
-    'apple_ownership_active_reservations',
-    'apple_ownership_unresolved',
-    'apple_ownership_materials',
-    'apple_ownership_cleanup_pending',
-    'apple_ownership_cleanup_unknown',
-    'apple_ownership_deliveries',
-  ]) {
-    if (!inventory.includes(`'securityAudit', '${dataset}'`)) {
-      fail(`Retention inventory is missing Apple ownership dataset ${dataset}.`);
+  if (requireAppleOwnershipContracts) {
+    for (const dataset of [
+      'apple_ownership_enrollments',
+      'apple_ownership_attempts',
+      'apple_ownership_active_reservations',
+      'apple_ownership_unresolved',
+      'apple_ownership_materials',
+      'apple_ownership_cleanup_pending',
+      'apple_ownership_cleanup_unknown',
+      'apple_ownership_deliveries',
+    ]) {
+      if (!inventory.includes(`'securityAudit', '${dataset}'`)) {
+        fail(`Retention inventory is missing Apple ownership dataset ${dataset}.`);
+      }
     }
-  }
-  const appleOwnership = text(root, sourceTexts, 'backend/src/apple_ownership.js');
-  const appleOwnershipRollback = text(
-    root,
-    sourceTexts,
-    'backend/sql/migrations/106_apple_ownership_v2.down.sql',
-  );
-  for (const marker of [
-    'prepareAppleOwnershipAccountDeletion',
-    "state='cleanup_pending'",
-    "state='cleanup_unknown'",
-    'startAppleOwnershipCleanupWorker',
-    'apple_attempt_unavailable',
-    'profile_generation',
-    'material_key_id',
-    'coordinationDigest',
-    'pg_advisory_xact_lock',
-    'reserved.profile',
-  ]) {
-    if (!appleOwnership.includes(marker)) {
-      fail(`Apple ownership retention boundary is missing ${marker}.`);
+    const appleOwnership = text(root, sourceTexts, 'backend/src/apple_ownership.js');
+    const appleOwnershipRollback = text(
+      root,
+      sourceTexts,
+      'backend/sql/migrations/106_apple_ownership_v2.down.sql',
+    );
+    for (const marker of [
+      'prepareAppleOwnershipAccountDeletion',
+      "state='cleanup_pending'",
+      "state='cleanup_unknown'",
+      'startAppleOwnershipCleanupWorker',
+      'apple_attempt_unavailable',
+      'profile_generation',
+      'material_key_id',
+      'coordinationDigest',
+      'pg_advisory_xact_lock',
+      'reserved.profile',
+    ]) {
+      if (!appleOwnership.includes(marker)) {
+        fail(`Apple ownership retention boundary is missing ${marker}.`);
+      }
     }
-  }
-  if (!appleOwnershipRollback.includes('apple_ownership_v2_obligations_present')) {
-    fail('Apple ownership rollback must refuse retained ownership or cleanup obligations.');
-  }
-  const appleOwnershipMigration = text(
-    root,
-    sourceTexts,
-    'backend/sql/migrations/106_apple_ownership_v2.up.sql',
-  );
-  for (const marker of [
-    'private_use_confirmed_at', 'web_test_cohort_enrolled_at',
-    'guard_apple_ownership_user_delete', 'apple_ownership_cleanup_required',
-    'ON DELETE CASCADE', "'committed'",
-  ]) {
-    if (!appleOwnershipMigration.includes(marker)) {
-      fail(`Apple ownership deletion boundary is missing ${marker}.`);
+    if (!appleOwnershipRollback.includes('apple_ownership_v2_obligations_present')) {
+      fail('Apple ownership rollback must refuse retained ownership or cleanup obligations.');
     }
-  }
-  const appleRevocation = text(root, sourceTexts, 'backend/src/apple_revocation.js');
-  for (const marker of [
-    "const APPLE_ISSUER = 'https://appleid.apple.com'",
-    'const PROVIDER_RESPONSE_MAX_BYTES = 32 * 1024',
-    'const PROVIDER_DEADLINE_MS = 20_000',
-    "redirect: 'error'", "content-encoding", 'createAppleRevocationProviderRing',
-    'Promise.race',
-  ]) {
-    if (!appleRevocation.includes(marker)) {
-      fail(`Apple provider cleanup transport boundary is missing ${marker}.`);
+    const appleOwnershipMigration = text(
+      root,
+      sourceTexts,
+      'backend/sql/migrations/106_apple_ownership_v2.up.sql',
+    );
+    for (const marker of [
+      'private_use_confirmed_at', 'web_test_cohort_enrolled_at',
+      'guard_apple_ownership_user_delete', 'apple_ownership_cleanup_required',
+      'ON DELETE CASCADE', "'committed'",
+    ]) {
+      if (!appleOwnershipMigration.includes(marker)) {
+        fail(`Apple ownership deletion boundary is missing ${marker}.`);
+      }
     }
-  }
-  const appleOwnershipSecrets = text(
-    root,
-    sourceTexts,
-    'backend/src/apple_revocation_secret_files.js',
-  );
-  for (const marker of [
-    'APPLE_OWNERSHIP_COORDINATION_KEY_FILE',
-    'APPLE_OWNERSHIP_HISTORICAL_PROFILES_FILE',
-    'owner-only permissions', 'profiles.length > 8',
-  ]) {
-    if (!appleOwnershipSecrets.includes(marker)) {
-      fail(`Apple ownership retained-profile boundary is missing ${marker}.`);
+    const appleRevocation = text(root, sourceTexts, 'backend/src/apple_revocation.js');
+    for (const marker of [
+      "const APPLE_ISSUER = 'https://appleid.apple.com'",
+      'const PROVIDER_RESPONSE_MAX_BYTES = 32 * 1024',
+      'const PROVIDER_DEADLINE_MS = 20_000',
+      "redirect: 'error'", "content-encoding", 'createAppleRevocationProviderRing',
+      'Promise.race',
+    ]) {
+      if (!appleRevocation.includes(marker)) {
+        fail(`Apple provider cleanup transport boundary is missing ${marker}.`);
+      }
+    }
+    const appleOwnershipSecrets = text(
+      root,
+      sourceTexts,
+      'backend/src/apple_revocation_secret_files.js',
+    );
+    for (const marker of [
+      'APPLE_OWNERSHIP_COORDINATION_KEY_FILE',
+      'APPLE_OWNERSHIP_HISTORICAL_PROFILES_FILE',
+      'owner-only permissions', 'profiles.length > 8',
+    ]) {
+      if (!appleOwnershipSecrets.includes(marker)) {
+        fail(`Apple ownership retained-profile boundary is missing ${marker}.`);
+      }
     }
   }
   const supportOperationalMetrics = text(
@@ -1956,7 +1966,17 @@ export function validateRetentionDeletionReadiness({
   for (const path of requiredSourcePaths) {
     if (sha256(text(root, sourceTexts, path)) !== sourceMap.get(path)) fail(`sourceInventory hash is stale: ${path}.`);
   }
-  assertSourceContracts(root, sourceTexts);
+  const appleOwnershipSourceCount = appleOwnershipSourcePaths.filter(
+    (path) => requiredSourcePaths.includes(path),
+  ).length;
+  if (appleOwnershipSourceCount !== 0
+      && appleOwnershipSourceCount !== appleOwnershipSourcePaths.length) {
+    fail('Apple ownership source contract must be complete when present.');
+  }
+  assertSourceContracts(root, sourceTexts, {
+    requireAppleOwnershipContracts:
+      appleOwnershipSourceCount === appleOwnershipSourcePaths.length,
+  });
   assertProviderEvidence(root, evidenceTexts);
   assertRetentionExecutionPreflightEvidence(root, evidenceTexts);
   assertFirebaseServiceReadiness(root, evidenceTexts);

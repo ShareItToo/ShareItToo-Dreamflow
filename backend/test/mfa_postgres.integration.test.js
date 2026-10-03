@@ -451,20 +451,49 @@ if (!databaseUrl) {
 
       const downSql = await fs.readFile(path.join(root, 'sql/migrations/080_mfa_totp.down.sql'), 'utf8');
       const upSql = await fs.readFile(path.join(root, 'sql/migrations/080_mfa_totp.up.sql'), 'utf8');
+      const appleOwnershipDownSql = await fs.readFile(
+        path.join(root, 'sql/migrations/106_apple_ownership_v2.down.sql'),
+        'utf8',
+      );
+      const appleOwnershipUpSql = await fs.readFile(
+        path.join(root, 'sql/migrations/106_apple_ownership_v2.up.sql'),
+        'utf8',
+      );
+      await database.query(appleOwnershipDownSql);
       await database.query(downSql);
       const removed = await database.query(
         `SELECT to_regclass('public.mfa_totp_factors') AS factors,
-                to_regclass('public.auth_mfa_challenges') AS challenges`,
+                to_regclass('public.auth_mfa_challenges') AS challenges,
+                to_regclass('public.apple_ownership_deliveries') AS apple_deliveries`,
       );
       assert.equal(removed.rows[0].factors, null);
       assert.equal(removed.rows[0].challenges, null);
+      assert.equal(removed.rows[0].apple_deliveries, null);
       await database.query(upSql);
+      await database.query(appleOwnershipUpSql);
       const restored = await database.query(
         `SELECT to_regclass('public.mfa_totp_factors') AS factors,
-                to_regclass('public.auth_mfa_challenges') AS challenges`,
+                to_regclass('public.auth_mfa_challenges') AS challenges,
+                to_regclass('public.apple_ownership_deliveries') AS apple_deliveries`,
       );
       assert.equal(restored.rows[0].factors, 'mfa_totp_factors');
       assert.equal(restored.rows[0].challenges, 'auth_mfa_challenges');
+      assert.equal(restored.rows[0].apple_deliveries, 'apple_ownership_deliveries');
+      const restoredAppleMfaForeignKey = await database.query(
+        `SELECT constraint_definition.confdeltype,
+                pg_get_constraintdef(constraint_definition.oid) AS definition
+           FROM pg_constraint AS constraint_definition
+          WHERE constraint_definition.conname =
+                'apple_ownership_deliveries_mfa_challenge_id_fkey'
+            AND constraint_definition.conrelid = 'apple_ownership_deliveries'::regclass
+            AND constraint_definition.confrelid = 'auth_mfa_challenges'::regclass`,
+      );
+      assert.equal(restoredAppleMfaForeignKey.rowCount, 1);
+      assert.equal(restoredAppleMfaForeignKey.rows[0].confdeltype, 'n');
+      assert.equal(
+        restoredAppleMfaForeignKey.rows[0].definition,
+        'FOREIGN KEY (mfa_challenge_id) REFERENCES auth_mfa_challenges(id) ON DELETE SET NULL',
+      );
     } finally {
       await new Promise((resolve) => server.close(resolve));
       await database.end();

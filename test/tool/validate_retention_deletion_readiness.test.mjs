@@ -39,6 +39,38 @@ test('retention inventory binds the owner participation API workflow', () => {
   assert.throws(() => validate({ retentionManifest }), /every required retention source exactly once/u);
 });
 
+test('current retention keeps Apple ownership source and dataset requirements fail closed', () => {
+  const migrationPath = 'backend/sql/migrations/106_apple_ownership_v2.up.sql';
+  assert.ok(baseRetention.sourceInventory.some((entry) => entry.path === migrationPath));
+  const missingSource = clone(baseRetention);
+  missingSource.sourceInventory = missingSource.sourceInventory.filter(
+    (entry) => entry.path !== migrationPath,
+  );
+  assert.throws(
+    () => validate({ retentionManifest: missingSource }),
+    /every required retention source exactly once/u,
+  );
+
+  const inventoryPath = 'backend/src/retention_inventory.js';
+  const inventorySource = readFileSync(resolve(root, inventoryPath), 'utf8');
+  const missingDatasetSource = inventorySource.replace(
+    "'securityAudit', 'apple_ownership_enrollments'",
+    "'securityAudit', 'apple_ownership_enrollment_missing'",
+  );
+  assert.notEqual(missingDatasetSource, inventorySource);
+  const missingDataset = clone(baseRetention);
+  missingDataset.sourceInventory.find(
+    (entry) => entry.path === inventoryPath,
+  ).sha256 = sha256(missingDatasetSource);
+  assert.throws(
+    () => validate({
+      retentionManifest: missingDataset,
+      sourceTexts: { [inventoryPath]: missingDatasetSource },
+    }),
+    /Retention inventory is missing Apple ownership dataset apple_ownership_enrollments/u,
+  );
+});
+
 test('historical source selection requires a genuine complete snapshot attestation', () => {
   const forged = {
     [boundSnapshotAttestationBrand]: true,
