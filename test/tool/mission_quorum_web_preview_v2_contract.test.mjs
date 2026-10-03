@@ -11,8 +11,11 @@ const allowed = new Set([
   'test/mission_quorum_web_view_v2_test.dart',
   'test/tool/mission_quorum_web_preview_v2_contract.test.mjs',
   'backend/test/mission_quorum_projection_v2.test.js',
+  'test/support/mission_quorum_web_browser_v2.mjs',
+  'test/tool/mission_quorum_web_browser_v2.test.mjs',
+  '.github/workflows/mission-quorum-web-v2-proof.yml',
 ]);
-test('V2 display has only exact test consumers, never product, PG, flag, runner or deployment wiring', async () => {
+test('V2 display has only exact test consumers and isolated test runner, never product, PG, flag or deployment wiring', async () => {
   for (const dir of ['lib', 'web', 'tool', 'scripts', 'backend/src', 'backend/ops', 'backend/test', 'test', '.github']) {
     for (const p of await readdir(new URL(`${dir}/`, root), { recursive: true })) {
       const path = `${dir}/${p}`;

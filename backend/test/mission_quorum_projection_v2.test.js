@@ -269,7 +269,10 @@ test('V2 has only exact projection/display test consumers and no I/O, provider o
       if (!/\.(js|mjs|dart|json)$/u.test(path) || ['backend/src/mission_quorum_projection_v2.js',
         'backend/test/mission_quorum_projection_v2.test.js',
         'backend/test/support/mission_quorum_web_fixture_v2.js',
-        'test/tool/mission_quorum_web_preview_v2_contract.test.mjs'].includes(`${directory}/${path}`)) continue;
+        'test/tool/mission_quorum_web_preview_v2_contract.test.mjs',
+        'test/support/mission_quorum_web_browser_v2.mjs',
+        'test/tool/mission_quorum_web_browser_v2.test.mjs',
+        '.github/workflows/mission-quorum-web-v2-proof.yml'].includes(`${directory}/${path}`)) continue;
       assert.doesNotMatch(await readFile(new URL(`${directory}/${path}`, root), 'utf8'), /mission_quorum_projection_v2|projectMissionQuorumV2/u);
     }
   }
