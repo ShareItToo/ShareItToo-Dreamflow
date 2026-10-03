@@ -311,6 +311,24 @@ The command never prints the protected env file, password, database URL or
 provider keys. A failed inventory, backup, migration/probe, cleanup or public
 readback aborts before the final container is created.
 
+The source-only local catalog finalizer is a separate no-Docker/no-SSH helper:
+`green_catalog_local_finalizer.mjs` reads one owner-only `0600` JSON readback
+from an existing `0700` directory and writes a new exclusive `0600` JSON
+record. It binds the D3 runtime commit, producer Ops
+`84408c04c0387a4412b8542ca1381d1be110ed1b`, exact D3 image digest and
+`attempt-01` as distinct fields. Its consumer semantics are separately pinned
+to source commit `64468ddaa1f0cf2494559ff11e82c0e1eca14db0`, path
+`backend/ops/green_staging_promotion.mjs`, SHA-256
+`8e2dd7d47038555b36b917ca88b2e78e61d7e5365886929000004b1814abd8d3`;
+the helper does not import the mutable current runner, and this exact
+`consumerSource` tuple is required in the serialized evidence document. It
+requires the complete synthetic catalog and unchanged database baseline,
+canonicalizes one LF and UTC timestamps, and rejects extra fields, symlinks,
+unsafe modes or any binding drift before writing. A failed write removes only
+the helper-created regular non-symlink inode (matched by device, inode and
+owner), never a replacement at the same path. It performs no remote, Docker
+or deployment operation.
+
 The shared Staging public port is never used as the acceptance target. The
 The controlled candidate runs from the exact immutable image and isolated
 database on the immediately preflighted free loopback port `18082`, while the reverse proxy remains bound
