@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { contract, parseArgs, validateInventory, validateNetwork, validateObservation,
   validateCleanup, runProbe, launchArgs, privilegeArgs, summarizeTargets, validateTargetDiagnostic,
-  inventoryPhases, runInventoryPhases, classifyCommandFailure } from '../support/mission_web_entry_linux_probe.mjs';
+  inventoryPhases, runInventoryPhases, classifyCommandFailure, validateTargetInventory, selectBlankTarget } from '../support/mission_web_entry_linux_probe.mjs';
 
 const sha = 'a'.repeat(40);
 const digests = () => ({ runnerSha256: '1'.repeat(64), chromeSha256: '2'.repeat(64), nodeSha256: '3'.repeat(64) });
@@ -11,8 +11,9 @@ const inventory = () => ({ platform: 'linux', arch: 'x64', imageOS: 'ubuntu24',
   imageVersion: '20260927.320.1', node: '22.23.3', chrome: '154.0.8037.57',
   uid: 1001, gid: 1001, head: sha, clean: true, digests: digests() });
 const network = () => ({ links: ['lo'], routes4: [], routes6: [], resolverEmpty: true });
+const targetCounts = () => ({ pageBlank: 1, pageOther: 0, browserUi: 2, extension: 0, serviceWorker: 0, other: 0 });
 const observation = () => ({ browser: 'Chrome/154.0.8037.57', protocol: '1.3', httpStatus: 200,
-  targets: [{ type: 'page', url: 'about:blank' }], evaluated: true,
+  targetCounts: targetCounts(), evaluated: true,
   renderers: [{ uid: 1001, gid: 1001, seccomp: 2, filters: 1, noNewPrivs: 1,
     capabilities: '0000000000000000', nestedPidNamespace: true, forbiddenFlags: false }],
   externalTcp: 'ENETUNREACH', loopback: 200, workerPrivileges: true });
@@ -75,8 +76,29 @@ test('only loopback with empty main route tables and resolver is accepted', () =
 });
 test('blank, evaluated renderer and positive sandbox proofs are all mandatory', () => {
   validateObservation(observation(), inventory());
-  for (const change of [{ targets: [] }, { targets: [...observation().targets, { type: 'page', url: 'about:blank' }] }, { targets: [{ type: 'service_worker', url: 'chrome-extension://synthetic/' }] }, { evaluated: false }, { renderers: [] }, { externalTcp: 'EPERM' }, { externalTcp: 'connected' }, { loopback: 500 }, { httpStatus: 302 }, { browser: 'other' }, { protocol: '2' }, { workerPrivileges: false }]) assert.throws(() => validateObservation({ ...observation(), ...change }, inventory()));
+  for (const change of [{ targetCounts: undefined }, { targetCounts: { ...targetCounts(), pageBlank: 2 } }, { targetCounts: { ...targetCounts(), serviceWorker: 1 } }, { evaluated: false }, { renderers: [] }, { externalTcp: 'EPERM' }, { externalTcp: 'connected' }, { loopback: 500 }, { httpStatus: 302 }, { browser: 'other' }, { protocol: '2' }, { workerPrivileges: false }]) assert.throws(() => validateObservation({ ...observation(), ...change }, inventory()));
   for (const [key, value] of Object.entries({ uid: 0, gid: 0, seccomp: 0, filters: 0, noNewPrivs: 0, capabilities: '1', nestedPidNamespace: false, forbiddenFlags: true })) assert.throws(() => validateObservation({ ...observation(), renderers: [{ ...observation().renderers[0], [key]: value }] }, inventory()));
+});
+test('only the observed exact target vector is accepted; every single-field drift fails', () => {
+  validateTargetInventory(targetCounts());
+  for (const key of Object.keys(targetCounts())) {
+    for (const value of [0, 1, 2, 3, 256]) {
+      if (value === targetCounts()[key]) continue;
+      assert.throws(() => validateTargetInventory({ ...targetCounts(), [key]: value }), /probe_targets|probe_failure/);
+      assert.throws(() => validateObservation({ ...observation(), targetCounts: { ...targetCounts(), [key]: value } }, inventory()));
+    }
+    const missing = targetCounts(); delete missing[key]; assert.throws(() => validateTargetInventory(missing));
+  }
+});
+test('unique blank page is selected explicitly independently of target array order', () => {
+  const blank = { type: 'page', url: 'about:blank', targetId: 'synthetic-blank' };
+  const ui = { type: 'browser_ui', url: 'chrome://synthetic', targetId: 'synthetic-ui' };
+  for (const targets of [[blank, ui, ui], [ui, blank, ui], [ui, ui, blank]]) assert.equal(selectBlankTarget(targets), blank);
+  for (const extra of [blank, ui, { type: 'page', url: 'https://private.invalid' },
+    { type: 'service_worker', url: 'chrome-extension://private/' }, { type: 'service_worker', url: 'https://private.invalid' },
+    { type: 'other', url: 'private' }]) assert.throws(() => selectBlankTarget([blank, ui, ui, extra]));
+  for (const targets of [[], [blank], [blank, ui], [ui, ui], [{ ...blank, targetId: undefined }, ui, ui]])
+    assert.throws(() => selectBlankTarget(targets));
 });
 test('every cleanup field is required; abnormal Chrome exit never passes', () => {
   validateCleanup(cleanup());
@@ -186,7 +208,9 @@ test('real execution is explicitly gated; tests and regression only exercise fak
   assert.match(source, /launcherAbsent/);
   assert.match(source, /resolverBaseCreated/);
   assert.match(source, /hash\(item\.file\) === item\.digest/);
-  assert.match(source, /send\(\{ event: 'targets', value: summarizeTargets\(targets\) \}\);\s+check\(targets\.length === 1 && targets\[0\]\.type === 'page' && targets\[0\]\.url === 'about:blank'/);
+  assert.match(source, /send\(\{ event: 'targets', value: summarizeTargets\(targets\) \}\);\s+const blankTarget = selectBlankTarget\(targets\);/);
+  assert.match(source, /targetId: blankTarget\.targetId/);
+  assert.doesNotMatch(source, /targets\[0\]|targets: targets\.map/);
   assert.match(source, /targetSummary = validateTargetDiagnostic\(row\.value\)/);
   assert.match(source, /encoding: 'utf8', timeout: 3000/);
   assert.match(source, /command\(chrome, \['--version'\], \{ timeout: 10000 \}\)/);

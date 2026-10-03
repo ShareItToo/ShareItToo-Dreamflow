@@ -61,6 +61,18 @@ export function summarizeTargets(targets) {
   }
   return validateTargetDiagnostic(summary);
 }
+export function validateTargetInventory(value) {
+  const counts = validateTargetDiagnostic(value);
+  // Exact sanitized vector observed in CI run 37102625787; no other target classes.
+  const expected = { pageBlank: 1, pageOther: 0, browserUi: 2, extension: 0, serviceWorker: 0, other: 0 };
+  check(targetClasses.every(key => counts[key] === expected[key]), 'probe_targets');
+}
+export function selectBlankTarget(targets) {
+  validateTargetInventory(summarizeTargets(targets));
+  const blank = targets.find(target => target.type === 'page' && target.url === 'about:blank');
+  check(typeof blank?.targetId === 'string' && blank.targetId.length > 0, 'probe_targets');
+  return blank;
+}
 function cleanupDiagnostic(value) {
   return { ...Object.fromEntries(cleanupFields.map(key => [key, value?.[key] === true])),
     exitClass: value?.exitSignal ? 'signal' : value?.exitCode === 0 ? 'normal'
@@ -97,7 +109,7 @@ export function validateNetwork(v) {
 }
 export function validateObservation(v, inventory) {
   check(v?.browser === `Chrome/${contract.chrome}` && v.protocol === '1.3' && v.httpStatus === 200, 'probe_version');
-  check(v.targets?.length === 1 && v.targets[0].type === 'page' && v.targets[0].url === 'about:blank', 'probe_targets');
+  validateTargetInventory(v.targetCounts);
   check(v.evaluated === true && v.workerPrivileges === true && v.renderers?.length > 0, 'probe_sandbox');
   for (const r of v.renderers) check(r.uid === inventory.uid && r.gid === inventory.gid && r.seccomp === 2
     && r.filters >= 1 && r.noNewPrivs === 1 && r.capabilities === '0000000000000000'
@@ -413,8 +425,8 @@ async function worker(directory) {
     const version = await cdp('Browser.getVersion');
     const targets = (await cdp('Target.getTargets')).targetInfos;
     send({ event: 'targets', value: summarizeTargets(targets) });
-    check(targets.length === 1 && targets[0].type === 'page' && targets[0].url === 'about:blank', 'probe_targets');
-    const session = (await cdp('Target.attachToTarget', { targetId: targets[0].targetId, flatten: true })).sessionId;
+    const blankTarget = selectBlankTarget(targets);
+    const session = (await cdp('Target.attachToTarget', { targetId: blankTarget.targetId, flatten: true })).sessionId;
     await cdp('Page.enable', {}, session); await cdp('Runtime.enable', {}, session);
     const result = await cdp('Runtime.evaluate', { expression: '1+1', returnByValue: true }, session);
     const processes = await cdp('SystemInfo.getProcessInfo');
@@ -427,7 +439,7 @@ async function worker(directory) {
     }); phase('network', 'confirmed');
     send({ event: 'observation', pids: processes.processInfo.filter(p => p.type === 'renderer').map(p => p.id),
       value: { browser: version.product, protocol: version.protocolVersion, httpStatus: response.status,
-        targets: targets.map(t => ({ type: t.type, url: t.url })), evaluated: result.result?.value === 2,
+        targetCounts: summarizeTargets(targets), evaluated: result.result?.value === 2,
         workerPrivileges, externalTcp, loopback: response.status } });
     await acknowledgement;
     await cdp('Browser.close');
