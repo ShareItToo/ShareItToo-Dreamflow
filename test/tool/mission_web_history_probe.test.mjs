@@ -291,6 +291,7 @@ test('build/network/matrix failures are stable and always clean up; abnormal exi
 test('successor consumers are exact test support only and fake tests register automatically', () => {
   const allowed = new Set(['test/support/mission_web_history_harness.dart',
     'test/support/mission_web_history_build.mjs', 'test/support/mission_web_history_probe.mjs',
+    'test/support/notification_release_probe.mjs',
     'test/tool/mission_web_history_probe.test.mjs', 'test/tool/web_app_router_boundary.test.mjs',
     '.github/workflows/mission-web-history-proof.yml']);
   for (const directory of ['lib', 'backend/src', 'test', 'web', 'tool', '.github/workflows']) {

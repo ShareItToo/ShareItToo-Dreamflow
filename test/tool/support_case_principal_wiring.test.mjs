@@ -67,7 +67,10 @@ test('help and notification entries capture owner before awaiting and pass it in
     assert.ok(start >= 0);
     assert.ok(body.indexOf(`final ${owner} = _supportPrincipal.capture()`) < body.indexOf('await '));
     assert.match(body, new RegExp(`SupportCasesScreen\\(\\s*owner: ${owner}`, 'u'));
-    assert.match(body, /_supportPrincipal\.pushOwnedRoute/u);
+    assert.match(body, /(?:_supportPrincipal|principal)\.pushOwnedRoute/u);
+    if (body.includes('principal.pushOwnedRoute')) {
+      assert.match(body, /final principal = _supportPrincipal/u);
+    }
   }
   const callers = readdirSync(new URL('../../lib/screens', import.meta.url))
     .filter((file) => file.endsWith('.dart') && file !== 'support_cases_screen.dart')

@@ -60,6 +60,7 @@ test('D6 consumers are limited to the isolated route and its exact tests', () =>
     'lib/screens/mission_web_entry_screen.dart',
     'test/mission_web_entry_route_test.dart',
     'test/mission_web_entry_test.dart',
+    'test/support/notification_release_probe.mjs',
     'test/tool/mission_web_entry_browser_probe.test.mjs',
     'test/tool/mission_web_entry_linux_probe.test.mjs',
   ].sort());
@@ -67,7 +68,7 @@ test('D6 consumers are limited to the isolated route and its exact tests', () =>
 
 test('blank browser probe is test support only and has no product consumer', () => {
   const allowed = ['test/support/mission_web_entry_browser_probe.mjs', 'test/tool/mission_web_entry_browser_probe.test.mjs',
-    'test/tool/mission_web_entry_boundary.test.mjs'];
+    'test/support/notification_release_probe.mjs', 'test/tool/mission_web_entry_boundary.test.mjs'];
   for (const directory of ['lib', 'backend/src', 'backend/ops', 'tool', 'scripts', 'web', 'test']) {
     for (const name of readdirSync(root + directory, { recursive: true })) {
       const path = `${directory}/${name}`;
