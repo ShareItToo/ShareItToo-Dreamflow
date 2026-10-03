@@ -3017,7 +3017,8 @@ export function createApp({
         if (exactExistingSocialIdentity && user.id !== precheckedSocialAccountId) {
           throw new HttpError(409, 'social_identity_changed');
         }
-        if (exactExistingSocialIdentity) assertStagingUserAllowed(user.id);
+        // Preflight email/identity reads cannot authorize the locked principal.
+        assertStagingUserAllowed(user.id);
         if (linked.rows[0].firebase_user_id !== identity.firebaseUserId) {
           throw new HttpError(
             403,
@@ -3039,6 +3040,7 @@ export function createApp({
         );
         user = existing.rows[0];
         if (user) {
+          assertStagingUserAllowed(user.id);
           if (stagingGoogleRegistration && user.id !== stagingGoogleRegistration.userId) {
             throw new HttpError(403, 'staging_google_identity_conflict');
           }
@@ -3064,6 +3066,7 @@ export function createApp({
             throw new HttpError(400, 'registration_action_label_mismatch');
           }
           const userId = stagingGoogleRegistration?.userId ?? crypto.randomUUID();
+          assertStagingUserAllowed(userId);
           if (stagingGoogleRegistration) {
             const occupied = await client.query(
               'SELECT id FROM users WHERE id = $1 FOR UPDATE',

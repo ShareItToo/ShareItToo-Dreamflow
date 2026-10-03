@@ -273,7 +273,7 @@ if (!databaseUrl) {
       });
       const probeResults = closedProbe.stdout.split('\n').filter((line) => line.startsWith('FINALIZER_PROBE='));
       assert.equal(probeResults.length, 1);
-      assert.deepEqual(JSON.parse(probeResults[0].slice('FINALIZER_PROBE='.length)), { existing: 200, unknown: 403, newUsers: 0, newIdentities: 0 });
+      assert.deepEqual(JSON.parse(probeResults[0].slice('FINALIZER_PROBE='.length)), { existing: 200, unknown: 403, newUsers: 0, newIdentities: 0, deniedPrincipalCases: 4 });
       assert.equal(Object.values((await setupPool.query(enrolledSql)).rows[0])[0], '1|1|1');
       const mutationCounts = async () => (await setupPool.query(
         `SELECT

@@ -85,6 +85,10 @@ function harness() {
       async revoke() { calls.revoke++; },
     }),
     safeOperationalErrorCode: () => 'synthetic_error',
+    assertStagingUserAllowed: (id) => {
+      assert.equal(context.config.stagingAccess.enabled, false);
+      assert.equal(id, owner);
+    },
     console: { error() {} },
     reconcileExpiredAccountSuspension: async () => {},
     safeText: (value) => typeof value === 'string' ? value : '',
