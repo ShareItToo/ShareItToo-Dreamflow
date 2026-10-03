@@ -36,6 +36,14 @@ function fixture() {
     [`/admin/v2/projects/${projectId}/config`, config],
     [keyResource, { keys: [key] }], [`/v2/${key.name}`, key], [`/v2/${key.name}/keyString`, { keyString: publicKey }],
   ]);
+  for (const serviceName of ['identitytoolkit.googleapis.com', 'securetoken.googleapis.com']) {
+    const name = `projects/${projectNumber}/services/${serviceName}`;
+    responses.set(`/v1/${name}`, { name, parent: `projects/${projectNumber}`, state: 'ENABLED',
+      config: { name: serviceName, title: 'Synthetic service', apis: [{ name: 'synthetic.Api', methods: [{ name: 'SyntheticMethod' }] }],
+        documentation: { summary: 'synthetic private detail' }, quota: { limits: [{ name: 'synthetic-limit', defaultLimit: '100' }] },
+        authentication: { rules: [{ selector: 'synthetic.Selector' }] }, usage: { rules: [] },
+        endpoints: [{ name: serviceName }], monitoredResources: [{ type: 'synthetic_type' }], monitoring: { consumerDestinations: [] } } });
+  }
   const transport = async (request) => {
     calls.push(request);
     assert.equal(request.method, 'GET'); assert.ok(request.signal instanceof AbortSignal);
@@ -50,13 +58,85 @@ function fixture() {
     request: { projectId, appId } };
 }
 
-test('only five read methods exist, no default transport, no execution side effects or mutation entrypoint', () => {
+test('only six read methods exist, no default transport, no execution side effects or mutation entrypoint', () => {
   const f = fixture(); assert.equal(f.calls.length, 0);
-  assert.deepEqual(Object.keys(f.adapter).sort(), ['readApiKeyInventory', 'readProjectConfig', 'readSdkConfig', 'readWebApp', 'readWebAppsInventory']);
+  assert.deepEqual(Object.keys(f.adapter).sort(), ['readApiKeyInventory', 'readProjectConfig', 'readRequiredAuthServices', 'readSdkConfig', 'readWebApp', 'readWebAppsInventory']);
   assert.equal(Object.isFrozen(f.adapter), true);
   assert.throws(() => create(f.binding), { message: 'read_binding_invalid' });
   const source = fs.readFileSync(new URL('../ops/staging_google_web_read_adapter.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /\b(?:fetch|console|process)\s*[.(]|node:(?:fs|https?|net|child_process)|\b(?:POST|PATCH|DELETE)\b/u);
+});
+test('two exact services.get reads prove separate necessary conditions, never key compatibility or sufficiency', async () => {
+  const f = fixture(); const result = await f.adapter.readRequiredAuthServices();
+  assert.deepEqual(result, { projectNumber: f.binding.projectNumber,
+    services: ['identitytoolkit.googleapis.com', 'securetoken.googleapis.com'].map((serviceName) => ({ serviceName, state: 'ENABLED',
+      configDigest: digest(f.responses.get(`/v1/projects/${f.binding.projectNumber}/services/${serviceName}`).config) })),
+    scope: 'auth-service-enablement-only', keyCompatibility: 'not_assessed' });
+  assert.equal(Object.hasOwn(result, 'webCompatible'), false);
+  assert.deepEqual(f.calls.map(({ method, service, resource, query }) => ({ method, service, resource, query })),
+    result.services.map(({ serviceName }) => ({ method: 'GET', service: 'serviceusage',
+      resource: `/v1/projects/${f.binding.projectNumber}/services/${serviceName}`, query: {} })));
+  assert.equal(JSON.stringify(result).includes('synthetic private detail'), false);
+  assert.equal((await f.adapter.readApiKeyInventory()).apiKey.webCompatible, false);
+});
+test('documented nested service config details are digest-bound, with order-independent objects and no raw output', async () => {
+  const f = fixture(); const before = await f.adapter.readRequiredAuthServices();
+  const value = f.responses.get(`/v1/projects/${f.binding.projectNumber}/services/securetoken.googleapis.com`);
+  value.config = Object.fromEntries(Object.entries(value.config).reverse());
+  assert.deepEqual(await f.adapter.readRequiredAuthServices(), before);
+  value.config.quota.limits[0].defaultLimit = '101';
+  const after = await f.adapter.readRequiredAuthServices();
+  assert.equal(after.services[0].configDigest, before.services[0].configDigest);
+  assert.notEqual(after.services[1].configDigest, before.services[1].configDigest);
+  assert.equal(JSON.stringify(after).includes('synthetic-limit'), false);
+});
+for (const serviceName of ['identitytoolkit.googleapis.com', 'securetoken.googleapis.com']) {
+  for (const variant of ['disabled', 'unspecified', 'missingState', 'numericState', 'foreignProject', 'foreignParent', 'foreignService',
+    'missingConfig', 'wrongConfigName', 'unknownResponseField', 'unknownConfigField', 'nullConfig', 'arrayConfig', 'invalidArray', 'invalidObject', 'invalidTitle']) {
+    test(`services.get rejects ${serviceName}: ${variant}`, async () => {
+      const f = fixture(); const value = f.responses.get(`/v1/projects/${f.binding.projectNumber}/services/${serviceName}`);
+      if (variant === 'disabled') value.state = 'DISABLED';
+      if (variant === 'unspecified') value.state = 'STATE_UNSPECIFIED';
+      if (variant === 'missingState') delete value.state;
+      if (variant === 'numericState') value.state = 2;
+      if (variant === 'foreignProject') value.name = value.name.replace(f.binding.projectNumber, '999999999999');
+      if (variant === 'foreignParent') value.parent = 'projects/999999999999';
+      if (variant === 'foreignService') value.name = value.name.replace(serviceName, 'foreign.googleapis.com');
+      if (variant === 'missingConfig') delete value.config;
+      if (variant === 'wrongConfigName') value.config.name = 'foreign.googleapis.com';
+      if (variant === 'unknownResponseField') value.extra = 'unexpected';
+      if (variant === 'unknownConfigField') value.config.extra = 'unexpected';
+      if (variant === 'nullConfig') value.config = null;
+      if (variant === 'arrayConfig') value.config = [];
+      if (variant === 'invalidArray') value.config.apis = [null];
+      if (variant === 'invalidObject') value.config.quota = [];
+      if (variant === 'invalidTitle') value.config.title = 42;
+      await assert.rejects(f.adapter.readRequiredAuthServices(), (error) => ['service_enablement_invalid', 'service_config_invalid'].includes(error.message));
+      assert.equal(f.calls.length, serviceName === 'identitytoolkit.googleapis.com' ? 1 : 2);
+    });
+  }
+}
+test('minimal service configs are sufficient for enablement only, not full config or key readiness', async () => {
+  const f = fixture();
+  for (const serviceName of ['identitytoolkit.googleapis.com', 'securetoken.googleapis.com']) {
+    f.responses.get(`/v1/projects/${f.binding.projectNumber}/services/${serviceName}`).config = { name: serviceName };
+  }
+  assert.equal((await f.adapter.readRequiredAuthServices()).keyCompatibility, 'not_assessed');
+});
+test('second service transport failure or timeout returns no partial proof and exposes no transport details', async () => {
+  const f = fixture();
+  for (const timeout of [false, true]) {
+    let calls = 0; let lastRequest;
+    const adapter = create({ ...f.binding, timeoutMs: 5, transport: async (request) => {
+      calls++; lastRequest = request;
+      if (calls === 1) return f.transport(request);
+      if (timeout) return new Promise(() => {});
+      throw Error(`/synthetic/private/transport ${f.publicKey}`);
+    } });
+    await assert.rejects(adapter.readRequiredAuthServices(), (error) => error.message === 'read_operation_failed'
+      && !String(error.stack).includes(f.publicKey) && !String(error.stack).includes('/synthetic/private/transport') && !Object.hasOwn(error, 'cause'));
+    assert.equal(calls, 2); assert.equal(lastRequest.signal.aborted, timeout);
+  }
 });
 test('ACTIVE and DELETED pages are exhaustive, ordered and bound; all requests retain showDeleted', async () => {
   const f = fixture(); const result = await f.adapter.readWebAppsInventory();

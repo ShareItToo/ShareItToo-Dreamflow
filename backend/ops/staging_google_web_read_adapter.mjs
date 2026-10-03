@@ -1,6 +1,7 @@
 // Read-only response seam; no CLI, network client, credentials, writes or logging.
 // Official REST schemas checked 2026-10-03: Firebase Management v1beta1 WebApp,
-// WebAppConfig; Identity Platform v2 Config; Google Cloud API Keys v2 Key.
+// WebAppConfig; Identity Platform v2 Config; Google Cloud API Keys v2 Key;
+// Service Usage v1 services.get / Service (documented 2025-11-11).
 // This is NOT a complete runner adapter: provider/runtime/other-app attestations,
 // key compatibility approval and any authorizedDomains CAS/lease remain external.
 import { createHash } from 'node:crypto';
@@ -105,6 +106,29 @@ export function createStagingGoogleWebReadAdapter({ projectId, projectNumber, ap
     return value; // Internal only: the public result contains digests, never raw metadata.
   }
   return Object.freeze({
+    readRequiredAuthServices: safe(async () => {
+      const services = [];
+      for (const serviceName of ['identitytoolkit.googleapis.com', 'securetoken.googleapis.com']) {
+        const name = `projects/${projectNumber}/services/${serviceName}`;
+        const value = await get('serviceusage', `/v1/${name}`);
+        check(fields(value, ['name', 'parent', 'config', 'state']) && value.name === name
+          && value.parent === `projects/${projectNumber}` && value.state === 'ENABLED', 'service_enablement_invalid');
+        const config = value.config;
+        check(config !== undefined && fields(config, ['name', 'title', 'apis', 'documentation', 'quota', 'authentication', 'usage', 'endpoints', 'monitoredResources', 'monitoring'])
+          && config.name === serviceName && (!Object.hasOwn(config, 'title') || typeof config.title === 'string'), 'service_config_invalid');
+        for (const field of ['apis', 'endpoints', 'monitoredResources']) {
+          if (Object.hasOwn(config, field)) check(Array.isArray(config[field]) && config[field].every(plain), 'service_config_invalid');
+        }
+        for (const field of ['documentation', 'quota', 'authentication', 'usage', 'monitoring']) {
+          if (Object.hasOwn(config, field)) check(plain(config[field]), 'service_config_invalid');
+        }
+        // Nested documented configuration is opaque, but every byte-semantic
+        // JSON field is digest-bound. This is neither API-key compatibility
+        // nor an atomic project snapshot, and it never enables a service.
+        services.push({ serviceName, state: 'ENABLED', configDigest: digest(config) });
+      }
+      return { projectNumber, services, scope: 'auth-service-enablement-only', keyCompatibility: 'not_assessed' };
+    }),
     readWebAppsInventory: safe(async () => ({
       webApps: await pages('firebase', `/v1beta1/projects/${projectNumber}/webApps`, 'apps', app, (v) => v.appId),
       webAppsInventory: { showDeleted: true, exhausted: true, nextPageToken: '' },
