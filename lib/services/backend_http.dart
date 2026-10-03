@@ -10,8 +10,14 @@ class BackendException implements Exception {
   final int statusCode;
   final String code;
   final Object? details;
+  final int? retryAfterSeconds;
 
-  const BackendException(this.statusCode, this.code, {this.details});
+  const BackendException(
+    this.statusCode,
+    this.code, {
+    this.details,
+    this.retryAfterSeconds,
+  });
 
   @override
   String toString() => 'BackendException($statusCode, $code)';
@@ -60,7 +66,12 @@ class BackendHttp {
           code = decoded['error'].toString();
         }
       } catch (_) {}
-      throw BackendException(response.statusCode, code);
+      throw BackendException(
+        response.statusCode,
+        code,
+        retryAfterSeconds:
+            _boundedRetryAfter(response.headers['retry-after'])?.inSeconds,
+      );
     }
     return BackendBinaryResponse(
       bytes: response.bodyBytes,
@@ -89,6 +100,7 @@ class BackendHttp {
         response.statusCode,
         response.body['error']?.toString() ?? 'request_failed',
         details: response.body['details'],
+        retryAfterSeconds: response.retryAfter?.inSeconds,
       );
     }
     return response.body;
@@ -142,20 +154,25 @@ class BackendHttp {
         throw ArgumentError.value(method, 'method', 'Unsupported HTTP method');
     }
 
+    final retryAfter = _boundedRetryAfter(response.headers['retry-after']);
     Map<String, dynamic> decoded = <String, dynamic>{};
     if (response.body.trim().isNotEmpty) {
       try {
         final value = jsonDecode(response.body);
         if (value is Map) decoded = Map<String, dynamic>.from(value);
       } catch (_) {
-        throw BackendException(response.statusCode, 'invalid_server_response');
+        throw BackendException(
+          response.statusCode,
+          'invalid_server_response',
+          retryAfterSeconds: retryAfter?.inSeconds,
+        );
       }
     }
 
     return BackendJsonResponse(
       statusCode: response.statusCode,
       body: decoded,
-      retryAfter: _boundedRetryAfter(response.headers['retry-after']),
+      retryAfter: retryAfter,
     );
   }
 

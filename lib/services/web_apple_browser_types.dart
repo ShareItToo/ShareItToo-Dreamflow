@@ -1,3 +1,5 @@
+import 'dart:async';
+
 class WebAppleDirectConfig {
   final String clientId;
   final String redirectUri;
@@ -59,4 +61,31 @@ class WebApplePopupFailure implements Exception {
 
   @override
   String toString() => 'WebApplePopupFailure($code)';
+}
+
+/// Owns one popup promise at a time. A timed-out Apple promise may still settle
+/// later in the browser; its completion is deliberately detached and can never
+/// clear or satisfy a newer popup attempt.
+class WebApplePopupSingleFlight {
+  Future<WebApplePopupResponse>? _active;
+
+  Future<WebApplePopupResponse> run({
+    required Future<WebApplePopupResponse> Function() invoke,
+    Duration timeout = const Duration(minutes: 2),
+  }) {
+    if (_active != null) {
+      return Future<WebApplePopupResponse>.error(
+        const WebApplePopupFailure('popup_in_progress'),
+      );
+    }
+    final source = Future<WebApplePopupResponse>.sync(invoke);
+    late final Future<WebApplePopupResponse> bounded;
+    bounded = source.timeout(timeout, onTimeout: () {
+      throw const WebApplePopupFailure('popup_unavailable');
+    });
+    _active = bounded;
+    return bounded.whenComplete(() {
+      if (identical(_active, bounded)) _active = null;
+    });
+  }
 }

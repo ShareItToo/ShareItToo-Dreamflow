@@ -106,7 +106,23 @@ void main() {
 
   test('Apple v2 ownership terminal failures retain exact safe categories', () {
     for (final code in [
+      'apple_ownership_status_unavailable',
+      'apple_ownership_pending',
+      'apple_attempt_unavailable',
+      'apple_ownership_deadline_elapsed',
+      'apple_ownership_unresolved',
       'apple_ownership_exchange_unresolved',
+      'apple_ownership_cleanup_required',
+      'apple_session_delivery_unavailable',
+      'apple_session_delivery_uncertain',
+    ]) {
+      expect(
+        AuthService.classifySocialBackendError(code),
+        AuthFailure.appleOwnershipUnresolved,
+        reason: code,
+      );
+    }
+    for (final code in [
       'apple_ownership_request_conflict',
       'apple_authorization_code_reused',
       'apple_ownership_material_conflict',
@@ -122,7 +138,6 @@ void main() {
       );
     }
     for (final code in [
-      'apple_attempt_unavailable',
       'apple_ownership_receipt_expired',
       'apple_ownership_status_rate_limited',
       'apple_ownership_binding_unavailable',

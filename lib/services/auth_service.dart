@@ -1735,9 +1735,6 @@ class AuthService {
         'apple_ownership_unavailable' ||
         'apple_ownership_paused' ||
         'apple_ownership_provider_unavailable' ||
-        'apple_ownership_status_unavailable' ||
-        'apple_ownership_pending' ||
-        'apple_attempt_unavailable' ||
         'apple_ownership_receipt_expired' ||
         'apple_ownership_status_rate_limited' ||
         'apple_ownership_binding_unavailable' ||
@@ -1746,15 +1743,20 @@ class AuthService {
         'apple_ownership_delivery_unavailable' ||
         'apple_ownership_material_unreadable' ||
         'apple_ownership_profile_unavailable' ||
-        'apple_ownership_upgrade_required' ||
-        'apple_session_delivery_unavailable' ||
-        'apple_session_delivery_uncertain' =>
+        'apple_ownership_upgrade_required' =>
           AuthFailure.providerUnavailable,
         'apple_ownership_not_eligible' => AuthFailure.pilotAccountDenied,
-        'apple_ownership_principal_conflict' ||
+        'apple_ownership_status_unavailable' ||
+        'apple_ownership_pending' ||
+        'apple_attempt_unavailable' ||
+        'apple_ownership_deadline_elapsed' ||
         'apple_ownership_unresolved' ||
         'apple_ownership_exchange_unresolved' ||
         'apple_ownership_cleanup_required' ||
+        'apple_session_delivery_unavailable' ||
+        'apple_session_delivery_uncertain' =>
+          AuthFailure.appleOwnershipUnresolved,
+        'apple_ownership_principal_conflict' ||
         'apple_ownership_closed' ||
         'apple_ownership_request_conflict' ||
         'apple_authorization_code_reused' ||
@@ -2467,6 +2469,7 @@ enum AuthFailure {
   socialPopupBlocked,
   pilotAccountDenied,
   socialIdentityConflict,
+  appleOwnershipUnresolved,
   socialTokenInvalid,
   providerUnavailable,
   socialEmailRequired,

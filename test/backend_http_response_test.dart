@@ -60,10 +60,15 @@ void main() {
         throwsA(isA<BackendException>()
             .having((error) => error.statusCode, 'status', 409)
             .having((error) => error.code, 'code', 'synthetic_conflict')
-            .having((error) => error.details, 'details', {'safe': true})),
+            .having((error) => error.details, 'details', {'safe': true}).having(
+                (error) => error.retryAfterSeconds, 'retry-after', 45)),
       );
     },
         () => MockClient((_) async => http.Response(
-            '{"error":"synthetic_conflict","details":{"safe":true}}', 409)));
+                '{"error":"synthetic_conflict","details":{"safe":true}}', 409,
+                headers: const {
+                  'retry-after': '45',
+                  'x-private-debug': 'must-not-surface',
+                })));
   });
 }

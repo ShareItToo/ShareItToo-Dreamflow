@@ -1064,15 +1064,15 @@
     },
     {
       "path": "lib/services/auth_service.dart",
-      "sha256": "3b893dbaee7009005a1ebcb8e3155ee2bfe505c1136c8604763daed04377875a"
+      "sha256": "e734dec3485411472e2d4beaf4ec3bec7981fe19deca5b8b8c9db95a1527cd95"
     },
     {
       "path": "lib/services/backend_http.dart",
-      "sha256": "cc4cc242fd3a4dc0c13941de9b95e26ae2634945b6dca5ed7a9c92931d0d4f1d"
+      "sha256": "0f75624a408f1029d5264e503d2e319460b9b76ce88dcdf40aecdde8da3faa2b"
     },
     {
       "path": "lib/services/apple_web_v2_client.dart",
-      "sha256": "fd1e8029dcf240df00b0be08e23b552cfab3a6c7309d6086305bfd109fc5ab43"
+      "sha256": "5ab4096b8d87bfa00ad8468e26dc79dba620b2c82449a75a82607886a7330022"
     },
     {
       "path": "lib/services/web_apple_auth.dart",
@@ -1092,11 +1092,11 @@
     },
     {
       "path": "lib/services/web_apple_browser_bridge_web.dart",
-      "sha256": "7c9e9a8d35e5ff05713fb596069e8e19fbb5dc79ad4dbdaa04f1fc2c72c255a8"
+      "sha256": "3da28401325253e3ebba3341dfbeacea4ca6f511c5023b35c2ccdcc602342f89"
     },
     {
       "path": "lib/services/web_apple_browser_types.dart",
-      "sha256": "9ccf107a7106fc1e161fd4c50b99f8f7959e66e7c635cce40556752f9ecff2d3"
+      "sha256": "e788aa6392216f97924f614e0a5d5d178266774d044e76fc59e978bf8d631853"
     },
     {
       "path": "lib/services/staging_password_enrollment_client.dart",

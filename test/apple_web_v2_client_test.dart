@@ -68,6 +68,7 @@ class Harness {
       Duration(seconds: 8),
       Duration(seconds: 30),
     ],
+    String Function()? createId,
   }) =>
       exchangeAppleWebV2(
         material: material,
@@ -75,10 +76,11 @@ class Harness {
           bodies.add(body);
           return responder(body);
         },
-        createOpaqueId: () {
-          ids += 1;
-          return String.fromCharCode(64 + ids) * 43;
-        },
+        createOpaqueId: createId ??
+            () {
+              ids += 1;
+              return String.fromCharCode(64 + ids) * 43;
+            },
         requireCurrent: () {
           if (!current) throw const RemoteAuthAttemptSuperseded();
         },
@@ -137,6 +139,39 @@ void main() {
         h.bodies.where((body) => body.toString().contains('single-use-code')),
         hasLength(1));
     expect(h.waits, [const Duration(seconds: 2)]);
+  });
+
+  test('ambiguous acquire error recovers by requestId without code replay',
+      () async {
+    final h = Harness();
+    h.responder = (body) async => switch (operation(body)) {
+          'acquire' => const BackendJsonResponse(
+              statusCode: 503,
+              body: {'error': 'apple_ownership_provider_unavailable'},
+            ),
+          'status' => projection('ready', 200),
+          'session' => session(),
+          _ => throw StateError('unexpected operation'),
+        };
+    await h.run();
+    expect(h.bodies.map(operation), ['acquire', 'status', 'session']);
+    expect(
+        h.bodies.where((body) => operation(body) == 'acquire'), hasLength(1));
+    expect(
+        h.bodies.where((body) => body.toString().contains('single-use-code')),
+        hasLength(1));
+  });
+
+  test('terminal acquire projection is classified without status or session',
+      () async {
+    final h = Harness();
+    h.responder = (_) async => projection('unresolved', 409);
+    await expectLater(
+      h.run(),
+      throwsA(isA<AppleWebV2Failure>()
+          .having((error) => error.code, 'code', 'apple_ownership_unresolved')),
+    );
+    expect(h.bodies.map(operation), ['acquire']);
   });
 
   test('429 Retry-After is bounded and consumes a fixed polling slot',
@@ -296,6 +331,105 @@ void main() {
     expect((sessionBodies[0]['appleAuth'] as Map)['deliveryId'], 'B' * 43);
     expect((sessionBodies[1]['appleAuth'] as Map)['deliveryId'], 'C' * 43);
     expect(h.tokens, 3);
+  });
+
+  test('ambiguous session HTTP response uses a fresh delivery ID', () async {
+    final h = Harness();
+    var deliveries = 0;
+    h.responder = (body) async {
+      if (operation(body) == 'acquire') return projection('ready', 200);
+      deliveries += 1;
+      if (deliveries == 1) {
+        return const BackendJsonResponse(
+          statusCode: 503,
+          body: {'error': 'request_failed'},
+        );
+      }
+      return session();
+    };
+    await h.run();
+    final sessionBodies =
+        h.bodies.where((body) => operation(body) == 'session').toList();
+    expect(sessionBodies, hasLength(2));
+    expect((sessionBodies[0]['appleAuth'] as Map)['deliveryId'], 'B' * 43);
+    expect((sessionBodies[1]['appleAuth'] as Map)['deliveryId'], 'C' * 43);
+  });
+
+  test('principal drift before session dispatch is not delivery uncertainty',
+      () async {
+    final h = Harness();
+    var tokenReads = 0;
+    final material = AppleWebV2Material(
+      authorizationCode: 'synthetic-single-use-code',
+      readFreshFirebaseIdToken: () async {
+        tokenReads += 1;
+        if (tokenReads == 2) h.current = false;
+        return token;
+      },
+    );
+    h.responder = (body) async => projection('ready', 200);
+    await expectLater(
+      exchangeAppleWebV2(
+        material: material,
+        request: (body) {
+          h.bodies.add(body);
+          return h.responder(body);
+        },
+        createOpaqueId: () {
+          h.ids += 1;
+          return String.fromCharCode(64 + h.ids) * 43;
+        },
+        requireCurrent: () {
+          if (!h.current) throw const RemoteAuthAttemptSuperseded();
+        },
+        delay: (_) async {},
+        now: () => clock,
+      ),
+      throwsA(isA<RemoteAuthAttemptSuperseded>()),
+    );
+    expect(h.bodies.map(operation), ['acquire']);
+    expect(tokenReads, 2);
+    expect(h.ids, 2);
+  });
+
+  test('duplicate delivery ID fails closed before a second session request',
+      () async {
+    final h = Harness();
+    h.responder = (body) async {
+      if (operation(body) == 'acquire') return projection('ready', 200);
+      throw TimeoutException('synthetic ambiguous delivery');
+    };
+    var ids = 0;
+    await expectLater(
+      h.run(createId: () {
+        ids += 1;
+        return ids == 1 ? 'A' * 43 : 'B' * 43;
+      }),
+      throwsA(isA<AppleWebV2Failure>()
+          .having((error) => error.code, 'code', 'invalid_apple_delivery_id')),
+    );
+    expect(
+        h.bodies.where((body) => operation(body) == 'session'), hasLength(1));
+  });
+
+  test('session response rejects extra fields without issuing a retry',
+      () async {
+    final h = Harness();
+    h.responder = (body) async {
+      if (operation(body) == 'acquire') return projection('ready', 200);
+      final value = session();
+      return BackendJsonResponse(
+        statusCode: value.statusCode,
+        body: {...value.body, 'privateDebug': 'must-not-surface'},
+      );
+    };
+    await expectLater(
+      h.run(),
+      throwsA(isA<AppleWebV2Failure>().having(
+          (error) => error.code, 'code', 'invalid_apple_session_response')),
+    );
+    expect(
+        h.bodies.where((body) => operation(body) == 'session'), hasLength(1));
   });
 
   test('three uncertain deliveries stop without a fourth generation', () async {

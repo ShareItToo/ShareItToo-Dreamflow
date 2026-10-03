@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
@@ -96,8 +97,78 @@ Matcher failure(String code) => throwsA(isA<WebAppleAuthFailure>()
     .having((error) => error.code, 'sanitized code', code)
     .having(
         (error) => error.toString(), 'redacted', isNot(contains('synthetic'))));
+Matcher popupFailure(String code) => throwsA(isA<WebApplePopupFailure>()
+    .having((error) => error.code, 'sanitized code', code));
 
 void main() {
+  test('popup bridge is single-flight and rejects a duplicate invocation',
+      () async {
+    final flight = WebApplePopupSingleFlight();
+    final first = Completer<WebApplePopupResponse>();
+    var invocations = 0;
+    final active = flight.run(invoke: () {
+      invocations += 1;
+      return first.future;
+    });
+    await expectLater(
+      flight.run(invoke: () async {
+        invocations += 1;
+        throw StateError('duplicate must not invoke Apple');
+      }),
+      popupFailure('popup_in_progress'),
+    );
+    expect(invocations, 1);
+    first.complete(const WebApplePopupResponse(
+      state: 'state',
+      authorizationCode: 'code',
+      appleIdToken: 'token',
+    ));
+    expect((await active).authorizationCode, 'code');
+    expect(
+      (await flight.run(
+        invoke: () async => const WebApplePopupResponse(
+          state: 'next',
+          authorizationCode: 'next-code',
+          appleIdToken: 'next-token',
+        ),
+      ))
+          .state,
+      'next',
+    );
+  });
+
+  test('late timed-out popup cannot clear or satisfy its successor', () async {
+    final flight = WebApplePopupSingleFlight();
+    final late = Completer<WebApplePopupResponse>();
+    await expectLater(
+      flight.run(
+        invoke: () => late.future,
+        timeout: const Duration(milliseconds: 1),
+      ),
+      popupFailure('popup_unavailable'),
+    );
+    final successor = Completer<WebApplePopupResponse>();
+    final active = flight.run(invoke: () => successor.future);
+    late.complete(const WebApplePopupResponse(
+      state: 'late',
+      authorizationCode: 'late-code',
+      appleIdToken: 'late-token',
+    ));
+    await Future<void>.delayed(Duration.zero);
+    await expectLater(
+      flight.run(
+        invoke: () async => throw StateError('successor still owns flight'),
+      ),
+      popupFailure('popup_in_progress'),
+    );
+    successor.complete(const WebApplePopupResponse(
+      state: 'successor',
+      authorizationCode: 'successor-code',
+      appleIdToken: 'successor-token',
+    ));
+    expect((await active).state, 'successor');
+  });
+
   test('independent state/raw nonce and token-only Firebase credential seam',
       () async {
     final attempt = Attempt();

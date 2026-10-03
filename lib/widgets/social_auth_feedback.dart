@@ -20,6 +20,8 @@ String? socialAuthFailureMessage(
     AuthFailure.socialIdentityConflict ||
     AuthFailure.socialProviderAlreadyLinked =>
       'Diese Anmeldung konnte nicht deinem SIT-Konto zugeordnet werden. Nutze deine bisherige Anmeldung oder wende dich an den SIT-Support.',
+    AuthFailure.appleOwnershipUnresolved =>
+      'Die Apple-Anmeldung hat einen ungeklärten Status. Starte sie nicht erneut. Nutze vorerst deine bisherige Anmeldung oder wende dich an den SIT-Support.',
     AuthFailure.socialTokenInvalid =>
       'Die $label-Anmeldung ist nicht mehr gültig. Starte die Anmeldung erneut.',
     AuthFailure.socialPopupBlocked =>

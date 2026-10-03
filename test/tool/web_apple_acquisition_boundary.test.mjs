@@ -18,8 +18,10 @@ test('Apple Web uses direct JS state/nonce and v2 without legacy popup fallback'
   assert.match(auth, /sha256\.convert\(utf8\.encode\(rawNonce\)\)/u);
   assert.match(auth, /response\.state != state/u);
   assert.match(bridge, /AppleID\.auth\.signIn/u);
+  assert.match(bridge, /_popupSingleFlight\.run\(/u);
   assert.match(bridge, /appleid\.cdn-apple\.com\/appleauth\/static\/jsapi\/appleid\/1\/en_US\/appleid\.auth\.js/u);
   assert.match(bridge, /if \(identical\(_loader, attempt\)\) _loader = null/u);
+  assert.doesNotMatch(bridge, /location\.(?:assign|replace)|window\.open|usePopup['"]?\s*:\s*false/u);
   assert.match(service, /OAuthProvider\('apple\.com'\)\.credential\([\s\S]*idToken: appleIdToken,[\s\S]*rawNonce: rawNonce/u);
   assert.match(service, /exchangeAppleWebV2\(/u);
   assert.match(client, /'operation': 'acquire'/u);

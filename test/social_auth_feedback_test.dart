@@ -77,6 +77,16 @@ void main() {
           socialAuthFailureMessage(failure, AuthSocialProvider.google), isNull);
     }
   });
+  test('unresolved Apple ownership explicitly prevents blind replay', () {
+    final message = socialAuthFailureMessage(
+      AuthService.classifySocialBackendError('apple_ownership_unresolved'),
+      AuthSocialProvider.apple,
+    );
+    expect(message, contains('ungeklärten Status'));
+    expect(message, contains('Starte sie nicht erneut'));
+    expect(message, isNot(contains('subject')));
+    expect(message, isNot(contains('receipt')));
+  });
   test(
       'both entry screens use classified feedback and never log raw social errors',
       () {

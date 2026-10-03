@@ -9,6 +9,7 @@ const _scriptId = 'sit-apple-sign-in-sdk';
 const _scriptUrl =
     'https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js';
 Future<void>? _loader;
+final _popupSingleFlight = WebApplePopupSingleFlight();
 
 @JS('AppleID.auth.init')
 external void _initializeApple(JSObject configuration);
@@ -60,7 +61,10 @@ Future<void> _loadSdkOnce() async {
   });
 }
 
-Future<WebApplePopupResponse> openWebApplePopup(
+Future<WebApplePopupResponse> openWebApplePopup(WebApplePopupRequest request) =>
+    _popupSingleFlight.run(invoke: () => _openWebApplePopupOnce(request));
+
+Future<WebApplePopupResponse> _openWebApplePopupOnce(
     WebApplePopupRequest request) async {
   await _loadSdk();
   try {

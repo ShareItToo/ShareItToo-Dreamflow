@@ -111,12 +111,15 @@ Future<Map<String, dynamic>> exchangeAppleWebV2({
     projection = _projectionFrom(response, now());
     acquireRetryAfter = response.retryAfter;
     if (projection.state != 'pending' && projection.state != 'ready') {
-      throw const AppleWebV2Failure('invalid_apple_ownership_response');
+      throw AppleWebV2Failure('apple_ownership_${projection.state}');
     }
   } on AppleWebV2Failure {
     rethrow;
-  } on BackendException {
-    rethrow;
+  } on BackendException catch (error) {
+    if (!_acquireMayHaveCommitted(error)) rethrow;
+    // A successful or partially successful response may have been replaced by
+    // an intermediary error. Recover only by the immutable request ID.
+    requireCurrent();
   } on Object {
     // The provider may already have consumed the code. Never replay acquire.
     requireCurrent();
@@ -179,11 +182,17 @@ Future<Map<String, dynamic>> exchangeAppleWebV2({
   }
 
   Object? lastUncertain;
+  final deliveryIds = <String>{};
   for (var generation = 0; generation < 3; generation += 1) {
     requireCurrent();
     final deliveryId = _opaqueId(createOpaqueId(), 'invalid_apple_delivery_id');
+    if (!deliveryIds.add(deliveryId)) {
+      throw const AppleWebV2Failure('invalid_apple_delivery_id');
+    }
+    // Principal/generation or Firebase-token failure before request dispatch is
+    // not an ambiguous delivery and must never consume another delivery ID.
+    final token = await _freshToken(material, requireCurrent);
     try {
-      final token = await _freshToken(material, requireCurrent);
       final response = await bounded(() => request({
             'idToken': token,
             'appleAuth': {
@@ -194,7 +203,11 @@ Future<Map<String, dynamic>> exchangeAppleWebV2({
             },
           }));
       if (response.statusCode == 200 || response.statusCode == 202) {
-        _validateDeliveredResponse(response.body, readyProjection.receipt);
+        _validateDeliveredResponse(
+          response.body,
+          readyProjection.receipt,
+          now(),
+        );
         final mfa = response.body['mfaRequired'] == true;
         if ((mfa && response.statusCode != 202) ||
             (!mfa && response.statusCode != 200)) {
@@ -210,11 +223,19 @@ Future<Map<String, dynamic>> exchangeAppleWebV2({
         lastUncertain = BackendException(response.statusCode, code);
         continue;
       }
+      if (_deliveryMayHaveCommitted(response.statusCode, code)) {
+        lastUncertain = BackendException(response.statusCode, code);
+        continue;
+      }
       throw BackendException(response.statusCode, code,
           details: response.body['details']);
     } on BackendException catch (error) {
       if (error.statusCode == 409 &&
           error.code == 'apple_session_delivery_uncertain') {
+        lastUncertain = error;
+        continue;
+      }
+      if (_deliveryMayHaveCommitted(error.statusCode, error.code)) {
         lastUncertain = error;
         continue;
       }
@@ -289,12 +310,24 @@ _AppleProjection _projectionFrom(
 }
 
 void _validateDeliveredResponse(
-    Map<String, dynamic> body, String expectedReceipt) {
+  Map<String, dynamic> body,
+  String expectedReceipt,
+  DateTime now,
+) {
   final projection = body['appleAuth'];
   if (projection is! Map ||
+      projection.length != 4 ||
+      !const {'version', 'receipt', 'state', 'expiresAt'}
+          .containsAll(projection.keys) ||
       projection['version'] != 2 ||
       projection['state'] != 'ready' ||
       projection['receipt'] != expectedReceipt) {
+    throw const AppleWebV2Failure('invalid_apple_session_response');
+  }
+  final projectionExpiry =
+      DateTime.tryParse(projection['expiresAt']?.toString() ?? '');
+  if (projectionExpiry == null ||
+      !projectionExpiry.toUtc().isAfter(now.toUtc())) {
     throw const AppleWebV2Failure('invalid_apple_session_response');
   }
   final session = body['session'];
@@ -304,10 +337,31 @@ void _validateDeliveredResponse(
       challenge is String &&
       challenge.length >= 32 &&
       challenge.length <= 200;
-  if (hasSession == hasMfa) {
+  final expectedBodyKeys = hasMfa
+      ? const {'appleAuth', 'mfaRequired', 'mfaChallenge', 'expiresAt'}
+      : const {'appleAuth', 'session'};
+  if (hasSession == hasMfa ||
+      body.length != expectedBodyKeys.length ||
+      !expectedBodyKeys.containsAll(body.keys)) {
     throw const AppleWebV2Failure('invalid_apple_session_response');
+  }
+  if (hasMfa) {
+    final challengeExpiry =
+        DateTime.tryParse(body['expiresAt']?.toString() ?? '');
+    if (challengeExpiry == null ||
+        !challengeExpiry.toUtc().isAfter(now.toUtc())) {
+      throw const AppleWebV2Failure('invalid_apple_session_response');
+    }
   }
 }
 
 String _errorCode(BackendJsonResponse response) =>
     response.body['error']?.toString() ?? 'request_failed';
+
+bool _acquireMayHaveCommitted(BackendException error) =>
+    error.code == 'invalid_server_response' ||
+    error.statusCode == 408 ||
+    error.statusCode >= 500;
+
+bool _deliveryMayHaveCommitted(int statusCode, String code) =>
+    code == 'invalid_server_response' || statusCode == 408 || statusCode >= 500;
