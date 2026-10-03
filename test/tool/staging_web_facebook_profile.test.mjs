@@ -285,9 +285,9 @@ test('reader rejects path replacement during its descriptor-bound read', (t) => 
   const h = handoff();
   const file = path.join(root, 'facebook-readiness.json');
   fs.writeFileSync(file, h.bytes, { mode: 0o600 });
-  const originalRead = fs.readFileSync;
+  const originalRead = fs.readSync;
   let changed = false;
-  t.mock.method(fs, 'readFileSync', (target, ...args) => {
+  t.mock.method(fs, 'readSync', (target, ...args) => {
     const bytes = originalRead(target, ...args);
     if (typeof target === 'number' && !changed) {
       changed = true;
@@ -309,9 +309,9 @@ test('reader rejects parent replacement during its descriptor-bound read', (t) =
   const h = handoff();
   const file = path.join(parent, 'facebook-readiness.json');
   fs.writeFileSync(file, h.bytes, { mode: 0o600 });
-  const originalRead = fs.readFileSync;
+  const originalRead = fs.readSync;
   let changed = false;
-  t.mock.method(fs, 'readFileSync', (target, ...args) => {
+  t.mock.method(fs, 'readSync', (target, ...args) => {
     const bytes = originalRead(target, ...args);
     if (typeof target === 'number' && !changed) {
       changed = true;
@@ -324,6 +324,89 @@ test('reader rejects parent replacement during its descriptor-bound read', (t) =
     /facebook_web_readiness_changed/);
   assert.equal(changed, true);
 });
+
+for (const replacement of ['parent', 'file']) {
+  test(`reader rejects ${replacement} identity replacement immediately after open without reading`, (t) => {
+    const outer = temp(t); const parent = path.join(outer, 'evidence');
+    fs.mkdirSync(parent, { mode: 0o700 });
+    const file = path.join(parent, 'facebook-readiness.json'); const h = handoff();
+    fs.writeFileSync(file, h.bytes, { mode: 0o600 });
+    const open = fs.openSync; let replaced = false; let reads = 0;
+    t.mock.method(fs, 'openSync', (target, ...args) => {
+      const fd = open(target, ...args);
+      if (!replaced && target === (replacement === 'parent' ? parent : file)) {
+        replaced = true;
+        if (replacement === 'parent') {
+          fs.renameSync(parent, path.join(outer, 'original'));
+          fs.mkdirSync(parent, { mode: 0o700 });
+        } else fs.renameSync(file, path.join(parent, 'original.json'));
+        fs.writeFileSync(file, h.bytes, { mode: 0o600 });
+      }
+      return fd;
+    });
+    t.mock.method(fs, 'readSync', () => { reads += 1; throw new Error('unexpected read'); });
+    assert.throws(() => readFacebookWebReadiness(file, h.evidenceDigest, { now: runClock }),
+      { message: replacement === 'parent' ? 'facebook_web_readiness_parent' : 'facebook_web_readiness_changed' });
+    assert.equal(replaced, true); assert.equal(reads, 0);
+  });
+}
+
+for (const mutation of ['growth', 'truncate', 'same-size-content', 'file-mode', 'parent-mode', 'hardlink']) {
+  test(`reader rejects ${mutation} during bounded descriptor read`, (t) => {
+    const root = temp(t); const file = path.join(root, 'facebook-readiness.json'); const h = handoff();
+    fs.writeFileSync(file, h.bytes, { mode: 0o600 });
+    const read = fs.readSync; let changed = false; let totalRead = 0; const requested = [];
+    t.mock.method(fs, 'readSync', (fd, buffer, offset, length, position) => {
+      requested.push({ allocation: buffer.length, length });
+      if (!changed) {
+        changed = true;
+        if (mutation === 'growth') fs.appendFileSync(file, Buffer.alloc(32768));
+        if (mutation === 'truncate') fs.truncateSync(file, 1);
+        if (mutation === 'same-size-content') fs.writeFileSync(file, h.bytes.replace('facebook', 'faceboox'));
+        if (mutation === 'file-mode') fs.chmodSync(file, 0o644);
+        if (mutation === 'parent-mode') fs.chmodSync(root, 0o755);
+        if (mutation === 'hardlink') fs.linkSync(file, path.join(root, 'linked'));
+      }
+      const count = read(fd, buffer, offset, length, position); totalRead += count; return count;
+    });
+    assert.throws(() => readFacebookWebReadiness(file, h.evidenceDigest, { now: runClock }),
+      { message: 'facebook_web_readiness_changed' });
+    assert.equal(changed, true);
+    assert.ok(requested.every(({ allocation, length }) => allocation <= Buffer.byteLength(h.bytes) && length <= allocation));
+    assert.ok(totalRead <= Buffer.byteLength(h.bytes) + 1);
+  });
+}
+
+test('reader accepts short descriptor reads without reopening or returning partial content', (t) => {
+  const root = temp(t); const file = path.join(root, 'facebook-readiness.json'); const h = handoff();
+  fs.writeFileSync(file, h.bytes, { mode: 0o600 });
+  const read = fs.readSync; const descriptors = [];
+  t.mock.method(fs, 'readSync', (fd, buffer, offset, length, position) => {
+    descriptors.push(fd); return read(fd, buffer, offset, Math.min(length, 7), position);
+  });
+  assert.deepEqual(readFacebookWebReadiness(file, h.evidenceDigest, { now: runClock }), binding());
+  assert.ok(descriptors.length > 2); assert.equal(new Set(descriptors).size, 1);
+});
+
+for (const operation of ['openSync', 'readSync', 'closeSync']) {
+  test(`reader sanitizes ${operation} failures and closes every acquired descriptor`, (t) => {
+    const root = temp(t); const file = path.join(root, 'facebook-readiness.json'); const h = handoff();
+    fs.writeFileSync(file, h.bytes, { mode: 0o600 });
+    const open = fs.openSync; const close = fs.closeSync; const opened = []; const closed = [];
+    t.mock.method(fs, 'openSync', (...args) => {
+      if (operation === 'openSync') throw new Error('facebook_web_private /private/synthetic/path');
+      const fd = open(...args); opened.push(fd); return fd;
+    });
+    t.mock.method(fs, 'closeSync', (fd) => {
+      close(fd); closed.push(fd);
+      if (operation === 'closeSync') throw new Error('facebook_web_private /private/synthetic/path');
+    });
+    if (operation === 'readSync') t.mock.method(fs, 'readSync', () => { throw new Error('facebook_web_private /private/synthetic/path'); });
+    assert.throws(() => readFacebookWebReadiness(file, h.evidenceDigest, { now: runClock }),
+      { message: 'facebook_web_readiness_file' });
+    assert.deepEqual(closed.toSorted(), opened.toSorted());
+  });
+}
 
 test('schema v3 artifact binds profile, readiness and evidence through release identity', (t) => {
   const facebookWeb = binding();

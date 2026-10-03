@@ -206,17 +206,19 @@ export function readFacebookWebReadiness(file, evidenceDigest, { now = new Date(
   requireThat(typeof file === 'string' && path.isAbsolute(file)
     && path.normalize(file) === file, 'facebook_web_readiness_path');
   const parent = path.dirname(file);
-  confinedDirectory(parent);
   let parentFd;
   let fd;
   try {
-    const parentPathBefore = fs.lstatSync(parent, { bigint: true });
+    // Open first; all authorization checks bind to this retained descriptor,
+    // never to a pathname checked before open.
     parentFd = fs.openSync(parent,
       fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW);
+    confinedDirectory(parent);
     const parentBefore = fs.fstatSync(parentFd, { bigint: true });
+    const parentPathBefore = fs.lstatSync(parent, { bigint: true });
     requireThat(parentBefore.isDirectory() && parentBefore.nlink >= 1n
       && parentBefore.uid === BigInt(process.getuid())
-      && (parentBefore.mode & 0o777n) === 0o700n
+      && (parentBefore.mode & 0o7777n) === 0o700n
       && sameStat(parentBefore, parentPathBefore),
     'facebook_web_readiness_parent');
     fd = fs.openSync(file,
@@ -224,10 +226,23 @@ export function readFacebookWebReadiness(file, evidenceDigest, { now = new Date(
     const before = fs.fstatSync(fd, { bigint: true });
     requireThat(before.isFile() && before.nlink === 1n
       && before.uid === BigInt(process.getuid())
-      && (before.mode & 0o777n) === 0o600n
+      && (before.mode & 0o7777n) === 0o600n
       && before.size >= 2n && before.size <= 16384n,
     'facebook_web_readiness_file');
-    const bytes = fs.readFileSync(fd);
+    requireThat(sameStat(before, fs.lstatSync(file, { bigint: true }))
+      && sameStat(parentBefore, fs.fstatSync(parentFd, { bigint: true }))
+      && sameStat(parentBefore, fs.lstatSync(parent, { bigint: true })),
+    'facebook_web_readiness_changed');
+    // A raced growth must not make readFileSync allocate beyond the ceiling.
+    const bytes = Buffer.alloc(Number(before.size));
+    let offset = 0;
+    while (offset < bytes.length) {
+      const count = fs.readSync(fd, bytes, offset, bytes.length - offset, offset);
+      requireThat(count > 0, 'facebook_web_readiness_changed');
+      offset += count;
+    }
+    requireThat(fs.readSync(fd, Buffer.alloc(1), 0, 1, bytes.length) === 0,
+      'facebook_web_readiness_changed');
     const after = fs.fstatSync(fd, { bigint: true });
     const pathAfter = fs.lstatSync(file, { bigint: true });
     const parentAfter = fs.fstatSync(parentFd, { bigint: true });
@@ -248,10 +263,14 @@ export function readFacebookWebReadiness(file, evidenceDigest, { now = new Date(
     requireThat(JSON.stringify(evidence) === raw, 'facebook_web_readiness_canonical');
     return bindFacebookWebReadiness(evidence, evidenceDigest, { now });
   } catch (error) {
-    if (typeof error?.message === 'string' && error.message.startsWith('facebook_web_')) throw error;
+    if (/^facebook_web_[a-z_]+$/u.test(error?.message ?? '')) throw error;
     throw new Error('facebook_web_readiness_file');
   } finally {
-    if (fd !== undefined) fs.closeSync(fd);
-    if (parentFd !== undefined) fs.closeSync(parentFd);
+    let closeFailed = false;
+    for (const descriptor of [fd, parentFd]) {
+      try { if (descriptor !== undefined) fs.closeSync(descriptor); }
+      catch { closeFailed = true; }
+    }
+    requireThat(!closeFailed, 'facebook_web_readiness_file');
   }
 }
