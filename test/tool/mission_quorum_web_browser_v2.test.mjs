@@ -8,7 +8,7 @@ import { runProbe, parseArgs, contract, toolchain, boundFiles, buildArguments, p
   artifactDigest, validateArtifact, matrixPlan, validateMatrix, classifyAsset,
   classifyBlockedRequest, networkReasonKeys, validateNetworkDiagnostic, ownsBuildGroup,
   launchArgs, privilegeArgs, validateInventory, validateNetwork, validateCleanup,
-  requireRenderedText, classifyTextObservation, validateTextDiagnostic } from '../support/mission_quorum_web_browser_v2.mjs';
+  requireRenderedText, classifyTextObservation, validateTextDiagnostic, renderedSemanticsRect } from '../support/mission_quorum_web_browser_v2.mjs';
 
 const head = 'a'.repeat(40);
 const sha = 'b'.repeat(64);
@@ -181,42 +181,76 @@ test('static AX text is read after bounded scroll, without requiring a clickable
     safe:()=>{throw Error('p7_network');}}),/^Error: p7_network$/u);
   assert.equal(scrolled,false);
 });
-test('heading diagnostics classify exact boundaries without emitting text or admitting flattened labels',async()=>{
+test('heading diagnostics classify exact boundaries without emitting text or admitting uncorrelated flattening',async()=>{
   const label='Position 1 · Synthetischer Eigentümer 1';
   assert.deepEqual(classifyTextObservation(label,`other\n${label}\nPflichtkomponente`,false),
-    {exact_ax_line:1,exact_dom_label_line:0,flattened_ax_boundary_match:0,absent:0});
+    {exact_ax_line:1,exact_dom_label_line:0,rendered_dom_label_line:0,flattened_ax_boundary_match:0,absent:0});
   assert.deepEqual(classifyTextObservation(label,`${label} Pflichtkomponente Verfügbarkeit: unbekannt`,true),
-    {exact_ax_line:0,exact_dom_label_line:1,flattened_ax_boundary_match:1,absent:0});
+    {exact_ax_line:0,exact_dom_label_line:1,rendered_dom_label_line:0,flattened_ax_boundary_match:1,absent:0});
   for(const text of [`${label} private-tail Pflichtkomponente`,`prefix ${label} Pflichtkomponente`,
     'Position 11 · Synthetischer Eigentümer 1 Pflichtkomponente',`${label} Pflichtkomponente-private-tail`])
     assert.deepEqual(classifyTextObservation(label,text,false),
-      {exact_ax_line:0,exact_dom_label_line:0,flattened_ax_boundary_match:0,absent:1});
+      {exact_ax_line:0,exact_dom_label_line:0,rendered_dom_label_line:0,flattened_ax_boundary_match:0,absent:1});
   let reads=0;let domReads=0;let scrolls=0;const diagnostics=[];
   await assert.rejects(requireRenderedText(label,{readText:async()=>{reads++;return `${label} Pflichtkomponente`;},
-    scroll:async()=>{scrolls++;},safe:()=>{},readDomExact:async()=>{domReads++;return true;},
+    scroll:async()=>{scrolls++;},safe:()=>{},readDomEvidence:async()=>{domReads++;return {exactLine:true,rendered:false};},
     onFailure:d=>diagnostics.push(d)}),/^Error: p7_matrix$/u);
   assert.equal(reads,18);assert.equal(domReads,18);assert.equal(scrolls,17);assert.equal(diagnostics.length,1);
-  assert.deepEqual(diagnostics[0],{observations:18,exact_ax_line:0,exact_dom_label_line:18,flattened_ax_boundary_match:18,absent:0});
+  assert.deepEqual(diagnostics[0],{observations:18,exact_ax_line:0,exact_dom_label_line:18,rendered_dom_label_line:0,flattened_ax_boundary_match:18,absent:0});
   assert.doesNotMatch(JSON.stringify(diagnostics),/Position|private-tail|https:|nodeId|path/u);
   let observed=false;
   await requireRenderedText(label,{readText:async()=>label,scroll:async()=>{throw Error('unexpected');},safe:()=>{},
-    readDomExact:async()=>{observed=true;return false;},onFailure:()=>{throw Error('unexpected');}});
+    readDomEvidence:async()=>{observed=true;return {exactLine:false,rendered:false};},onFailure:()=>{throw Error('unexpected');}});
   assert.equal(observed,false); // An already passing exact AX line is unchanged.
   const second='Position 2 · Synthetischer Eigentümer 2';
   assert.equal(classifyTextObservation(second,`${second} Optionale Komponente`,false).flattened_ax_boundary_match,1);
 });
 test('text diagnostic validator rejects extra keys, unsafe values and impossible count shapes',()=>{
-  const good={observations:18,exact_ax_line:0,exact_dom_label_line:18,flattened_ax_boundary_match:18,absent:0};
+  const good={observations:18,exact_ax_line:0,exact_dom_label_line:18,rendered_dom_label_line:0,flattened_ax_boundary_match:18,absent:0};
   assert.deepEqual(validateTextDiagnostic(good),good);
   for(const mutate of [d=>d.url='private',d=>delete d.absent,d=>d.exact_dom_label_line=-1,
+    d=>d.rendered_dom_label_line=19,d=>d.rendered_dom_label_line=1,
     d=>d.absent=19,d=>d.observations=17,d=>d.exact_ax_line=1,d=>d.absent=0.5,
     d=>d.absent='0',d=>d.absent=true,d=>d.absent=NaN,d=>d.absent=Infinity,
     d=>{d.exact_dom_label_line=0;d.flattened_ax_boundary_match=0;}]){
     const d={...good};mutate(d);assert.throws(()=>validateTextDiagnostic(d),/^Error: probe_failure$/u);
   }
 });
+test('flattened headings require correlated exact DOM line and rendered geometry in the same observation',async()=>{
+  const label='Position 1 · Synthetischer Eigentümer 1';let reads=0;
+  await requireRenderedText(label,{readText:async()=>{reads++;return `${label} Pflichtkomponente Verfügbarkeit: unbekannt`;},
+    readDomEvidence:async()=>({exactLine:true,rendered:true}),safe:()=>{},scroll:async()=>{throw Error('unexpected');}});
+  assert.equal(reads,1);
+  // DOM proof in observation 1 cannot combine with an AX match in observation 2.
+  let observation=0;const diagnostics=[];
+  await assert.rejects(requireRenderedText(label,{readText:async()=>++observation%2?'absent':`${label} Pflichtkomponente`,
+    readDomEvidence:async()=>({exactLine:observation%2===1,rendered:observation%2===1}),
+    safe:()=>{},scroll:async()=>{},onFailure:d=>diagnostics.push(d)}),/^Error: p7_matrix$/u);
+  assert.equal(observation,18);assert.equal(diagnostics[0].rendered_dom_label_line,9);
+  for(const evidence of [{exactLine:false,rendered:false},{exactLine:true,rendered:false}])
+    await assert.rejects(requireRenderedText(label,{readText:async()=>`${label} Pflichtkomponente`,readDomEvidence:async()=>evidence,
+      safe:()=>{},scroll:async()=>{},onFailure:()=>{}}),/^Error: p7_matrix$/u);
+  for(const ax of ['absent',`${label} private-tail Pflichtkomponente`,`${label} Pflichtkomponente-private-tail`,`prefix ${label} Pflichtkomponente`])
+    await assert.rejects(requireRenderedText(label,{readText:async()=>ax,readDomEvidence:async()=>({exactLine:true,rendered:true}),
+      safe:()=>{},scroll:async()=>{},onFailure:()=>{}}),/^Error: p7_matrix$/u);
+  await assert.rejects(requireRenderedText(label,{readText:async()=>`${label} Pflichtkomponente`,
+    readDomEvidence:async()=>({exactLine:false,rendered:true}),safe:()=>{},scroll:async()=>{}}),/^Error: probe_failure$/u);
+});
+test('semantics rectangle proves finite nonzero container intersection, not heading pixels or hit testing',()=>{
+  const rect={x:12,y:20,width:300,height:700};const viewport={width:390,height:844};
+  assert.equal(renderedSemanticsRect(rect,viewport),true);
+  assert.equal(renderedSemanticsRect({...rect,y:-10},viewport),true);
+  for(const changed of [{width:0},{height:-1},{x:NaN},{y:Infinity},{x:390},{y:844},{x:-301},
+    {x:Number.MAX_VALUE,width:Number.MAX_VALUE},{width:'300'},{extra:'private'}])
+    assert.equal(renderedSemanticsRect({...rect,...changed},viewport),false);
+  assert.equal(renderedSemanticsRect(rect,{width:0,height:844}),false);
+  assert.equal(renderedSemanticsRect(rect,{width:390,height:NaN}),false);
+  const source=fs.readFileSync('test/support/mission_quorum_web_browser_v2.mjs','utf8');
+  assert.match(source,/e\.isConnected/u);assert.match(source,/getComputedStyle\(e\)/u);
+  assert.match(source,/renderedSemanticsRect\.toString\(\)/u);
+});
 test('only a primary p7_matrix failure carries the one validated heading diagnostic',async()=>{
-  const diagnostic={observations:18,exact_ax_line:0,exact_dom_label_line:0,flattened_ax_boundary_match:0,absent:18};
+  const diagnostic={observations:18,exact_ax_line:0,exact_dom_label_line:0,rendered_dom_label_line:0,flattened_ax_boundary_match:0,absent:18};
   const adapter=code=>fake({observe:async()=>{throw Error(code);},textDiagnostic:()=>diagnostic});
   const r=await runProbe({expectedHead:head,adapter:adapter('p7_matrix')});
   assert.equal(r.code,'p7_matrix');assert.deepEqual(r.diagnostic,diagnostic);

@@ -663,37 +663,58 @@ function realAdapter(expectedHead, emit, signal) {
 }
 
 // Static Flutter text may share a merged semantics label and has no clickable
-// DOM rectangle. Require its exact AX line, including after lazy scroll builds;
-// never substitute substring matching or a control's DOM hit-test contract.
+// DOM rectangle for each line. Keep standalone exact AX lines, or correlate
+// an exact DOM aria-label line and the known flattened AX boundary in ONE read
+// iteration. Neither signal alone admits a heading; controls remain hit-tested.
 const componentHeadings=['Position 1 · Synthetischer Eigentümer 1','Position 2 · Synthetischer Eigentümer 2'];
-const textDiagnosticKeys=['observations','exact_ax_line','exact_dom_label_line','flattened_ax_boundary_match','absent'];
-export function classifyTextObservation(label,text,domExact) {
-  check(componentHeadings.includes(label)&&typeof text==='string'&&typeof domExact==='boolean','probe_failure');
+const textDiagnosticKeys=['observations','exact_ax_line','exact_dom_label_line','rendered_dom_label_line','flattened_ax_boundary_match','absent'];
+// Geometry proves only that the connected labelled semantics CONTAINER has a
+// finite nonzero rectangle intersecting the current viewport. It does not
+// prove individual heading pixels, lack of occlusion, or control hit testing.
+export function renderedSemanticsRect(rect,viewport) {
+  const shape=(v,keys)=>v&&Object.getPrototypeOf(v)===Object.prototype&&Reflect.ownKeys(v).length===keys.length
+    &&keys.every(k=>{const d=Object.getOwnPropertyDescriptor(v,k);return d&&Object.hasOwn(d,'value')&&Number.isFinite(d.value);});
+  if(!shape(rect,['x','y','width','height'])||!shape(viewport,['width','height'])
+    ||rect.width<=0||rect.height<=0||viewport.width<=0||viewport.height<=0)return false;
+  const right=rect.x+rect.width;const bottom=rect.y+rect.height;
+  return Number.isFinite(right)&&Number.isFinite(bottom)
+    &&Math.max(rect.x,0)<Math.min(right,viewport.width)&&Math.max(rect.y,0)<Math.min(bottom,viewport.height);
+}
+export function classifyTextObservation(label,text,domExact,domRendered=false) {
+  check(componentHeadings.includes(label)&&typeof text==='string'&&typeof domExact==='boolean'
+    &&typeof domRendered==='boolean'&&(!domRendered||domExact),'probe_failure');
   const lines=text.split('\n');
   const ax=lines.includes(label);
-  // Diagnostic only: exact heading followed by a closed necessity label is a
-  // known boundary, never a substring/private suffix admission rule.
+  // Exact heading followed by a closed necessity label is a known boundary,
+  // never a substring/private suffix admission rule.
   const flat=lines.some(line=>['Pflichtkomponente','Optionale Komponente'].some(next=>{
     const prefix=`${label} ${next}`;return line===prefix||line.startsWith(`${prefix} `);
   }));
-  return {exact_ax_line:Number(ax),exact_dom_label_line:Number(domExact),
+  return {exact_ax_line:Number(ax),exact_dom_label_line:Number(domExact),rendered_dom_label_line:Number(domRendered),
     flattened_ax_boundary_match:Number(flat),absent:Number(!ax&&!domExact&&!flat)};
 }
 export function validateTextDiagnostic(value) {
   check(exact(value,textDiagnosticKeys)&&Object.values(value).every(n=>Number.isInteger(n)&&n>=0&&n<=18)
     && value.observations===18&&value.exact_ax_line===0
+    && value.rendered_dom_label_line<=value.exact_dom_label_line
+    && value.absent+value.rendered_dom_label_line+value.flattened_ax_boundary_match<=18
     && value.absent+Math.max(value.exact_dom_label_line,value.flattened_ax_boundary_match)<=18
     && value.absent+value.exact_dom_label_line+value.flattened_ax_boundary_match>=18,'probe_failure');
   return Object.fromEntries(textDiagnosticKeys.map(key=>[key,value[key]]));
 }
-export async function requireRenderedText(label,{readText,scroll,safe,readDomExact,onFailure}) {
-  const diagnostic=readDomExact?Object.fromEntries(textDiagnosticKeys.map(key=>[key,0])):null;
+export async function requireRenderedText(label,{readText,scroll,safe,readDomEvidence,onFailure}) {
+  const diagnostic=readDomEvidence?Object.fromEntries(textDiagnosticKeys.map(key=>[key,0])):null;
   for(let attempt=0;attempt<18;attempt++) {
     safe();
     const text=await readText();
     if(text.split('\n').includes(label))return;
     if(diagnostic){
-      const observation=classifyTextObservation(label,text,await readDomExact());
+      const dom=await readDomEvidence();
+      check(exact(dom,['exactLine','rendered']),'probe_failure');
+      const observation=classifyTextObservation(label,text,dom.exactLine,dom.rendered);
+      safe();
+      if(observation.exact_dom_label_line===1&&observation.rendered_dom_label_line===1
+        &&observation.flattened_ax_boundary_match===1)return;
       diagnostic.observations++;
       for(const [key,count]of Object.entries(observation))diagnostic[key]+=count;
     }
@@ -722,9 +743,17 @@ async function observeDisplayMatrix({cdp,evaluate,session,safe,emit,onTextDiagno
     await call('Input.dispatchMouseEvent',{type:'mouseWheel',x:size.width/2,y:size.height-80,deltaX:0,deltaY:delta});await delay(80);};
   const renderedText=label=>requireRenderedText(label,{readText:text,scroll: ()=>wheel(250),safe,
     ...(componentHeadings.includes(label)?{
-      readDomExact:()=>evaluate(`(() => {const label=${JSON.stringify(label)};
-        return [...document.querySelectorAll('flt-semantics[aria-label]')]
-          .some(e=>e.getAttribute('aria-label').split('\\n').includes(label));})()`),
+      readDomEvidence:()=>evaluate(`(() => {const label=${JSON.stringify(label)};
+        const geometry=${renderedSemanticsRect.toString()};
+        const elements=[...document.querySelectorAll('flt-semantics[aria-label]')]
+          .filter(e=>e.getAttribute('aria-label').split('\\n').includes(label));
+        const rendered=elements.some(e=>{
+          if(!e.isConnected||e.getClientRects().length===0)return false;
+          const style=getComputedStyle(e);
+          if(style.display==='none'||style.visibility!=='visible'||!(Number(style.opacity)>0))return false;
+          const r=e.getBoundingClientRect();
+          return geometry({x:r.x,y:r.y,width:r.width,height:r.height},{width:innerWidth,height:innerHeight});
+        });return {exactLine:elements.length>0,rendered};})()`),
       onFailure:onTextDiagnostic,
     }:{})});
   const textStep=async(name,action)=>{
