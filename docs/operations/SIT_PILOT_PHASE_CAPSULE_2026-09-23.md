@@ -1,6 +1,6 @@
 # SIT Pilot Phase Capsule — 2026-09-23
 
-## Current execution capsule — 2026-10-02
+## Current execution capsule — 2026-10-03
 
 This is the current ShareItToo/SIT entry point. Follow only the next bounded
 source link. Everything below **Historical snapshots** is retained provenance,
@@ -14,7 +14,8 @@ not current execution or release authority.
   package, its isolated P7-A2a Web-test presentation and the local-only P7-A2b
   browser vertical-slice runner are closed as the synthetic P7 source/VERIFY
   phase at exact `08636b6c`. The dormant D4 threat/abort contract is also
-  Sol-reviewed; real Mission matching/data activation remains gated.
+  Sol-reviewed and exact-head CI-green at `d1f12132`; real Mission
+  matching/data activation remains gated.
 - **Authoritative sources:** [Mission masterplan](../product/SIT_MISSION_MASTERPLAN_2026-09-30.md),
   [Web contract](STAGING_WEB_PILOT.md), [Web/native matrix](SIT_WEB_NATIVE_CAPABILITY_MATRIX_2026-10-02.md),
   [P6-C2 boundary](SIT_MISSION_P6C2_OWNER_API_2026-10-02.md) and
@@ -22,11 +23,14 @@ not current execution or release authority.
   Older checkpoint statements in linked documents do not supersede this capsule.
 - **Source/candidate truth:** the deployed Web source remains exact
   `967958f6c6a4d580f4f05e6849b32991db233603` on branch
-  `codex/master-workflow-20260808`. Dormant P7-A1 source head
-  `0940f1dcb4340a7c004409d4b664d4d8c9d8ced4` changes only a synthetic read
-  contract and its tests/runner. P7-A2a adds only isolated test support on top.
-  Neither package is deployed, routeable, persisted, feature-flagged or
-  evidence of real Mission completion.
+  `codex/master-workflow-20260808`. The closed synthetic P7 source/VERIFY head
+  is `08636b6ce5cd1011fb3faf8458e5ae4daae0d460`. Current non-deployed source
+  head `5a3cd92290c029d0391d526dd58cf8703ea24348` contains the pure,
+  unrouteable D4 threat/abort contract plus the separately bounded synthetic
+  D1/D2 acceptance-outcome diagnostic. Neither helper is a server-origin,
+  contract, payment, persistence or coordination adapter. None of these
+  successors is deployed, routeable, feature-flagged or evidence of real
+  Mission completion.
 - **967 exact-head CI:**
   [Regression 37066632738](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37066632738)
   and [CodeQL 37066632784](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37066632784)
@@ -121,7 +125,9 @@ not current execution or release authority.
   domain, followed by sanitized independent readback; no flag activation or
   login belongs to that package. This access/security mutation is
   `GEMINI_GATE_REQUIRED:SIT-GOOGLE-WEB-PREREQ-01`. The visible Gemini tab is
-  currently signed out on Flash-Lite, so no answer has been sent or accepted.
+  currently signed out at the correct account's passkey challenge. The remote
+  phone cannot satisfy the cross-device Bluetooth-proximity route; no alternate
+  login, gate send or accepted answer has occurred.
   Apple/Facebook stay off; account/session/MFA/allowlist gates stay authoritative.
 - **Mission/Gemini boundary:** P6-A resolver stays synthetic/injected; P6-C2 stays
   default-off, with no real matching, region or provider effects. D3/D4 remains
@@ -241,17 +247,58 @@ not current execution or release authority.
   no thresholds, retention period, legal basis, selection, contact, reservation,
   contract or payment. D3/D4 therefore remain open pending a fresh-source gate
   and any required professional review.
-- **Exact next:** when the visible SIT Gemini account is signed in, verify
-  exactly Google AI Pro `Pro` with `Extended` and submit only gate
-  `SIT-GOOGLE-WEB-PREREQ-01`; on PASS, execute the bounded Web-app/domain
-  provider package and independently read it back before any flag activation.
-  Independently, commit and push the reviewed unrouteable
-  `D4-SOURCE-THREAT-ABORT-CONTRACT`, then accept only automatic Regression and
-  CodeQL success on its exact successor head. Afterward prepare and submit the
-  current bounded D3/D4 contract to a fresh-source privacy/legal gate; never
-  invent retention terms or treat the older FIX as approval. D1/D2/D3/D4 stay
-  open, and a blocked provider lane must not stop the independent source/CI
-  package.
+- **D4 exact-head CI — PASS:** Regression
+  [37080972379](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37080972379)
+  completed successfully at exact
+  `d1f12132b0be20878cff1d69fea7264c25ca0995`; Backend, PostgreSQL-16,
+  Flutter/Android and clean-checkout reproducibility all passed, while
+  publication was correctly skipped. CodeQL
+  [37080972375](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37080972375)
+  also passed at the same head. This is source/CI evidence only.
+- **D1/D2 synthetic outcome contract — Sol source PASS:** exact source commit
+  `5a3cd92290c029d0391d526dd58cf8703ea24348` adds only the import-free,
+  synchronous and unrouteable diagnostic described in
+  [its boundary report](SIT_MISSION_D1_D2_SYNTHETIC_ACCEPTANCE_OUTCOME_CONTRACT_2026-10-03.md).
+  Independent focused verification passed 43/43 checks plus syntax, diff,
+  secret and no-consumer checks. Planned request bindings are separate from
+  observed effects: not-started, unknown/readback and no-effect states carry no
+  booking, contract, payment or provider identifiers; only complete matching
+  supplied positive observations may carry synthetic booking/contract IDs.
+  All legal, Mission and payment statuses remain `not_determined`; D1/D2 remain
+  open. Exact-head CI for this successor is not yet claimed.
+- **Fresh D3/D4 gate packet — Sol packet PASS; not sent:**
+  [SIT-MISSION-D3D4-SAFETY-02](SIT_GEMINI_MISSION_D3_D4_SAFETY_GATE_PACKET_2026-10-03.md)
+  (`SHA-256 a60905feba13180ab47eaff1d7084d8e0103acd89134aa516af387831a04ae88`)
+  binds six exact repository blobs at `d1f12132`, keeps D1–D4 open and asks
+  only whether a still-dormant PostgreSQL origin/common-snapshot adapter may be
+  built. Its official-source register records inaccessible GDPR/ePrivacy
+  article reads as `NOT VERIFIED`; they cannot silently become a PASS. No
+  Gemini access, answer, professional review, implementation or activation is
+  claimed by packet preparation.
+- **Google Web prerequisite gate packet — Sol packet PASS; not sent:**
+  [SIT-GOOGLE-WEB-PREREQ-01](SIT_GEMINI_GOOGLE_WEB_PREREQ_GATE_PACKET_2026-10-03.md)
+  (`SHA-256 8385e23481905fcaaab586f4e409624e19d60b418cf1ab904b3eac77d5c61985`)
+  binds 19 immutable repository blobs and three separate installed-SDK
+  snapshots to exact `d1f12132`, records six freshly opened official platform
+  sources and passed 14/14 focused local source checks. It asks only whether
+  one existing-project Web-app registration and the single Staging authorized
+  domain may be added before sanitized independent readback. Current provider
+  state remains `NOT VERIFIED`; packet preparation is not an A/PASS, provider
+  mutation, login proof, activation or release.
+- **Exact next:** complete only the read-only D1/D2 PostgreSQL adapter source
+  map: existing server-origin/common-snapshot, locking, replay and partial-effect
+  evidence; missing component-to-booking/contract relations; and the smallest
+  still-dormant adapter scope. Do not implement or wire that adapter before its
+  narrow gate. When the visible SIT Gemini account is signed in, verify exactly
+  Google AI Pro `Pro` with `Extended`, then submit
+  `SIT-MISSION-D3D4-SAFETY-02` with its exact supplied bytes. Only an A/PASS may
+  permit the named dormant D3/D4 PostgreSQL adapter; B/FIX or C/BLOCK stays
+  fail-closed. Separately refresh the sanitized provider/runtime identity and
+  prerequisite state, then submit `SIT-GOOGLE-WEB-PREREQ-01`; only its PASS may
+  permit exactly one Staging Web-app registration and only the Staging
+  authorized domain, followed by sanitized independent readback before any flag
+  activation or login test. Never conflate the two gates. D1/D2/D3/D4 stay
+  open, and a blocked provider lane must not stop the independent source work.
   No Production/Play change or pilot-complete claim follows from this sequence.
 
 ## Historical snapshots — retained evidence, superseded execution state
