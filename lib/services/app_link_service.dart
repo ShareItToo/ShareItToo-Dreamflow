@@ -33,7 +33,8 @@ class AppLinkTarget {
 }
 
 /// Only accepted targets survive startup. Rejected browser hrefs are never kept.
-/// This is path-serialization preparation, not MultiEntry/history evidence.
+/// This initial capture object alone does not attest MultiEntry/browser-history
+/// behavior. Production history ownership belongs to the separate Web router.
 final class InitialWebAppLinkCapture {
   final AppLinkTarget? target;
   const InitialWebAppLinkCapture._(this.target);
@@ -137,11 +138,17 @@ class LocalAppLinkPrincipalOwner implements AppLinkPrincipalOwner {
 class PrincipalBoundAppLinkTarget {
   final AppLinkTarget target;
   final AppLinkPrincipalOwner owner;
+  final bool Function()? ingressIsCurrent;
+  final bool initialIngress;
 
   const PrincipalBoundAppLinkTarget({
     required this.target,
     required this.owner,
+    this.ingressIsCurrent,
+    this.initialIngress = false,
   });
+
+  bool get isCurrentIngress => ingressIsCurrent?.call() ?? true;
 }
 
 class AppLinkPrincipalChanged implements Exception {
@@ -200,7 +207,10 @@ class AppLinkTargetInbox {
     return target;
   }
 
-  bool accept(AppLinkTarget target, AppLinkPrincipalOwner owner) {
+  void acceptHistory(PrincipalBoundAppLinkTarget action) => _pending = action;
+
+  bool accept(AppLinkTarget target, AppLinkPrincipalOwner owner,
+      {bool initialIngress = false, bool Function()? ingressIsCurrent}) {
     final acceptedAt = _now();
     final previousAt = _lastAcceptedAt;
     if (_lastAcceptedUri == target.uri &&
@@ -211,7 +221,11 @@ class AppLinkTargetInbox {
       return false;
     }
 
-    _pending = PrincipalBoundAppLinkTarget(target: target, owner: owner);
+    _pending = PrincipalBoundAppLinkTarget(
+        target: target,
+        owner: owner,
+        initialIngress: initialIngress,
+        ingressIsCurrent: ingressIsCurrent);
     _lastAcceptedUri = target.uri;
     _lastAcceptedPrincipalToken = owner.principalToken;
     _lastAcceptedEpoch = owner.epoch;
@@ -360,6 +374,54 @@ class AppLinkController extends ChangeNotifier with WidgetsBindingObserver {
   bool _disposed = false;
   Future<void> _ingressQueue = Future<void>.value();
   StreamSubscription<Uri>? _firebaseActionSubscription;
+  bool _webRouterOwnsIngress = false;
+  int _webIngressGeneration = 0;
+  AppLinkTarget? _initialWebTarget;
+  AppLinkTarget? get initialWebTarget => _initialWebTarget;
+
+  void attachWebRouter() => _webRouterOwnsIngress = true;
+  void detachWebRouter() => _webRouterOwnsIngress = false;
+  void invalidateWebIngress() => _webIngressGeneration++;
+
+  /// History is not a duplicate notification. It retains its original owner
+  /// and uses the same serial ingress queue, without weakening push dedupe.
+  Future<void> enqueueWebHistory({
+    required AppLinkTarget target,
+    AppLinkPrincipalOwner? restoredOwner,
+    required bool Function() isCurrent,
+    required void Function(PrincipalBoundAppLinkTarget) accept,
+  }) {
+    if (_disposed) return Future<void>.value();
+    final owner = restoredOwner == null
+        ? _capturePrincipalOwner()
+        : Future<AppLinkPrincipalOwner>.value(restoredOwner);
+    return _ingressQueue = _ingressQueue.then((_) async {
+      try {
+        final captured = await owner;
+        if (_disposed ||
+            !isCurrent() ||
+            !captured.isCurrentEpoch ||
+            !await captured.isCurrent() ||
+            _disposed ||
+            !isCurrent() ||
+            !captured.isCurrentEpoch) {
+          return;
+        }
+        accept(PrincipalBoundAppLinkTarget(
+            target: target, owner: captured, ingressIsCurrent: isCurrent));
+      } catch (_) {
+        // No rejected target or principal details escape this boundary.
+      }
+    });
+  }
+
+  void publishWebHistory(PrincipalBoundAppLinkTarget action) {
+    if (_disposed || !action.isCurrentIngress || !action.owner.isCurrentEpoch) {
+      return;
+    }
+    _inbox.acceptHistory(action);
+    notifyListeners();
+  }
 
   AppLinkController({
     AppLinkTargetInbox? inbox,
@@ -403,7 +465,8 @@ class AppLinkController extends ChangeNotifier with WidgetsBindingObserver {
           configurePaths: () {},
         ).target;
       }
-      if (target != null) _captureTarget(target);
+      _initialWebTarget = target;
+      if (target != null) _captureTarget(target, initialIngress: true);
     } else {
       _capture(WidgetsBinding.instance.platformDispatcher.defaultRouteName);
     }
@@ -418,6 +481,7 @@ class AppLinkController extends ChangeNotifier with WidgetsBindingObserver {
   Future<bool> didPushRouteInformation(
     RouteInformation routeInformation,
   ) async {
+    if (_webRouterOwnsIngress) return false;
     _capture(routeInformation.uri.toString());
     return true;
   }
@@ -454,13 +518,17 @@ class AppLinkController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void _captureTarget(AppLinkTarget target,
-      {Future<AppLinkPrincipalOwner>? startedOwner}) {
+      {Future<AppLinkPrincipalOwner>? startedOwner,
+      bool initialIngress = false}) {
     if (_disposed) return;
 
     // Calling the async capture now records AuthService.sessionEpoch before
     // its first storage await. Queue only the completion so concurrent native
     // and Firebase ingress cannot reorder targets.
     final owner = startedOwner ?? _capturePrincipalOwner();
+    final generation = _webIngressGeneration;
+    bool isCurrentIngress() =>
+        !_disposed && generation == _webIngressGeneration;
     _ingressQueue = _ingressQueue.then((_) async {
       AppLinkPrincipalOwner captured;
       try {
@@ -468,14 +536,17 @@ class AppLinkController extends ChangeNotifier with WidgetsBindingObserver {
       } catch (_) {
         return;
       }
-      if (_disposed ||
+      if (!isCurrentIngress() ||
           !captured.isCurrentEpoch ||
           !await captured.isCurrent() ||
-          _disposed ||
+          !isCurrentIngress() ||
           !captured.isCurrentEpoch) {
         return;
       }
-      if (_inbox.accept(target, captured)) notifyListeners();
+      if (_inbox.accept(target, captured,
+          initialIngress: initialIngress, ingressIsCurrent: isCurrentIngress)) {
+        notifyListeners();
+      }
     });
   }
 

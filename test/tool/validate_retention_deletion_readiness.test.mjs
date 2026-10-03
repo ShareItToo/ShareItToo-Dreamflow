@@ -21,6 +21,16 @@ function validate({ retentionManifest = clone(baseRetention), privacyManifest = 
   return validateRetentionDeletionReadiness({ root, retentionManifest, privacyManifest, sourceTexts, evidenceTexts, requireApproved, historicalSnapshot });
 }
 
+test('retention inventory binds Web router bytes and rejects omission or drift', () => {
+  const path = 'lib/navigation/web_app_router.dart';
+  assert.ok(baseRetention.sourceInventory.some((entry) => entry.path === path));
+  const retentionManifest = clone(baseRetention);
+  retentionManifest.sourceInventory = retentionManifest.sourceInventory.filter((entry) => entry.path !== path);
+  assert.throws(() => validate({ retentionManifest }), /every required retention source exactly once/u);
+  assert.throws(() => validate({ sourceTexts: { [path]: '// changed router bytes\n' } }),
+    /sourceInventory hash is stale: lib\/navigation\/web_app_router.dart/u);
+});
+
 test('retention inventory binds the owner participation API workflow', () => {
   const retentionManifest = clone(baseRetention);
   retentionManifest.sourceInventory = retentionManifest.sourceInventory.filter(

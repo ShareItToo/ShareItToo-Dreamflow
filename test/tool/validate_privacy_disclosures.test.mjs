@@ -48,6 +48,16 @@ function validate({
   });
 }
 
+test('privacy inventory binds Web router bytes and rejects omission or drift', () => {
+  const path = 'lib/navigation/web_app_router.dart';
+  assert.ok(basePrivacyManifest.sourceInventory.some((entry) => entry.path === path));
+  const privacyManifest = clone(basePrivacyManifest);
+  privacyManifest.sourceInventory = privacyManifest.sourceInventory.filter((entry) => entry.path !== path);
+  assert.throws(() => validate({ privacyManifest }), /every required privacy source exactly once/u);
+  assert.throws(() => validate({ sourceTexts: { [path]: '// changed router bytes\n' } }),
+    /sourceInventory hash is stale: lib\/navigation\/web_app_router.dart/u);
+});
+
 test('privacy inventory binds the owner participation API workflow', () => {
   const privacyManifest = clone(basePrivacyManifest);
   privacyManifest.sourceInventory = privacyManifest.sourceInventory.filter(

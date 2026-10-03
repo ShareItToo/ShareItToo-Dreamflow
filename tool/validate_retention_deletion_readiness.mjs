@@ -209,6 +209,7 @@ const sourcePaths = [
   'lib/services/firebase_runtime.dart',
   'lib/services/firebase_service_preferences.dart',
   'lib/services/app_link_service.dart',
+  'lib/navigation/web_app_router.dart',
   'lib/screens/app_link_destination_screen.dart',
   'android/app/src/main/kotlin/com/shareittoo/app/MainActivity.kt',
   'lib/services/account_deletion_service.dart',

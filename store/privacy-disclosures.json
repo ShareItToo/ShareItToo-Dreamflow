@@ -44,7 +44,7 @@
     },
     {
       "path": "lib/main.dart",
-      "sha256": "1969c1b2cf0d156230709a3e1d44058233d04b1acd54304ed1ef63cb6b1f4cf5"
+      "sha256": "31074cf4ea8ccd28993a82ad0d34d8a50336d99a758d01492a931a2805cf430c"
     },
     {
       "path": "lib/screens/privacy_info_screen.dart",
@@ -824,11 +824,15 @@
     },
     {
       "path": "lib/services/app_link_service.dart",
-      "sha256": "0e7819191d40d294809c9ad4dcfe12c3119319bf96a8c246741aad59d5c0d79c"
+      "sha256": "88189f19a06685ecccf05119f5b2f9ed3fcc447f26473dee3b032c33aea471f3"
+    },
+    {
+      "path": "lib/navigation/web_app_router.dart",
+      "sha256": "3f8954010147e15de4cf47aeb17d61efef7b6033cc84c0644e045a4c6f668f99"
     },
     {
       "path": "lib/screens/app_link_destination_screen.dart",
-      "sha256": "bdf6783b506f3fede1229a480d9bb260420373f9d98182a22e83bced95d375d3"
+      "sha256": "5149a066c9daefef7a2d688c4f7f4e3f75b812e8cf83880e6b88cbd0f38273ba"
     },
     {
       "path": "android/app/src/main/kotlin/com/shareittoo/app/MainActivity.kt",

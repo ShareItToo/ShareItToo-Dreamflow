@@ -10,6 +10,9 @@ const files = [
   'test/tool/mission_web_location_boundary.test.mjs',
   'lib/services/app_link_service.dart',
   'test/app_link_service_test.dart',
+  'lib/navigation/web_app_router.dart',
+  'test/web_app_router_test.dart',
+  'test/tool/web_app_router_boundary.test.mjs',
 ];
 const read = (path) => readFileSync(new URL(path, root), 'utf8');
 
@@ -23,7 +26,7 @@ test('D6 location has only its exact observation and initial-ingress consumers',
   }
 });
 
-test('initial integration uses captured metadata and legacy-only fallback, with no MultiEntry activation', () => {
+test('initial capture uses metadata and legacy-only fallback without owning history', () => {
   const source = read('lib/services/app_link_service.dart');
   const initial = source.slice(source.indexOf('  void initialize()'), source.indexOf('  @override\n  Future<bool> didPushRouteInformation'));
   assert.match(initial, /if \(_disposed \|\| _initialized\) return;/u);
@@ -37,11 +40,11 @@ test('initial integration uses captured metadata and legacy-only fallback, with 
   assert.match(source, /_readInitialBrowserLocation = kReleaseMode\s*\? readMissionWebLocation\s*:\s*\(readInitialBrowserLocation \?\? readMissionWebLocation\)/u);
   assert.match(source, /_initialWebCapture = kReleaseMode\s*\? _takeInitialWebCapture\(\)/u);
   assert.match(source, /@visibleForTesting InitialWebAppLinkCapture\? initialWebCapture/u);
-  assert.match(source, /Future<bool> didPushRouteInformation\(\s*RouteInformation routeInformation,\s*\) async \{\s*_capture\(routeInformation\.uri\.toString\(\)\);\s*return true;\s*\}/u);
+  assert.match(source, /Future<bool> didPushRouteInformation\(\s*RouteInformation routeInformation,\s*\) async \{\s*if \(_webRouterOwnsIngress\) return false;\s*_capture\(routeInformation\.uri\.toString\(\)\);\s*return true;\s*\}/u);
   assert.doesNotMatch(source, /fromEnvironment|SIT_|pushState|replaceState|addEventListener/u);
 });
 
-test('production captures before binding, then configures conditional SDK path strategy; history is still pending', () => {
+test('initial capture precedes path setup but alone does not attest MultiEntry/browser-history behavior', () => {
   const main = read('lib/main.dart');
   assert.ok(main.indexOf('prepareInitialWebAppLinks();') > main.indexOf('Future<void> main()'));
   assert.ok(main.indexOf('prepareInitialWebAppLinks();') < main.indexOf('WidgetsFlutterBinding.ensureInitialized();'));
@@ -50,6 +53,14 @@ test('production captures before binding, then configures conditional SDK path s
   assert.match(source, /readLocation: readMissionWebLocation/u);
   assert.match(source, /configurePaths: web_paths\.configureCleanWebPaths/u);
   assert.match(source, /bool get multiEntryHistoryVerified => false;/u);
+  assert.match(source, /This initial capture object alone does not attest MultiEntry\/browser-history/u);
+  const router = read('lib/navigation/web_app_router.dart');
+  assert.match(main, /if \(kIsWeb\) \{\s*return WebAppRouterHost/u);
+  assert.match(main, /MaterialApp\.router\(\s*routerConfig: config/u);
+  assert.match(router, /widget\.controller\.attachWebRouter\(\);/u);
+  assert.match(router, /class _Provider extends PlatformRouteInformationProvider/u);
+  assert.match(router, /Router\.navigate\(context, notifyListeners\)/u);
+  assert.match(router, /Router\.neglect\(context, notifyListeners\)/u);
   assert.match(source, /if \(dart\.library\.html\) 'web_path_strategy_web.dart'/u);
   assert.match(read('lib/services/web_path_strategy_web.dart'), /void configureCleanWebPaths\(\) => usePathUrlStrategy\(\);/u);
   assert.match(read('lib/services/web_path_strategy_stub.dart'), /void configureCleanWebPaths\(\) \{\}/u);

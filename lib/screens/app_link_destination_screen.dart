@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:lendify/navigation/web_app_router.dart';
 import 'package:lendify/models/item.dart';
 import 'package:lendify/models/rental_request.dart';
 import 'package:lendify/models/user.dart';
@@ -69,10 +70,12 @@ class _AppLinkHostState extends State<AppLinkHost> {
   Future<void> _openOwned(PrincipalBoundAppLinkTarget action) async {
     Route<void>? route;
     try {
-      if (!action.owner.isCurrentEpoch ||
+      if (!action.isCurrentIngress ||
+          !action.owner.isCurrentEpoch ||
           !await action.owner.isCurrent() ||
           !mounted ||
-          !action.owner.isCurrentEpoch) {
+          !action.owner.isCurrentEpoch ||
+          !action.isCurrentIngress) {
         return;
       }
       route = MaterialPageRoute<void>(
@@ -89,7 +92,8 @@ class _AppLinkHostState extends State<AppLinkHost> {
       _activeOwnedRoute = route;
       _activeOwner = action.owner;
       final navigator = Navigator.of(context);
-      if (!action.owner.isCurrentEpoch) return;
+      if (!action.owner.isCurrentEpoch || !action.isCurrentIngress) return;
+      WebOwnedRouteBridge.register(context, action, route);
       await navigator.push<void>(route);
     } finally {
       if (identical(route, _activeOwnedRoute)) {

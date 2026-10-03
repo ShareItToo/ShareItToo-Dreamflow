@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:lendify/theme.dart';
 import 'package:lendify/navigation/main_navigation.dart';
 import 'package:lendify/navigation/main_nav_controller.dart';
+import 'package:lendify/navigation/web_app_router.dart';
 import 'package:provider/provider.dart';
 import 'package:lendify/services/localization_service.dart';
 import 'package:lendify/services/developer_preview_service.dart';
@@ -125,6 +126,33 @@ class MyApp extends StatelessWidget {
       ],
       child: Consumer2<LocalizationController, BackgroundThemeController>(
         builder: (context, l10n, backgroundTheme, _) {
+          Widget appBuilder(BuildContext context, Widget? child) =>
+              PrivacyExportCacheLifecycleHost(
+                child: ForegroundPushHost(
+                  navigatorKey: rootNavigatorKey,
+                  messengerKey: rootScaffoldMessengerKey,
+                  child: AppGradientBackground(
+                    child: buildSyntheticCloneMaterialAppShell(child: child),
+                  ),
+                ),
+              );
+          if (kIsWeb) {
+            return WebAppRouterHost(
+              controller: context.read<AppLinkController>(),
+              navigatorKey: rootNavigatorKey,
+              root: const AppLinkHost(child: AppRoot()),
+              buildApp: (config) => MaterialApp.router(
+                routerConfig: config,
+                title: 'ShareItToo',
+                debugShowCheckedModeBanner: false,
+                scaffoldMessengerKey: rootScaffoldMessengerKey,
+                theme: buildLightTheme(context),
+                darkTheme: buildDarkTheme(context),
+                themeMode: backgroundTheme.themeMode,
+                builder: appBuilder,
+              ),
+            );
+          }
           return MaterialApp(
             title: 'ShareItToo',
             debugShowCheckedModeBanner: false,
@@ -133,15 +161,7 @@ class MyApp extends StatelessWidget {
             theme: buildLightTheme(context),
             darkTheme: buildDarkTheme(context),
             themeMode: backgroundTheme.themeMode,
-            builder: (context, child) => PrivacyExportCacheLifecycleHost(
-              child: ForegroundPushHost(
-                navigatorKey: rootNavigatorKey,
-                messengerKey: rootScaffoldMessengerKey,
-                child: AppGradientBackground(
-                  child: buildSyntheticCloneMaterialAppShell(child: child),
-                ),
-              ),
-            ),
+            builder: appBuilder,
             home: const AppLinkHost(child: AppRoot()),
           );
         },
