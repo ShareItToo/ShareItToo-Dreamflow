@@ -8,7 +8,8 @@ import { runProbe, parseArgs, contract, toolchain, boundFiles, buildArguments, p
   artifactDigest, validateArtifact, matrixPlan, validateMatrix, classifyAsset,
   classifyBlockedRequest, networkReasonKeys, validateNetworkDiagnostic, ownsBuildGroup,
   launchArgs, privilegeArgs, validateInventory, validateNetwork, validateCleanup,
-  requireRenderedText, classifyTextObservation, validateTextDiagnostic, renderedSemanticsRect } from '../support/mission_quorum_web_browser_v2.mjs';
+  requireRenderedText, classifyTextObservation, validateTextDiagnostic, renderedSemanticsRect,
+  isStaticTextLabel } from '../support/mission_quorum_web_browser_v2.mjs';
 
 const head = 'a'.repeat(40);
 const sha = 'b'.repeat(64);
@@ -236,6 +237,36 @@ test('flattened headings require correlated exact DOM line and rendered geometry
   await assert.rejects(requireRenderedText(label,{readText:async()=>`${label} Pflichtkomponente`,
     readDomEvidence:async()=>({exactLine:false,rendered:true}),safe:()=>{},scroll:async()=>{}}),/^Error: probe_failure$/u);
 });
+test('evidence counts correlate only exact segment/count and first-slot token boundaries',async()=>{
+  for(const segment of ['Übergabe','Rückgabe'])for(const count of [0,1,2,3,4]){
+    const label=`${segment}: ${count}/4 synthetische Foto-Slots`;
+    assert.equal(isStaticTextLabel(label),true);
+    for(const text of [label,`${label} Übersicht: fehlt`,`Passung: unbekannt ${label} Übersicht: synthetisch belegt Detail: fehlt`])
+      await requireRenderedText(label,{readText:async()=>text,readDomEvidence:async()=>({exactLine:true,rendered:true}),
+        safe:()=>{},scroll:async()=>{throw Error('unexpected');}});
+  }
+  for(const label of ['Übergabe: 5/4 synthetische Foto-Slots','Rückgabe: -1/4 synthetische Foto-Slots',
+    'Übergabe: 04/4 synthetische Foto-Slots','Übergabe: 4/5 synthetische Foto-Slots',
+    'Pickup: 4/4 synthetische Foto-Slots','private Übergabe: 4/4 synthetische Foto-Slots',
+    'Übergabe: 4/4 synthetische Foto-Slots private']){
+    assert.equal(isStaticTextLabel(label),false);
+    await assert.rejects(requireRenderedText(label,{readText:async()=>label,safe:()=>{},scroll:async()=>{}}),/^Error: probe_failure$/u);
+  }
+  const label='Übergabe: 4/4 synthetische Foto-Slots';
+  for(const text of [`private${label} Übersicht: fehlt`,`${label}private Übersicht: fehlt`,
+    `${label} private Übersicht: fehlt`,`${label} Detail: fehlt`,`${label} Übersicht:private`,
+    'Rückgabe: 4/4 synthetische Foto-Slots Übersicht: fehlt','Übergabe: 3/4 synthetische Foto-Slots Übersicht: fehlt'])
+    await assert.rejects(requireRenderedText(label,{readText:async()=>text,readDomEvidence:async()=>({exactLine:true,rendered:true}),
+      safe:()=>{},scroll:async()=>{},onFailure:()=>{}}),/^Error: p7_matrix$/u);
+  let step=0;let diagnostic;
+  await assert.rejects(requireRenderedText(label,{readText:async()=>++step%2?'absent':`${label} Übersicht: fehlt`,
+    readDomEvidence:async()=>({exactLine:step%2===1,rendered:step%2===1}),safe:()=>{},scroll:async()=>{},
+    onFailure:d=>{diagnostic=d;}}),/^Error: p7_matrix$/u);
+  assert.equal(step,18);assert.equal(diagnostic.exact_dom_label_line,9);assert.equal(diagnostic.flattened_ax_boundary_match,9);
+  for(const dom of [{exactLine:false,rendered:false},{exactLine:true,rendered:false}])
+    await assert.rejects(requireRenderedText(label,{readText:async()=>`${label} Übersicht: fehlt`,readDomEvidence:async()=>dom,
+      safe:()=>{},scroll:async()=>{},onFailure:()=>{}}),/^Error: p7_matrix$/u);
+});
 test('semantics rectangle proves finite nonzero container intersection, not heading pixels or hit testing',()=>{
   const rect={x:12,y:20,width:300,height:700};const viewport={width:390,height:844};
   assert.equal(renderedSemanticsRect(rect,viewport),true);
@@ -262,7 +293,7 @@ test('only a primary p7_matrix failure carries the one validated heading diagnos
   assert.equal(leaking.code,'probe_cleanup');assert.equal(leaking.diagnostic.observations,undefined);
   const source=fs.readFileSync('test/support/mission_quorum_web_browser_v2.mjs','utf8');
   assert.match(source,/textSummary===undefined && exact\(row,\['event','value'\]\)/u);
-  assert.match(source,/componentHeadings\.includes\(label\)\?\{/u);
+  assert.match(source,/isStaticTextLabel\(label\)\?\{/u);
   assert.match(source,/if\(text\.split\('\\n'\)\.includes\(label\)\)return/u);
 });
 test('runner has only explicit test/workflow consumers, never runtime or product entrypoints',()=>{

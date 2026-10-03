@@ -665,8 +665,10 @@ function realAdapter(expectedHead, emit, signal) {
 // Static Flutter text may share a merged semantics label and has no clickable
 // DOM rectangle for each line. Keep standalone exact AX lines, or correlate
 // an exact DOM aria-label line and the known flattened AX boundary in ONE read
-// iteration. Neither signal alone admits a heading; controls remain hit-tested.
+// iteration. Neither signal alone admits static text; controls remain hit-tested.
 const componentHeadings=['Position 1 · Synthetischer Eigentümer 1','Position 2 · Synthetischer Eigentümer 2'];
+export const isStaticTextLabel=label=>typeof label==='string'&&(componentHeadings.includes(label)
+  ||/^(?:Übergabe|Rückgabe): [0-4]\/4 synthetische Foto-Slots$/u.test(label));
 const textDiagnosticKeys=['observations','exact_ax_line','exact_dom_label_line','rendered_dom_label_line','flattened_ax_boundary_match','absent'];
 // Geometry proves only that the connected labelled semantics CONTAINER has a
 // finite nonzero rectangle intersecting the current viewport. It does not
@@ -681,15 +683,20 @@ export function renderedSemanticsRect(rect,viewport) {
     &&Math.max(rect.x,0)<Math.min(right,viewport.width)&&Math.max(rect.y,0)<Math.min(bottom,viewport.height);
 }
 export function classifyTextObservation(label,text,domExact,domRendered=false) {
-  check(componentHeadings.includes(label)&&typeof text==='string'&&typeof domExact==='boolean'
+  check(isStaticTextLabel(label)&&typeof text==='string'&&typeof domExact==='boolean'
     &&typeof domRendered==='boolean'&&(!domRendered||domExact),'probe_failure');
   const lines=text.split('\n');
   const ax=lines.includes(label);
-  // Exact heading followed by a closed necessity label is a known boundary,
-  // never a substring/private suffix admission rule.
-  const flat=lines.some(line=>['Pflichtkomponente','Optionale Komponente'].some(next=>{
+  // Headings keep their existing closed necessity boundary. Evidence counts
+  // can occur inside a merged AX line, but only as complete space-delimited
+  // tokens followed immediately by the fixed first slot label, never a loose
+  // substring. The same observation still needs the exact DOM line + geometry.
+  const flat=componentHeadings.includes(label)?lines.some(line=>['Pflichtkomponente','Optionale Komponente'].some(next=>{
     const prefix=`${label} ${next}`;return line===prefix||line.startsWith(`${prefix} `);
-  }));
+  })):lines.some(line=>{
+    const boundary=`${label} Übersicht:`;
+    return line===boundary||line.startsWith(`${boundary} `)||line.endsWith(` ${boundary}`)||line.includes(` ${boundary} `);
+  });
   return {exact_ax_line:Number(ax),exact_dom_label_line:Number(domExact),rendered_dom_label_line:Number(domRendered),
     flattened_ax_boundary_match:Number(flat),absent:Number(!ax&&!domExact&&!flat)};
 }
@@ -703,6 +710,7 @@ export function validateTextDiagnostic(value) {
   return Object.fromEntries(textDiagnosticKeys.map(key=>[key,value[key]]));
 }
 export async function requireRenderedText(label,{readText,scroll,safe,readDomEvidence,onFailure}) {
+  check(isStaticTextLabel(label),'probe_failure');
   const diagnostic=readDomEvidence?Object.fromEntries(textDiagnosticKeys.map(key=>[key,0])):null;
   for(let attempt=0;attempt<18;attempt++) {
     safe();
@@ -742,7 +750,7 @@ async function observeDisplayMatrix({cdp,evaluate,session,safe,emit,onTextDiagno
   const wheel=async(delta)=>{const size=await evaluate('({width:innerWidth,height:innerHeight})');
     await call('Input.dispatchMouseEvent',{type:'mouseWheel',x:size.width/2,y:size.height-80,deltaX:0,deltaY:delta});await delay(80);};
   const renderedText=label=>requireRenderedText(label,{readText:text,scroll: ()=>wheel(250),safe,
-    ...(componentHeadings.includes(label)?{
+    ...(isStaticTextLabel(label)?{
       readDomEvidence:()=>evaluate(`(() => {const label=${JSON.stringify(label)};
         const geometry=${renderedSemanticsRect.toString()};
         const elements=[...document.querySelectorAll('flt-semantics[aria-label]')]
