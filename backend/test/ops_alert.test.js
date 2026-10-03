@@ -108,3 +108,15 @@ fi
     await fs.rm(temporaryDir, { recursive: true, force: true });
   }
 });
+
+test('production alert unit limits repeated mail to one reminder per day', async () => {
+  const currentDir = path.dirname(fileURLToPath(import.meta.url));
+  const unit = await fs.readFile(
+    path.resolve(currentDir, '../ops/systemd/shareittoo-alert@.service'),
+    'utf8',
+  );
+
+  assert.match(unit, /^Environment=ALERT_COOLDOWN_SECONDS=86400$/m);
+  assert.match(unit, /^StateDirectory=shareittoo-alerts$/m);
+  assert.match(unit, /^ProtectSystem=strict$/m);
+});

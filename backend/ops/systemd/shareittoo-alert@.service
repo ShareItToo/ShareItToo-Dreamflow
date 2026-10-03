@@ -5,6 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
+Environment=ALERT_COOLDOWN_SECONDS=86400
 ExecStart=/docker/shareittoo/backend/ops/alert.sh %i
 User=root
 Group=root
