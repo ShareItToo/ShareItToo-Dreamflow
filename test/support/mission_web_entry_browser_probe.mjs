@@ -52,6 +52,33 @@ export function launchArgs(directory) {
     '--disable-extensions', '--disable-component-extensions-with-background-pages', '--user-data-dir=' + directory,
     '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', 'about:blank'];
 }
+const sameFile = (a, b) => ['dev', 'ino', 'mode', 'uid', 'gid', 'nlink', 'size', 'mtimeNs', 'ctimeNs']
+  .every(key => a[key] === b[key]);
+export async function readStableStartupFile(file, afterPathCheck = async () => {}) {
+  let handle;
+  try {
+    handle = await fs.open(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+    const before = await handle.stat({ bigint: true });
+    const pathBefore = await fs.lstat(file, { bigint: true });
+    requireThat(before.isFile() && before.size < 1024n && sameFile(before, pathBefore), 'probe_startup');
+    await afterPathCheck();
+    const bytes = Buffer.alloc(Number(before.size)); let offset = 0;
+    while (offset < bytes.length) {
+      const read = await handle.read(bytes, offset, bytes.length - offset, offset);
+      requireThat(read.bytesRead > 0, 'probe_startup'); offset += read.bytesRead;
+    }
+    const extra = await handle.read(Buffer.alloc(1), 0, 1, bytes.length);
+    const after = await handle.stat({ bigint: true });
+    const pathAfter = await fs.lstat(file, { bigint: true });
+    requireThat(extra.bytesRead === 0 && sameFile(before, after) && sameFile(after, pathAfter), 'probe_startup');
+    return bytes;
+  } catch (error) {
+    if (!handle && error?.code === 'ENOENT') throw error;
+    throw Error('probe_startup');
+  } finally {
+    if (handle) try { await handle.close(); } catch { throw Error('probe_startup'); }
+  }
+}
 
 // The supervisor is deliberately outside the Chrome sandbox: sandboxed ps is
 // denied on this host. Only the exact owned groups/profile may be stopped/removed.
@@ -93,9 +120,7 @@ function realAdapter() {
         checkAbort(signal);
         try {
           const file = path.join(directory, 'DevToolsActivePort');
-          const stat = await fs.lstat(file);
-          requireThat(stat.isFile() && !stat.isSymbolicLink() && stat.size < 1024, 'probe_startup');
-          const raw = (await fs.readFile(file, 'utf8')).split('\n')[0];
+          const raw = (await readStableStartupFile(file)).toString('utf8').split('\n')[0];
           if (/^[0-9]{1,5}$/u.test(raw) && Number(raw) > 0 && Number(raw) <= 65535) { port = Number(raw); return; }
         } catch (error) { if (error.code !== 'ENOENT') throw error; }
         await sleep(100);

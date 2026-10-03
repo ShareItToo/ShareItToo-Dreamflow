@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   parseArgs, validateTargets, validateVersion, validateNetwork, validateCleanup,
-  runBlankPreflight, launchArgs, policy, limits,
+  runBlankPreflight, launchArgs, policy, limits, readStableStartupFile,
 } from '../support/mission_web_entry_browser_probe.mjs';
 
 const targets = () => [
@@ -101,6 +103,32 @@ test('unexpected targets stop before any network probe; abort cannot report succ
   const closing = fake({ close: async () => { late.abort(); return cleanup(); } });
   assert.equal((await runBlankPreflight({ platform: 'darwin', adapter: closing.adapter, signal: late.signal })).code, 'probe_aborted');
 });
+test('startup port bytes and metadata come from one stable no-follow descriptor', async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'sit-browser-port-read-test-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const file = path.join(directory, 'DevToolsActivePort');
+  fs.writeFileSync(file, '49152\n', { mode: 0o600 });
+  assert.deepEqual(await readStableStartupFile(file), Buffer.from('49152\n'));
+  fs.rmSync(file); fs.symlinkSync(path.join(directory, 'missing-target'), file);
+  await assert.rejects(readStableStartupFile(file), /^Error: probe_startup$/);
+});
+for (const variant of ['replacement', 'growth', 'permission']) {
+  test(`startup port descriptor rejects concurrent ${variant}`, async (t) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'sit-browser-port-race-test-'));
+    t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+    const file = path.join(directory, 'DevToolsActivePort');
+    fs.writeFileSync(file, '49152\n', { mode: 0o600 });
+    const mutate = async () => {
+      if (variant === 'replacement') {
+        fs.renameSync(file, path.join(directory, 'retained-port'));
+        fs.writeFileSync(file, '49152\n', { mode: 0o600 });
+      }
+      if (variant === 'growth') fs.appendFileSync(file, 'growth');
+      if (variant === 'permission') fs.chmodSync(file, 0o644);
+    };
+    await assert.rejects(readStableStartupFile(file, mutate), /^Error: probe_startup$/);
+  });
+}
 test('launch policy and bounded ownership/cleanup remain explicit; CI never launches Chrome', () => {
   assert.equal(policy, '(version 1)(allow default)(deny network-outbound)(allow network-outbound (remote ip "localhost:*"))');
   const args = launchArgs('/tmp/synthetic-owned-profile');
