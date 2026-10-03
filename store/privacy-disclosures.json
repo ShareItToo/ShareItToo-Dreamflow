@@ -932,11 +932,11 @@
     },
     {
       "path": "lib/screens/login_screen.dart",
-      "sha256": "2010ade0fe6b0381c4ea45dd3568597fe0a28a859de8f7e2aec3ce84448a9b8e"
+      "sha256": "a9399f195cf771328adb3447bbca27dfdc7322de53b0f0dc0800df1915550c01"
     },
     {
       "path": "lib/screens/register_screen.dart",
-      "sha256": "13feda12dd9bbe09c57cb4cbbee7aa76cf7afce8b796918bb1f1c8a6bbb03420"
+      "sha256": "acb8d9ce2c25cd4bda05337f3ad05072c65082b034d7cbc7dda289c63f512d3e"
     },
     {
       "path": "lib/screens/wishlists_screen.dart",
@@ -1036,7 +1036,7 @@
     },
     {
       "path": "lib/services/auth_service.dart",
-      "sha256": "6ebe241cd53b80dcdc85f4cd70301dbc11c5045c9316f60a736ad0859b015ec0"
+      "sha256": "aa6d5b9cba2345f0469d4b317197175d58c234a9adda47da6d6ea6729089e00e"
     },
     {
       "path": "lib/services/staging_password_enrollment_client.dart",
@@ -1044,7 +1044,7 @@
     },
     {
       "path": "lib/services/web_google_auth.dart",
-      "sha256": "8b0117bd73268817e404eac265485a57549942145a3d12e16ea800bc167a40ea"
+      "sha256": "379b3e61a577bd531c7bf188be9e3190058d4f64a6af2d9228311f68d78f9b08"
     },
     {
       "path": "lib/screens/notification_settings_screen.dart",

@@ -20,6 +20,7 @@ import 'package:lendify/utils/registration_input_policy.dart';
 import 'package:lendify/widgets/app_popup.dart';
 import 'package:lendify/widgets/mfa_challenge_dialog.dart';
 import 'package:lendify/widgets/social_auth_button.dart';
+import 'package:lendify/widgets/social_auth_feedback.dart';
 import 'package:lendify/widgets/tracked_dialog_route.dart';
 import 'package:provider/provider.dart';
 
@@ -501,27 +502,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
             result.failure == AuthFailure.principalChanged) {
           return;
         }
-        final message = switch (result.failure) {
-          AuthFailure.socialEmailRequired =>
-            '$providerLabel hat keine E-Mail-Adresse übermittelt. Bitte gib sie dort frei oder nutze eine andere Anmeldung.',
-          AuthFailure.socialEmailVerificationRequired =>
-            'Die von $providerLabel übermittelte E-Mail ist noch nicht bestätigt.',
-          AuthFailure.socialProviderAlreadyLinked =>
-            'Dieses SIT-Konto ist bereits mit einem anderen $providerLabel-Konto verbunden.',
-          AuthFailure.socialAccountLinkRequiresReauthentication =>
-            'Diese E-Mail gehört bereits zu einem SIT-Konto. Melde dich einmal wie bisher an, bevor du $providerLabel verbindest.',
-          AuthFailure.accountNotActive =>
-            'Dieses SIT-Konto ist derzeit nicht aktiv.',
-          AuthFailure.providerUnavailable =>
-            '$providerLabel ist noch nicht freigeschaltet. Bitte nutze vorübergehend E-Mail.',
-          _ =>
-            'Die $providerLabel-Registrierung ist gerade nicht erreichbar. Bitte versuche es erneut.',
-        };
         if (!mounted) return;
-        await AppPopup.toast(
+        await showSocialAuthFailure(
           context,
-          icon: Icons.error_outline,
-          title: message,
+          failure: result.failure,
+          provider: provider,
         );
         return;
       }
@@ -604,7 +589,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         (route) => false,
       );
     } catch (error) {
-      debugPrint('[RegisterScreen] social registration failed: $error');
+      debugPrint('[RegisterScreen] social registration failed');
       final completedOwner = successfulSessionOwner;
       if (completedOwner != null) {
         await AuthService.clearSessionOwnerIfMatches(

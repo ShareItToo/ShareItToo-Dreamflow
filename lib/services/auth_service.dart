@@ -1501,8 +1501,9 @@ class AuthService {
       )) {
         return const AuthResult.failure(AuthFailure.principalChanged);
       }
-      debugPrint('[AuthService] ${provider.name} unavailable: ${error.cause}');
-      return const AuthResult.failure(AuthFailure.providerUnavailable);
+      debugPrint(
+          '[AuthService] social acquisition failed: ${error.failure.name}');
+      return AuthResult.failure(error.failure);
     } on BackendException catch (error) {
       if (!_authAttemptPreflightCurrent(
         expectedSessionEpoch,
@@ -1511,16 +1512,16 @@ class AuthService {
         return const AuthResult.failure(AuthFailure.principalChanged);
       }
       final failure = classifySocialBackendError(error.code);
-      debugPrint('[AuthService] social exchange failed: ${error.code}');
+      debugPrint('[AuthService] social exchange failed: ${failure.name}');
       return AuthResult.failure(failure);
-    } catch (error) {
+    } catch (_) {
       if (!_authAttemptPreflightCurrent(
         expectedSessionEpoch,
         isActionCurrent,
       )) {
         return const AuthResult.failure(AuthFailure.principalChanged);
       }
-      debugPrint('[AuthService] social sign-in failed: $error');
+      debugPrint('[AuthService] social sign-in failed');
       return const AuthResult.failure(AuthFailure.network);
     } finally {
       try {
@@ -1556,6 +1557,26 @@ class AuthService {
 
   @visibleForTesting
   static AuthFailure classifySocialBackendError(String code) => switch (code) {
+        'staging_account_not_allowlisted' ||
+        'staging_google_identity_not_allowlisted' =>
+          AuthFailure.pilotAccountDenied,
+        'staging_registration_disabled' => AuthFailure.pilotRegistrationClosed,
+        'staging_google_identity_conflict' ||
+        'social_identity_conflict' ||
+        'social_identity_changed' =>
+          AuthFailure.socialIdentityConflict,
+        'invalid_social_token' ||
+        'staging_google_registration_replay' =>
+          AuthFailure.socialTokenInvalid,
+        'mfa_required' ||
+        'mfa_reauthentication_required' =>
+          AuthFailure.mfaRequired,
+        'mfa_code_invalid' => AuthFailure.mfaCodeRejected,
+        'mfa_temporarily_locked' => AuthFailure.mfaLocked,
+        'mfa_challenge_expired' => AuthFailure.mfaChallengeExpired,
+        'mfa_challenge_invalid' ||
+        'invalid_mfa_challenge' =>
+          AuthFailure.mfaChallengeInvalid,
         'social_registration_consents_required' ||
         'registration_action_label_required' ||
         'registration_action_label_mismatch' =>
@@ -1577,6 +1598,37 @@ class AuthService {
         _ => AuthFailure.network,
       };
 
+  /// Only typed SDK codes are evidence; descriptions/custom data are discarded.
+  @visibleForTesting
+  static AuthFailure classifySocialProviderError(Object error) {
+    if (error is WebGoogleAuthFailure) {
+      return switch (error.code) {
+        'popup_cancelled' => AuthFailure.socialCancelled,
+        'popup_blocked' => AuthFailure.socialPopupBlocked,
+        'network_request_failed' => AuthFailure.network,
+        _ => AuthFailure.providerUnavailable,
+      };
+    }
+    if (error is GoogleSignInException) {
+      return error.code == GoogleSignInExceptionCode.canceled
+          ? AuthFailure.socialCancelled
+          : AuthFailure.providerUnavailable;
+    }
+    if (error is FirebaseAuthException) {
+      return switch (error.code) {
+        'popup-closed-by-user' ||
+        'cancelled-popup-request' ||
+        'web-context-cancelled' ||
+        'canceled' =>
+          AuthFailure.socialCancelled,
+        'popup-blocked' => AuthFailure.socialPopupBlocked,
+        'network-request-failed' => AuthFailure.network,
+        _ => AuthFailure.providerUnavailable,
+      };
+    }
+    return AuthFailure.providerUnavailable;
+  }
+
   static Future<String> _firebaseSocialIdToken(
     AuthSocialProvider provider, {
     required _SocialSdkAcquisition acquisition,
@@ -1584,9 +1636,7 @@ class AuthService {
   }) async {
     requireCurrent();
     if (!socialProviderEnabled(provider)) {
-      throw const _SocialProviderUnavailable(
-        'provider is disabled in this release candidate',
-      );
+      throw const _SocialProviderUnavailable();
     }
     if (kIsWeb) {
       if (provider == AuthSocialProvider.facebook) {
@@ -1599,12 +1649,12 @@ class AuthService {
           );
         } on WebFacebookAuthFailure catch (error) {
           if (error.cancelled) throw const _SocialSignInCancelled();
-          throw _SocialProviderUnavailable(error.code);
+          throw const _SocialProviderUnavailable();
         } on RemoteAuthAttemptSuperseded {
           rethrow;
         } catch (_) {
           // Includes SDK-instance acquisition failures before the adapter.
-          throw const _SocialProviderUnavailable('popup_unavailable');
+          throw const _SocialProviderUnavailable();
         }
       }
       try {
@@ -1631,7 +1681,7 @@ class AuthService {
         );
       } on WebGoogleAuthFailure catch (error) {
         if (error.cancelled) throw const _SocialSignInCancelled();
-        throw _SocialProviderUnavailable(error.code);
+        throw _SocialProviderUnavailable(classifySocialProviderError(error));
       }
     }
     await FirebaseRuntime.ensureFirebaseApp();
@@ -1669,7 +1719,7 @@ class AuthService {
           }
           final facebookToken = login.accessToken;
           if (login.status != LoginStatus.success || facebookToken == null) {
-            throw _SocialProviderUnavailable(login.message);
+            throw const _SocialProviderUnavailable();
           }
           acquisition.facebookAcquired = true;
           requireCurrent();
@@ -1691,9 +1741,7 @@ class AuthService {
         final authorizationCode =
             credential.additionalUserInfo?.authorizationCode?.trim();
         if (authorizationCode == null || authorizationCode.isEmpty) {
-          throw const _SocialProviderUnavailable(
-            'Apple authorization code was not returned by Firebase',
-          );
+          throw const _SocialProviderUnavailable();
         }
         acquisition.appleAuthorizationCode = authorizationCode;
         requireCurrent();
@@ -1704,20 +1752,11 @@ class AuthService {
       }
       return token;
     } on GoogleSignInException catch (error) {
-      if (error.code == GoogleSignInExceptionCode.canceled ||
-          error.code == GoogleSignInExceptionCode.interrupted) {
-        throw const _SocialSignInCancelled();
-      }
-      throw _SocialProviderUnavailable(error);
+      throw _SocialProviderUnavailable(classifySocialProviderError(error));
     } on FirebaseAuthException catch (error) {
-      if (error.code == 'web-context-cancelled' ||
-          error.code == 'canceled' ||
-          error.code == 'popup-closed-by-user') {
-        throw const _SocialSignInCancelled();
-      }
-      throw _SocialProviderUnavailable(error);
-    } on UnsupportedError catch (error) {
-      throw _SocialProviderUnavailable(error);
+      throw _SocialProviderUnavailable(classifySocialProviderError(error));
+    } on UnsupportedError {
+      throw const _SocialProviderUnavailable();
     }
   }
 
@@ -2174,8 +2213,9 @@ class _SocialSignInCancelled implements Exception {
 }
 
 class _SocialProviderUnavailable implements Exception {
-  final Object? cause;
-  const _SocialProviderUnavailable([this.cause]);
+  final AuthFailure failure;
+  const _SocialProviderUnavailable(
+      [this.failure = AuthFailure.providerUnavailable]);
 }
 
 class AuthSession {
@@ -2245,6 +2285,10 @@ enum AuthFailure {
   emailInUse,
   notImplemented,
   socialCancelled,
+  socialPopupBlocked,
+  pilotAccountDenied,
+  socialIdentityConflict,
+  socialTokenInvalid,
   providerUnavailable,
   socialEmailRequired,
   socialEmailVerificationRequired,

@@ -244,8 +244,19 @@ void main() {
                     'web-context-cancelled',
                     'canceled'
                   }.contains(code))
-              .having((error) => error.code, 'sanitized code',
-                  isNot(contains('private')))));
+              .having(
+                  (error) => error.code,
+                  'sanitized code',
+                  switch (code) {
+                    'popup-blocked' => 'popup_blocked',
+                    'network-request-failed' => 'network_request_failed',
+                    'popup-closed-by-user' ||
+                    'cancelled-popup-request' ||
+                    'web-context-cancelled' ||
+                    'canceled' =>
+                      'popup_cancelled',
+                    _ => 'popup_unavailable',
+                  })));
       expect(remoteCalled, isFalse);
     });
   }

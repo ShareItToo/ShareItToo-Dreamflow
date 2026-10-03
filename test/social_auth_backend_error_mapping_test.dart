@@ -1,7 +1,89 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:lendify/services/auth_service.dart';
+import 'package:lendify/services/web_google_auth.dart';
 
 void main() {
+  const backendCases = {
+    'staging_account_not_allowlisted': AuthFailure.pilotAccountDenied,
+    'staging_google_identity_not_allowlisted': AuthFailure.pilotAccountDenied,
+    'staging_registration_disabled': AuthFailure.pilotRegistrationClosed,
+    'staging_google_identity_conflict': AuthFailure.socialIdentityConflict,
+    'social_identity_conflict': AuthFailure.socialIdentityConflict,
+    'social_identity_changed': AuthFailure.socialIdentityConflict,
+    'invalid_social_token': AuthFailure.socialTokenInvalid,
+    'staging_google_registration_replay': AuthFailure.socialTokenInvalid,
+    'social_registration_consents_required': AuthFailure.consentRequired,
+    'registration_action_label_required': AuthFailure.consentRequired,
+    'registration_action_label_mismatch': AuthFailure.consentRequired,
+    'mfa_required': AuthFailure.mfaRequired,
+    'mfa_reauthentication_required': AuthFailure.mfaRequired,
+    'mfa_code_invalid': AuthFailure.mfaCodeRejected,
+    'mfa_temporarily_locked': AuthFailure.mfaLocked,
+    'mfa_challenge_expired': AuthFailure.mfaChallengeExpired,
+    'mfa_challenge_invalid': AuthFailure.mfaChallengeInvalid,
+    'invalid_mfa_challenge': AuthFailure.mfaChallengeInvalid,
+  };
+  for (final entry in backendCases.entries) {
+    test('exact backend code ${entry.key} has a typed safe outcome', () {
+      expect(AuthService.classifySocialBackendError(entry.key), entry.value);
+      expect(
+          AuthService.classifySocialBackendError(
+              '${entry.key}:private-subject'),
+          AuthFailure.network);
+    });
+  }
+  const providerCases = {
+    'popup-closed-by-user': AuthFailure.socialCancelled,
+    'cancelled-popup-request': AuthFailure.socialCancelled,
+    'web-context-cancelled': AuthFailure.socialCancelled,
+    'canceled': AuthFailure.socialCancelled,
+    'popup-blocked': AuthFailure.socialPopupBlocked,
+    'network-request-failed': AuthFailure.network,
+    'unauthorized-domain': AuthFailure.providerUnavailable,
+    'operation-not-allowed': AuthFailure.providerUnavailable,
+    'private-subject': AuthFailure.providerUnavailable,
+  };
+  for (final entry in providerCases.entries) {
+    test('only typed SDK code ${entry.key} is classified', () {
+      expect(
+          AuthService.classifySocialProviderError(FirebaseAuthException(
+            code: entry.key,
+            message: 'private-email@example.invalid private-token',
+          )),
+          entry.value);
+      expect(AuthService.classifySocialProviderError(StateError(entry.key)),
+          AuthFailure.providerUnavailable);
+    });
+  }
+  test('native SDK cancellation is distinct from an interruption', () {
+    for (final code in GoogleSignInExceptionCode.values) {
+      expect(
+          AuthService.classifySocialProviderError(GoogleSignInException(
+            code: code,
+            description: 'private-token popup-blocked',
+          )),
+          code == GoogleSignInExceptionCode.canceled
+              ? AuthFailure.socialCancelled
+              : AuthFailure.providerUnavailable);
+    }
+  });
+  test('sanitized web failures reach the service without raw provider data',
+      () {
+    for (final entry in {
+      'popup_cancelled': AuthFailure.socialCancelled,
+      'popup_blocked': AuthFailure.socialPopupBlocked,
+      'network_request_failed': AuthFailure.network,
+      'popup_unavailable': AuthFailure.providerUnavailable,
+      'private-token': AuthFailure.providerUnavailable,
+    }.entries) {
+      expect(
+          AuthService.classifySocialProviderError(
+              WebGoogleAuthFailure(entry.key)),
+          entry.value);
+    }
+  });
   test('Apple revocation availability is shown as a provider hold', () {
     expect(
       AuthService.classifySocialBackendError('apple_revocation_unavailable'),

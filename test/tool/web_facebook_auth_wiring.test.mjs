@@ -12,7 +12,7 @@ test('Facebook Web branch is gated, Firebase-only, before native fallback', () =
   const web = acquisition.slice(acquisition.indexOf('if (kIsWeb)'), acquisition.indexOf('await FirebaseRuntime.ensureFirebaseApp();'));
   for (const text of ['provider == AuthSocialProvider.facebook', 'acquireWebFacebookToken(',
     'available: () => FirebaseRuntime.webFacebookConfigurationReady', 'requireCurrent: requireCurrent',
-    'acquisition.firebaseUid = uid', 'on WebFacebookAuthFailure', '_SocialProviderUnavailable(error.code)']) assert.ok(web.includes(text), text);
+    'acquisition.firebaseUid = uid', 'on WebFacebookAuthFailure', 'throw const _SocialProviderUnavailable()']) assert.ok(web.includes(text), text);
   assert.doesNotMatch(web, /facebookAcquired\s*=|FacebookAuth.instance|appleAuthorizationCode\s*=/);
   assert.match(helper, /FacebookAuthProvider\(\)\.\.addScope\('email'\)/);
   assert.match(helper, /getIdTokenResult\(true\)/);

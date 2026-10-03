@@ -152,8 +152,13 @@ Future<String> acquireWebGoogleToken({
     };
     // SDK messages/customData can contain identity/token details: never retain
     // them in the typed result or user-visible logs.
+    final sanitizedCode = switch (code) {
+      'popup-blocked' => 'popup_blocked',
+      'network-request-failed' => 'network_request_failed',
+      _ => cancelled.contains(code) ? 'popup_cancelled' : 'popup_unavailable',
+    };
     throw WebGoogleAuthFailure(
-      cancelled.contains(code) ? 'popup_cancelled' : 'popup_unavailable',
+      sanitizedCode,
       cancelled: cancelled.contains(code),
     );
   }
