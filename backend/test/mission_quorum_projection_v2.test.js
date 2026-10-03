@@ -262,12 +262,14 @@ test('V2 rejects closed-enum, omitted field, coerced revision and private value 
   ]) { const x = lifecycle(fixture()); change(x); reject(x); }
 });
 
-test('V2 has no consumers outside its own test and no I/O, provider or runtime imports', async () => {
+test('V2 has only exact projection/display test consumers and no I/O, provider or runtime imports', async () => {
   const root = new URL('../../', import.meta.url);
   for (const directory of ['backend/src', 'backend/test', 'backend/ops', 'lib', 'test', 'tool']) {
     for (const path of await readdir(new URL(`${directory}/`, root), { recursive: true })) {
       if (!/\.(js|mjs|dart|json)$/u.test(path) || ['backend/src/mission_quorum_projection_v2.js',
-        'backend/test/mission_quorum_projection_v2.test.js'].includes(`${directory}/${path}`)) continue;
+        'backend/test/mission_quorum_projection_v2.test.js',
+        'backend/test/support/mission_quorum_web_fixture_v2.js',
+        'test/tool/mission_quorum_web_preview_v2_contract.test.mjs'].includes(`${directory}/${path}`)) continue;
       assert.doesNotMatch(await readFile(new URL(`${directory}/${path}`, root), 'utf8'), /mission_quorum_projection_v2|projectMissionQuorumV2/u);
     }
   }
