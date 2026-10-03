@@ -67,24 +67,87 @@ function safeError(error) {
 }
 
 export function assertSafeManagedAvatarUrl(value, base = apiBaseUrl) {
+  if (base !== apiBaseUrl) fail('Avatar URL is not a safe managed URL.');
   if (value === null) return null;
   if (typeof value !== 'string' || value.length > 300) fail('Avatar URL is not a safe managed URL.');
   let parsed;
   try { parsed = new URL(value); } catch { fail('Avatar URL is not a safe managed URL.'); }
   const expected = new URL(base);
   if (parsed.protocol !== 'https:' || parsed.origin !== expected.origin
+      || parsed.username || parsed.password || parsed.href !== value
       || parsed.search || parsed.hash || !managedUpload.test(parsed.pathname)) {
     fail('Avatar URL is not a safe managed URL.');
   }
   return value;
 }
 
-async function readOwnerUploadId({ fetchImpl, url, token }) {
-  const response = await fetchImpl(url, { headers: { Authorization: `Bearer ${token}` } });
-  if (response.status !== 200) fail('Owner avatar media did not read back safely.');
-  const id = response.headers?.get?.('x-upload-id') ?? null;
-  if (!isUploadId(id)) fail('Owner avatar media did not expose an exact owner upload identifier.');
-  return id;
+// Remote bytes are inspected and discarded, never persisted. Restoration uses
+// the original managed URL, not a downloaded file. The prefix is a media-type
+// guard, not a claim that an entire image has been decoded or authenticated.
+export async function inspectManagedAvatar({ fetchImpl, url, token, requireUploadId = false, timeoutMs = 15000 }) {
+  const reason = 'Owner avatar media did not read back safely.';
+  assertSafeManagedAvatarUrl(url);
+  if (!url || !Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 15000) fail(reason);
+  const controller = new AbortController();
+  let reader; let response; let complete = false;
+  const expiresAt = performance.now() + timeoutMs;
+  const bounded = async (operation) => {
+    let timer;
+    const remaining = expiresAt - performance.now();
+    if (remaining <= 0) { controller.abort(); fail(reason); }
+    try {
+      return await Promise.race([operation(), new Promise((_, reject) => {
+        const expired = () => { controller.abort(); reject(new Error(reason)); };
+        timer = setTimeout(expired, remaining);
+      })]);
+    } finally { clearTimeout(timer); }
+  };
+  const maxBytes = 8 * 1024 * 1024;
+  try {
+    response = await bounded(() => fetchImpl(url, {
+      method: 'GET', redirect: 'error', signal: controller.signal,
+      headers: { Authorization: `Bearer ${token}`, 'Accept-Encoding': 'identity' },
+    }));
+    if (response.status !== 200 || response.redirected !== false || response.url !== url) fail(reason);
+    const type = response.headers.get('content-type');
+    const extension = new URL(url).pathname.split('.').at(-1).toLowerCase();
+    const expectedType = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' }[extension];
+    if (type !== expectedType) fail(reason);
+    const encoding = response.headers.get('content-encoding');
+    if (encoding !== null && encoding !== 'identity') fail(reason);
+    const length = response.headers.get('content-length');
+    if (length !== null && (!/^[1-9][0-9]{0,7}$/u.test(length) || Number(length) > maxBytes)) fail(reason);
+    const uploadId = response.headers.get('x-upload-id');
+    if (requireUploadId && !isUploadId(uploadId)) fail(reason);
+    reader = response.body.getReader();
+    let byteLength = 0;
+    const prefix = Buffer.alloc(12);
+    while (true) {
+      const { done, value } = await bounded(() => reader.read());
+      if (done) break;
+      if (!(value instanceof Uint8Array) || value.length === 0 || value.length > maxBytes - byteLength) fail(reason);
+      if (byteLength < prefix.length) prefix.set(value.subarray(0, prefix.length - byteLength), byteLength);
+      byteLength += value.length;
+    }
+    if (byteLength === 0 || (length !== null && Number(length) !== byteLength)) fail(reason);
+    const validPrefix = type === 'image/png'
+      ? byteLength >= 8 && prefix.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+      : type === 'image/jpeg'
+        ? byteLength >= 3 && prefix[0] === 255 && prefix[1] === 216 && prefix[2] === 255
+        : byteLength >= 12 && prefix.subarray(0, 4).equals(Buffer.from('RIFF')) && prefix.subarray(8, 12).equals(Buffer.from('WEBP'));
+    if (!validPrefix) fail(reason);
+    complete = true;
+    return { byteLength, contentType: type, uploadId: requireUploadId ? uploadId : null };
+  } catch {
+    fail(reason); // Never expose transport messages, headers, URLs or credentials.
+  } finally {
+    if (!complete) {
+      controller.abort();
+      // Cancellation must not let an uncooperative stream delay the deadline.
+      try { Promise.resolve(reader ? reader.cancel() : response?.body?.cancel()).catch(() => {}); } catch { /* sanitized above */ }
+    }
+    try { reader?.releaseLock(); } catch { /* no transport details escape */ }
+  }
 }
 
 function isUploadId(value) {
@@ -423,7 +486,7 @@ async function concreteRunner({ sourceVaultFile, candidateDirectory, adbPath = '
   const { vault } = readEmailVerifiedJourneyVault(sourceVaultFile);
   const temp = createPrivateTempDirectory();
   const fixture = writeSyntheticAvatarFixture(temp);
-  let mediaId = null; let originalBytesPath = null; let original; let token; let id; let uiUpload;
+  let mediaId = null; let original; let token; let id; let uiUpload;
   const cleanupMedia = () => {
     if (mediaId !== null) currentHeadAndroidAdb(commandRunner, adbPath, device, ['shell', 'content', 'delete', '--uri', 'content://media/external/images/media', '--where', `_id=${mediaId}`]);
     currentHeadAndroidAdb(commandRunner, adbPath, device, ['shell', 'rm', '-f', `/sdcard/Download/${fixtureDisplayName}`]);
@@ -437,12 +500,7 @@ async function concreteRunner({ sourceVaultFile, candidateDirectory, adbPath = '
       try {
         ({ token, id, photoURL: original } = await loginAndReadOriginal({ fetchImpl, account: vault.accounts.find((a) => a.role === 'owner'), baseUrl: current.candidate.apiBaseUrl }));
         if (original) {
-          const response = await fetchImpl(original, { headers: { Authorization: `Bearer ${token}` } });
-          if (response.status !== 200) fail('Original owner avatar bytes did not read back safely.');
-          const bytes = Buffer.from(await response.arrayBuffer());
-          if (bytes.length === 0 || bytes.length > 8 * 1024 * 1024) fail('Original owner avatar bytes exceeded the bounded backup size.');
-          originalBytesPath = join(temp, 'original-owner-avatar.bin');
-          writeFileSync(originalBytesPath, bytes, { mode: 0o600, flag: 'wx' });
+          await inspectManagedAvatar({ fetchImpl, url: original, token });
         }
         currentHeadAndroidAdb(commandRunner, adbPath, device, ['push', fixture.path, `/sdcard/Download/${fixtureDisplayName}`]);
         currentHeadAndroidAdb(commandRunner, adbPath, device, ['shell', 'am', 'broadcast', '-a', 'android.intent.action.MEDIA_SCANNER_SCAN_FILE', '-d', `file:///sdcard/Download/${fixtureDisplayName}`]);
@@ -452,7 +510,7 @@ async function concreteRunner({ sourceVaultFile, candidateDirectory, adbPath = '
         const save = await saveProfile({ commandRunner, adbPath, device, wait });
         const uiReadback = await readProfiles({ fetchImpl, baseUrl: current.candidate.apiBaseUrl, token, id });
         if (!uiReadback.ownUrl || uiReadback.ownUrl === original || uiReadback.publicUrl !== uiReadback.ownUrl) fail('Photo-picker profile save did not produce a changed exact server readback.');
-        uiUpload = { id: await readOwnerUploadId({ fetchImpl, url: uiReadback.ownUrl, token }), url: uiReadback.ownUrl };
+        uiUpload = { id: (await inspectManagedAvatar({ fetchImpl, url: uiReadback.ownUrl, token, requireUploadId: true })).uploadId, url: uiReadback.ownUrl };
         return { photoPicker, save, original, id, uiUpload, originalOwnerIdSha256: sha256(id), originalAvatarUrlSha256: original ? sha256(original) : null, fixtureSha256: fixture.sha256 };
       } catch (error) {
         if (token && id && original !== undefined) {

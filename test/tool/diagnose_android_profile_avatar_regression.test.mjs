@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 
 import {
   assertSafeManagedAvatarUrl,
+  inspectManagedAvatar,
   parseExactNewestMediaRow,
   parseProfileAvatarRegressionArguments,
   runAndroidProfileAvatarRegression,
@@ -35,6 +37,142 @@ test('accepts only the exact staging managed avatar URL shape', () => {
   assert.throws(() => assertSafeManagedAvatarUrl(`${good}?download=1`), /safe managed/u);
   assert.throws(() => assertSafeManagedAvatarUrl('https://staging.shareittoo.com/api/v1/uploads/not-a-uuid-full.png'), /safe managed/u);
   assert.equal(assertSafeManagedAvatarUrl(null), null);
+  for (const unsafe of [
+    good.replace('https://', 'https://user:pass@'),
+    good.replace('/api/', '/other/../api/'),
+    good.replace('https://', 'https:\\\\'),
+    good.replace('.com/', '.com:443/'),
+    good.replace('staging.', 'STAGING.'),
+    `${good}#fragment`, `${good}\n`,
+  ]) assert.throws(() => assertSafeManagedAvatarUrl(unsafe), /safe managed/u);
+  assert.throws(() => assertSafeManagedAvatarUrl(good, 'https://other.invalid/api/v1'), /safe managed/u);
+});
+
+const avatarId = '123e4567-e89b-12d3-a456-426614174000';
+const avatarUrl = `https://staging.shareittoo.com/api/v1/uploads/${avatarId}-full.png`;
+const mediaFailure = 'Owner avatar media did not read back safely.';
+function mediaResponse({ bytes = syntheticAvatarFixtureBytes(), chunks = [bytes], headers = {}, ...overrides } = {}) {
+  return {
+    status: 200, redirected: false, url: avatarUrl,
+    headers: new Headers({ 'content-type': 'image/png', 'x-upload-id': avatarId, ...headers }),
+    body: new ReadableStream({ start(controller) { for (const chunk of chunks) controller.enqueue(chunk); controller.close(); } }),
+    ...overrides,
+  };
+}
+async function inspectResponse(response, options = {}) {
+  return inspectManagedAvatar({ fetchImpl: async () => response, url: avatarUrl, token: 'synthetic', ...options });
+}
+
+test('remote inspection uses exact GET, forbids redirects and returns no downloaded bytes or paths', async () => {
+  const bytes = syntheticAvatarFixtureBytes();
+  const result = await inspectManagedAvatar({
+    url: avatarUrl, token: 'synthetic', requireUploadId: true,
+    fetchImpl: async (url, options) => {
+      assert.equal(url, avatarUrl);
+      assert.equal(options.method, 'GET'); assert.equal(options.redirect, 'error');
+      assert.equal(options.headers.Authorization, 'Bearer synthetic');
+      assert.equal(options.headers['Accept-Encoding'], 'identity');
+      assert.equal(options.signal.aborted, false);
+      return mediaResponse({ chunks: [bytes.subarray(0, 2), bytes.subarray(2, 9), bytes.subarray(9)], headers: {
+        'content-length': String(bytes.length), 'content-disposition': 'attachment; filename="../../untrusted.bin"',
+      } });
+    },
+  });
+  assert.deepEqual(result, { byteLength: bytes.length, contentType: 'image/png', uploadId: avatarId });
+});
+
+test('remote bytes have no filesystem sink; only the generated synthetic fixture is written', () => {
+  const source = readFileSync(new URL('../../tool/diagnose_android_profile_avatar_regression.mjs', import.meta.url), 'utf8');
+  assert.equal((source.match(/writeFileSync\(/gu) ?? []).length, 1);
+  assert.match(source, /writeFileSync\(path, bytes, \{ mode: 0o600, flag: 'wx' \}\)/u);
+  assert.doesNotMatch(source, /originalBytesPath|original-owner-avatar\.bin|response\.arrayBuffer/u);
+});
+
+test('unsafe URLs fail before any credential-bearing fetch', async () => {
+  for (const url of [null, `${avatarUrl}?next=other`, avatarUrl.replace('staging.shareittoo.com', 'other.invalid'), avatarUrl.replace('https://', 'https://user@')]) {
+    let calls = 0;
+    await assert.rejects(inspectManagedAvatar({ url, token: 'synthetic', fetchImpl: async () => { calls += 1; } }));
+    assert.equal(calls, 0);
+  }
+});
+
+for (const [label, overrides] of Object.entries({
+  'redirect status': { status: 302 },
+  'followed redirect': { redirected: true },
+  'foreign response': { url: 'https://other.invalid/avatar.png' },
+  'different managed response': { url: avatarUrl.replace('-full.', '-thumb.') },
+  'missing final response URL': { url: '' },
+  'failed status': { status: 403 },
+  'HTML content type': { headers: { 'content-type': 'text/html' } },
+  'MIME-extension mismatch': { headers: { 'content-type': 'image/jpeg' } },
+  'compressed response': { headers: { 'content-encoding': 'gzip' } },
+  'oversized declared length': { headers: { 'content-length': '8388609' } },
+  'negative declared length': { headers: { 'content-length': '-1' } },
+  'ambiguous declared length': { headers: { 'content-length': '1, 2' } },
+  'incorrect declared length': { headers: { 'content-length': '1' } },
+  'HTML with image MIME': { bytes: Buffer.from('<html>untrusted</html>') },
+  'empty response': { chunks: [] },
+  'invalid chunk': { chunks: ['untrusted'] },
+  'empty chunk': { chunks: [new Uint8Array()] },
+  'missing body': { body: null },
+  'missing owner ID': { headers: { 'x-upload-id': '' } },
+  'unsafe owner ID': { headers: { 'x-upload-id': '../../untrusted' } },
+})) {
+  test(`remote inspection rejects ${label} with sanitized failure`, async () => {
+    await assert.rejects(inspectResponse(mediaResponse(overrides), { requireUploadId: true }), { message: mediaFailure });
+  });
+}
+
+test('stream size is enforced without trusting the length header, with cancellation', async () => {
+  let cancelled = false; let pulls = 0;
+  const body = new ReadableStream({
+    pull(controller) { pulls += 1; controller.enqueue(new Uint8Array(1024 * 1024)); },
+    cancel() { cancelled = true; },
+  }, { highWaterMark: 0 });
+  await assert.rejects(inspectResponse(mediaResponse({ body })), { message: mediaFailure });
+  assert.equal(pulls, 9); assert.equal(cancelled, true);
+});
+
+test('exact maximum size is accepted and no response bytes are retained', async () => {
+  const bytes = Buffer.alloc(8 * 1024 * 1024);
+  syntheticAvatarFixtureBytes().copy(bytes);
+  assert.deepEqual(await inspectResponse(mediaResponse({ bytes })), { byteLength: bytes.length, contentType: 'image/png', uploadId: null });
+});
+
+test('JPEG and WebP signatures must agree with the managed extension and MIME', async () => {
+  for (const [extension, type, bytes] of [
+    ['jpg', 'image/jpeg', Buffer.from([255, 216, 255, 224])],
+    ['jpeg', 'image/jpeg', Buffer.from([255, 216, 255, 224])],
+    ['webp', 'image/webp', Buffer.from('RIFF0000WEBP')],
+  ]) {
+    const url = avatarUrl.replace('.png', `.${extension}`);
+    const response = mediaResponse({ bytes, url, headers: { 'content-type': type } });
+    assert.equal((await inspectResponse(response, { url })).contentType, type);
+    await assert.rejects(inspectResponse(mediaResponse({ bytes: Buffer.from('not an image'), url, headers: { 'content-type': type } }), { url }), { message: mediaFailure });
+    if (extension === 'webp') {
+      const nonAscii = Buffer.from(bytes); nonAscii[0] |= 128;
+      await assert.rejects(inspectResponse(mediaResponse({ bytes: nonAscii, url, headers: { 'content-type': type } }), { url }), { message: mediaFailure });
+    }
+  }
+});
+
+test('transport and stream exceptions are sanitized', async () => {
+  const unsafe = new Error('https://other.invalid/private /private/secret synthetic auth');
+  await assert.rejects(inspectManagedAvatar({ url: avatarUrl, token: 'synthetic', fetchImpl: async () => { throw unsafe; } }), { message: mediaFailure });
+  const body = new ReadableStream({ pull(controller) { controller.error(unsafe); } });
+  await assert.rejects(inspectResponse(mediaResponse({ body })), { message: mediaFailure });
+});
+
+test('header and stalled-body deadlines abort even an uncooperative transport or cancellation', async () => {
+  let signal;
+  await assert.rejects(inspectManagedAvatar({ url: avatarUrl, token: 'synthetic', timeoutMs: 10,
+    fetchImpl: async (_, options) => { signal = options.signal; return new Promise(() => {}); },
+  }), { message: mediaFailure });
+  assert.equal(signal.aborted, true);
+  let cancelled = false;
+  const body = new ReadableStream({ pull() { return new Promise(() => {}); }, cancel() { cancelled = true; return new Promise(() => {}); } });
+  await assert.rejects(inspectResponse(mediaResponse({ body }), { timeoutMs: 10 }), { message: mediaFailure });
+  assert.equal(cancelled, true);
 });
 
 test('synthetic fixture bytes are deterministic and a real PNG', () => {
