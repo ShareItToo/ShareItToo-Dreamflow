@@ -1,8 +1,15 @@
 name: mission-web-history-proof
 
-# Reviewed manual successor only. Normal regression discovers its fake tests;
-# adding this file must never trigger a real browser job on a pull request.
+# The isolated proof runs only for this bounded package's PR changes. Manual
+# dispatch remains available once this workflow exists on the default branch.
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/mission-web-history-proof.yml'
+      - 'test/support/mission_web_history_build.mjs'
+      - 'test/support/mission_web_history_harness.dart'
+      - 'test/support/mission_web_history_probe.mjs'
+      - 'test/tool/mission_web_history_probe.test.mjs'
   workflow_dispatch:
     inputs:
       source_head:
@@ -22,9 +29,27 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
+      - name: Validate exact source
+        id: source
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_SOURCE: ${{ inputs.source_head }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          case "$EVENT_NAME" in
+            workflow_dispatch) source_head="$DISPATCH_SOURCE" ;;
+            pull_request) source_head="$PR_HEAD" ;;
+            *) echo 'history_source' >&2; exit 1 ;;
+          esac
+          if [[ ! "$source_head" =~ ^[a-f0-9]{40}$ ]]; then
+            echo 'history_source' >&2
+            exit 1
+          fi
+          printf 'head=%s\n' "$source_head" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.source_head }}
+          ref: ${{ steps.source.outputs.head }}
           persist-credentials: false
       - name: Fake-only successor contract
         run: node --test test/tool/mission_web_history_probe.test.mjs test/tool/mission_web_entry_boundary.test.mjs test/tool/web_app_router_boundary.test.mjs test/tool/mission_web_location_boundary.test.mjs
@@ -38,5 +63,5 @@ jobs:
           cache: true
       - name: Build then one isolated exact-code history proof
         env:
-          EXPECTED_SOURCE_HEAD: ${{ inputs.source_head }}
+          EXPECTED_SOURCE_HEAD: ${{ steps.source.outputs.head }}
         run: node test/support/mission_web_history_probe.mjs --linux-history-harness --source-head "$EXPECTED_SOURCE_HEAD"

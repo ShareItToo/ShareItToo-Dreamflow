@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { validateSdkState, validateHistoryMatrix, artifactDigest, buildArguments,
   validateArtifact, classifyAsset, contract } from '../support/mission_web_history_build.mjs';
 import { runProbe, parseArgs, launchArgs, privilegeArgs, ownsBuildGroup } from '../support/mission_web_history_probe.mjs';
@@ -167,13 +168,57 @@ test('build cleanup refuses PID/PGID reuse and requires a surviving observed sta
   assert.doesNotMatch(build, /process\.kill\(-child\.pid/u);
   assert.match(build, /stopOwned = ownGroup\(child\.pid\)/u);
 });
-test('manual-only workflow provisions before isolated runner without secrets, publishing or downloads inside worker', () => {
+const proofPaths = ['.github/workflows/mission-web-history-proof.yml',
+  'test/support/mission_web_history_build.mjs', 'test/support/mission_web_history_harness.dart',
+  'test/support/mission_web_history_probe.mjs', 'test/tool/mission_web_history_probe.test.mjs'];
+function validateWorkflow(workflow) {
+  const triggers = workflow.match(/^on:\n([\s\S]*?)\npermissions:/mu)?.[1];
+  assert.equal(triggers, `  pull_request:\n    paths:\n${proofPaths.map(p => `      - '${p}'`).join('\n')}\n  workflow_dispatch:\n    inputs:\n      source_head:\n        description: Exact reviewed source commit (40 lowercase hexadecimal characters)\n        required: true\n        type: string\n`);
+  assert.equal(workflow.match(/^permissions:\n([\s\S]*?)\nconcurrency:/mu)?.[1], '  contents: read\n');
+  assert.equal((workflow.match(/permissions:/gu) ?? []).length, 1);
+  assert.match(workflow, /EVENT_NAME: \$\{\{ github\.event_name \}\}/u);
+  assert.match(workflow, /DISPATCH_SOURCE: \$\{\{ inputs\.source_head \}\}/u);
+  assert.match(workflow, /PR_HEAD: \$\{\{ github\.event\.pull_request\.head\.sha \}\}/u);
+  assert.equal((workflow.match(/ref:/gu) ?? []).length, 1);
+  assert.match(workflow, /ref: \$\{\{ steps\.source\.outputs\.head \}\}/u);
+  assert.match(workflow, /EXPECTED_SOURCE_HEAD: \$\{\{ steps\.source\.outputs\.head \}\}/u);
+  assert.doesNotMatch(workflow, /github\.sha|merge_commit_sha|refs\/pull|pull_request_target|secrets\.|id-token|packages:|upload-artifact|deploy|publish/u);
+  assert.ok(workflow.indexOf('id: source') < workflow.indexOf('actions/checkout@'));
+}
+test('bounded PR paths and manual dispatch bind checkout and runner to one validated exact source', () => {
   const workflow = fs.readFileSync('.github/workflows/mission-web-history-proof.yml', 'utf8');
-  assert.match(workflow, /workflow_dispatch:/u); assert.doesNotMatch(workflow, /^  (?:pull_request|push):/mu);
+  validateWorkflow(workflow);
+  for (const [from, to] of [
+    ['  pull_request:', '  pull_request_target:'], ['  workflow_dispatch:', '  push:'],
+    ["      - 'test/support/mission_web_history_probe.mjs'", "      - 'test/**'"],
+    ['  contents: read', '  contents: write'], ['  contents: read', '  contents: read\n  id-token: write'],
+    ['github.event_name', 'github.ref'], ['inputs.source_head', 'github.sha'],
+    ['github.event.pull_request.head.sha', 'github.event.pull_request.merge_commit_sha'],
+    ['ref: ${{ steps.source.outputs.head }}', 'ref: ${{ github.sha }}'],
+    ['EXPECTED_SOURCE_HEAD: ${{ steps.source.outputs.head }}', 'EXPECTED_SOURCE_HEAD: ${{ inputs.source_head }}'],
+  ]) assert.throws(() => validateWorkflow(workflow.replace(from, to)));
   assert.match(workflow, /persist-credentials: false/u); assert.match(workflow, /contents: read/u);
   assert.match(workflow, /flutter-version: 3\.41\.7/u); assert.match(workflow, /timeout-minutes: 10/u);
   assert.doesNotMatch(workflow, /secrets\.|id-token|packages:|upload-artifact|deploy/u);
   const source = fs.readFileSync('test/support/mission_web_history_probe.mjs', 'utf8');
   const worker = source.slice(source.indexOf('async function worker(directory)'));
   assert.doesNotMatch(worker, /pub get|npm |curl |wget |flutter build/u);
+});
+test('source selector accepts only exact event-specific 40hex heads without merge fallback or payload output', () => {
+  const workflow = fs.readFileSync('.github/workflows/mission-web-history-proof.yml', 'utf8');
+  const block = workflow.match(/      - name: Validate exact source\n([\s\S]*?)      - uses: actions\/checkout/mu)?.[1];
+  assert.ok(block);
+  const script = block.split('        run: |\n')[1].split('\n').map(line => line.startsWith('          ') ? line.slice(10) : line).join('\n');
+  const run = (event, dispatch, pr) => execFileSync('/bin/bash', ['-e', '-u', '-o', 'pipefail', '-c', script], {
+    env: { EVENT_NAME: event, DISPATCH_SOURCE: dispatch, PR_HEAD: pr, GITHUB_OUTPUT: '/dev/stdout' },
+    encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 1000,
+  });
+  assert.equal(run('pull_request', 'b'.repeat(40), head), `head=${head}\n`);
+  assert.equal(run('workflow_dispatch', head, 'b'.repeat(40)), `head=${head}\n`);
+  for (const values of [['push', head, head], ['pull_request_target', head, head],
+    ['pull_request', head, ''], ['workflow_dispatch', '', head], ['pull_request', head, 'A'.repeat(40)],
+    ['workflow_dispatch', `${head}\nprivate`, head], ['pull_request', head, 'refs/pull/1/merge'],
+    ['workflow_dispatch', '$(private)', head]]) {
+    assert.throws(() => run(...values), error => error.status === 1 && error.stdout === '' && error.stderr === 'history_source\n');
+  }
 });
