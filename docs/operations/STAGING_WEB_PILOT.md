@@ -17,11 +17,13 @@ current-consumer/capacity guards, locked dependency resolution, release Web
 compilation and loopback-only smoke. It fixes the API to
 `https://staging.shareittoo.com/api/v1`, internal staging-only Web shell profile,
 both synthetic lanes off, no public booking-group release and no CDN resources.
-No caller-supplied flags are forwarded. No Firebase credentials are read or copied.
+No caller-supplied flags are forwarded. The default schema-1 shell reads no
+Firebase configuration; the explicit schema-2 successor below accepts only
+reviewed public Web SDK options. Neither path accepts credentials or secrets.
 
 This initial Web shell explicitly sets `SIT_SOCIAL_GOOGLE_ENABLED=false`
-(Apple/Facebook also false), because `FirebaseRuntimeConfig.currentOptions`
-returns null on Web. It also sets `SIT_BLUE_OCEAN_LISTING_ASSISTANT=false` and
+(Apple/Facebook also false). Without explicit bound Web configuration,
+`FirebaseRuntimeConfig.currentOptions` returns null on Web. It also sets `SIT_BLUE_OCEAN_LISTING_ASSISTANT=false` and
 `SIT_STAGE_A_NON_BINDING_PILOT=false`, because `OnDeviceListingAnalysisService`
 rejects Web. These temporary fail-closed boundaries are **not functional closure
 by hiding controls**. `SIT_STAGE_A_PILOT_ID` is empty and
@@ -41,6 +43,58 @@ Flutter revision, builder+contract digest and every served file. Its SHA must be
 approved out of band; the deployer never trusts an artifact's self-declared hash.
 This is a repeatable input contract, not a claim of byte-identical Flutter output
 across different toolchains. No timestamps or local/private paths enter it.
+
+### Explicit Google Web successor (schema 2)
+
+The versioned `staging-google-web-v1` profile is a separate build input:
+
+```sh
+node tool/build_staging_web.mjs /absolute/clean/source EXACT_40_CHAR_HEAD /absolute/new/artifact --google-web-config /absolute/private/public-web-config.json REVIEWED_CONFIG_SHA256
+```
+
+Before supplying this input, close `SIT-GOOGLE-WEB-PREREQ-01`, independently
+read back the registered Web app and exact authorized Staging domain, and bind
+the public configuration to the Staging backend Firebase project. The builder
+checks configuration integrity, not provider approval or live functionality.
+Do not manufacture the reviewed digest from guessed values.
+
+The external JSON file must be a current-user-owned regular single-link file
+with mode `0600`, outside the source checkout, at an absolute non-symlink path.
+It contains exactly seven string fields: `projectId`, `messagingSenderId`,
+`appId`, `apiKey`, `authDomain`, `backendProjectId`, `authorizedOrigin`. The
+SHA-256 input binds UTF-8 compact JSON with those keys in that exact order;
+file formatting and input key order do not change this canonical digest.
+Provider-issued public values remain external and must not be pasted into
+Git, chat, or logs. Service-account credentials, OAuth client secrets,
+additional keys, partial options, mismatched project/sender/app identities,
+custom auth domains and origins other than `https://staging.shareittoo.com`
+are rejected before compilation. The auth domain must equal
+`projectId + '.firebaseapp.com'` and the backend project must match.
+
+The successor enables exactly Google plus its activation-validation flag;
+Apple and Facebook remain off and every other shell setting retains its
+schema-1 value. Its manifest has `schemaVersion: 2`,
+`profileContractVersion: "staging-google-web-v1"`, and
+`googleWebConfigDigest`, with the exact public defines bound in `profile`.
+These SDK options are necessarily present in the compiled browser app and
+the external artifact manifest; they are not secrets. The release identity
+and freshness bootstrap bind the complete profile including the public config.
+The same shared contract generates and validates both versions. Historical
+schema-1 artifacts retain their original profiles and remain readable for
+current/rollback validation under the existing bootstrap-version rules.
+
+The builder passes defines via an ephemeral owner-only file and removes it on
+exit. It does not print config values in its summary or parser/subprocess
+errors. No provider, domain, account, allowlist, backend or deployment mutation
+is performed by this source package. A successful artifact still requires the
+existing archive/deploy checks and real Google popup/login, cancellation,
+SIT session/MFA and logout acceptance before Web login is called functional.
+
+Focused proof: `node --test test/tool/staging_web_google_profile.test.mjs`
+includes the real builder CLI, input reader, sealing and artifact validator,
+with explicitly synthetic options and substituted compiler/smoke processes.
+It is generated-manifest contract evidence, not an actual Flutter build or
+Firebase authentication result.
 
 ## Required checked transfer archive
 

@@ -9,8 +9,49 @@ export const sha256 = (value) => crypto.createHash('sha256').update(value).diges
 const requireThat = (condition, code) => { if (!condition) throw new Error(code); };
 const hashPattern = /^[a-f0-9]{64}$/;
 const sourcePattern = /^[a-f0-9]{40}$/;
-export function profile(source, version) {
-  return {
+export const GOOGLE_WEB_PROFILE = 'staging-google-web-v1';
+const googleFields = {
+  projectId: 'SIT_FIREBASE_PROJECT_ID',
+  messagingSenderId: 'SIT_FIREBASE_MESSAGING_SENDER_ID',
+  appId: 'SIT_FIREBASE_WEB_APP_ID',
+  apiKey: 'SIT_FIREBASE_WEB_API_KEY',
+  authDomain: 'SIT_FIREBASE_WEB_AUTH_DOMAIN',
+  backendProjectId: 'SIT_FIREBASE_WEB_BACKEND_PROJECT_ID',
+  authorizedOrigin: 'SIT_FIREBASE_WEB_AUTHORIZED_ORIGIN',
+};
+// This is a public SDK configuration, never a service account or OAuth secret.
+// Its independently reviewed digest is an input, not approval created here.
+export function bindGoogleWebConfig(config, digest) {
+  requireThat(config && Object.getPrototypeOf(config) === Object.prototype &&
+    Object.keys(config).sort().join(',') === Object.keys(googleFields).sort().join(',') &&
+    Object.values(config).every((value) => typeof value === 'string'), 'google_web_config_shape');
+  const canonical = Object.fromEntries(Object.keys(googleFields).map((key) => [key, config[key]]));
+  requireThat(/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(config.projectId) &&
+    /^[0-9]{6,20}$/.test(config.messagingSenderId) &&
+    new RegExp(`^1:${config.messagingSenderId}:web:[a-f0-9]{16,64}$`).test(config.appId) &&
+    /^AIza[A-Za-z0-9_-]{35}$/.test(config.apiKey) &&
+    config.authDomain === `${config.projectId}.firebaseapp.com` &&
+    config.backendProjectId === config.projectId && config.authorizedOrigin === TARGET, 'google_web_config_invalid');
+  requireThat(hashPattern.test(digest) && sha256(JSON.stringify(canonical)) === digest, 'google_web_config_digest_mismatch');
+  return { config: canonical, digest };
+}
+export function readGoogleWebConfig(file, digest) {
+  requireThat(path.isAbsolute(file) && path.normalize(file) === file, 'google_web_config_path');
+  confinedDirectory(path.dirname(file));
+  const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+  try {
+    const stat = fs.fstatSync(fd);
+    requireThat(stat.isFile() && stat.nlink === 1 && stat.uid === process.getuid() &&
+      (stat.mode & 0o777) === 0o600 && stat.size <= 4096, 'google_web_config_file');
+    const bytes = fs.readFileSync(fd);
+    requireThat(bytes.length === stat.size, 'google_web_config_file');
+    let value;
+    try { value = JSON.parse(bytes); } catch { throw Error('google_web_config_json'); }
+    return bindGoogleWebConfig(value, digest);
+  } finally { fs.closeSync(fd); }
+}
+export function profile(source, version, googleWeb = null) {
+  const result = {
     SIT_BACKEND_ENABLED: 'true', SIT_API_BASE_URL: `${TARGET}/api/v1`,
     SIT_APP_COMMIT: source, SIT_BUILD_NUMBER: version.split('+')[1],
     SIT_CLIENT_BUILD: version, SIT_RELEASE_CHANNEL: 'internal', SIT_BUNDLE_ID: 'com.shareittoo.app',
@@ -23,6 +64,15 @@ export function profile(source, version) {
     SIT_SOCIAL_APPLE_ENABLED: 'false', SIT_SOCIAL_FACEBOOK_ENABLED: 'false',
     SIT_SOCIAL_PROVIDER_ACTIVATION_VALIDATED: 'false',
   };
+  if (googleWeb !== null) {
+    requireThat(googleWeb && Object.keys(googleWeb).sort().join(',') === 'config,digest', 'google_web_binding_shape');
+    const bound = bindGoogleWebConfig(googleWeb.config, googleWeb.digest);
+    result.SIT_SOCIAL_GOOGLE_ENABLED = 'true';
+    result.SIT_SOCIAL_PROVIDER_ACTIVATION_VALIDATED = 'true';
+    for (const [key, define] of Object.entries(googleFields)) result[define] = bound.config[key];
+    result.SIT_FIREBASE_WEB_CONFIG_SHA256 = bound.digest;
+  }
+  return result;
 }
 export function cleanSource(root, expected) {
   confinedDirectory(root);
@@ -165,28 +215,31 @@ function monitorStagingRelease(expected) {
   void check();
 }
 
-export function stagingBootstrapFor(source, version) {
+export function stagingBootstrapFor(source, version, googleWeb = null) {
   requireThat(sourcePattern.test(source), 'source_sha_invalid');
   requireThat(/^\d+\.\d+\.\d+\+\d+$/.test(version), 'build_identity_invalid');
-  const identity = { source, version, profileDigest: sha256(JSON.stringify(profile(source, version))) };
+  const identity = { source, version, profileDigest: sha256(JSON.stringify(profile(source, version, googleWeb))) };
   return stagingBootstrap.replace('document.body.appendChild(script);',
     `document.body.appendChild(script);\n(${monitorStagingRelease.toString()})(${JSON.stringify(identity)});`);
 }
 
-export function sealArtifact({ directory, source, version, flutterVersion, builderDigest }) {
+export function sealArtifact({ directory, source, version, flutterVersion, builderDigest, googleWeb = null }) {
   requireThat(sourcePattern.test(source) && /^\d+\.\d+\.\d+\+\d+$/.test(version), 'build_identity_invalid');
+  const buildProfile = profile(source, version, googleWeb);
   const web = path.join(directory, 'web');
   const index = path.join(web, 'index.html');
   const html = fs.readFileSync(index, 'utf8');
   const tag = '<script src="flutter_bootstrap.js" async></script>';
   requireThat(html.split(tag).length === 2, 'bootstrap_template_drift');
   fs.writeFileSync(index, html.replace(tag, '<script src="staging_bootstrap.js"></script>'));
-  fs.writeFileSync(path.join(web, 'staging_bootstrap.js'), stagingBootstrapFor(source, version));
+  fs.writeFileSync(path.join(web, 'staging_bootstrap.js'), stagingBootstrapFor(source, version, googleWeb));
   fs.writeFileSync(path.join(web, 'flutter_service_worker.js'), retirementWorker);
-  fs.writeFileSync(path.join(web, 'staging-release.json'), `${JSON.stringify({ target: TARGET, source, version, profileDigest: sha256(JSON.stringify(profile(source, version))) })}\n`);
-  const manifest = { schemaVersion: 1, bootstrapContractVersion: 2, target: TARGET, api: `${TARGET}/api/v1`, source, version,
+  fs.writeFileSync(path.join(web, 'staging-release.json'), `${JSON.stringify({ target: TARGET, source, version, profileDigest: sha256(JSON.stringify(buildProfile)) })}\n`);
+  const manifest = { schemaVersion: googleWeb ? 2 : 1, bootstrapContractVersion: 2,
+    ...(googleWeb ? { profileContractVersion: GOOGLE_WEB_PROFILE, googleWebConfigDigest: googleWeb.digest } : {}),
+    target: TARGET, api: `${TARGET}/api/v1`, source, version,
     sourceClean: true, mode: 'release', pwaStrategy: 'none', resourcesCdn: false,
-    flutterVersion, builderDigest, profile: profile(source, version), files: inventory(web) };
+    flutterVersion, builderDigest, profile: buildProfile, files: inventory(web) };
   fs.writeFileSync(path.join(directory, 'staging-web-manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, { flag: 'wx', mode: 0o644 });
   const manifestSha = sha256(fs.readFileSync(path.join(directory, 'staging-web-manifest.json')));
   fs.writeFileSync(path.join(directory, 'SHA256SUMS'), `${manifestSha}  staging-web-manifest.json\n${Object.entries(manifest.files).map(([file, hash]) => `${hash}  web/${file}\n`).join('')}`, { flag: 'wx', mode: 0o644 });
@@ -205,17 +258,22 @@ export function validateArtifact(directory, expectedHash, expectedSource, { mode
   const bytes = fs.readFileSync(path.join(directory, 'staging-web-manifest.json'));
   requireThat(sha256(bytes) === expectedHash, 'manifest_hash_mismatch');
   const m = JSON.parse(bytes);
+  let googleWeb = null;
+  if (m.schemaVersion === 2) {
+    requireThat(m.profileContractVersion === GOOGLE_WEB_PROFILE && m.bootstrapContractVersion === 2, 'artifact_google_web_contract');
+    googleWeb = bindGoogleWebConfig(Object.fromEntries(Object.entries(googleFields).map(([key, define]) => [key, m.profile?.[define]])), m.googleWebConfigDigest);
+  } else requireThat(!Object.hasOwn(m, 'profileContractVersion') && !Object.hasOwn(m, 'googleWebConfigDigest'), 'artifact_google_web_contract');
   const legacy = !Object.hasOwn(m, 'bootstrapContractVersion');
   requireThat(legacy ? mode !== 'candidate' : m.bootstrapContractVersion === 2, 'artifact_bootstrap_contract');
-  requireThat(m.schemaVersion === 1 && m.target === TARGET && m.api === `${TARGET}/api/v1` && m.sourceClean === true &&
+  requireThat([1, 2].includes(m.schemaVersion) && m.target === TARGET && m.api === `${TARGET}/api/v1` && m.sourceClean === true &&
     m.mode === 'release' && m.pwaStrategy === 'none' && m.resourcesCdn === false &&
     sourcePattern.test(m.source) && (!expectedSource || m.source === expectedSource) &&
     /^\d+\.\d+\.\d+\+\d+$/.test(m.version) && hashPattern.test(m.builderDigest), 'artifact_identity_mismatch');
-  requireThat(JSON.stringify(m.profile) === JSON.stringify(profile(m.source, m.version)), 'artifact_profile_mismatch');
+  requireThat(JSON.stringify(m.profile) === JSON.stringify(profile(m.source, m.version, googleWeb)), 'artifact_profile_mismatch');
   const actual = inventory(path.join(directory, 'web'));
   requireThat(JSON.stringify(actual) === JSON.stringify(m.files), 'artifact_integrity_mismatch');
   for (const required of ['index.html', 'main.dart.js', 'manifest.json', 'flutter_bootstrap.js']) requireThat(actual[required], 'artifact_required_file_missing');
-  requireThat(fs.readFileSync(path.join(directory, 'web/staging_bootstrap.js'), 'utf8') === (legacy ? stagingBootstrap : stagingBootstrapFor(m.source, m.version)) &&
+  requireThat(fs.readFileSync(path.join(directory, 'web/staging_bootstrap.js'), 'utf8') === (legacy ? stagingBootstrap : stagingBootstrapFor(m.source, m.version, googleWeb)) &&
     fs.readFileSync(path.join(directory, 'web/flutter_service_worker.js'), 'utf8') === retirementWorker &&
     fs.readFileSync(path.join(directory, 'web/index.html'), 'utf8').includes('<script src="staging_bootstrap.js"></script>'), 'artifact_cache_contract');
   requireThat(fs.readFileSync(path.join(directory, 'web/staging-release.json'), 'utf8') === `${JSON.stringify({ target: TARGET, source: m.source, version: m.version, profileDigest: sha256(JSON.stringify(m.profile)) })}\n`, 'artifact_served_identity');
