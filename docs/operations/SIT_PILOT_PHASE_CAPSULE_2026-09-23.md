@@ -25,12 +25,34 @@ not current execution or release authority.
   `967958f6c6a4d580f4f05e6849b32991db233603` on branch
   `codex/master-workflow-20260808`. The closed synthetic P7 source/VERIFY head
   is `08636b6ce5cd1011fb3faf8458e5ae4daae0d460`. Current non-deployed source
-  head `5a3cd92290c029d0391d526dd58cf8703ea24348` contains the pure,
-  unrouteable D4 threat/abort contract plus the separately bounded synthetic
-  D1/D2 acceptance-outcome diagnostic. Neither helper is a server-origin,
+  head `177a0628fd349bf2f4f6a1d26501c3c6236c3c50` contains the pure,
+  unrouteable D4 threat/abort contract, synthetic D1/D2 acceptance-outcome
+  diagnostic and v2 server-readback envelope. None is a server-origin,
   contract, payment, persistence or coordination adapter. None of these
   successors is deployed, routeable, feature-flagged or evidence of real
   Mission completion.
+- **Remote source CI — Sol verified PASS:** exact
+  `73887e3ca5f619bb0089d88cb6daef6f507d25f3`, Regression
+  [37083356044](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37083356044)
+  and CodeQL
+  [37083356038](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37083356038)
+  both **SUCCESS**. This is exact-738 source CI, not a CI/deployment claim for
+  current local 177 or a Mission/contract/payment activation.
+- **Critical disk incident — Sol cleanup/natural-health closure PASS:**
+  [alert diagnosis](SIT_CRITICAL_ALERT_SPAM_SOURCE_MAP_2026-10-03.md) verified
+  a real disk failure, valid cooldown/marker and roughly hourly delivery.
+  Installed alert bytes matched; healthcheck bytes were older/different.
+  [Exact cleanup record](SIT_DISK_RETENTION_SOURCE_MAP_2026-10-03.md): only ten
+  prep/input directories plus verified Staging build `5d3b4261` removed after
+  fresh guards; total 100,476,656 KiB, used 88,435,628 → 84,257,056 KiB,
+  available 12,024,644 → 16,203,216 KiB, **89% → 84%**. Releases,
+  current/previous inputs, evidence, backups and Green seals/images remained.
+  Deletion has no filesystem undo; source/artifacts are reconstructible from
+  exact Git commits/retained releases. Natural timer finished at
+  `2026-10-03 01:30:15 UTC`, `Result=success`, `ExecMainStatus=0`, journal
+  `ShareItToo health check passed`; following disk readback stayed **84%**
+  (used 84,257,308 KiB, available 16,202,964 KiB). No forced check, mail send
+  or cooldown/threshold change; observed incident closed, no future guarantee.
 - **967 exact-head CI:**
   [Regression 37066632738](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37066632738)
   and [CodeQL 37066632784](https://github.com/ShareItToo/ShareItToo-Dreamflow/actions/runs/37066632784)
@@ -265,7 +287,21 @@ not current execution or release authority.
   booking, contract, payment or provider identifiers; only complete matching
   supplied positive observations may carry synthetic booking/contract IDs.
   All legal, Mission and payment statuses remain `not_determined`; D1/D2 remain
-  open. Exact-head CI for this successor is not yet claimed.
+  open. The later exact-738 source CI is recorded above, not a runtime approval.
+- **D1/D2 server-readback v2 — Sol source PASS:**
+  [boundary and evidence](SIT_MISSION_D1_D2_SERVER_READBACK_CONTRACT_2026-10-03.md),
+  focused **76/76**. Planned request, authoritative pre-existing context and
+  observed effect remain separate shapes. Schema-native synthetic IDs,
+  command/actor binding and exact Mission-slot association fail closed; missing
+  association remains unavailable/unmapped. No DB, route, provider, effect,
+  payment or retry authority; D1/D2 remain **OPEN**.
+- **D1/D2 PG-readback gate packet — prepared, not sent:**
+  [exact packet](SIT_GEMINI_MISSION_D1_D2_PG_READBACK_GATE_PACKET_2026-10-03.md),
+  SHA-256 `c62d2fcba657e36d6c23844c8fdcaf2283569c1a1b552590f5d551797f9cb447`.
+  It asks only whether a test-only, unrouteable read-only common-snapshot
+  provenance reader may be built. Missing Mission-slot→command/booking relations
+  stay unavailable/unmapped; no positive effect, legal/payment or retry inference.
+  No Gemini answer or adapter implementation/activation is claimed.
 - **Fresh D3/D4 gate packet — Sol packet PASS; not sent:**
   [SIT-MISSION-D3D4-SAFETY-02](SIT_GEMINI_MISSION_D3_D4_SAFETY_GATE_PACKET_2026-10-03.md)
   (`SHA-256 a60905feba13180ab47eaff1d7084d8e0103acd89134aa516af387831a04ae88`)
@@ -285,11 +321,10 @@ not current execution or release authority.
   domain may be added before sanitized independent readback. Current provider
   state remains `NOT VERIFIED`; packet preparation is not an A/PASS, provider
   mutation, login proof, activation or release.
-- **Exact next:** complete only the read-only D1/D2 PostgreSQL adapter source
-  map: existing server-origin/common-snapshot, locking, replay and partial-effect
-  evidence; missing component-to-booking/contract relations; and the smallest
-  still-dormant adapter scope. Do not implement or wire that adapter before its
-  narrow gate. When the visible SIT Gemini account is signed in, verify exactly
+- **Exact next:** disk incident closed; no further cleanup or alert-source fix.
+  The D1/D2 source map, v2 envelope and PG gate packet are prepared. Do not implement
+  or wire the PostgreSQL reader before its narrow gate. When the visible SIT
+  Gemini account is signed in, verify exactly
   Google AI Pro `Pro` with `Extended`, then submit
   `SIT-MISSION-D3D4-SAFETY-02` with its exact supplied bytes. Only an A/PASS may
   permit the named dormant D3/D4 PostgreSQL adapter; B/FIX or C/BLOCK stays
