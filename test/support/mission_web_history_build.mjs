@@ -185,7 +185,7 @@ export function validateIsolatedRegistrant(before, after, executableTexts) {
     && !/google_sign_in_web|GoogleSignInPlugin/u.test(after)
     && Array.isArray(executableTexts) && executableTexts.length > 0
     && executableTexts.every(text => typeof text === 'string'
-      && !/accounts\.google\.com\/gsi\/client/u.test(text.replaceAll('\\/', '/'))), 'history_isolation');
+      && !text.replaceAll('\\/', '/').includes('accounts.google.com/gsi/client')), 'history_isolation');
 }
 
 // Provision/build precedes network namespace entry. Source and lock are exact;

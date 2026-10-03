@@ -85,7 +85,8 @@ test('generated registration changes only exact GIS lines and executable assets 
     `${after}// GoogleSignInPlugin`, after.replace('Other.registerWith(registrar);', '')]) {
     assert.throws(() => validateIsolatedRegistrant(before, candidate, ['compiled local app']), /^Error: history_isolation$/u);
   }
-  for (const code of ['https://accounts.google.com/gsi/client', 'https:\\/\\/accounts.google.com\\/gsi\\/client'])
+  for (const code of ['https://accounts.google.com/gsi/client', 'https:\\/\\/accounts.google.com\\/gsi\\/client',
+    'prefix:https://accounts.google.com/gsi/client:suffix'])
     assert.throws(() => validateIsolatedRegistrant(before, after, [code]), /^Error: history_isolation$/u);
   const value = artifact(); delete value.isolation;
   assert.throws(() => validateArtifact(value), /^Error: history_artifact$/u);
