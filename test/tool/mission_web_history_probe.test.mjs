@@ -95,7 +95,7 @@ test('blocked requests have only deterministic coarse reasons; admission is unch
     [{ method: 'PRIVATE_METHOD' }, 'non_get'], [{ responseStatusCode: 302 }, 'response_stage'],
     [{ type: 'WebSocket' }, 'websocket'], [{ type: 'PRIVATE_TYPE' }, 'unsupported_type'],
     [{ url: 'http://private.invalid/private-path?private-query' }, 'non_https_scheme'],
-    [{ url: 'https://private.invalid/private-path?private-query' }, 'foreign_origin'],
+    [{ url: 'https://private.invalid/private-path?private-query' }, 'other_foreign_origin'],
     [{ url: 'https://shareittoo.com/main.dart.js?' }, 'query_or_fragment'],
     [{ url: 'https://shareittoo.com/main.dart.js#' }, 'query_or_fragment'],
     [{ url: 'https://shareittoo.com/%70rivate' }, 'unsafe_path'],
@@ -110,7 +110,8 @@ test('blocked requests have only deterministic coarse reasons; admission is unch
 });
 test('network aggregates are exact detached bounded counts, with monotone single-block updates', () => {
   assert.deepEqual(networkReasonKeys, ['non_get', 'response_stage', 'unsupported_type', 'non_https_scheme',
-    'foreign_origin', 'query_or_fragment', 'unsafe_path', 'untracked_asset', 'websocket']);
+    'flutter_canvaskit_cdn', 'flutter_font_fallback_cdn', 'google_identity_script', 'firebase_js_cdn',
+    'other_foreign_origin', 'query_or_fragment', 'unsafe_path', 'untracked_asset', 'websocket']);
   const initial = networkCounts(); const next = { ...initial, untracked_asset: 1 };
   assert.deepEqual(validateNetworkDiagnostic(next, initial), next);
   const detached = validateNetworkDiagnostic(next); next.untracked_asset = 2; assert.equal(detached.untracked_asset, 1);
@@ -125,7 +126,7 @@ test('network aggregates are exact detached bounded counts, with monotone single
   assert.throws(() => validateNetworkDiagnostic(next, initial), /^Error: probe_failure$/u);
 });
 test('only primary history_network may expose validated aggregate, never raw request data', async () => {
-  const counts = { ...networkCounts(), foreign_origin: 1, untracked_asset: 1 };
+  const counts = { ...networkCounts(), other_foreign_origin: 1, untracked_asset: 1 };
   const networkDiagnostic = () => counts;
   const adapter = fake({ observe: async () => { throw Error('history_network'); }, networkDiagnostic });
   const result = await runProbe({ expectedHead: head, adapter });
@@ -134,7 +135,7 @@ test('only primary history_network may expose validated aggregate, never raw req
   const originalCleanup = adapter.cleanup;
   adapter.cleanup = async () => ({ ...await originalCleanup(), profileRemoved: false });
   const cleanupFailure = await runProbe({ expectedHead: head, adapter });
-  assert.equal(cleanupFailure.code, 'probe_cleanup'); assert.equal(cleanupFailure.diagnostic?.foreign_origin, undefined);
+  assert.equal(cleanupFailure.code, 'probe_cleanup'); assert.equal(cleanupFailure.diagnostic?.other_foreign_origin, undefined);
   assert.equal((await runProbe({ expectedHead: head, adapter: fake({ networkDiagnostic }) })).diagnostic, undefined);
   const otherFailure = await runProbe({ expectedHead: head, adapter: fake({
     observe: async () => { throw Error('history_matrix'); }, networkDiagnostic }) });
@@ -146,6 +147,38 @@ test('only primary history_network may expose validated aggregate, never raw req
   assert.match(source, /send\(\{ event: 'network', value: validateNetworkDiagnostic\(networkCounts\) \}\)/u);
   assert.match(source, /networkSummary = validateNetworkDiagnostic\(row\.value, networkSummary\)/u);
   assert.match(source, /Fetch\.failRequest/u);
+});
+test('foreign diagnostics distinguish exact public source purposes without admitting or echoing private tails', async () => {
+  const files = new Set(['index.html', 'main.dart.js']);
+  const samples = [
+    ['https://www.gstatic.com/flutter-canvaskit/private-revision/private-file?private-query', 'flutter_canvaskit_cdn'],
+    ['https://fonts.gstatic.com/s/private-family/private-font?private-query', 'flutter_font_fallback_cdn'],
+    ['https://accounts.google.com/gsi/client', 'google_identity_script'],
+    ['https://accounts.google.com/gsi/client?private-query#private-fragment', 'google_identity_script'],
+    ['https://www.gstatic.com/firebasejs/private-version/private-script?private-query', 'firebase_js_cdn'],
+    ['https://www.gstatic.com/flutter-canvaskit-extra/private-tail', 'other_foreign_origin'],
+    ['https://fonts.gstatic.com/s-extra/private-tail', 'other_foreign_origin'],
+    ['https://accounts.google.com/gsi/client/private-tail', 'other_foreign_origin'],
+    ['https://accounts.google.com/gsi/client-extra?private-query', 'other_foreign_origin'],
+    ['https://www.gstatic.com/firebasejs-extra/private-tail', 'other_foreign_origin'],
+    ['https://www.gstatic.com.private.invalid/firebasejs/private-tail', 'other_foreign_origin'],
+    ['https://private-user@www.gstatic.com/firebasejs/private-tail', 'other_foreign_origin'],
+    ['http://fonts.gstatic.com/s/private-tail', 'non_https_scheme'],
+  ];
+  const counts = networkCounts();
+  for (const [url, reason] of samples) {
+    assert.equal(classifyAsset(url, 'Script', files), null);
+    assert.equal(classifyBlockedRequest({ method: 'GET', url, type: 'Script' }, files), reason);
+    assert.equal(classifyBlockedRequest({ method: 'POST', url, type: 'Script' }, files), 'non_get');
+    counts[reason]++;
+  }
+  const result = await runProbe({ expectedHead: head, adapter: fake({
+    observe: async () => { throw Error('history_network'); }, networkDiagnostic: () => counts }) });
+  assert.equal(result.code, 'history_network'); assert.deepEqual(result.diagnostic, counts);
+  const json = JSON.stringify(result);
+  for (const [url] of samples) assert.equal(json.includes(url), false);
+  assert.doesNotMatch(json, /private|https?:|gstatic\.com|accounts\.google\.com|firebasejs\/|gsi\/|\?/u);
+  assert.throws(() => validateNetworkDiagnostic({ ...counts, foreign_origin: 1 }), /^Error: probe_failure$/u);
 });
 test('harness uses production classes, not test route hooks or a replacement router', () => {
   const source = fs.readFileSync('test/support/mission_web_history_harness.dart', 'utf8');

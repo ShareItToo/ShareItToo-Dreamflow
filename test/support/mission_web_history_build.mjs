@@ -71,14 +71,26 @@ export function classifyAsset(url, type, files) {
 }
 // Diagnostic precedence only; this never grants request admission.
 export const networkReasonKeys = Object.freeze(['non_get', 'response_stage', 'unsupported_type',
-  'non_https_scheme', 'foreign_origin', 'query_or_fragment', 'unsafe_path', 'untracked_asset', 'websocket']);
+  'non_https_scheme', 'flutter_canvaskit_cdn', 'flutter_font_fallback_cdn', 'google_identity_script',
+  'firebase_js_cdn', 'other_foreign_origin', 'query_or_fragment', 'unsafe_path', 'untracked_asset', 'websocket']);
 export function classifyBlockedRequest({ method, url, type, responseStatusCode }, files) {
   if (method !== 'GET') return 'non_get';
   if (responseStatusCode) return 'response_stage';
   if (type === 'WebSocket') return 'websocket';
   if (!['Document', 'Script', 'Stylesheet', 'Font', 'Image', 'Fetch', 'XHR', 'Other'].includes(type)) return 'unsupported_type';
   if (typeof url !== 'string' || !url.startsWith('https://')) return 'non_https_scheme';
-  if (!url.startsWith('https://shareittoo.com/')) return 'foreign_origin';
+  if (!url.startsWith('https://shareittoo.com/')) {
+    // Fixed public resource-purpose diagnostics, never an admission allowlist.
+    // Flutter 3.41.7 flutter_js/src/utils.js + engine/configuration.dart;
+    // google_identity_services_web 0.3.3+1 js_loader.dart;
+    // firebase_core_web 3.10.0 firebase_core_web.dart. Query/tail bytes stay local.
+    if (url.startsWith('https://www.gstatic.com/flutter-canvaskit/')) return 'flutter_canvaskit_cdn';
+    if (url.startsWith('https://fonts.gstatic.com/s/')) return 'flutter_font_fallback_cdn';
+    const identityScript = 'https://accounts.google.com/gsi/client';
+    if (url === identityScript || url.startsWith(`${identityScript}?`) || url.startsWith(`${identityScript}#`)) return 'google_identity_script';
+    if (url.startsWith('https://www.gstatic.com/firebasejs/')) return 'firebase_js_cdn';
+    return 'other_foreign_origin';
+  }
   if (/[?#]/u.test(url)) return 'query_or_fragment';
   const name = url.slice('https://shareittoo.com/'.length);
   if (type === 'Document' && name !== '' && name !== 'mission') return 'unsafe_path';
