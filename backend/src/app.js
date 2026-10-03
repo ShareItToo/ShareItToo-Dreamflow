@@ -468,9 +468,20 @@ import {
 import {
   AppleRevocationError,
   createAppleRevocationProvider,
+  createAppleRevocationProviderRing,
   encryptAppleRevocationMaterial,
   normalizeAppleRevocationMaterial,
 } from './apple_revocation.js';
+import {
+  acquireAppleOwnership,
+  AppleOwnershipError,
+  assertLegacyAppleOwnershipAllowed,
+  completeAppleMfaDelivery,
+  deliverAppleOwnershipSession,
+  parseAppleOwnershipRequest,
+  prepareAppleOwnershipAccountDeletion,
+  readAppleOwnershipStatus,
+} from './apple_ownership.js';
 import {
   drainIdentityVerificationRedactions,
   enqueueIdentityVerificationRedactions,
@@ -2153,6 +2164,9 @@ export async function eraseAccount(client, user, { actorRole = 'user', source = 
   const firebaseIdentityDeletionIds = await enqueueFirebaseIdentityDeletions(client, {
     userId: user.id,
   });
+  const appleOwnershipCleanup = await prepareAppleOwnershipAccountDeletion(client, {
+    userId: user.id,
+  });
   const appleRevocationCleanup = await getAppleRevocationCleanupStatus(client, {
     ids: firebaseIdentityDeletionIds,
   });
@@ -2211,6 +2225,7 @@ export async function eraseAccount(client, user, { actorRole = 'user', source = 
     privateShelfMediaCleanupIds,
     firebaseIdentityDeletionIds,
     appleRevocationCleanup,
+    appleOwnershipCleanup,
     crashlyticsReportDeletionIds,
     identityVerificationRedactionIds,
   };
@@ -2327,6 +2342,10 @@ export function createApp({
   drainIdentityVerificationRedactionsNow = null,
   identityVerificationProvider: identityVerificationProviderOverride = null,
   socialAuthPreTransactionHook = null,
+  appleOwnershipConfiguration = config.appleOwnership,
+  appleOwnershipProvider = config.appleOwnership.configured
+    ? createAppleRevocationProviderRing(config.appleOwnership)
+    : null,
   drainCrashlyticsReportDeletions = (ids) => {
     if (!crashlyticsReportDeleteClient) {
       return Promise.resolve({ accepted: 0, retried: 0 });
@@ -2526,7 +2545,14 @@ export function createApp({
     if (result.pending) throw new IdentityVerificationError(409, 'identity_verification_session_pending_reconcile');
     res.set('Cache-Control', 'no-store').json({ received: true, ...result });
   }));
-  app.use(express.json({ limit: '2mb' }));
+  app.use(express.json({
+    limit: '2mb',
+    verify: (req, _res, buffer) => {
+      if (req.originalUrl?.split('?')[0] === '/v1/auth/social') {
+        req.rawJsonBody = Buffer.from(buffer);
+      }
+    },
+  }));
   app.use(express.urlencoded({ extended: false, limit: '20kb' }));
   app.use(syntheticCatalogMutationGuard({ configuration: config.syntheticCatalog }));
   if (syntheticCloneBookingLane) {
@@ -2849,9 +2875,116 @@ export function createApp({
         throw error;
       }
     };
+    if (req.body && typeof req.body === 'object' && Object.hasOwn(req.body, 'appleAuth')) {
+      res.set('Cache-Control', 'no-store');
+      try {
+        const command = parseAppleOwnershipRequest(req.rawJsonBody, req.body);
+        const identity = await verifySocialIdentity({
+          requireFreshToken: true,
+          maxIssuedAgeSeconds: 60,
+        });
+        if (identity.provider !== 'apple') throw new HttpError(400, 'invalid_social_provider_material');
+        const owner = await pool.query(
+          `SELECT account.id
+             FROM auth_identities AS identity
+             JOIN users AS account ON account.id=identity.user_id
+            WHERE identity.provider='apple' AND identity.provider_subject=$1
+              AND identity.firebase_user_id=$2
+              AND account.account_status='active' AND account.deactivated_at IS NULL`,
+          [identity.subject, identity.firebaseUserId],
+        );
+        if (!owner.rowCount) throw new HttpError(403, 'apple_ownership_not_eligible');
+        if (config.stagingAccess.enabled) assertStagingUserAllowed(owner.rows[0].id);
+        const existingBearer = bearerToken(req);
+        if (existingBearer) {
+          let bearer;
+          try {
+            bearer = verifyAccessToken(existingBearer);
+          } catch {
+            throw new HttpError(401, 'invalid_or_expired_session');
+          }
+          const active = await pool.query(
+            'SELECT 1 FROM auth_sessions WHERE id=$1 AND user_id=$2 AND revoked_at IS NULL',
+            [bearer.sid, bearer.sub],
+          );
+          if (!active.rowCount) throw new HttpError(401, 'invalid_or_expired_session');
+          if (bearer.sub !== owner.rows[0].id) {
+            throw new HttpError(409, 'apple_ownership_principal_conflict');
+          }
+        }
+        if (command.appleAuth.operation === 'acquire') {
+          const result = await acquireAppleOwnership({
+            database: pool,
+            identity,
+            appleAuth: command.appleAuth,
+            configuration: appleOwnershipConfiguration,
+            provider: appleOwnershipProvider,
+          });
+          if (result.appleAuth.state === 'pending') res.set('Retry-After', '2');
+          return res.status(result.appleAuth.state === 'pending' ? 202 : 200).json(result);
+        }
+        if (command.appleAuth.operation === 'status') {
+          const result = await readAppleOwnershipStatus({
+            database: pool,
+            identity,
+            appleAuth: command.appleAuth,
+            configuration: appleOwnershipConfiguration,
+          });
+          const status = result.appleAuth.state === 'pending' ? 202
+            : result.appleAuth.state === 'ready' ? 200
+              : result.appleAuth.state === 'closed' ? 410 : 409;
+          if (status === 202) res.set('Retry-After', '2');
+          return res.status(status).json(result);
+        }
+        const result = await deliverAppleOwnershipSession({
+          database: pool,
+          identity,
+          appleAuth: command.appleAuth,
+          configuration: appleOwnershipConfiguration,
+          deliver: async ({ client, user }) => {
+            if (await isMfaEnabled(client, user.user_id)) {
+              const challenge = await createLoginChallenge(client, {
+                userId: user.user_id,
+                userAgent: req.get('user-agent'),
+                ipAddress: requestIp(req),
+              });
+              return { kind: 'mfa', challenge };
+            }
+            return {
+              kind: 'session',
+              session: await issueSession(client, { ...user, id: user.user_id }, {
+                userAgent: req.get('user-agent'),
+                ipAddress: requestIp(req),
+              }),
+            };
+          },
+        });
+        if (result.kind === 'mfa') return res.status(202).json({
+          appleAuth: result.appleAuth,
+          mfaRequired: true,
+          mfaChallenge: result.challenge.challenge,
+          expiresAt: result.challenge.expiresAt,
+        });
+        return res.json({ appleAuth: result.appleAuth, session: result.session });
+      } catch (error) {
+        if (error instanceof AppleOwnershipError) {
+          if (error.code === 'apple_ownership_status_rate_limited') {
+            res.set('Retry-After', '60');
+          }
+          throw new HttpError(error.status, error.code);
+        }
+        throw error;
+      }
+    }
     let identity = await verifySocialIdentity(
       config.stagingGoogleRegistration.enabled ? { includeTokenDigest: true } : undefined,
     );
+    try {
+      await assertLegacyAppleOwnershipAllowed(pool, identity);
+    } catch (error) {
+      if (error instanceof AppleOwnershipError) throw new HttpError(error.status, error.code);
+      throw error;
+    }
     let stagingGoogleRegistration = null;
     let existingSocialAccount = null;
     let exactExistingSocialIdentity = false;
@@ -3643,6 +3776,17 @@ export function createApp({
         ipAddress: requestIp(req),
         mfaVerified: true,
       });
+      let appleDelivery;
+      try {
+        appleDelivery = await completeAppleMfaDelivery(client, {
+          challengeId: verified.challengeId,
+          sessionId: session.sessionId,
+          configuration: appleOwnershipConfiguration,
+        });
+      } catch (error) {
+        if (error instanceof AppleOwnershipError) throw new HttpError(error.status, error.code);
+        throw error;
+      }
       await writeAudit(client, {
         actor: { id: user.id, role: user.role ?? 'user' },
         action: 'auth.mfa_challenge_succeeded',
@@ -3651,7 +3795,9 @@ export function createApp({
         requestId: req.requestId,
         metadata: { method: verified.method },
       });
-      return session;
+      return appleDelivery.linked
+        ? { appleAuth: appleDelivery.appleAuth, session }
+        : session;
     });
     if (outcome.ok === false) throw outcome.error;
     res.set('Cache-Control', 'private, no-store').json(outcome);
@@ -4491,6 +4637,9 @@ export function createApp({
       privateShelfMediaCleanup: privateShelfCleanup.failures.length ? 'queued' : 'complete',
       identityVerificationCleanup: outcome.identityVerificationRedactionIds.length ? 'queued' : 'not_required',
       appleRevocationCleanup: outcome.appleRevocationCleanup,
+      appleOwnershipCleanup: outcome.appleOwnershipCleanup.unresolved > 0
+        ? 'unresolved'
+        : (outcome.appleOwnershipCleanup.queued > 0 ? 'queued' : 'not_required'),
     });
   }));
 
@@ -4593,7 +4742,7 @@ export function createApp({
       return sendHtml(res, 200, resultPage({
         success: true,
         title: 'Konto gelöscht',
-        message: `Dein ShareItToo-Konto wurde geschlossen. Personenbezogene Daten wurden gelöscht oder anonymisiert; die bestätigte Löschung beim Identitätsprovider läuft gegebenenfalls noch und wird nicht vorweggenommen.${outcome.appleRevocationCleanup === 'not_required' ? '' : ' Die Apple-Token-Widerrufung bleibt ausdrücklich ausstehend und wird nicht als abgeschlossen behauptet.'}`,
+        message: `Dein ShareItToo-Konto wurde geschlossen. Personenbezogene Daten wurden gelöscht oder anonymisiert; die bestätigte Löschung beim Identitätsprovider läuft gegebenenfalls noch und wird nicht vorweggenommen.${outcome.appleRevocationCleanup === 'not_required' && outcome.appleOwnershipCleanup.queued === 0 && outcome.appleOwnershipCleanup.unresolved === 0 ? '' : ' Die Apple-Token-Widerrufung bleibt ausdrücklich ausstehend und wird nicht als abgeschlossen behauptet.'}`,
       }));
     } catch (error) {
       if (error instanceof HttpError && error.code === 'account_deletion_blocked') {

@@ -62,6 +62,14 @@ export async function inspectRetentionInventory(client, { actor }) {
   const result = await client.query(
     `WITH inventory(category, dataset, row_count, oldest_at, newest_at) AS (
        SELECT 'accounts', 'user_accounts', count(*)::bigint, min(created_at), max(updated_at) FROM users
+       UNION ALL SELECT 'securityAudit', 'apple_ownership_enrollments', count(*)::bigint, min(enrolled_at), max(enrolled_at) FROM apple_ownership_enrollments
+       UNION ALL SELECT 'securityAudit', 'apple_ownership_attempts', count(*)::bigint, min(created_at), max(updated_at) FROM apple_ownership_attempts
+       UNION ALL SELECT 'securityAudit', 'apple_ownership_active_reservations', count(*)::bigint, min(created_at), max(updated_at) FROM apple_ownership_attempts WHERE state IN ('claimed','exchanging')
+       UNION ALL SELECT 'securityAudit', 'apple_ownership_unresolved', count(*)::bigint, min(created_at), max(updated_at) FROM apple_ownership_attempts WHERE state='unknown'
+       UNION ALL SELECT 'securityAudit', 'apple_ownership_materials', count(*)::bigint, min(acquired_at), max(updated_at) FROM apple_ownership_materials
+       UNION ALL SELECT 'securityAudit', 'apple_ownership_cleanup_pending', count(*)::bigint, min(acquired_at), max(updated_at) FROM apple_ownership_materials WHERE state IN ('cleanup_pending','revoking')
+       UNION ALL SELECT 'securityAudit', 'apple_ownership_cleanup_unknown', count(*)::bigint, min(acquired_at), max(updated_at) FROM apple_ownership_materials WHERE state='cleanup_unknown'
+       UNION ALL SELECT 'securityAudit', 'apple_ownership_deliveries', count(*)::bigint, min(created_at), max(COALESCE(completed_at,created_at)) FROM apple_ownership_deliveries
        UNION ALL SELECT 'userIntent', 'rental_carts', count(*)::bigint, min(created_at), max(updated_at) FROM rental_carts
        UNION ALL SELECT 'userIntent', 'rental_cart_projects', count(*)::bigint, min(created_at), max(updated_at) FROM rental_cart_projects
        UNION ALL SELECT 'userIntent', 'rental_cart_items', count(*)::bigint, min(created_at), max(updated_at) FROM rental_cart_items

@@ -110,7 +110,7 @@ test('login challenges are random, expire-bound, and single-use by hash', async 
     if (/UPDATE auth_mfa_challenges/u.test(sql)) return { rows: [], rowCount: 0 };
     if (/INSERT INTO auth_mfa_challenges/u.test(sql)) {
       inserted = parameters;
-      return { rows: [], rowCount: 1 };
+      return { rows: [{ id: 'challenge-created' }], rowCount: 1 };
     }
     throw new Error(`unexpected query: ${sql}`);
   });
@@ -121,6 +121,7 @@ test('login challenges are random, expire-bound, and single-use by hash', async 
   assert.ok(result.expiresAt.getTime() > Date.now());
   assert.notEqual(inserted[1], result.challenge);
   assert.match(inserted[1], /^[a-f0-9]{64}$/u);
+  assert.equal(result.challengeId, 'challenge-created');
 });
 
 test('a consumed login challenge cannot replay its TOTP or create a second session', async () => {
@@ -154,7 +155,9 @@ test('a consumed login challenge cannot replay its TOTP or create a second sessi
   });
   const code = totpCode(secret, Math.floor(Date.now() / 1000 / 30));
   const first = await verifyLoginChallenge(client, { challenge, code });
-  assert.deepEqual(first, { ok: true, userId: 'user-1', method: 'totp' });
+  assert.deepEqual(first, {
+    ok: true, userId: 'user-1', method: 'totp', challengeId: 'challenge-1',
+  });
   await assert.rejects(
     verifyLoginChallenge(client, { challenge, code }),
     (error) => error.code === 'mfa_challenge_expired',

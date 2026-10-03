@@ -21,6 +21,7 @@
     "test:postgres:mission-supply-participation": "SIT_POSTGRES_FOCUSED_MISSION_SUPPLY_PARTICIPATION=1 node ../tool/run_local_postgres_integration.mjs",
     "test:postgres:mission-quorum-projection": "SIT_POSTGRES_FOCUSED_MISSION_QUORUM_PROJECTION=1 node ../tool/run_local_postgres_integration.mjs",
     "test:postgres:private-shelf": "SIT_POSTGRES_FOCUSED_PRIVATE_SHELF=1 node ../tool/run_local_postgres_integration.mjs",
+    "test:postgres:apple-ownership": "SIT_POSTGRES_FOCUSED_APPLE_OWNERSHIP=1 node ../tool/run_local_postgres_integration.mjs",
     "acceptance:disposable-candidate": "node ops/staging_disposable_candidate_acceptance.mjs",
     "identity:pilot-end": "node ops/close_identity_verification_pilot.mjs",
     "check": "for file in src/*.js ops/*.mjs; do node --check \"$file\"; done && for file in ops/*.sh; do bash -n \"$file\"; done",

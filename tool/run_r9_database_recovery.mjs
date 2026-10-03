@@ -28,7 +28,7 @@ const requireFromBackend = createRequire(
   new URL('../backend/package.json', import.meta.url),
 );
 
-export const r9RequiredMigrationCount = 105;
+export const r9RequiredMigrationCount = 106;
 export const r9SyntheticAccountCount = 12;
 export const r9SyntheticListingCount = 6;
 export const r9ResultClassification = 'LOCAL_ISOLATED_DATABASE_RECOVERY_PROOF';
@@ -115,6 +115,10 @@ const rollbackGuardExpectations = Object.freeze([
     filename: '105_staging_password_enrollment_redemptions.down.sql',
     message: 'staging_password_enrollment_active_redemptions',
   }),
+  Object.freeze({
+    filename: '106_apple_ownership_v2.down.sql',
+    message: 'apple_ownership_v2_obligations_present',
+  }),
 ]);
 
 function fail(message) {
@@ -194,7 +198,7 @@ async function readMigrationPlan(root) {
   }
   if (plan.length !== r9RequiredMigrationCount
       || plan[0]?.filename !== '001_b3_foundation.up.sql'
-      || plan.at(-1)?.filename !== '105_staging_password_enrollment_redemptions.up.sql') {
+      || plan.at(-1)?.filename !== '106_apple_ownership_v2.up.sql') {
     fail('r9_migration_inventory_unexpected');
   }
   return Object.freeze(plan);
@@ -999,6 +1003,17 @@ async function assertRollbackGuardRefusals(pool, root) {
         await client.query(`INSERT INTO staging_password_enrollment_redemptions (token_digest, expires_at)
           VALUES (repeat('e', 64), now() + interval '1 hour')`);
       }
+      if (guard.filename === '106_apple_ownership_v2.down.sql') {
+        await client.query(`INSERT INTO apple_ownership_enrollments (
+          user_id,provider_subject,firebase_user_id,firebase_project_id,
+          apple_client_id,redirect_uri,profile_generation,profile_digest,
+          private_use_confirmed_at,web_test_cohort_enrolled_at
+        ) VALUES (
+          'r9-user-001','r9-apple-subject','r9-firebase-user','shareittoo-test',
+          'com.shareittoo.test','https://shareittoo.test/apple/callback',
+          'r9-apple-v2',repeat('a',64),now(),now()
+        )`);
+      }
       try {
         await client.query(sql);
       } catch (error) {
@@ -1070,7 +1085,7 @@ async function closePools(pools) {
 
 export function validateR9Observation(value, {
   requiredMigrationCount = r9RequiredMigrationCount,
-  requiredLastMigration = '105_staging_password_enrollment_redemptions.up.sql',
+  requiredLastMigration = '106_apple_ownership_v2.up.sql',
   requiredRollbackGuards = rollbackGuardExpectations,
 } = {}) {
   if (value?.schemaVersion !== 1

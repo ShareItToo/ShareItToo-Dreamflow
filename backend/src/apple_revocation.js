@@ -5,6 +5,8 @@ import jwt from 'jsonwebtoken';
 const APPLE_ISSUER = 'https://appleid.apple.com';
 const APPLE_AUTH_ENDPOINT = `${APPLE_ISSUER}/auth`;
 const MATERIAL_MAX_LENGTH = 12_000;
+const PROVIDER_RESPONSE_MAX_BYTES = 32 * 1024;
+const PROVIDER_DEADLINE_MS = 20_000;
 
 function base64url(value) {
   return Buffer.from(value).toString('base64url');
@@ -144,32 +146,104 @@ function providerError(response, code) {
   });
 }
 
-async function postForm(fetchImpl, url, body, { expectJson = true } = {}) {
+async function readBoundedBody(response, maximumBytes) {
+  const declared = Number(response.headers?.get?.('content-length') ?? 0);
+  if (Number.isFinite(declared) && declared > maximumBytes) {
+    throw new AppleRevocationError('apple_revocation_response_invalid', { retryable: true });
+  }
+  if (response.body?.getReader) {
+    const reader = response.body.getReader();
+    const chunks = [];
+    let length = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      length += value.byteLength;
+      if (length > maximumBytes) {
+        await reader.cancel().catch(() => {});
+        throw new AppleRevocationError('apple_revocation_response_invalid', { retryable: true });
+      }
+      chunks.push(value);
+    }
+    const combined = new Uint8Array(length);
+    let offset = 0;
+    for (const chunk of chunks) { combined.set(chunk, offset); offset += chunk.byteLength; }
+    return combined;
+  }
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.byteLength > maximumBytes) {
+    throw new AppleRevocationError('apple_revocation_response_invalid', { retryable: true });
+  }
+  return bytes;
+}
+
+async function postForm(fetchImpl, url, body, {
+  expectJson = true,
+  deadlineMs = PROVIDER_DEADLINE_MS,
+} = {}) {
   let response;
-  try {
-    response = await fetchImpl(url, {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams(body),
-    });
-  } catch (error) {
-    throw new AppleRevocationError('apple_revocation_transport_failed', {
+  const controller = new AbortController();
+  const boundedDeadlineMs = Number.isSafeInteger(deadlineMs)
+    ? Math.min(PROVIDER_DEADLINE_MS, Math.max(1, deadlineMs))
+    : PROVIDER_DEADLINE_MS;
+  let rejectDeadline;
+  const deadlineFailure = new Promise((_resolve, reject) => { rejectDeadline = reject; });
+  const deadline = setTimeout(() => {
+    controller.abort();
+    rejectDeadline(new AppleRevocationError('apple_revocation_transport_failed', {
       retryable: true,
-      cause: error,
-    });
-  }
-  if (!response?.ok) throw providerError(response, 'apple_revocation_provider_rejected');
-  if (!expectJson) return null;
-  let payload;
+    }));
+  }, boundedDeadlineMs);
   try {
-    payload = await response.json();
-  } catch (error) {
-    throw new AppleRevocationError('apple_revocation_response_invalid', {
-      retryable: true,
-      cause: error,
-    });
+    try {
+      response = await Promise.race([fetchImpl(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams(body),
+        redirect: 'error',
+        signal: controller.signal,
+      }), deadlineFailure]);
+    } catch {
+      throw new AppleRevocationError('apple_revocation_transport_failed', {
+        retryable: true,
+      });
+    }
+    if (!response?.ok) throw providerError(response, 'apple_revocation_provider_rejected');
+    const encoding = response.headers?.get?.('content-encoding')?.trim().toLowerCase() ?? '';
+    if (encoding && encoding !== 'identity') {
+      throw new AppleRevocationError('apple_revocation_response_invalid', { retryable: true });
+    }
+    if (!expectJson) {
+      await Promise.race([
+        readBoundedBody(response, PROVIDER_RESPONSE_MAX_BYTES),
+        deadlineFailure,
+      ]);
+      return null;
+    }
+    const contentType = response.headers?.get?.('content-type')?.trim().toLowerCase() ?? '';
+    if (!/^application\/json(?:\s*;\s*charset=utf-8)?$/u.test(contentType)) {
+      throw new AppleRevocationError('apple_revocation_response_invalid', { retryable: true });
+    }
+    let payload;
+    try {
+      const bytes = await Promise.race([
+        readBoundedBody(response, PROVIDER_RESPONSE_MAX_BYTES),
+        deadlineFailure,
+      ]);
+      payload = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+    } catch (error) {
+      if (error instanceof AppleRevocationError) throw error;
+      throw new AppleRevocationError('apple_revocation_response_invalid', {
+        retryable: true,
+      });
+    }
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      throw new AppleRevocationError('apple_revocation_response_invalid', { retryable: true });
+    }
+    return payload;
+  } finally {
+    clearTimeout(deadline);
   }
-  return payload;
 }
 
 /**
@@ -252,7 +326,26 @@ export function createAppleRevocationProvider({
   });
 }
 
+export function createAppleRevocationProviderRing(configuration) {
+  const entries = (configuration?.profiles ?? []).map((profile) => [
+    profile.profileDigest,
+    createAppleRevocationProvider(profile.providerConfiguration),
+  ]);
+  const byDigest = new Map(entries);
+  return Object.freeze({
+    forProfile(profile) {
+      if (!profile || profile.materialKeyId !== configuration.profiles
+        .find((entry) => entry.profileDigest === profile.profileDigest)?.materialKeyId) return null;
+      return byDigest.get(profile.profileDigest) ?? null;
+    },
+  });
+}
+
 export const appleRevocationConstants = Object.freeze({
   materialMaxLength: MATERIAL_MAX_LENGTH,
   issuer: APPLE_ISSUER,
+  providerDeadlineMs: PROVIDER_DEADLINE_MS,
+  providerResponseMaxBytes: PROVIDER_RESPONSE_MAX_BYTES,
 });
+
+export const appleRevocationInternals = Object.freeze({ postForm });

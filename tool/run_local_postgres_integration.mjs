@@ -74,6 +74,9 @@ export const integrationTestGroups = Object.freeze({
   mfa: Object.freeze([
     'backend/test/mfa_postgres.integration.test.js',
   ]),
+  appleOwnership: Object.freeze([
+    'backend/test/apple_ownership_postgres.integration.test.js',
+  ]),
 });
 
 export function integrationTestPlan({
@@ -93,7 +96,9 @@ export function integrationTestPlan({
   focusedMissionSupplyParticipation = false,
   focusedMissionQuorumProjection = false,
   focusedPrivateShelf = false,
+  focusedAppleOwnership = false,
 } = {}) {
+  if (focusedAppleOwnership) return [integrationTestGroups.appleOwnership];
   if (focusedMissionAdmission) return [integrationTestGroups.missionAdmission];
   if (focusedNotifications) return [integrationTestGroups.notificationLifecycle];
   if (focusedPasswordEnrollment) return [integrationTestGroups.passwordEnrollment];
@@ -145,6 +150,7 @@ export function integrationTestPlan({
     integrationTestGroups.listingAi,
     integrationTestGroups.identity,
     integrationTestGroups.mfa,
+    integrationTestGroups.appleOwnership,
   ];
 }
 
@@ -349,6 +355,7 @@ export async function runLocalPostgresIntegration({
   const focusedPasswordEnrollment = environment.SIT_POSTGRES_FOCUSED_PASSWORD_ENROLLMENT === '1';
   const focusedNotifications = environment.SIT_POSTGRES_FOCUSED_NOTIFICATIONS === '1';
   const focusedMissionAdmission = environment.SIT_POSTGRES_FOCUSED_MISSION_ADMISSION === '1';
+  const focusedAppleOwnership = environment.SIT_POSTGRES_FOCUSED_APPLE_OWNERSHIP === '1';
   const integrationGroups = integrationTestPlan({
     focusedMissionAdmission,
     focusedNotifications,
@@ -366,6 +373,7 @@ export async function runLocalPostgresIntegration({
     focusedMissionSupplyParticipation,
     focusedMissionQuorumProjection,
     focusedPrivateShelf,
+    focusedAppleOwnership,
   });
 
   const onSignal = (signal) => {

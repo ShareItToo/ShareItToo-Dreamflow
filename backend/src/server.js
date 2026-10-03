@@ -4,7 +4,11 @@ import { createApp } from './app.js';
 import { config } from './config.js';
 import { startCredentialCleanupWorker } from './credential_cleanup.js';
 import { startFirebaseIdentityCleanupWorker } from './firebase_identity_cleanup.js';
-import { createAppleRevocationProvider } from './apple_revocation.js';
+import {
+  createAppleRevocationProvider,
+  createAppleRevocationProviderRing,
+} from './apple_revocation.js';
+import { startAppleOwnershipCleanupWorker } from './apple_ownership.js';
 import {
   startIdentityVerificationReconciliationWorker,
   startIdentityVerificationRedactionWorker,
@@ -158,6 +162,13 @@ async function main() {
       : null,
     appleRevocationKey: config.appleRevocation.encryptionKey,
   });
+  const stopAppleOwnershipCleanup = startAppleOwnershipCleanupWorker({
+    database: pool,
+    configuration: config.appleOwnership,
+    provider: config.appleOwnership.configured
+      ? createAppleRevocationProviderRing(config.appleOwnership)
+      : null,
+  });
   const stopCrashlyticsCleanup = config.crashReportDeletion.enabled
     ? startCrashlyticsCleanupWorker({
       client: pool,
@@ -199,6 +210,7 @@ async function main() {
     if (technicalSandboxTimer) clearInterval(technicalSandboxTimer);
     stopCredentialCleanup();
     stopFirebaseIdentityCleanup();
+    stopAppleOwnershipCleanup();
     stopCrashlyticsCleanup();
     stopIdentityVerificationReconciliation();
     stopIdentityVerificationRedaction();

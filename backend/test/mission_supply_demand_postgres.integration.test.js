@@ -36,7 +36,7 @@ if (!databaseUrl) {
       await runMigrations(setupPool);
       await runMigrations(setupPool);
       const terminal = await setupPool.query('SELECT name FROM schema_migrations ORDER BY name');
-      assert.equal(terminal.rows.at(-1).name, '105_staging_password_enrollment_redemptions.up.sql');
+      assert.equal(terminal.rows.at(-1).name, '106_apple_ownership_v2.up.sql');
 
       const requesterId = `p6-requester-${crypto.randomUUID()}`;
       const recipientId = `p6-recipient-${crypto.randomUUID()}`;

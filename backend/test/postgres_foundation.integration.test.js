@@ -253,6 +253,7 @@ if (!databaseUrl) {
         '103_mission_supply_demands.up.sql',
         '104_mission_supply_participation.up.sql',
         '105_staging_password_enrollment_redemptions.up.sql',
+        '106_apple_ownership_v2.up.sql',
       ]);
       assert.match(migrationRows.rows[0].checksum, /^[0-9a-f]{64}$/);
       assert.match(migrationRows.rows[2].checksum, /^[0-9a-f]{64}$/);

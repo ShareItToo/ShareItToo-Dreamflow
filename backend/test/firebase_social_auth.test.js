@@ -89,6 +89,39 @@ test('token verification checks revocation and never accepts a short token', asy
   );
 });
 
+test('Apple v2 alone enforces the 60-second issued-at ceiling', async () => {
+  const fixedNow = 1_800_000_000_000;
+  const issuedAt = Math.floor(fixedNow / 1000) - 61;
+  const tokenClaims = claims({
+    iat: issuedAt,
+    exp: Math.floor(fixedNow / 1000) + 600,
+    auth_time: Math.floor(fixedNow / 1000) - 30,
+  });
+  const legacyGoogle = await verifyFirebaseSocialToken('x'.repeat(200), {
+    verifyIdToken: async () => tokenClaims,
+    requireFreshToken: true,
+    now: fixedNow,
+  });
+  assert.equal(legacyGoogle.provider, 'google');
+  assert.equal(legacyGoogle.tokenIssuedAt, issuedAt);
+  const appleV2Claims = claims({
+    ...tokenClaims,
+    firebase: {
+      sign_in_provider: 'apple.com',
+      identities: { 'apple.com': ['apple-native-subject'] },
+    },
+  });
+  await assert.rejects(
+    verifyFirebaseSocialToken('x'.repeat(200), {
+      verifyIdToken: async () => appleV2Claims,
+      requireFreshToken: true,
+      maxIssuedAgeSeconds: 60,
+      now: fixedNow,
+    }),
+    (error) => error.code === 'invalid_social_token',
+  );
+});
+
 test('staging registration token verification returns only bounded fresh-token metadata', async () => {
   const fixedNow = 1_800_000_000_000;
   const identity = await verifyFirebaseSocialToken('x'.repeat(200), {

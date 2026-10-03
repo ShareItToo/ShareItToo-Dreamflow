@@ -23,6 +23,34 @@
       "sha256": "2e3795b71a83b344cc1e1516340d69c424a44ec0c28915f079810d3fc668c27d"
     },
     {
+      "path": "backend/src/apple_ownership_config.js",
+      "sha256": "f524f1e732e678cab06ddf91503f5f223c1ea522f7a41d129db8de23ba3d77aa"
+    },
+    {
+      "path": "backend/src/apple_ownership.js",
+      "sha256": "71c8aa2fd60d2df8e7676b1c9de0a3e147b249dddafa97ec3c6b4fd00cdcf953"
+    },
+    {
+      "path": "backend/src/apple_revocation.js",
+      "sha256": "e1b592bfa1c51e006b2fc463ca49a2a37b54effd71e6ab3e2fb9d1a308e01a40"
+    },
+    {
+      "path": "backend/src/apple_revocation_secret_files.js",
+      "sha256": "662dfcd3632b334c1ccd2c35914af13683e55a49ca8f3c6da2adba2ef4537ae9"
+    },
+    {
+      "path": "backend/src/mfa_workflow.js",
+      "sha256": "46a240add040324c0bcb474f99832bdd11168f33294132eb6c4e488a4d8b74bd"
+    },
+    {
+      "path": "backend/sql/migrations/106_apple_ownership_v2.up.sql",
+      "sha256": "c117bf85cc8c89ba993c4f23b18bf156044ed0731f2c8295ecb8f66536f12d56"
+    },
+    {
+      "path": "backend/sql/migrations/106_apple_ownership_v2.down.sql",
+      "sha256": "cd30591180af68fcb25f52d3b388d58a3e7264bead92c6e4e756046d5f1159b6"
+    },
+    {
       "path": "lib/widgets/support_principal_controller.dart",
       "sha256": "d7b8be389b09ec64656bafe1fc9e54ddc5bdf58b8602b3e76db266a665544d33"
     },
@@ -92,11 +120,11 @@
     },
     {
       "path": "backend/src/privacy_export.js",
-      "sha256": "d945fe136b558f989b814b7ef7b6d52d114af1d3ecc6a8c7d25aac4601953f28"
+      "sha256": "8de337db0aa2f7fcac6b541b48f38613c479e4f3f7402faf97456733945a7db3"
     },
     {
       "path": "backend/src/privacy_export_policy.js",
-      "sha256": "2c89b6ecaf4d10789eee8873320a87349c2904eabc822009bb622093f8c4a851"
+      "sha256": "0204752eeb1628c54760208ef69aea2a5e116183e946fc2557821db1ac6dfd85"
     },
     {
       "path": "backend/src/observability.js",
@@ -104,7 +132,7 @@
     },
     {
       "path": "backend/src/server.js",
-      "sha256": "3ce8558094bf2aa3a77fc0003e804c1b85ded2bf413558b6dac64a029ff3f931"
+      "sha256": "ce3414718038d312ccb6f6f8e0b7cb8dd324606e914091e91c7948ce93df08ff"
     },
     {
       "path": "backend/src/credential_cleanup.js",
@@ -624,7 +652,7 @@
     },
     {
       "path": "backend/src/retention_inventory.js",
-      "sha256": "7298a775da927381a284502851ed6b9c5ca4e4b40dbdd33c2ab0eda24125c24a"
+      "sha256": "a95278e2f809acd435c6886a97ba73d0837d6a025b4ac2638ad1d7c030ea892d"
     },
     {
       "path": "backend/src/financial_documents.js",
@@ -648,7 +676,7 @@
     },
     {
       "path": "backend/src/config.js",
-      "sha256": "0877f2ecdf5157fedb6906b0adfa1a8ade3a730fe7929c395e1f10ac8cb9bd77"
+      "sha256": "219897bf28b412763d2136a586430757e05e3bf1e8aee6bece66984a9c6bbc2b"
     },
     {
       "path": "backend/src/notifications.js",
@@ -680,7 +708,7 @@
     },
     {
       "path": "backend/src/firebase_social_auth.js",
-      "sha256": "58843e34ac407b429d2d1886d56fce54a37645e5f92e75ef282953003c235399"
+      "sha256": "e57db92227adcf5f55013cf98d827da0d8d30d7f86b5bdc7831a0beb970230ab"
     },
     {
       "path": "backend/src/staging_google_registration.js",
@@ -1064,7 +1092,7 @@
     },
     {
       "path": "backend/src/app.js",
-      "sha256": "c822d43a0980846193e948b155133ecc2ad2754bcd80a98d01c8ddb58c6e2b00"
+      "sha256": "caf17872edfddc8a19e40aeeb56291f2a648b2e3c5ee947d56f2c5cbf31bce81"
     },
     {
       "path": "backend/src/rate_limit_policy.js",

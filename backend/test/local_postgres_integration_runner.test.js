@@ -90,6 +90,12 @@ test('password enrollment is included in standard PG execution and has a focused
   assert.equal(integrationTestPlan().flat().filter((entry) => entry === target).length, 1);
 });
 
+test('Apple ownership is included in standard PG execution and has a focused route', () => {
+  const target = 'backend/test/apple_ownership_postgres.integration.test.js';
+  assert.deepEqual(integrationTestPlan({ focusedAppleOwnership: true }), [[target]]);
+  assert.equal(integrationTestPlan().flat().filter((entry) => entry === target).length, 1);
+});
+
 test('notifications use the standard PG plan and their focused environment route', async (t) => {
   const target = 'backend/test/notification_lifecycle_postgres.integration.test.js';
   assert.deepEqual(integrationTestPlan({ focusedNotifications: true }), [[target]]);
@@ -145,6 +151,7 @@ test('runs readiness, isolated database and integration before guaranteed cleanu
     ],
     ['backend/test/identity_verification_postgres.integration.test.js'],
     ['backend/test/mfa_postgres.integration.test.js'],
+    ['backend/test/apple_ownership_postgres.integration.test.js'],
   ];
   const result = await runLocalPostgresIntegration({
     repositoryRoot: fixture.root,

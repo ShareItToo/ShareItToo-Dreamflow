@@ -164,6 +164,11 @@ const sourcePaths = [
   'backend/src/maps_proxy.js',
   'backend/src/google_maps_activation.js',
   'backend/src/config.js',
+  'backend/src/apple_ownership_config.js',
+  'backend/src/apple_ownership.js',
+  'backend/src/apple_revocation.js',
+  'backend/src/apple_revocation_secret_files.js',
+  'backend/src/mfa_workflow.js',
   'backend/src/notifications.js',
   'backend/src/push_sender.js',
   'backend/src/transactional_mail_templates.js',
@@ -176,6 +181,8 @@ const sourcePaths = [
   'backend/src/staging_password_enrollment.js',
   'backend/sql/migrations/105_staging_password_enrollment_redemptions.up.sql',
   'backend/sql/migrations/105_staging_password_enrollment_redemptions.down.sql',
+  'backend/sql/migrations/106_apple_ownership_v2.up.sql',
+  'backend/sql/migrations/106_apple_ownership_v2.down.sql',
   'backend/sql/migrations/095_staging_google_registration_replays.up.sql',
   'backend/sql/migrations/095_staging_google_registration_replays.down.sql',
   'backend/sql/migrations/096_booking_exact_time_snapshot.up.sql',
@@ -829,7 +836,12 @@ function assertProcessingTransparency({ privacy, services, root, sourceTexts }) 
   return { approved: processingApproved };
 }
 
-function assertSourceContracts({ root, sourceTexts, historicalSnapshot = null }) {
+function assertSourceContracts({
+  root,
+  sourceTexts,
+  historicalSnapshot = null,
+  appleOwnershipV2Required = false,
+}) {
   const pubspec = sourceText(root, sourceTexts, 'pubspec.yaml');
   for (const dependency of [
     'firebase_messaging:',
@@ -977,8 +989,66 @@ function assertSourceContracts({ root, sourceTexts, historicalSnapshot = null })
     'duplicateCaseLinks: supportDuplicateCaseLinks',
     'support_case.feedback_context',
     'progressUpdates: supportProgressUpdates',
+    ...(appleOwnershipV2Required
+      ? ['appleOwnership', 'attemptState', 'materialStates']
+      : []),
   ]) {
     if (!exportSource.includes(marker)) fail(`Backend privacy export is missing ${marker}.`);
+  }
+  if (appleOwnershipV2Required) {
+    const appleOwnership = sourceText(root, sourceTexts, 'backend/src/apple_ownership.js');
+    const appleOwnershipMigration = sourceText(
+      root,
+      sourceTexts,
+      'backend/sql/migrations/106_apple_ownership_v2.up.sql',
+    );
+    const appleOwnershipRollback = sourceText(
+      root,
+      sourceTexts,
+      'backend/sql/migrations/106_apple_ownership_v2.down.sql',
+    );
+    for (const marker of [
+      'encrypted_receipt', 'code_fingerprint', 'material_ciphertext',
+      'cleanup_unknown', 'apple_session_delivery_uncertain',
+      'prepareAppleOwnershipAccountDeletion', 'apple_attempt_unavailable',
+      'private_use_confirmed_at', 'web_test_cohort_enrolled_at',
+      "state='committed'", 'profile_generation', 'material_key_id',
+      'guard_apple_ownership_user_delete', 'ON DELETE CASCADE',
+      'coordinationDigest', 'pg_advisory_xact_lock', 'reserved.profile',
+    ]) {
+      if (!appleOwnership.includes(marker) && !appleOwnershipMigration.includes(marker)) {
+        fail(`Apple ownership privacy boundary is missing ${marker}.`);
+      }
+    }
+    const appleRevocation = sourceText(root, sourceTexts, 'backend/src/apple_revocation.js');
+    for (const marker of [
+      "const APPLE_ISSUER = 'https://appleid.apple.com'",
+      'const PROVIDER_RESPONSE_MAX_BYTES = 32 * 1024',
+      'const PROVIDER_DEADLINE_MS = 20_000',
+      "redirect: 'error'", "content-encoding", 'createAppleRevocationProviderRing',
+      'Promise.race',
+    ]) {
+      if (!appleRevocation.includes(marker)) {
+        fail(`Apple provider transport privacy boundary is missing ${marker}.`);
+      }
+    }
+    const appleOwnershipSecrets = sourceText(
+      root,
+      sourceTexts,
+      'backend/src/apple_revocation_secret_files.js',
+    );
+    for (const marker of [
+      'APPLE_OWNERSHIP_COORDINATION_KEY_FILE',
+      'APPLE_OWNERSHIP_HISTORICAL_PROFILES_FILE',
+      'owner-only permissions', 'profiles.length > 8',
+    ]) {
+      if (!appleOwnershipSecrets.includes(marker)) {
+        fail(`Apple ownership secret boundary is missing ${marker}.`);
+      }
+    }
+    if (!appleOwnershipRollback.includes('apple_ownership_v2_obligations_present')) {
+      fail('Apple ownership rollback must refuse retained ownership or cleanup obligations.');
+    }
   }
   const exportPolicy = sourceText(
     root,
@@ -2335,7 +2405,12 @@ export function validatePrivacyDisclosures({
       fail(`Local principal privacy coverage is missing ${marker}.`);
     }
   }
-  assertSourceContracts({ root, sourceTexts, historicalSnapshot });
+  assertSourceContracts({
+    root,
+    sourceTexts,
+    historicalSnapshot,
+    appleOwnershipV2Required: sourceMap.has('backend/src/apple_ownership.js'),
+  });
 
   const binary = object(privacy.binaryEvidence, 'binaryEvidence');
   const expectedCandidateEvidenceRef = `docs/evidence/b11/android-candidate-${candidate.buildNumber}.json`;

@@ -14,7 +14,11 @@ import {
   readStripeSecretConfiguration,
 } from './stripe_secret_files.js';
 import { readMfaEncryptionKeyConfiguration } from './mfa_secret_files.js';
-import { readAppleRevocationConfiguration } from './apple_revocation_secret_files.js';
+import {
+  readAppleOwnershipSecretConfiguration,
+  readAppleRevocationConfiguration,
+} from './apple_revocation_secret_files.js';
+import { readAppleOwnershipConfiguration } from './apple_ownership_config.js';
 import { normalizeIdentityVerificationTransport } from './identity_verification_config.js';
 import { readStagingAccessConfiguration } from './staging_access_gate.js';
 import { readSyntheticCatalogConfiguration } from './staging_synthetic_catalog.js';
@@ -49,7 +53,16 @@ const mfaSecretConfiguration = readMfaEncryptionKeyConfiguration(process.env, {
   deploymentEnvironment,
 });
 const mfaEncryptionKey = mfaSecretConfiguration.key;
+const appleOwnershipProfileRequested = Boolean(
+  process.env.APPLE_OWNERSHIP_CONFIG_GENERATION?.trim()
+    || process.env.APPLE_OWNERSHIP_HISTORICAL_PROFILES_FILE?.trim()
+    || (process.env.APPLE_OWNERSHIP_ACQUISITION_ENABLED ?? '').trim().toLowerCase() === 'true',
+);
 const appleRevocation = readAppleRevocationConfiguration(process.env, {
+  deploymentEnvironment,
+  requireOwnershipFileSecrets: appleOwnershipProfileRequested,
+});
+const appleOwnershipSecrets = readAppleOwnershipSecretConfiguration(process.env, {
   deploymentEnvironment,
 });
 const bindHost = (process.env.BIND_HOST ?? '0.0.0.0').trim();
@@ -204,6 +217,12 @@ if (firebaseCrashReportDeletionEnabled) {
     }
   }
 }
+const appleOwnership = readAppleOwnershipConfiguration(process.env, {
+  appleRevocation,
+  firebaseProjectId,
+  coordinationKey: appleOwnershipSecrets.coordinationKey,
+  historicalProfiles: appleOwnershipSecrets.historicalProfiles,
+});
 
 const paymentTransport = (process.env.PAYMENT_TRANSPORT ?? (
   deploymentEnvironment === 'staging' || deploymentEnvironment === 'test'
@@ -446,6 +465,7 @@ export const config = Object.freeze({
     credentialSource: mfaSecretConfiguration.credentialSource,
   }),
   appleRevocation: Object.freeze(appleRevocation),
+  appleOwnership: Object.freeze(appleOwnership),
   corsOrigins: csv(process.env.CORS_ORIGINS),
   publicBaseUrl: (process.env.PUBLIC_BASE_URL ?? 'https://shareittoo.com/api/v1').replace(/\/$/, ''),
   uploadDir: path.resolve(process.env.UPLOAD_DIR ?? '/data/uploads'),

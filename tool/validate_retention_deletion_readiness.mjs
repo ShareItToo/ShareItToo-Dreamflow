@@ -73,6 +73,11 @@ const sourcePaths = [
   'backend/src/account_actions.js',
   'backend/src/auth_session_actions.js',
   'backend/src/config.js',
+  'backend/src/apple_ownership_config.js',
+  'backend/src/apple_ownership.js',
+  'backend/src/apple_revocation.js',
+  'backend/src/apple_revocation_secret_files.js',
+  'backend/src/mfa_workflow.js',
   'backend/src/notifications.js',
   'backend/src/push_sender.js',
   'backend/src/transactional_mail_templates.js',
@@ -96,6 +101,8 @@ const sourcePaths = [
   'backend/src/staging_password_enrollment.js',
   'backend/sql/migrations/105_staging_password_enrollment_redemptions.up.sql',
   'backend/sql/migrations/105_staging_password_enrollment_redemptions.down.sql',
+  'backend/sql/migrations/106_apple_ownership_v2.up.sql',
+  'backend/sql/migrations/106_apple_ownership_v2.down.sql',
   'backend/sql/migrations/095_staging_google_registration_replays.up.sql',
   'backend/sql/migrations/095_staging_google_registration_replays.down.sql',
   'backend/sql/migrations/096_booking_exact_time_snapshot.up.sql',
@@ -754,6 +761,85 @@ function assertSourceContracts(root, sourceTexts) {
   }
   if (!inventory.includes("'securityAudit', 'support_deadline_watchdog_state'")) {
     fail('Retention inventory is missing operational dataset support_deadline_watchdog_state.');
+  }
+  for (const dataset of [
+    'apple_ownership_enrollments',
+    'apple_ownership_attempts',
+    'apple_ownership_active_reservations',
+    'apple_ownership_unresolved',
+    'apple_ownership_materials',
+    'apple_ownership_cleanup_pending',
+    'apple_ownership_cleanup_unknown',
+    'apple_ownership_deliveries',
+  ]) {
+    if (!inventory.includes(`'securityAudit', '${dataset}'`)) {
+      fail(`Retention inventory is missing Apple ownership dataset ${dataset}.`);
+    }
+  }
+  const appleOwnership = text(root, sourceTexts, 'backend/src/apple_ownership.js');
+  const appleOwnershipRollback = text(
+    root,
+    sourceTexts,
+    'backend/sql/migrations/106_apple_ownership_v2.down.sql',
+  );
+  for (const marker of [
+    'prepareAppleOwnershipAccountDeletion',
+    "state='cleanup_pending'",
+    "state='cleanup_unknown'",
+    'startAppleOwnershipCleanupWorker',
+    'apple_attempt_unavailable',
+    'profile_generation',
+    'material_key_id',
+    'coordinationDigest',
+    'pg_advisory_xact_lock',
+    'reserved.profile',
+  ]) {
+    if (!appleOwnership.includes(marker)) {
+      fail(`Apple ownership retention boundary is missing ${marker}.`);
+    }
+  }
+  if (!appleOwnershipRollback.includes('apple_ownership_v2_obligations_present')) {
+    fail('Apple ownership rollback must refuse retained ownership or cleanup obligations.');
+  }
+  const appleOwnershipMigration = text(
+    root,
+    sourceTexts,
+    'backend/sql/migrations/106_apple_ownership_v2.up.sql',
+  );
+  for (const marker of [
+    'private_use_confirmed_at', 'web_test_cohort_enrolled_at',
+    'guard_apple_ownership_user_delete', 'apple_ownership_cleanup_required',
+    'ON DELETE CASCADE', "'committed'",
+  ]) {
+    if (!appleOwnershipMigration.includes(marker)) {
+      fail(`Apple ownership deletion boundary is missing ${marker}.`);
+    }
+  }
+  const appleRevocation = text(root, sourceTexts, 'backend/src/apple_revocation.js');
+  for (const marker of [
+    "const APPLE_ISSUER = 'https://appleid.apple.com'",
+    'const PROVIDER_RESPONSE_MAX_BYTES = 32 * 1024',
+    'const PROVIDER_DEADLINE_MS = 20_000',
+    "redirect: 'error'", "content-encoding", 'createAppleRevocationProviderRing',
+    'Promise.race',
+  ]) {
+    if (!appleRevocation.includes(marker)) {
+      fail(`Apple provider cleanup transport boundary is missing ${marker}.`);
+    }
+  }
+  const appleOwnershipSecrets = text(
+    root,
+    sourceTexts,
+    'backend/src/apple_revocation_secret_files.js',
+  );
+  for (const marker of [
+    'APPLE_OWNERSHIP_COORDINATION_KEY_FILE',
+    'APPLE_OWNERSHIP_HISTORICAL_PROFILES_FILE',
+    'owner-only permissions', 'profiles.length > 8',
+  ]) {
+    if (!appleOwnershipSecrets.includes(marker)) {
+      fail(`Apple ownership retained-profile boundary is missing ${marker}.`);
+    }
   }
   const supportOperationalMetrics = text(
     root,

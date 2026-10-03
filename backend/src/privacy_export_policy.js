@@ -72,6 +72,7 @@ function portabilityProjection(raw) {
     authentication: {
       identities: records(raw.authentication?.identities),
       pushDevices: records(raw.authentication?.pushDevices),
+      appleOwnership: records(raw.authentication?.appleOwnership),
     },
     marketplace: {
       listings: records(marketplace.listings),

@@ -29,7 +29,12 @@ function boundedText(value, maxLength) {
 
 export function normalizeFirebaseSocialClaims(
   decoded,
-  { requireFreshToken = false, includeTokenDigest = false, now = Date.now() } = {},
+  {
+    requireFreshToken = false,
+    includeTokenDigest = false,
+    maxIssuedAgeSeconds = null,
+    now = Date.now(),
+  } = {},
 ) {
   if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded)) {
     throw new SocialAuthError(401, 'invalid_social_token');
@@ -72,9 +77,16 @@ export function normalizeFirebaseSocialClaims(
   const expiresAt = Number(decoded.exp);
   const authTime = Number(decoded.auth_time);
   const nowSeconds = Math.floor(now / 1000);
+  const issuedAgeLimit = Number.isSafeInteger(maxIssuedAgeSeconds)
+    && maxIssuedAgeSeconds > 0
+    && maxIssuedAgeSeconds <= 60 * 60
+    ? maxIssuedAgeSeconds
+    : null;
   if (!Number.isSafeInteger(issuedAt) || !Number.isSafeInteger(expiresAt)
       || !Number.isSafeInteger(authTime)
-      || issuedAt > nowSeconds + 60 || expiresAt <= nowSeconds
+      || issuedAt > nowSeconds + 60
+      || (issuedAgeLimit !== null && nowSeconds - issuedAt > issuedAgeLimit)
+      || expiresAt <= nowSeconds
       || expiresAt <= issuedAt || expiresAt - issuedAt > 2 * 60 * 60
       || authTime > nowSeconds + 60 || nowSeconds - authTime > 15 * 60) {
     throw new SocialAuthError(401, 'invalid_social_token');
@@ -85,6 +97,7 @@ export function normalizeFirebaseSocialClaims(
     tokenExpiresAt: expiresAt,
     tokenAuthTime: authTime,
     tokenDigest,
+    firebaseProjectId: boundedText(decoded.aud, 80),
   };
 }
 
@@ -119,7 +132,13 @@ export async function firebaseAuthClient() {
 
 export async function verifyFirebaseSocialToken(
   rawToken,
-  { verifyIdToken, requireFreshToken = false, includeTokenDigest = false, now = Date.now() } = {},
+  {
+    verifyIdToken,
+    requireFreshToken = false,
+    includeTokenDigest = false,
+    maxIssuedAgeSeconds = null,
+    now = Date.now(),
+  } = {},
 ) {
   if (!verifyIdToken && !config.socialAuth.enabled) {
     throw new SocialAuthError(503, 'social_auth_unavailable');
@@ -132,7 +151,7 @@ export async function verifyFirebaseSocialToken(
     const decoded = await verify(token, true);
     return normalizeFirebaseSocialClaims(
       (requireFreshToken || includeTokenDigest) ? { ...decoded, __rawToken: token } : decoded,
-      { requireFreshToken, includeTokenDigest, now },
+      { requireFreshToken, includeTokenDigest, maxIssuedAgeSeconds, now },
     );
   } catch (error) {
     if (error instanceof SocialAuthError) throw error;

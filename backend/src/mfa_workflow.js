@@ -254,13 +254,14 @@ export async function createLoginChallenge(client, {
       WHERE user_id = $1 AND purpose = 'login' AND consumed_at IS NULL`,
     [userId],
   );
-  await client.query(
+  const inserted = await client.query(
     `INSERT INTO auth_mfa_challenges (
        user_id, challenge_hash, purpose, expires_at, user_agent, ip_address
-     ) VALUES ($1, $2, 'login', $3, $4, $5::inet)`,
+     ) VALUES ($1, $2, 'login', $3, $4, $5::inet)
+     RETURNING id`,
     [userId, challengeHash(challenge), expiresAt, userAgent || null, ipAddress || null],
   );
-  return Object.freeze({ challenge, expiresAt });
+  return Object.freeze({ challenge, expiresAt, challengeId: inserted.rows[0].id });
 }
 
 export async function verifyLoginChallenge(client, { challenge, code }) {
@@ -345,7 +346,12 @@ export async function verifyLoginChallenge(client, { challenge, code }) {
       [row.user_id, JSON.stringify(consumed.recoveryHashes)],
     );
   }
-  return Object.freeze({ ok: true, userId: row.user_id, method: consumed.kind });
+  return Object.freeze({
+    ok: true,
+    userId: row.user_id,
+    method: consumed.kind,
+    challengeId: row.id,
+  });
 }
 
 export async function getMfaStatus(client, userId) {

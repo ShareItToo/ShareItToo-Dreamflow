@@ -4,6 +4,7 @@ import test from 'node:test';
 
 import {
   AppleRevocationError,
+  appleRevocationInternals,
   createAppleRevocationProvider,
   decryptAppleRevocationMaterial,
   encryptAppleRevocationMaterial,
@@ -24,6 +25,13 @@ function syntheticAppleIdToken(claims = {
 }) {
   const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
   return `${encode({ alg: 'none', typ: 'JWT' })}.${encode(claims)}.synthetic`;
+}
+
+function jsonResponse(value, init = {}) {
+  return new Response(JSON.stringify(value), {
+    status: init.status ?? 200,
+    headers: { 'content-type': 'application/json; charset=utf-8', ...(init.headers ?? {}) },
+  });
 }
 
 test('Apple revocation material is mutually exclusive and encrypted at rest', () => {
@@ -57,18 +65,12 @@ test('Apple adapter exchanges authorization code and revokes through a synthetic
     privateKey: privateKey.export({ type: 'pkcs8', format: 'pem' }),
     fetchImpl: async (url, options) => {
       requests.push({ url, options });
-      return {
-        ok: true,
-        status: 200,
-        ...(url.endsWith('/token')
-          ? {
-              json: async () => ({
-                id_token: syntheticAppleIdToken(),
-                refresh_token: 'synthetic-refresh',
-              }),
-            }
-          : {}),
-      };
+      return url.endsWith('/token')
+        ? jsonResponse({
+            id_token: syntheticAppleIdToken(),
+            refresh_token: 'synthetic-refresh',
+          })
+        : new Response('', { status: 200 });
     },
   });
   const refreshToken = await provider.exchangeAuthorizationCode({
@@ -82,6 +84,73 @@ test('Apple adapter exchanges authorization code and revokes through a synthetic
   assert.equal(requests[0].options.body.get('code'), 'synthetic-code');
   assert.equal(requests[1].options.body.get('token'), 'synthetic-refresh');
   assert.equal(requests[1].options.body.get('token_type_hint'), 'refresh_token');
+  assert.equal(requests[0].options.redirect, 'error');
+  assert.ok(requests[0].options.signal instanceof AbortSignal);
+});
+
+test('Apple provider transport rejects timeout, redirects, MIME, encoding and oversized bodies without detail leakage', async () => {
+  const { privateKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+  const options = {
+    enabled: true,
+    clientId: 'com.example.sit',
+    teamId: 'TEAMID1234',
+    keyId: 'KEYID1234',
+    privateKey: privateKey.export({ type: 'pkcs8', format: 'pem' }),
+  };
+  const fixtures = [
+    async () => { throw new DOMException('private timeout detail', 'AbortError'); },
+    async () => Response.redirect('https://evil.example/provider', 302),
+    async () => new Response('{}', { status: 200, headers: { 'content-type': 'text/plain' } }),
+    async () => new Response('{}', { status: 200, headers: {
+      'content-type': 'application/json', 'content-encoding': 'gzip',
+    } }),
+    async () => new Response('x'.repeat(32 * 1024 + 1), { status: 200, headers: {
+      'content-type': 'application/json',
+    } }),
+  ];
+  for (const fetchImpl of fixtures) {
+    const provider = createAppleRevocationProvider({ ...options, fetchImpl });
+    await assert.rejects(
+      provider.exchangeAuthorizationCode({ code: 'synthetic-code', expectedSubject: 'apple-subject' }),
+      (error) => error instanceof AppleRevocationError
+        && [
+          'apple_revocation_transport_failed',
+          'apple_revocation_provider_rejected',
+          'apple_revocation_response_invalid',
+        ].includes(error.code)
+        && !Object.hasOwn(error, 'cause')
+        && !String(error).includes('private timeout detail')
+        && !String(error).includes('evil.example'),
+    );
+  }
+});
+
+test('Apple transport deadline terminates stalled fetch and stalled response body deterministically', async () => {
+  for (const fixture of ['fetch', 'body']) {
+    let signal;
+    const fetchImpl = async (_url, options) => {
+      signal = options.signal;
+      if (fixture === 'fetch') return new Promise(() => {});
+      return new Response(new ReadableStream({ start() {} }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    };
+    const startedAt = Date.now();
+    await assert.rejects(
+      appleRevocationInternals.postForm(
+        fetchImpl,
+        'https://appleid.apple.com/auth/token',
+        { grant_type: 'authorization_code' },
+        { deadlineMs: 10 },
+      ),
+      (error) => error instanceof AppleRevocationError
+        && error.code === 'apple_revocation_transport_failed'
+        && !Object.hasOwn(error, 'cause'),
+    );
+    assert.equal(signal.aborted, true);
+    assert.ok(Date.now() - startedAt < 1000);
+  }
 });
 
 test('Apple token exchange binds the response identity before releasing refresh material', async () => {
@@ -103,13 +172,9 @@ test('Apple token exchange binds the response identity before releasing refresh 
       teamId: 'TEAMID1234',
       keyId: 'KEYID1234',
       privateKey: privateKey.export({ type: 'pkcs8', format: 'pem' }),
-      fetchImpl: async () => ({
-        ok: true,
-        status: 200,
-        json: async () => ({
+      fetchImpl: async () => jsonResponse({
           ...(claims === undefined ? {} : { id_token: syntheticAppleIdToken(claims) }),
           refresh_token: 'synthetic-refresh',
-        }),
       }),
     });
     await assert.rejects(
@@ -133,11 +198,10 @@ test('Apple token exchange preserves provider retryability without exposing resp
     teamId: 'TEAMID1234',
     keyId: 'KEYID1234',
     privateKey: privateKey.export({ type: 'pkcs8', format: 'pem' }),
-    fetchImpl: async () => ({
-      ok: false,
-      status: 503,
-      json: async () => ({ error: 'synthetic provider detail' }),
-    }),
+    fetchImpl: async () => jsonResponse(
+      { error: 'synthetic provider detail' },
+      { status: 503 },
+    ),
   });
   await assert.rejects(
     provider.exchangeAuthorizationCode({ code: 'synthetic-code' }),

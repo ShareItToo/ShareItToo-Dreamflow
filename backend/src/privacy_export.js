@@ -90,6 +90,25 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
          ON session.provider_session_hash = tombstone.provider_session_hash
       WHERE session.user_id = $1 AND session.status = 'redacted'
       ORDER BY tombstone.expires_at`, userId)();
+  const appleOwnership = await rows(client,
+    `SELECT CASE attempt.state
+              WHEN 'claimed' THEN 'pending'
+              WHEN 'exchanging' THEN 'pending'
+              WHEN 'committed' THEN 'ready'
+              WHEN 'unknown' THEN 'unresolved'
+              WHEN 'cleanup_required' THEN 'cleanup_required'
+              ELSE 'closed'
+            END AS "attemptState",
+            attempt.created_at AS "createdAt",
+            attempt.updated_at AS "updatedAt",
+            count(material.*)::int AS "materialCount",
+            COALESCE(array_agg(material.state ORDER BY material.acquired_at)
+              FILTER (WHERE material.id IS NOT NULL), ARRAY[]::text[]) AS "materialStates"
+       FROM apple_ownership_attempts AS attempt
+       LEFT JOIN apple_ownership_materials AS material ON material.attempt_id=attempt.id
+      WHERE attempt.user_id=$1
+      GROUP BY attempt.id, attempt.state, attempt.created_at, attempt.updated_at
+      ORDER BY attempt.created_at`, userId)();
 
   const [
     sessions,
@@ -1448,7 +1467,7 @@ export async function buildAccountExport(client, userId, { purpose = 'access_cop
 
   const raw = {
     account: { ...account, registrationBundles },
-    authentication: { sessions, identities, pushDevices },
+    authentication: { sessions, identities, pushDevices, appleOwnership },
     marketplace: {
       listings,
       listingSets: {

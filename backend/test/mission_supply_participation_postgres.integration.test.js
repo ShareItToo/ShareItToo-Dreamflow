@@ -29,7 +29,7 @@ if (!databaseUrl) {
       const terminal = await pool.query(
         'SELECT name FROM schema_migrations ORDER BY name',
       );
-      assert.equal(terminal.rows.at(-1).name, '105_staging_password_enrollment_redemptions.up.sql');
+      assert.equal(terminal.rows.at(-1).name, '106_apple_ownership_v2.up.sql');
 
       await pool.query(
         `INSERT INTO users (id, email, profile, role, account_status,
