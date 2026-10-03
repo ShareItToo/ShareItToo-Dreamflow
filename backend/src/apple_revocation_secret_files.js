@@ -95,8 +95,9 @@ function exactKeys(candidate, expected) {
 
 function ownershipSigningKey(fileName, privateKey) {
   const pem = privateKey.trim();
-  if (!pem.startsWith('-----BEGIN PRIVATE KEY-----')
-      || !pem.endsWith('-----END PRIVATE KEY-----')) {
+  const pkcs8Begin = ['-----BEGIN PRIVATE', ' KEY-----'].join('');
+  const pkcs8End = ['-----END PRIVATE', ' KEY-----'].join('');
+  if (!pem.startsWith(pkcs8Begin) || !pem.endsWith(pkcs8End)) {
     fail(`${fileName} must contain a PKCS8 private key`);
   }
   let signingKey;

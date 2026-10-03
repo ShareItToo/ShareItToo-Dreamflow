@@ -12182,6 +12182,7 @@ if (!databaseUrl) {
         deleted: true,
         identityVerificationCleanup: 'not_required',
         appleRevocationCleanup: 'not_required',
+        appleOwnershipCleanup: 'not_required',
         privateShelfMediaCleanup: 'complete',
       });
       assert.equal((await login(nextPassword)).status, 401);

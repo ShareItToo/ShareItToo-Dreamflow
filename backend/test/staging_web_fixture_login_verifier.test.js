@@ -53,7 +53,7 @@ function privateInput(bootstrapRuntimeCommit = runtimeCommit) {
   const manifest = {
     kind: 'sit-dedicated-web-fixture-bootstrap', schemaVersion: 2, operation: 'seed',
     sourceCommit: 'e'.repeat(40), sourceHashes: { bootstrap: 'f'.repeat(64) },
-    schemaCount: 105, ledgerDigest, passwordDigests: secrets.map(encodedSecret),
+    schemaCount: 106, ledgerDigest, passwordDigests: secrets.map(encodedSecret),
     preflight: { runId, runtimeCommit: bootstrapRuntimeCommit, roles, listingId, uploadName,
       database: { host: dbName, name: 'shareittoo_green', user: 'shareittoo_green' } },
   };
@@ -439,7 +439,7 @@ test('real store compensation SQL scopes updates to exact IDs, session IDs and m
 
 test('real store attestation and snapshots are enforced inside read-only transactions', async () => {
   const input = privateInput();
-  const ledger = Array.from({ length: 105 }, (_, index) => ({ name: `${index}`.padStart(3, '0'), checksum: sha(`${index}`) }));
+  const ledger = Array.from({ length: 106 }, (_, index) => ({ name: `${index}`.padStart(3, '0'), checksum: sha(`${index}`) }));
   input.manifest.ledgerDigest = fixtureLoginProofDigest(ledger);
   const state = baseState(); const row = Object.fromEntries(Object.entries(state).map(([key, value]) => [
     key.replace(/[A-Z]/gu, (letter) => `_${letter.toLowerCase()}`), value,
@@ -453,7 +453,7 @@ test('real store attestation and snapshots are enforced inside read-only transac
     return { rows: [] };
   } };
   const store = createFixtureLoginProofStore(client, { runId, marker });
-  assert.deepEqual(await store.attest(input.manifest), { schemaCount: 105, ledgerDigest: input.manifest.ledgerDigest });
+  assert.deepEqual(await store.attest(input.manifest), { schemaCount: 106, ledgerDigest: input.manifest.ledgerDigest });
   assert.deepEqual(await store.snapshot({ readOnly: true }), state);
   assert.equal(calls.filter((sql) => sql === 'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY').length, 2);
   assert.equal(calls.filter((sql) => sql === 'ROLLBACK').length, 2);
@@ -583,7 +583,7 @@ function hostFixture(input) {
   loginsVerified: execute ? 2 : 0, meVerified: execute ? 2 : 0, logoutsVerified: execute ? 2 : 0,
   accessTokensRejected: execute ? 2 : 0, activeSessions: 0, activeRefreshTokens: 0,
   credentialsAttested: 2, quiescenceReadbacks: execute ? 3 : 0,
-  retainedSessionRecords: execute ? 2 : 0, loginAudits: execute ? 2 : 0, schemaCount: 105,
+  retainedSessionRecords: execute ? 2 : 0, loginAudits: execute ? 2 : 0, schemaCount: 106,
   authHistory: { before: { sessions: 2, refreshTokens: 2, loginAudits: 2 },
     after: { sessions: execute ? 4 : 2, refreshTokens: execute ? 4 : 2, loginAudits: execute ? 4 : 2 },
     beforeDigest: '6'.repeat(64), afterDigest: '6'.repeat(64) },

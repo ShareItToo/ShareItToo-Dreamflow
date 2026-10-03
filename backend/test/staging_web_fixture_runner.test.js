@@ -48,7 +48,7 @@ test('runner binds WebP extension across preparation, private inventory, binding
   assert.throws(() => prepareFixtureRunnerInput({ manifest: f.manifest, photoBytes: bytes, source: f.source }));
 });
 function fixture() {
-  const source = { commit: 'b'.repeat(40), schemaCount: 105, ledgerDigest: 'c'.repeat(64), hashes: Object.fromEntries(adapterSources.map((p) => [p, 'd'.repeat(64)])) };
+  const source = { commit: 'b'.repeat(40), schemaCount: 106, ledgerDigest: 'c'.repeat(64), hashes: Object.fromEntries(adapterSources.map((p) => [p, 'd'.repeat(64)])) };
   const environment = { DEPLOYMENT_ENVIRONMENT: 'test', APP_COMMIT: 'a'.repeat(40),
     DATABASE_URL: `postgres://shareittoo_green@${dbName}/shareittoo_green`, SIT_STAGING_ACCESS_GATE_ENABLED: 'true',
     SIT_STAGING_ALLOWED_USER_IDS: 'synthetic-owner,synthetic-renter', SIT_STAGING_PUBLIC_LISTING_IDS: 'synthetic-listing',
@@ -66,7 +66,7 @@ function fixture() {
     availabilityDigest: 'f'.repeat(64), photo: { file: '/run/sit-fixture-input/photo.jpg', classification: 'authentic_non_ai', mimeType: 'image/jpeg',
       sha256: hash(photoBytes), currentProductEvidence: false, sourceUrl: 'https://example.invalid/illustration', creator: 'Synthetic', license: 'CC0', capturedAt: '2017-01-01' } };
   const manifest = { kind: 'sit-staging-web-fixture-adapter', schemaVersion: 1, operation: 'activate', preflight,
-    sourceCommit: source.commit, sourceHashes: source.hashes, schemaCount: 105, ledgerDigest: source.ledgerDigest, uploadDirectory: '/data/uploads' };
+    sourceCommit: source.commit, sourceHashes: source.hashes, schemaCount: 106, ledgerDigest: source.ledgerDigest, uploadDirectory: '/data/uploads' };
   const bytes = Buffer.from(JSON.stringify(manifest));
   const envBytes = Buffer.from(Object.entries(environment).filter(([key]) => key !== 'APP_COMMIT').map(([key, value]) => `${key}=${value}`).join('\n'));
   const binding = { kind: 'sit-green-web-fixture-runner', schemaVersion: 1, createdAt: new Date().toISOString(), opsCommit: source.commit,
@@ -332,16 +332,16 @@ test('lost create response and child failure clean only owned exact IDs; cleanup
   const f = fixture(); f.resultOverride = { manifestDigest: 'private-value' }; await assert.rejects(f.run(), /fixture_runner_result_invalid/u); assert.equal(f.runner, null);
 });
 
-test('real file hashing binds adapter bytes, transitive runtime source and all 105 migration checksums', () => {
+test('real file hashing binds adapter bytes, transitive runtime source and all 106 migration checksums', () => {
   const dir = mkdtempSync(resolve(tmpdir(), 'fixture-runner-bytes-'));
   try {
     const sourceRoot = resolve(dir, 'source'); const runtimeBackend = resolve(dir, 'runtime');
     for (const path of [resolve(sourceRoot, 'backend/src'), resolve(sourceRoot, 'backend/ops'), resolve(runtimeBackend, 'src'), resolve(runtimeBackend, 'sql/migrations')]) mkdirSync(path, { recursive: true });
     for (const path of [resolve(sourceRoot, 'backend/src/transitive.js'), resolve(runtimeBackend, 'src/transitive.js')]) writeFileSync(path, 'actual runtime');
     writeFileSync(resolve(sourceRoot, 'backend/ops/adapter.mjs'), 'actual adapter');
-    const ledger = Array.from({ length: 105 }, (_, i) => ({ name: `${String(i + 1).padStart(3, '0')}_test.up.sql`, checksum: hash('SELECT 1;') }));
+    const ledger = Array.from({ length: 106 }, (_, i) => ({ name: `${String(i + 1).padStart(3, '0')}_test.up.sql`, checksum: hash('SELECT 1;') }));
     for (const entry of ledger) writeFileSync(resolve(runtimeBackend, 'sql/migrations', entry.name), 'SELECT 1;');
-    const source = { hashes: { 'backend/ops/adapter.mjs': hash('actual adapter') }, schemaCount: 105, ledgerDigest: fixtureDigest(ledger) };
+    const source = { hashes: { 'backend/ops/adapter.mjs': hash('actual adapter') }, schemaCount: 106, ledgerDigest: fixtureDigest(ledger) };
     const input = { source, sourceRoot, runtimeBackend, runtimeTreeDigest: fixtureRunnerTree(resolve(runtimeBackend, 'src')) };
     verifyFixtureRunnerSourceFiles(input);
     writeFileSync(resolve(runtimeBackend, 'src/transitive.js'), 'drift'); assert.throws(() => verifyFixtureRunnerSourceFiles(input), /runtime_source_drift/u);

@@ -36,7 +36,7 @@
     },
     {
       "path": "backend/src/apple_revocation_secret_files.js",
-      "sha256": "662dfcd3632b334c1ccd2c35914af13683e55a49ca8f3c6da2adba2ef4537ae9"
+      "sha256": "fd8015012e27cf88855c41b32f8d6de72976d7eb1f1645f9034563ac82f87c7d"
     },
     {
       "path": "backend/src/mfa_workflow.js",
