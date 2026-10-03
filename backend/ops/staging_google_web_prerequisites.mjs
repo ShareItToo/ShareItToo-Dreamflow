@@ -201,7 +201,8 @@ export async function runStagingGoogleWebPrerequisites({ binding, adapter, journ
     if (journal) validateState(journal.state, binding, configFile);
     let observed = snapshot(await adapter.readSnapshot(), binding);
     if (!journal) {
-      requireThat(observed.webApps.length === 0 && !observed.authorizedDomains.includes(host), 'baseline_already_changed');
+      // Compare validated bare-host entries, never URL substrings.
+      requireThat(observed.webApps.length === 0 && !observed.authorizedDomains.some((domain) => domain === host), 'baseline_already_changed');
       requireThat(prerequisiteSnapshotDigest(observed) === binding.baselineDigest, 'baseline_stale');
       requireThat(!exists(configFile), 'output_already_exists');
     }

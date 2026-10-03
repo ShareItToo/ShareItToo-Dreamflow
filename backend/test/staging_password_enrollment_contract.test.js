@@ -39,4 +39,17 @@ test('source keeps invitation material out of request logs/export and binds clea
   assert.match(template, /^SIT_STAGING_PASSWORD_ENROLLMENT_INVITATIONS=$/mu);
   assert.match(app, /app\.post\('\/v1\/auth\/register', registrationLimiter/u);
   assert.match(app, /authorizationPresent: req\.get\('authorization'\) !== undefined/u);
+  assert.match(app, /token: req\.body\?\.enrollmentToken,\s*email,\s*authorizationPresent:/u);
+  assert.match(app, /const passwordHash = await hashPassword\(password\)/u);
+});
+
+test('account passwords retain independent salted scrypt, not invitation/content SHA-256', async () => {
+  const { hashPassword, verifyPassword } = await import('../src/security.js');
+  const credential = ['synthetic', 'fixture', '17'].join('-');
+  const first = await hashPassword(credential); const second = await hashPassword(credential);
+  assert.match(first, /^scrypt\$[a-f0-9]{32}\$[a-f0-9]{128}$/u);
+  assert.notEqual(first, second);
+  assert.equal(await verifyPassword(credential, first), true);
+  assert.equal(await verifyPassword(`${credential}-wrong`, first), false);
+  assert.equal(await verifyPassword(credential, 'a'.repeat(64)), false);
 });

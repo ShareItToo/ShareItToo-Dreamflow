@@ -41,6 +41,20 @@ test('ops preparation uses random bearer material and token-salted email binding
   assert.throws(() => prepareStagingPasswordInvitation({ email: email.toUpperCase(), userId, now }), denied);
 });
 
+test('existing invitation digest format remains valid; token and email changes fail closed', () => {
+  // Fixed synthetic 32-byte bearer vector, never a real invitation/password.
+  const token = Buffer.alloc(32, 7).toString('base64url');
+  const invitation = {
+    tokenDigest: 'dc4bf80c77473d130fa0de86ba4018fe98bb214005e6a5891d12ba91446f9e81',
+    emailDigest: '12b72992fb7d8743534375adeef370e6cedfe22cf466ce510e885073b9283d18',
+    userId, issuedAt: new Date(now).toISOString(), expiresAt: new Date(now + 86400000).toISOString(),
+  };
+  const configuration = read(environment(invitation));
+  assert.equal(resolveStagingPasswordEnrollment(configuration, { token, email, now }).userId, userId);
+  assert.throws(() => resolveStagingPasswordEnrollment(configuration, { token: Buffer.alloc(32, 8).toString('base64url'), email, now }), denied);
+  assert.throws(() => resolveStagingPasswordEnrollment(configuration, { token, email: 'foreign@example.invalid', now }), denied);
+});
+
 test('requires valid closed gate and exact unique preauthorized principals', () => {
   const { invitation } = make();
   for (const gate of [

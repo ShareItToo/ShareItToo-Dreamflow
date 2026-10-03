@@ -99,6 +99,22 @@ test('one create and one guarded patch preserve all domains/config and export co
   assert.equal(f.calls.create, 1); assert.equal(f.calls.patch, 1);
   assert.equal(fs.existsSync(`${f.journalFile}.lock`), false);
 });
+test('preflight compares whole validated domain entries, never host substrings or a string inventory', async (t) => {
+  const f = fixture(t);
+  f.snapshot.authorizedDomains.push('staging.shareittoo.com.evil.invalid', 'evil-staging.shareittoo.com', 'notstaging.shareittoo.com');
+  f.binding.baselineDigest = prerequisiteSnapshotDigest(f.snapshot);
+  f.binding.gate.baselineDigest = f.binding.baselineDigest;
+  assert.equal((await f.invoke()).status, 'preflight-passed-no-mutation');
+  f.snapshot.authorizedDomains.push('staging.shareittoo.com');
+  await assert.rejects(f.invoke(), /baseline_already_changed/u);
+  for (const domains of ['staging.shareittoo.com', ['https://staging.shareittoo.com'], ['evil.invalid/staging.shareittoo.com'],
+    ['staging.shareittoo.com@evil.invalid'], ['staging.shareittoo.com?evil.invalid']]) {
+    f.snapshot.authorizedDomains = domains;
+    await assert.rejects(f.invoke(), /domain_inventory_invalid/u);
+  }
+  assert.deepEqual(f.calls, { create: 0, operation: 0, app: 0, patch: 0, sdk: 0 });
+  assert.deepEqual(fs.readdirSync(f.directory), []);
+});
 for (const mutation of ['source', 'runner', 'origin', 'project', 'expired', 'gate', 'baseline', 'extra']) {
   test(`binding ${mutation} refuses before create`, async (t) => {
     const f = fixture(t);

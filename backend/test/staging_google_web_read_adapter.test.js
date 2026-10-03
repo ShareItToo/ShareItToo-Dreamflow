@@ -4,6 +4,8 @@ import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { createStagingGoogleWebReadAdapter as create } from '../ops/staging_google_web_read_adapter.mjs';
 
+// Independent deterministic oracle for synthetic public-key/config fingerprints,
+// not a password verifier; intentionally byte-compatible with the read contract.
 const sha = (v) => createHash('sha256').update(v).digest('hex');
 const canonical = (v) => Array.isArray(v) ? v.map(canonical) : v && typeof v === 'object'
   ? Object.fromEntries(Object.keys(v).sort().map((key) => [key, canonical(v[key])])) : v;
@@ -219,6 +221,7 @@ test('key UID is distinct from resource ID; list/get/getKeyString bind full inve
   const f = fixture(); const result = await f.adapter.readApiKeyInventory();
   assert.equal(result.apiKey.apiKeyId, f.key.uid); assert.notEqual(f.key.uid, f.key.name.split('/').at(-1));
   assert.equal(result.apiKey.keyFingerprint, sha(f.publicKey));
+  assert.equal(result.apiKey.keyFingerprint, 'd5f8bee883f72b92679865bf327e27cb37e5a077eff372a25c3d9ee399bd0adf');
   assert.equal(result.apiKey.restrictionsDigest, digest(f.key.restrictions));
   assert.equal(result.keyInventoryDigest, digest([f.key]));
   assert.equal(result.apiKey.exists, true); assert.equal(result.apiKey.webCompatible, false);

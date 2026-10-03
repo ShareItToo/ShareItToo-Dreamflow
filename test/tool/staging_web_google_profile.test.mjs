@@ -44,6 +44,8 @@ test('Google successor binds the same canonical digest and compile-time fields a
   assert.equal(p.SIT_SOCIAL_PROVIDER_ACTIVATION_VALIDATED, 'true');
   assert.equal(p.SIT_SOCIAL_APPLE_ENABLED, 'false'); assert.equal(p.SIT_SOCIAL_FACEBOOK_ENABLED, 'false');
   assert.equal(p.SIT_FIREBASE_WEB_CONFIG_SHA256, googleWeb.digest);
+  // Frozen synthetic public-config vector protects the cross-runtime format.
+  assert.equal(googleWeb.digest, '2d45d33c8cf81d7fe51c7daea8ddb4bb749dc868e08b3d61a94ae3e93ab814fd');
   assert.equal(p.SIT_FIREBASE_PROJECT_ID, googleWeb.config.projectId);
   assert.equal(p.SIT_FIREBASE_MESSAGING_SENDER_ID, googleWeb.config.messagingSenderId);
   assert.equal(p.SIT_FIREBASE_WEB_APP_ID, googleWeb.config.appId);
