@@ -9,7 +9,7 @@ import { runProbe, parseArgs, contract, toolchain, boundFiles, buildArguments, p
   classifyBlockedRequest, networkReasonKeys, validateNetworkDiagnostic, ownsBuildGroup,
   launchArgs, privilegeArgs, validateInventory, validateNetwork, validateCleanup,
   requireRenderedText, classifyTextObservation, validateTextDiagnostic, renderedSemanticsRect,
-  isStaticTextLabel } from '../support/mission_quorum_web_browser_v2.mjs';
+  isStaticTextLabel, resolveBrowserControl, requireControlPoint } from '../support/mission_quorum_web_browser_v2.mjs';
 
 const head = 'a'.repeat(40);
 const sha = 'b'.repeat(64);
@@ -163,7 +163,8 @@ test('source locks cleanup, bounded phases and no runtime/provider wiring',()=>{
   assert.match(s,/await renderedText\(`\$\{name\}: \$\{count\}\/4 synthetische Foto-Slots`\)/u);
   assert.doesNotMatch(s,/await visible\(heading\)|await visible\(`\$\{name\}: /u);
   assert.match(s,/scroll: \(\)=>wheel\(250\)/u);
-  assert.match(s,/scroll\?await visible\(label\):await point\(label\)/u);
+  assert.match(s,/resolveBrowserControl\.toString\(\)/u);
+  assert.match(s,/display-evidence-open-state/u);
   assert.match(s,/--offline/u);assert.match(s,/--enforce-lockfile/u);assert.match(s,/Browser.close/u);
 });
 test('static AX text is read after bounded scroll, without requiring a clickable DOM node',async()=>{
@@ -306,6 +307,66 @@ test('runner has only explicit test/workflow consumers, never runtime or product
     if(allowed.has(p)||! /\.(?:dart|js|mjs|json|html|ya?ml|sh)$/u.test(p))continue;
     assert.doesNotMatch(fs.readFileSync(p,'utf8'),/mission_quorum_web_browser_v2|isolated-synthetic-v2-browser-proof/u,p);
   }
+});
+test('controls select exact role/name and fixed component zero before geometry or hit testing',()=>{
+  const label='Synthetische Belegdetails öffnen';const viewport={width:390,height:844};
+  const card=index=>({getAttribute:k=>k==='aria-label'?`Position ${index+1} · Synthetischer Eigentümer ${index+1}\nPflichtkomponente`:null,parentElement:null});
+  const button=(index,overrides={})=>({isConnected:true,textContent:label,disabled:false,
+    parentElement:card(index),getAttribute:k=>({role:'button','aria-label':label}[k]??null),
+    hasAttribute:k=>k==='aria-label',getClientRects:()=>[{}],
+    getBoundingClientRect:()=>({x:10,y:100,width:300,height:40}),contains:()=>false,...overrides});
+  const a=button(0),b=button(1);let hit=a;let nodes=[a,b];
+  const doc={querySelectorAll:q=>{assert.equal(q,'[role="button"]');return nodes;},
+    elementFromPoint:()=>hit,elementsFromPoint:()=>[hit],defaultView:{getComputedStyle:()=>({display:'block',visibility:'visible',opacity:'1'})}};
+  assert.deepEqual(resolveBrowserControl(doc,label,0,viewport),{x:160,y:120});
+  assert.equal(resolveBrowserControl(doc,label,null,viewport),null); // Generic duplicate is never silently chosen.
+  assert.equal(resolveBrowserControl(doc,label,1,viewport),null);
+  hit=b;assert.equal(resolveBrowserControl(doc,label,0,viewport),null); // No visible-duplicate fallback.
+  const clipped=button(0,{getBoundingClientRect:()=>({x:10,y:-100,width:300,height:40})});
+  nodes=[clipped,b];assert.equal(resolveBrowserControl(doc,label,0,viewport),null); // Never pick the later visible duplicate.
+  nodes=[a,b];hit={};assert.equal(resolveBrowserControl(doc,label,0,viewport),null);
+  hit=a;
+  assert.equal(resolveBrowserControl({...doc,elementsFromPoint:()=>[b,a]},label,0,viewport),null);
+  nodes=[a,b,button(2)];assert.equal(resolveBrowserControl(doc,label,0,viewport),null);
+  nodes=[a];assert.equal(resolveBrowserControl(doc,label,0,{width:Infinity,height:844}),null);
+  for(const rect of [{x:10,y:-1,width:300,height:40},{x:10,y:100,width:0,height:40},
+    {x:10,y:100,width:NaN,height:40},{x:380,y:100,width:20,height:40}]){
+    const bad=button(0,{getBoundingClientRect:()=>rect});nodes=[bad,b];hit=bad;
+    assert.equal(resolveBrowserControl(doc,label,0,viewport),null);
+  }
+  for(const value of [`private ${label}`,`${label} private`]){
+    const bad=button(0,{getAttribute:k=>({role:'button','aria-label':value}[k]??null)});nodes=[bad];hit=bad;
+    assert.equal(resolveBrowserControl(doc,label,0,viewport),null);
+  }
+  const staticText=button(0,{getAttribute:k=>({'aria-label':label,role:'group'}[k]??null)});nodes=[staticText];hit=staticText;
+  assert.equal(resolveBrowserControl(doc,label,0,viewport),null);
+  for(const override of [{isConnected:false},{disabled:true},{getClientRects:()=>[]}]){
+    const bad=button(0,override);nodes=[bad];hit=bad;assert.equal(resolveBrowserControl(doc,label,0,viewport),null);
+  }
+  const close=button(0,{getAttribute:k=>({role:'button','aria-label':'Belegdetails schließen'}[k]??null)});
+  nodes=[a];hit=a;assert.equal(resolveBrowserControl(doc,'Belegdetails schließen',0,viewport),null);
+  nodes=[close];hit=close;assert.deepEqual(resolveBrowserControl(doc,'Belegdetails schließen',0,viewport),{x:160,y:120});
+  nodes=[close,close];assert.equal(resolveBrowserControl(doc,'Belegdetails schließen',0,viewport),null);
+  const child={};const parent=button(0,{contains:e=>e===child});nodes=[parent];hit=child;
+  assert.deepEqual(resolveBrowserControl(doc,label,0,viewport),{x:160,y:120});
+});
+test('control state readback is bounded and cannot pass a missing transition',async()=>{
+  let reads=0;let advances=0;
+  assert.deepEqual(await requireControlPoint({read:async()=>++reads===3?{x:10,y:20}:null,
+    advance:async()=>{advances++;},safe:()=>{}}),{x:10,y:20});
+  assert.equal(reads,3);assert.equal(advances,2);
+  reads=0;advances=0;
+  await assert.rejects(requireControlPoint({read:async()=>{reads++;return null;},
+    advance:async()=>{advances++;},safe:()=>{}}),/^Error: p7_matrix$/u);
+  assert.equal(reads,18);assert.equal(advances,17);
+  const source=fs.readFileSync('test/support/mission_quorum_web_browser_v2.mjs','utf8');
+  assert.match(source,/click\('Synthetische Belegdetails öffnen',true,0\)/u);
+  assert.match(source,/waitControlState\('Belegdetails schließen',0\)/u);
+  assert.ok(source.indexOf("textStep('display-evidence-open-state'")<source.indexOf("textStep(name==='Übergabe'"));
+  const view=fs.readFileSync('test/support/mission_quorum_web_preview_v2.dart','utf8');
+  assert.match(view,/for \(var i = 0; i < components\.length; i\+\+\)/u);
+  assert.match(view,/_expanded == i \? null : i/u);
+  assert.match(view,/_segmentView\(_map\(details\[i\]\[segment\]\)/u);
 });
 test('workflow binds only exact PR head or dispatch source and uses a real file command',()=>{
   const y=fs.readFileSync('.github/workflows/mission-quorum-web-v2-proof.yml','utf8');

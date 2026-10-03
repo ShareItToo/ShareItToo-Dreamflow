@@ -60,7 +60,7 @@ export const matrixPlan = Object.freeze([
   return Object.freeze({step,scenario,width,height,status,pickup,returnCount,qr,fallback,reason,dispute,acceptance});
 }));
 phases.push(...matrixPlan.map(r => `display-row-${r.step}`));
-phases.push('display-component-first', 'display-component-second', 'display-pickup-count', 'display-return-count');
+phases.push('display-component-first', 'display-component-second', 'display-evidence-click', 'display-evidence-open-state', 'display-pickup-count', 'display-return-count');
 export function validateMatrix(rows) {
   check(Array.isArray(rows) && rows.length === matrixPlan.length, 'p7_matrix');
   check(new Set(rows.map(r=>r.screenshotSha256)).size === rows.length, 'p7_matrix');
@@ -732,6 +732,43 @@ export async function requireRenderedText(label,{readText,scroll,safe,readDomEvi
   throw Error('p7_matrix');
 }
 
+// Unlike static semantics-container geometry, controls require a fully visible
+// finite rectangle and both browser hit-test APIs to identify that control (or
+// its descendant). Select DOM occurrence BEFORE geometry, never a visible
+// duplicate. Occurrence zero is the source-order binding to the view's first
+// component; it is not an inferred DOM ancestor/component identity.
+export function resolveBrowserControl(document,label,componentIndex,viewport) {
+  if(typeof label!=='string'||!viewport||!Number.isFinite(viewport.width)||!Number.isFinite(viewport.height)
+    ||viewport.width<=0||viewport.height<=0)return null;
+  if(componentIndex!==null&&(componentIndex!==0||!['Synthetische Belegdetails öffnen','Belegdetails schließen'].includes(label)))return null;
+  const candidates=[...document.querySelectorAll('[role="button"]')].filter(e=>e.getAttribute('role')==='button'
+    &&(e.hasAttribute('aria-label')?e.getAttribute('aria-label'):e.textContent)===label);
+  if(componentIndex===null?candidates.length!==1:candidates.length<1||candidates.length>2)return null;
+  // The unchanged view owns one expanded index, so two close controls are
+  // contradictory, not interchangeable evidence of a successful transition.
+  if(label==='Belegdetails schließen'&&candidates.length!==1)return null;
+  const e=candidates[0];
+  if(!e.isConnected||e.disabled||e.getAttribute('aria-disabled')==='true'||e.getClientRects().length===0)return null;
+  const style=document.defaultView.getComputedStyle(e);
+  if(style.display==='none'||style.visibility!=='visible'||!(Number(style.opacity)>0))return null;
+  const r=e.getBoundingClientRect();
+  if(![r.x,r.y,r.width,r.height].every(Number.isFinite)||r.width<=0||r.height<=0||r.x<0||r.y<0
+    ||!Number.isFinite(r.x+r.width)||!Number.isFinite(r.y+r.height)
+    ||r.x+r.width>viewport.width||r.y+r.height>viewport.height)return null;
+  const p={x:r.x+r.width/2,y:r.y+r.height/2};
+  const related=hit=>Boolean(hit&&(hit===e||e.contains(hit)));
+  if(!related(document.elementFromPoint(p.x,p.y))||!related(document.elementsFromPoint(p.x,p.y)[0]))return null;
+  return p;
+}
+export async function requireControlPoint({read,advance,safe}) {
+  for(let attempt=0;attempt<18;attempt++){
+    safe();const p=await read();safe();
+    if(p!==null){check(exact(p,['x','y'])&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.x>=0&&p.y>=0,'p7_matrix');return p;}
+    if(attempt<17)await advance();
+  }
+  throw Error('p7_matrix');
+}
+
 async function observeDisplayMatrix({cdp,evaluate,session,safe,emit,onTextDiagnostic}) {
   const call=(method,params={})=>cdp(method,params,session);
   const disclosure='Synthetischer Test – keine authentischen Fotos, keine vertragliche oder finanzielle Wirkung. Keine echte Miete. D1–D4 offen.';
@@ -742,7 +779,7 @@ async function observeDisplayMatrix({cdp,evaluate,session,safe,emit,onTextDiagno
     const names=(a.nodes??[]).map(n=>n.name?.value).filter(v=>typeof v==='string');
     const t=names.join('\n');check(!t.includes('P7 render failure'),'p7_render');
     check(!/p7v2-synthetic-|[a-f0-9]{64}/u.test(t),'p7_matrix');return t;};
-  const point=label=>evaluate(`(() => {const label=${JSON.stringify(label)};
+  const staticPoint=label=>evaluate(`(() => {const label=${JSON.stringify(label)};
     const es=[...document.querySelectorAll('flt-semantics,[role="button"]')];
     for(const e of es){if(e.getAttribute('aria-label')!==label&&e.textContent!==label)continue;
       const r=e.getBoundingClientRect();if(r.width>0&&r.height>0&&r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight)
@@ -769,8 +806,10 @@ async function observeDisplayMatrix({cdp,evaluate,session,safe,emit,onTextDiagno
     try{await action();emit(name,'confirmed');}
     catch(error){emit(name,'failed');throw error;}
   };
-  const visible=async(label)=>{for(let i=0;i<18;i++){safe();const p=await point(label);if(p)return p;await wheel(250);}throw Error('p7_matrix');};
-  const click=async(label,scroll=false)=>{const p=scroll?await visible(label):await point(label);check(p,'p7_matrix');
+  const controlPoint=(label,componentIndex=null)=>evaluate(`(${resolveBrowserControl.toString()})(document,${JSON.stringify(label)},${JSON.stringify(componentIndex)},{width:innerWidth,height:innerHeight})`);
+  const visibleControl=(label,componentIndex)=>requireControlPoint({read:()=>controlPoint(label,componentIndex),advance:()=>wheel(250),safe});
+  const waitControlState=(label,componentIndex)=>requireControlPoint({read:()=>controlPoint(label,componentIndex),advance:()=>delay(80),safe});
+  const click=async(label,scroll=false,componentIndex=null)=>{const p=scroll?await visibleControl(label,componentIndex):await controlPoint(label,componentIndex);check(p,'p7_matrix');
     for(const type of ['mousePressed','mouseReleased'])await call('Input.dispatchMouseEvent',{type,...p,button:'left',clickCount:1});await delay(100);};
   const waitText=async(label)=>{for(let i=0;i<60;i++){if((await text()).includes(label))return;await delay(100);}throw Error('p7_matrix');};
   const keyboardActivate=async()=>{for(const type of ['keyDown','keyUp'])await call('Input.dispatchKeyEvent',
@@ -786,7 +825,7 @@ async function observeDisplayMatrix({cdp,evaluate,session,safe,emit,onTextDiagno
         const t=await text();check(t.includes('Synthetische Testansicht nicht freigegeben')&&!t.includes(disclosure),'p7_matrix');
       }else{
         await waitText(`Mission: ${labels[plan.status]}`);check((await text()).includes(disclosure),'p7_matrix');
-        check(await point(disclosure),'p7_matrix');
+        check(await staticPoint(disclosure),'p7_matrix');
         // Lazy ListView children must actually render independently; duplicate
         // axis labels are not proof that both separate components were shown.
         for(const [phase,heading] of [
@@ -805,7 +844,9 @@ async function observeDisplayMatrix({cdp,evaluate,session,safe,emit,onTextDiagno
         check((await text()).includes(`Klärungsfall: ${labels[plan.dispute]}`),'p7_matrix');
         if(plan.reason)check((await text()).includes('Rückgabe-Klärungsgrund (synthetisch): widersprüchlicher Rückgabe-/Prüffallstatus.'),'p7_matrix');
         if(plan.scenario==='released')check((await text()).includes('Freigabe: freigegeben'),'p7_matrix');
-        await wheel(-10000); await click('Synthetische Belegdetails öffnen',true);
+        await wheel(-10000);
+        await textStep('display-evidence-click',()=>click('Synthetische Belegdetails öffnen',true,0));
+        await textStep('display-evidence-open-state',()=>waitControlState('Belegdetails schließen',0));
         for(const [name,count]of [['Übergabe',plan.pickup],['Rückgabe',plan.returnCount]]) {
           await textStep(name==='Übergabe'?'display-pickup-count':'display-return-count',async()=>{
             await renderedText(`${name}: ${count}/4 synthetische Foto-Slots`);
@@ -815,11 +856,13 @@ async function observeDisplayMatrix({cdp,evaluate,session,safe,emit,onTextDiagno
           &&t.includes('Fallback: exakt 6 Ziffern, synthetischer Verifizierungsbeleg')===plan.fallback,'p7_matrix');
         for(const label of ['Übersicht:','Detail:','Zubehör:','Kritischer Bereich:'])check(t.includes(label),'p7_matrix');
         // Keyboard uses the focus retained by the actually clicked local action.
-        await wheel(-10000); await click('Belegdetails schließen',true);await keyboardActivate();
+        await wheel(-10000); await click('Belegdetails schließen',true,0);
+        await waitControlState('Synthetische Belegdetails öffnen',0);await keyboardActivate();
+        await waitControlState('Belegdetails schließen',0);
         check((await text()).includes('synthetische Foto-Slots'),'p7_matrix');
         await wheel(-10000);await click('Testansicht zurücksetzen',true);
         check(!(await text()).includes('synthetische Foto-Slots'),'p7_matrix');
-        check(await point(disclosure),'p7_matrix');
+        check(await staticPoint(disclosure),'p7_matrix');
       }
       const geometry=await evaluate('document.documentElement.scrollWidth<=innerWidth&&document.documentElement.scrollHeight<=innerHeight');
       check(geometry===true,'p7_matrix');
