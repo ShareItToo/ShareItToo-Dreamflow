@@ -54,12 +54,17 @@ discover a mechanically stale source hash.
   immutable parent relationship and the same principal. Require both expected
   principals and a real-database reassignment negative test that preserves
   aggregate counts while changing ownership.
-- Synthetic acceptance-outcome fixtures must keep planned request bindings
-  separate from observed effects. `not_started`, unknown/readback and proven
-  no-effect states must not preallocate or invent booking, contract, payment or
-  provider identifiers; those identifiers may appear only in a complete,
-  exact, server-supplied effect observation, with deterministic negative tests
-  for missing, partial and mismatched effect identities.
+- Synthetic acceptance-outcome fixtures must keep planned request bindings,
+  server-supplied pre-existing context and observed effects as three separate
+  shapes. `not_started` must not preallocate booking, contract, payment or
+  provider identifiers, and unknown/readback/no-effect states must never invent
+  them. If the current workflow already has a Booking or Contract before the
+  acceptance attempt, a successor version may carry those IDs only in a
+  complete, separately typed authoritative-context record with exact lifecycle,
+  actor and parent-association proof; it must never classify them as newly
+  observed effects. Effect identifiers may appear only in a complete, exact,
+  server-supplied effect observation, with deterministic negative tests for
+  missing, partial and mismatched context and effect identities.
 - Non-root bind-source mentor invariant: keep protected host evidence parents
   root-owned `0700`; do not weaken them merely to make host-side UID traversal
   pass. Before starting any non-root worker, the root Docker daemon must verify
@@ -97,6 +102,11 @@ discover a mechanically stale source hash.
   Repeat-promotion pre-state contracts must derive from the last verified final
   runtime shape, not a stale first-promotion source shape; deterministic tests
   must assert the exact live tuple and reject extra, missing or changed mounts.
+- New committed documents, gate packets and capsules must use repository-relative
+  paths. Absolute host- or user-specific paths belong only in private local
+  evidence locators and must never be tracked. Check new documentation for such
+  paths before handoff or commit; describe artifacts without transient worktree
+  status claims.
 - An image- and manifest-bound promotion runner may raise its terminal schema
   only when that exact published image contains the new migration. A source-only
   product package leaves the accepted live runner unchanged; create its schema
