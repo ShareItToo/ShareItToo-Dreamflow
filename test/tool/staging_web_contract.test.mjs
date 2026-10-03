@@ -6,10 +6,11 @@ import path from 'node:path';
 import vm from 'node:vm';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { TARGET, profile, cleanSource, sealArtifact, validateArtifact, deploy, sha256, stagingBootstrap, retirementWorker } from '../../tool/staging_web_contract.mjs';
+import { TARGET, GOOGLE_WEB_PROFILE, bindGoogleWebConfig, profile, cleanSource, sealArtifact, validateArtifact, deploy, sha256, stagingBootstrap, stagingBootstrapFor, retirementWorker } from '../../tool/staging_web_contract.mjs';
+import { buildArchive, verifyArchive } from '../../tool/staging_web_archive.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-function fixture(t) {
+function fixture(t, googleWeb = null) {
   const temp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sit-staging-web-test-')));
   t.after(() => fs.rmSync(temp, { recursive: true, force: true }));
   const sourceRoot = path.join(temp, 'source'); fs.mkdirSync(sourceRoot);
@@ -17,18 +18,112 @@ function fixture(t) {
   git('init'); fs.writeFileSync(path.join(sourceRoot, 'fixture'), 'tracked'); git('add', '.');
   git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-m', 'fixture');
   const source = git('rev-parse', 'HEAD');
-  function artifact(name, version = '1.0.0+2026092905') {
+  function artifact(name, version = '1.0.0+2026092905', binding = null) {
     const directory = path.join(temp, name); fs.mkdirSync(path.join(directory, 'web'), { recursive: true });
     for (const [file, text] of Object.entries({ 'index.html': '<script src="flutter_bootstrap.js" async></script>', 'main.dart.js': 'compiled fixture', 'manifest.json': '{"name":"ShareItToo"}', 'flutter_bootstrap.js': '_flutter.loader.load();' })) fs.writeFileSync(path.join(directory, 'web', file), text);
-    const hash = sealArtifact({ directory, source, version, flutterVersion: { frameworkVersion: 'fixture' }, builderDigest: 'a'.repeat(64) });
+    const hash = sealArtifact({ directory, source, version, flutterVersion: { frameworkVersion: 'fixture' }, builderDigest: 'a'.repeat(64), googleWeb: binding });
     return { directory, hash };
   }
-  const old = artifact('old', '1.0.0+2026092904'); const candidate = artifact('candidate');
+  const old = artifact('old', '1.0.0+2026092904'); const candidate = artifact('candidate', undefined, googleWeb);
   const root = path.join(temp, 'staging-web'); fs.mkdirSync(path.join(root, 'releases'), { recursive: true, mode: 0o755 });
   fs.cpSync(old.directory, path.join(root, 'releases', old.hash), { recursive: true });
   fs.symlinkSync(`releases/${old.hash}/web`, path.join(root, 'current'));
   const args = { root, target: TARGET, artifact: candidate.directory, manifestHash: candidate.hash, sourceRoot, source, currentHash: old.hash, verify: () => {} };
   return { temp, root, old, candidate, args, sourceRoot, source };
+}
+
+function googleHandoff(t) {
+  // Synthetic public options only; no Firebase, Flutter build or live route.
+  const config = { projectId: 'synthetic-sit-fixture', messagingSenderId: '123456789012',
+    appId: `1:123456789012:web:${'a'.repeat(32)}`, apiKey: ['AI', 'za', 'x'.repeat(35)].join(''),
+    authDomain: 'synthetic-sit-fixture.firebaseapp.com', backendProjectId: 'synthetic-sit-fixture', authorizedOrigin: TARGET };
+  const binding = bindGoogleWebConfig(config, sha256(JSON.stringify(config)));
+  const f = fixture(t, binding);
+  const archive = path.join(f.temp, 'transfer.tar');
+  const proof = buildArchive(f.candidate.directory, f.candidate.hash, archive);
+  assert.equal(proof.archiveHash, sha256(fs.readFileSync(archive)));
+  const extracted = path.join(f.temp, 'extracted'); fs.mkdirSync(extracted);
+  // Independent system-tar extraction, then the real archive/artifact validators.
+  execFileSync('tar', ['-xf', archive, '-C', extracted], { stdio: ['ignore', 'pipe', 'pipe'] });
+  assert.equal(verifyArchive(extracted, f.candidate.hash, archive).archiveHash, proof.archiveHash);
+  const manifest = validateArtifact(extracted, f.candidate.hash, f.source);
+  assert.equal(manifest.schemaVersion, 2);
+  assert.equal(manifest.profileContractVersion, GOOGLE_WEB_PROFILE);
+  assert.equal(manifest.googleWebConfigDigest, binding.digest);
+  assert.equal(validateArtifact(f.old.directory, f.old.hash).schemaVersion, 1);
+  for (const name of ['staging-web-manifest.json', 'SHA256SUMS', ...Object.keys(manifest.files).map((name) => `web/${name}`)]) {
+    assert.deepEqual(fs.readFileSync(path.join(extracted, name)), fs.readFileSync(path.join(f.candidate.directory, name)), name);
+  }
+  const release = JSON.parse(fs.readFileSync(path.join(extracted, 'web/staging-release.json')));
+  assert.deepEqual(release, { target: TARGET, source: f.source, version: manifest.version,
+    profileDigest: sha256(JSON.stringify(profile(f.source, manifest.version, binding))) });
+  assert.equal(fs.readFileSync(path.join(extracted, 'web/staging_bootstrap.js'), 'utf8'), stagingBootstrapFor(f.source, manifest.version, binding));
+  return { ...f, binding, manifest, release, args: { ...f.args, artifact: extracted } };
+}
+
+// Simulate the four CLI HTTPS readbacks through the actual current symlink.
+// No HTTP server is used: this proves the handoff, not gateway/browser behavior.
+function routeVerifier(f, expected, drift = null) {
+  let calls = 0;
+  const verify = ({ directory, manifestHash }) => {
+    calls += 1;
+    assert.equal(manifestHash, expected.hash);
+    assert.equal(fs.realpathSync(path.join(f.root, 'current')), path.join(directory, 'web'));
+    for (const name of ['index.html', 'staging_bootstrap.js', 'flutter_service_worker.js', 'staging-release.json']) {
+      let served = fs.readFileSync(path.join(f.root, 'current', name));
+      if (name === 'staging_bootstrap.js' && drift === 'bootstrap') served = fs.readFileSync(path.join(f.old.directory, 'web', name));
+      if (name === 'staging-release.json' && ['source', 'version', 'profileDigest'].includes(drift)) {
+        const identity = JSON.parse(served);
+        identity[drift] = JSON.parse(fs.readFileSync(path.join(f.old.directory, 'web', name)))[drift];
+        if (drift === 'source') identity.source = '0'.repeat(40);
+        served = Buffer.from(`${JSON.stringify(identity)}\n`);
+      }
+      if (sha256(served) !== sha256(fs.readFileSync(path.join(expected.directory, 'web', name)))) throw Error('staging_static_readback_mismatch');
+    }
+  };
+  return { verify, calls: () => calls };
+}
+
+test('Google v2 archive handoff preflights without mutation and publishes exact identity over existing v1 route', (t) => {
+  const f = googleHandoff(t); const reader = routeVerifier(f, f.candidate);
+  const before = fs.readdirSync(f.root); const releases = fs.readdirSync(path.join(f.root, 'releases'));
+  assert.equal(deploy({ ...f.args, verify: reader.verify }).status, 'preflight-passed-no-mutation');
+  assert.equal(reader.calls(), 0);
+  assert.deepEqual(fs.readdirSync(f.root), before);
+  assert.deepEqual(fs.readdirSync(path.join(f.root, 'releases')), releases);
+  assert.equal(fs.readlinkSync(path.join(f.root, 'current')), `releases/${f.old.hash}/web`);
+  assert.equal(deploy({ ...f.args, execute: true, verify: reader.verify }).status, 'deployed');
+  assert.equal(reader.calls(), 1);
+  assert.equal(fs.readlinkSync(path.join(f.root, 'previous')), `releases/${f.old.hash}/web`);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(f.root, 'current/staging-release.json'))), f.release);
+  assert.equal(fs.existsSync(path.join(f.root, '.deployment-lock')), false);
+
+  const recovery = routeVerifier(f, f.old);
+  const rollback = { ...f.args, artifact: f.old.directory, manifestHash: f.old.hash,
+    currentHash: f.candidate.hash, rollback: true, verify: recovery.verify };
+  assert.equal(deploy(rollback).status, 'preflight-passed-no-mutation');
+  assert.equal(recovery.calls(), 0);
+  assert.equal(fs.readlinkSync(path.join(f.root, 'current')), `releases/${f.candidate.hash}/web`);
+  assert.equal(deploy({ ...rollback, execute: true }).status, 'deployed');
+  assert.equal(recovery.calls(), 1, 'explicit rollback must perform its own readback');
+  assert.equal(fs.readlinkSync(path.join(f.root, 'current')), `releases/${f.old.hash}/web`);
+  assert.equal(fs.readlinkSync(path.join(f.root, 'previous')), `releases/${f.candidate.hash}/web`);
+  validateArtifact(path.join(f.root, 'releases', f.candidate.hash), f.candidate.hash, f.source);
+});
+
+for (const drift of ['source', 'version', 'profileDigest', 'bootstrap']) {
+  test(`Google v2 served ${drift} mismatch restores v1 pointer without claiming recovery readback`, (t) => {
+    const f = googleHandoff(t); const reader = routeVerifier(f, f.candidate, drift);
+    assert.throws(() => deploy({ ...f.args, execute: true, verify: reader.verify }), { message: 'staging_static_readback_mismatch' });
+    assert.equal(reader.calls(), 1, 'automatic restoration validates disk only; no second served readback');
+    for (const pointer of ['current', 'previous']) assert.equal(fs.readlinkSync(path.join(f.root, pointer)), `releases/${f.old.hash}/web`);
+    for (const artifact of [f.old, f.candidate]) validateArtifact(path.join(f.root, 'releases', artifact.hash), artifact.hash, f.source);
+    assert.equal(fs.existsSync(path.join(f.root, '.deployment-lock')), false);
+    // Independent recovery readback is a separate step, not deploy success.
+    const recovery = routeVerifier(f, f.old);
+    recovery.verify({ directory: path.join(f.root, 'releases', f.old.hash), manifestHash: f.old.hash });
+    assert.equal(recovery.calls(), 1);
+  });
 }
 test('exact staging profile, no real-money/local-QA/provider expansion', () => {
   const p = profile('a'.repeat(40), '1.0.0+2026092905');
