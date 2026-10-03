@@ -1,7 +1,7 @@
 # Prepared gate packet — SIT-MISSION-D3D4-SAFETY-02
 
 **PREPARED ONLY — NOT SENT — NO GATE DECISION.** Prepared 2026-10-03.
-Review target: `d1f12132b0be20878cff1d69fea7264c25ca0995`, branch
+Review target: `154f8fd92830da0bcd0edde0164f119f64dbb646`, branch
 `codex/master-workflow-20260808`, ShareItToo. This document is not approval to
 implement, deploy, process real data or contact anybody. D1–D4 remain open.
 
@@ -11,13 +11,20 @@ implement, deploy, process real data or contact anybody. D1–D4 remain open.
   with **Extended** immediately before the already user-authorized send. No
   other model/mode is a substitute. This packet does not attest login or mode,
   and no further user permission request is required after that preflight.
+  This refresh does not expand the existing authorization; the current package
+  remains preparation only until the verified account/mode preflight succeeds.
 - Deliver only approved, non-secret source material for this gate. The paths
   below are repository-relative source locators, **not evidence Gemini can read
   them**. Gemini must state precisely which supplied files/excerpts it actually
   opened. A hash
   or this capsule alone does not replace their contents. Missing decisive bytes
   require `NOT VERIFIED`, not a claimed repository inspection.
-- Revalidate all six immutable source hashes against the target commit. If the
+- For R5 supply only the relevant scope, FIX reasons and accepted-routing
+  excerpts; omit its personal account and conversation/session locator. Label
+  full-file hashes as repository provenance and separately bind the exact
+  transmitted excerpt bytes. Never imply that a full-file hash authenticates
+  a shortened or sanitized excerpt.
+- Revalidate all five immutable source hashes against the target commit. If the
   current checkout advances, distinguish that fact from the bound review target;
   do not silently rebind this packet or treat later changes as reviewed.
 - Send only after the account/mode and supplied-source-byte preflight. No browser
@@ -27,7 +34,8 @@ implement, deploy, process real data or contact anybody. D1–D4 remain open.
 ## Immutable technical source register
 
 Authority: SIT repository, exact commit above. Full-file SHA-256 below; access
-date 2026-10-03. Preparation result for R1–R6: local bytes read/hash-checked, not
+date 2026-10-03. Refresh result for R1–R5: exact local bytes read/hash-checked
+against the target commit, not
 remote/Gemini access. Repository: `ShareItToo/ShareItToo-Dreamflow`. Every path
 below is repository-relative and bound to the exact commit above.
 
@@ -37,10 +45,16 @@ below is repository-relative and bound to the exact commit above.
 | R2 | `backend/test/mission_supply_safety_contract.test.js` | `c55dceb50782a92ecaff5a8768a2552345eba82d8199746152f233874adb46de` | Current focused test definitions, whole file; field/alias/shape/state negatives and no-consumer scan. Not database/runtime proof. |
 | R3 | `docs/operations/SIT_MISSION_D4_THREAT_ABORT_CONTRACT_2026-10-03.md` | `349c8b7c9fe5c76721d9f61905dc3dae6c4d3f012885c58b10228b5848075a17` | Current threat/abort mapping and explicit gaps; original inspected base was 08636b6, not a claim of a deployed adapter. |
 | R4 | `docs/product/SIT_MISSION_MASTERPLAN_2026-09-30.md` | `22375f1c7847a76e55fcb362e476067086fb3a5c5d6c378592bc20635847001d` | D3/D4 at lines 207–208: privacy/retention plus ACL/media proof; enumeration/spam/facts/Fit/support obligations. |
-| R5 | `docs/operations/SIT_PILOT_PHASE_CAPSULE_2026-09-23.md` | `0c9b844842a2f32d41d762f93963e400f1521d85bc724a0fd0fa64d3b44ca6d0` | Current execution head and D4 paragraph, not historical snapshots; recorded 191/191 focused checks and continued D1–D4 boundary. |
-| R6 | `docs/operations/SIT_GEMINI_MISSION_P6C_D3_D4_GATE_2026-10-02.md` | `4187465351b7ecd4177c275d1c7100053e932ee124515870d4be5d3b928a3082` | Prior FIX and its reasons; historical review target 14e7678, never current approval or a fresh legal-source register. |
+| R5 | `docs/operations/SIT_GEMINI_MISSION_P6C_D3_D4_GATE_2026-10-02.md` | `4187465351b7ecd4177c275d1c7100053e932ee124515870d4be5d3b928a3082` | Prior FIX and its reasons; historical review target 14e7678, never current approval or a fresh legal-source register. |
 
-### Technical capsule — FACT from R1–R6
+The mutable phase capsule is not evidence for this refreshed packet. Its prior
+hash, execution-head statements and reported test result have been removed from
+this register. R3's link to that capsule is documentary provenance, not a
+transitive current-state assertion. This refresh supersedes the packet's former
+review target `d1f12132b0be20878cff1d69fea7264c25ca0995` only; it does not rewrite
+R3's inspected base or R5's historical gate target.
+
+### Technical capsule — FACT from R1–R5
 
 - R1 rechecks one already released, request-bound demand. `expected` and exact
   singleton `observations` bind principal/owner, Mission revision/digest, P5
@@ -58,9 +72,14 @@ below is repository-relative and bound to the exact commit above.
   internal allow. Internal reason codes must not be exposed as an API response.
 - R1 is import-free and unrouteable: no clock/randomness, network/storage,
   provider, recipient selection/ranking/contact, reservation, booking, contract
-  or payment effect. No app/route/job/flag consumes it. R2's definitions and R5's
-  recorded 191/191 result are source evidence; no tests were rerun for this
-  docs-only packet and no exact-successor CI result is asserted here.
+  or payment effect. R2's fresh consumer scan found no references in backend
+  source/Ops, Flutter/Web, tools/scripts or package metadata. This is the exact
+  scanned boundary, not a live runtime or whole-repository execution claim.
+- **Fresh focused proof:** on 2026-10-03, from `backend/`,
+  `node --import ./test_setup.js --test test/mission_supply_safety_contract.test.js`
+  passed **191/191**, exit 0, against the unchanged R1/R2 bytes registered above.
+  This proves the supplied-verdict contract and its consumer guard, not database
+  origin/common-snapshot, adapter existence, CI, deployment or real-data safety.
 - **OPEN:** R1 cannot authenticate supplied server verdicts or prove their
   common snapshot, current account eligibility, expiry, rate permit or support
   ACL. R3 explicitly does not claim participation/support links already exist
@@ -70,16 +89,30 @@ below is repository-relative and bound to the exact commit above.
   new thresholds, marketing/channel classification or legal basis is supplied.
   Existing safe revoke must remain independent of this recheck. D1–D4 stay open.
 
+### Source-to-claim and unresolved proof map
+
+| Claim | Decisive supplied source | Limit / required next evidence |
+| --- | --- | --- |
+| Exact binding, singleton, revision-2 and adverse-state rules | R1 whole implementation; R2 field/alias/state negative tests | Equality of supplied values is not authenticated server origin. |
+| Constant public unavailable, non-binding internal outcome, no effects or product consumer in the scanned trees | R1 result/import boundary; R2 output and consumer tests; fresh 191/191 run | No HTTP timing/enumeration, live route or PG transaction proof. |
+| D3/D4 scope and unresolved privacy/abuse risks | R4 D3/D4; R3 threat table and explicit gaps | R3's referenced SQL/workflow/ACL sources were not reopened here and are not verified adapter mappings. |
+| No invented support/participation relation, permit authority or common snapshot | R1 supplied-verdict shape; R3 explicit missing links/currentness limitations | Read exact underlying sources in a separately bounded mapping package; missing source remains unknown/abort. |
+| Prior gate did not authorize legal/privacy activation | R5 historical FIX reasons and accepted routing | No inherited legal conclusion, current legal-source freshness or new permission. |
+
+R1–R5 are the complete substantive repository evidence supplied for this
+question. No schema, migration, database read or source adapter is added by
+this documentation refresh.
+
 ## Exact Gemini prompt — narrow decision only
 
-You are reviewing **SIT-MISSION-D3D4-SAFETY-02** against R1–R6 at the exact
+You are reviewing **SIT-MISSION-D3D4-SAFETY-02** against R1–R5 at the exact
 commit recorded above. The entire packet, including the source register and
 limitations, is part of the question. Do not redesign the application.
 
 **Decide one and only one option:**
 
 - **A — PASS:** only the next bounded development step may be a still-dormant,
-  unrouteable, read-only PostgreSQL adapter that proves server-origin and
+  unrouteable, test-only, read-only PostgreSQL adapter that proves server-origin and
   common-snapshot verdicts for this exact contract using isolated, explicitly
   synthetic fixtures. Name the exact invariants and negative tests required
   for that proof. PASS is not a finding that the adapter exists or passed.
@@ -167,11 +200,19 @@ missing-proof table, labeled FACT/INFERENCE/PROPOSAL/OPEN statements, complete
 source register, and `BOUNDARY: D1–D4 OPEN; no real-data/contact/legal/retention
 approval`. No implementation, deployment or account instructions.
 
-## Official-source preparation register — access 2026-10-03
+## Historical official-source preparation register — recorded access 2026-10-03
 
-These are preparation observations, **not Gemini verification and not legal
-advice**. No secondary source is relied on. Status dates below are exactly the
-observed document/page dates, not invented last-updated or effective dates.
+The entries below are preserved observations from the earlier packet, **not
+fresh accesses in this refresh, Gemini verification or legal advice**. No
+browser or external retrieval was used for this update. Every current external
+legal/status proposition is therefore **NOT VERIFIED in this refresh**;
+previously reported OPENED is historical access only. The old observations
+cannot establish whether a successor, amendment or access condition changed.
+Historical content is STALE for a current legal conclusion until independently
+reopened; failed/partial accesses remain NOT VERIFIED. Dates below are recorded
+document/page dates, not newly verified effective dates. The locators identify
+official primary/regulator sources to reopen only if decisive; none supplies
+legal permission for the proposed synthetic development step by itself.
 
 | ID | Direct official source / authority | Document/status date | Preparation access result and exact supported proposition |
 | --- | --- | --- | --- |
@@ -186,15 +227,18 @@ observed document/page dates, not invented last-updated or effective dates.
 | L5 | [EDPB 2/2019 final status page](https://www.edpb.europa.eu/documents/guideline/guidelines-22019-on-the-processing-of-personal-data-under-article-61b-gdpr-in_en), reached via [official prior path](https://www.edpb.europa.eu/our-work-tools/our-documents/guidelines/guidelines-22019-processing-personal-data-under-article-61b_en), and [linked PDF](https://www.edpb.europa.eu/system/files/documents/files/file1/edpb_guidelines-art_6-1-b-adopted_after_public_consultation_en.pdf) — EDPB | Page: 16 October 2019, final version; PDF: Version 2.0, adopted 8 October 2019 after consultation | OPENED: page/PDF distinguish publication from adoption. PDF paras 22–27 concern objective contractual necessity and less-intrusive alternatives. This is not evidence that Art.6(1)(b) is appropriate for SIT's proposed future processing. |
 | L6 | [DSK direct-marketing guidance](https://www.datenschutzkonferenz-online.de/media/oh/OH-Werbung_Februar%202022_final.pdf) and [official guidance index](https://www.datenschutzkonferenz-online.de/orientierungshilfen.html) — German independent federal/state supervisory authorities (DSK) | PDF stand February 2022; index entry 18 February 2022 | OPENED: title/status and sections 1.3/1.4 identify case-specific balancing and interaction with contact-channel rules. Index still lists this edition; not a representation that no later legal change exists. Guidance is not a current consolidated statute or an SIT channel/legal approval. |
 
-L3 full citation observed from the official header:
+L3 full citation recorded by the earlier preparation, **not reverified here**:
 
 > Gesetz gegen den unlauteren Wettbewerb in der Fassung der Bekanntmachung vom
 > 3. März 2010 (BGBl. I S. 254), das zuletzt durch Artikel 6 des Gesetzes vom
 > 12. Mai 2026 (BGBl. 2026 I Nr. 139) geändert worden ist.
 
-**OPEN at preparation:** direct article verification for GDPR Arts 5/6/13 and
-ePrivacy Arts 2(h)/13, and the fresh reviewer-access proof for all six repository
-sources. These gaps are visible input to the gate, not license for A/PASS.
+**OPEN after this refresh:** direct current article/status verification for any
+decisive external legal proposition, including GDPR Arts 5/6/13 and ePrivacy
+Arts 2(h)/13, and fresh reviewer access to the supplied bytes for all five
+repository sources. These gaps are visible input to the gate, not license for
+A/PASS on an unverified decisive proposition. Historical successful accesses
+do not cure them.
 No current SIT legal-basis, channel, retention, location or activation decision
 is made by this document. The research discipline preserves source-access
 failures instead of filling them with prior-context assertions.
