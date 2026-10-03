@@ -60,6 +60,7 @@ export const matrixPlan = Object.freeze([
   return Object.freeze({step,scenario,width,height,status,pickup,returnCount,qr,fallback,reason,dispute,acceptance});
 }));
 phases.push(...matrixPlan.map(r => `display-row-${r.step}`));
+phases.push('display-component-first', 'display-component-second', 'display-pickup-count', 'display-return-count');
 export function validateMatrix(rows) {
   check(Array.isArray(rows) && rows.length === matrixPlan.length, 'p7_matrix');
   check(new Set(rows.map(r=>r.screenshotSha256)).size === rows.length, 'p7_matrix');
@@ -649,6 +650,18 @@ function realAdapter(expectedHead, emit, signal) {
   };
 }
 
+// Static Flutter text may share a merged semantics label and has no clickable
+// DOM rectangle. Require its exact AX line, including after lazy scroll builds;
+// never substitute substring matching or a control's DOM hit-test contract.
+export async function requireRenderedText(label,{readText,scroll,safe}) {
+  for(let attempt=0;attempt<18;attempt++) {
+    safe();
+    if((await readText()).split('\n').includes(label))return;
+    if(attempt<17)await scroll();
+  }
+  throw Error('p7_matrix');
+}
+
 async function observeDisplayMatrix({cdp,evaluate,session,safe,emit}) {
   const call=(method,params={})=>cdp(method,params,session);
   const disclosure='Synthetischer Test – keine authentischen Fotos, keine vertragliche oder finanzielle Wirkung. Keine echte Miete. D1–D4 offen.';
@@ -666,6 +679,12 @@ async function observeDisplayMatrix({cdp,evaluate,session,safe,emit}) {
         return {x:r.x+r.width/2,y:r.y+r.height/2};}return null;})()`);
   const wheel=async(delta)=>{const size=await evaluate('({width:innerWidth,height:innerHeight})');
     await call('Input.dispatchMouseEvent',{type:'mouseWheel',x:size.width/2,y:size.height-80,deltaX:0,deltaY:delta});await delay(80);};
+  const renderedText=label=>requireRenderedText(label,{readText:text,scroll: ()=>wheel(250),safe});
+  const textStep=async(name,action)=>{
+    emit(name,'begin');
+    try{await action();emit(name,'confirmed');}
+    catch(error){emit(name,'failed');throw error;}
+  };
   const visible=async(label)=>{for(let i=0;i<18;i++){safe();const p=await point(label);if(p)return p;await wheel(250);}throw Error('p7_matrix');};
   const click=async(label,scroll=false)=>{const p=scroll?await visible(label):await point(label);check(p,'p7_matrix');
     for(const type of ['mousePressed','mouseReleased'])await call('Input.dispatchMouseEvent',{type,...p,button:'left',clickCount:1});await delay(100);};
@@ -686,8 +705,10 @@ async function observeDisplayMatrix({cdp,evaluate,session,safe,emit}) {
         check(await point(disclosure),'p7_matrix');
         // Lazy ListView children must actually render independently; duplicate
         // axis labels are not proof that both separate components were shown.
-        for(const heading of ['Position 1 · Synthetischer Eigentümer 1','Position 2 · Synthetischer Eigentümer 2']) {
-          await visible(heading); check((await text()).includes(heading),'p7_matrix');
+        for(const [phase,heading] of [
+          ['display-component-first','Position 1 · Synthetischer Eigentümer 1'],
+          ['display-component-second','Position 2 · Synthetischer Eigentümer 2']]) {
+          await textStep(phase,async()=>{await renderedText(heading);});
         }
         await wheel(-10000);
         // All eleven axis labels must exist in this real rendered component.
@@ -702,8 +723,9 @@ async function observeDisplayMatrix({cdp,evaluate,session,safe,emit}) {
         if(plan.scenario==='released')check((await text()).includes('Freigabe: freigegeben'),'p7_matrix');
         await wheel(-10000); await click('Synthetische Belegdetails öffnen',true);
         for(const [name,count]of [['Übergabe',plan.pickup],['Rückgabe',plan.returnCount]]) {
-          await visible(`${name}: ${count}/4 synthetische Foto-Slots`);
-          check((await text()).includes(`${name}: ${count}/4 synthetische Foto-Slots`),'p7_matrix');
+          await textStep(name==='Übergabe'?'display-pickup-count':'display-return-count',async()=>{
+            await renderedText(`${name}: ${count}/4 synthetische Foto-Slots`);
+          });
         }
         const t=await text();check(t.includes('QR-v3: synthetischer Verifizierungsbeleg')===plan.qr
           &&t.includes('Fallback: exakt 6 Ziffern, synthetischer Verifizierungsbeleg')===plan.fallback,'p7_matrix');

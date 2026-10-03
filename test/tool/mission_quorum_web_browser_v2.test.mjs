@@ -7,7 +7,8 @@ import { execFileSync } from 'node:child_process';
 import { runProbe, parseArgs, contract, toolchain, boundFiles, buildArguments, project,
   artifactDigest, validateArtifact, matrixPlan, validateMatrix, classifyAsset,
   classifyBlockedRequest, networkReasonKeys, validateNetworkDiagnostic, ownsBuildGroup,
-  launchArgs, privilegeArgs, validateInventory, validateNetwork, validateCleanup } from '../support/mission_quorum_web_browser_v2.mjs';
+  launchArgs, privilegeArgs, validateInventory, validateNetwork, validateCleanup,
+  requireRenderedText } from '../support/mission_quorum_web_browser_v2.mjs';
 
 const head = 'a'.repeat(40);
 const sha = 'b'.repeat(64);
@@ -157,8 +158,28 @@ test('source locks cleanup, bounded phases and no runtime/provider wiring',()=>{
   assert.match(s,/Accessibility.getFullAXTree/u);assert.match(s,/Page.captureScreenshot/u);
   for(const heading of ['Position 1 · Synthetischer Eigentümer 1','Position 2 · Synthetischer Eigentümer 2'])
     assert.ok(s.includes(heading));
-  assert.match(s,/await visible\(heading\);\s*check\(\(await text\(\)\)\.includes\(heading\)/u);
+  assert.match(s,/await renderedText\(heading\)/u);
+  assert.match(s,/await renderedText\(`\$\{name\}: \$\{count\}\/4 synthetische Foto-Slots`\)/u);
+  assert.doesNotMatch(s,/await visible\(heading\)|await visible\(`\$\{name\}: /u);
+  assert.match(s,/scroll: \(\)=>wheel\(250\)/u);
+  assert.match(s,/scroll\?await visible\(label\):await point\(label\)/u);
   assert.match(s,/--offline/u);assert.match(s,/--enforce-lockfile/u);assert.match(s,/Browser.close/u);
+});
+test('static AX text is read after bounded scroll, without requiring a clickable DOM node',async()=>{
+  const label='Position 1 · Synthetischer Eigentümer 1';let reads=0;let wheels=0;let guards=0;
+  await requireRenderedText(label,{readText:async()=>++reads<3?'other':`other\n${label}\naxis`,
+    scroll:async()=>{wheels++;},safe:()=>{guards++;}});
+  assert.equal(reads,3);assert.equal(wheels,2);assert.equal(guards,3);
+  reads=0;wheels=0;
+  await assert.rejects(requireRenderedText(label,{readText:async()=>{reads++;return `${label} private-tail`;},
+    scroll:async()=>{wheels++;},safe:()=>{}}),/^Error: p7_matrix$/u);
+  assert.equal(reads,18);assert.equal(wheels,17);
+  for(const value of [`prefix ${label}`,`${label} suffix`,'Position 2 · Synthetischer Eigentümer 2'])
+    await assert.rejects(requireRenderedText(label,{readText:async()=>value,scroll:async()=>{},safe:()=>{}}),/^Error: p7_matrix$/u);
+  let scrolled=false;
+  await assert.rejects(requireRenderedText(label,{readText:async()=>label,scroll:async()=>{scrolled=true;},
+    safe:()=>{throw Error('p7_network');}}),/^Error: p7_network$/u);
+  assert.equal(scrolled,false);
 });
 test('runner has only explicit test/workflow consumers, never runtime or product entrypoints',()=>{
   const allowed=new Set(['test/support/mission_quorum_web_browser_v2.mjs','test/tool/mission_quorum_web_browser_v2.test.mjs',
