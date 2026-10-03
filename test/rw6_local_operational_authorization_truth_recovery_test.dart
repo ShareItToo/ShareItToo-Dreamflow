@@ -870,6 +870,15 @@ void main() {
     await tester.pump();
     await tester.pumpAndSettle();
     expect(find.text('RW6 A notification'), findsNothing);
+    // A generic data refresh cannot authorize a successor session. Preserve
+    // that fail-closed result, then deliver the principal-change event emitted
+    // by AuthService so the inbox can establish the new account's ownership.
+    expect(find.text('RW6 B notification'), findsNothing);
+    SharedPersistenceSync.notify(
+      SharedPersistenceSync.accountSecurityStateKey,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('RW6 A notification'), findsNothing);
     expect(find.text('RW6 B notification'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
   });
