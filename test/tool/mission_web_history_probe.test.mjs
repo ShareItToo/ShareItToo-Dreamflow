@@ -3,12 +3,104 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { validateSdkState, validateHistoryMatrix, artifactDigest, buildArguments,
   validateArtifact, classifyAsset, classifyBlockedRequest, networkReasonKeys, validateNetworkDiagnostic,
   isolateGoogleRegistrationGraph, validateIsolatedRegistrant, isolationScope,
   contract } from '../support/mission_web_history_build.mjs';
-import { runProbe, parseArgs, launchArgs, privilegeArgs, ownsBuildGroup } from '../support/mission_web_history_probe.mjs';
+import { runProbe, parseArgs, launchArgs, privilegeArgs, ownsBuildGroup, preloadHistoryAssetResponses } from '../support/mission_web_history_probe.mjs';
+
+function assetFixture(t) {
+  const outer = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sit-history-assets-')));
+  t.after(() => fs.rmSync(outer, { recursive: true, force: true }));
+  const root = path.join(outer, 'web'); fs.mkdirSync(root); fs.mkdirSync(path.join(root, 'assets'));
+  const bytes = Buffer.from('synthetic bound asset'); const a = artifact();
+  a.files = ['assets/icon.png', 'flutter_bootstrap.js', 'index.html', 'main.dart.js'].map(name => {
+    fs.writeFileSync(path.join(root, name), bytes);
+    return { path: name, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') };
+  });
+  a.artifactDigest = artifactDigest(a.files);
+  return { root, file: path.join(root, 'assets/icon.png'), bytes, artifact: a };
+}
+
+test('asset requests select exact preloaded bytes and MIME with no request-time fs access', t => {
+  const f = assetFixture(t); const response = preloadHistoryAssetResponses(f.root, f.artifact);
+  fs.renameSync(f.file, `${f.file}.old`); fs.writeFileSync(f.file, 'replacement must never be served');
+  for (const operation of ['readFileSync', 'readSync', 'openSync', 'lstatSync', 'realpathSync']) {
+    t.mock.method(fs, operation, () => { throw Error('request must not touch filesystem'); });
+  }
+  assert.deepEqual(response('GET', '/index.html'), { body: f.bytes, contentType: 'text/html; charset=utf-8' });
+  assert.deepEqual(response('GET', '/assets/icon.png'), { body: f.bytes, contentType: 'image/png' });
+  const modified = response('GET', '/assets/icon.png'); modified.body.fill(0); modified.contentType = 'text/html';
+  assert.deepEqual(response('GET', '/assets/icon.png'), { body: f.bytes, contentType: 'image/png' });
+  for (const url of ['/', '../index.html', '/../index.html', '/assets/../index.html', '/%69ndex.html', '/%2e%2e/private',
+    '/assets%2ficon.png', '/assets\\icon.png', '//index.html', '/index.html?x=1', '/index.html#part',
+    'https://outside.invalid/index.html', '/private/path', '/index.html\0', '/INDEX.html', '__proto__']) {
+    assert.equal(response('GET', url), null);
+  }
+  assert.equal(response('POST', '/index.html'), null); assert.equal(response('GET', { toString: () => '/index.html' }), null);
+});
+
+for (const variant of ['symlink', 'parent-symlink', 'hardlink', 'digest', 'size', 'unsafe-inventory', 'oversize-inventory']) {
+  test(`preload rejects ${variant} using a fixed error without private paths`, t => {
+    const f = assetFixture(t);
+    if (variant === 'symlink') { fs.renameSync(f.file, `${f.file}.old`); fs.symlinkSync(`${f.file}.old`, f.file); }
+    if (variant === 'parent-symlink') { const parent = path.dirname(f.file); fs.renameSync(parent, `${parent}.old`); fs.symlinkSync(`${parent}.old`, parent, 'dir'); }
+    if (variant === 'hardlink') fs.linkSync(f.file, `${f.file}.linked`);
+    if (variant === 'digest') fs.writeFileSync(f.file, Buffer.alloc(f.bytes.length));
+    if (variant === 'size') fs.appendFileSync(f.file, 'extra');
+    if (variant === 'unsafe-inventory') f.artifact.files[0].path = '../outside';
+    if (variant === 'oversize-inventory') f.artifact.files[0].bytes = 64 * 1024 * 1024 + 1;
+    f.artifact.artifactDigest = artifactDigest(f.artifact.files);
+    assert.throws(() => preloadHistoryAssetResponses(f.root, f.artifact), { message: 'history_artifact' });
+  });
+}
+
+for (const variant of ['file-open', 'file-read', 'parent-read', 'growth', 'truncate', 'mode']) {
+  test(`asset preload rejects ${variant} identity race before publishing any responder`, t => {
+    const f = assetFixture(t); const open = fs.openSync; const read = fs.readSync;
+    let changed = false; let total = 0;
+    const mutate = () => {
+      changed = true;
+      if (variant === 'file-open' || variant === 'file-read') { fs.renameSync(f.file, `${f.file}.old`); fs.writeFileSync(f.file, f.bytes); }
+      if (variant === 'parent-read') { const parent = path.dirname(f.file); fs.renameSync(parent, `${parent}.old`); fs.symlinkSync(`${parent}.old`, parent, 'dir'); }
+      if (variant === 'growth') fs.appendFileSync(f.file, Buffer.alloc(32768));
+      if (variant === 'truncate') fs.truncateSync(f.file, 1);
+      if (variant === 'mode') fs.chmodSync(f.file, (fs.statSync(f.file).mode & 0o777) === 0o600 ? 0o400 : 0o600);
+    };
+    t.mock.method(fs, 'openSync', (target, ...args) => {
+      const fd = open(target, ...args); if (!changed && variant === 'file-open' && target === f.file) mutate(); return fd;
+    });
+    t.mock.method(fs, 'readSync', (fd, buffer, offset, length, position) => {
+      if (!changed) mutate(); assert.ok(buffer.length <= f.bytes.length);
+      const count = read(fd, buffer, offset, length, position); total += count; return count;
+    });
+    assert.throws(() => preloadHistoryAssetResponses(f.root, f.artifact), { message: 'history_artifact' });
+    assert.equal(changed, true); assert.ok(total <= f.bytes.length + 1);
+  });
+}
+
+test('asset preloading handles short reads and closes all retained descriptors on failure', t => {
+  const f = assetFixture(t); const read = fs.readSync; const open = fs.openSync; const close = fs.closeSync;
+  const opened = []; const closed = [];
+  t.mock.method(fs, 'openSync', (...args) => { const fd = open(...args); opened.push(fd); return fd; });
+  t.mock.method(fs, 'readSync', (fd, buffer, offset, length, position) => read(fd, buffer, offset, Math.min(3, length), position));
+  t.mock.method(fs, 'closeSync', fd => { close(fd); closed.push(fd); });
+  assert.deepEqual(preloadHistoryAssetResponses(f.root, f.artifact)('GET', '/index.html').body, f.bytes);
+  assert.deepEqual(closed.toSorted(), opened.toSorted());
+  t.mock.method(fs, 'readSync', () => { throw Error('https://outside.invalid /private/path'); });
+  assert.throws(() => preloadHistoryAssetResponses(f.root, f.artifact), { message: 'history_artifact' });
+  assert.deepEqual(closed.toSorted(), opened.toSorted());
+});
+
+test('HTTP request callback cannot use request text as a filesystem path', () => {
+  const source = fs.readFileSync('test/support/mission_web_history_probe.mjs', 'utf8');
+  const handler = source.slice(source.indexOf('assetServer = http.createServer'), source.indexOf('assetServer.listen'));
+  assert.match(handler, /assetResponse\(request.method, request.url\)/u);
+  assert.doesNotMatch(handler, /fs\.|path\.join|request\.url\?\.slice/u);
+  assert.ok(source.indexOf('const assetResponse = preloadHistoryAssetResponses(webRoot, artifact)') < source.indexOf('assetServer = http.createServer'));
+});
 
 const instance = n => String(n).repeat(32);
 const state = (n, entry, serialCount) => ({ serialCount, state: { version: 1, instance: instance(n), entry } });

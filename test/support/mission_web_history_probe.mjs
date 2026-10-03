@@ -43,6 +43,64 @@ const command = (bin, args, options = {}) => {
 };
 const rootCommand = (bin, args, options) => command('/usr/bin/sudo', ['-n', '--', bin, ...args], options);
 const hash = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+
+// Freeze the validated build inventory before accepting any HTTP request. The
+// returned responder only selects bytes; request text never reaches a fs API.
+export function preloadHistoryAssetResponses(webRoot, artifact) {
+  const assets = new Map(); const descriptors = []; const directories = new Map();
+  const same = (a, b) => ['dev', 'ino', 'mode', 'uid', 'gid', 'nlink', 'size', 'mtimeNs', 'ctimeNs'].every(key => a[key] === b[key]);
+  const lstat = file => fs.lstatSync(file, { bigint: true });
+  const fstat = fd => fs.fstatSync(fd, { bigint: true });
+  const open = (file, flags) => { const fd = fs.openSync(file, flags | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK); descriptors.push(fd); return fd; };
+  const stableDirectories = () => {
+    for (const [file, entry] of directories) check(same(entry.before, fstat(entry.fd)) && same(entry.before, lstat(file)), 'history_artifact');
+    check(fs.realpathSync(webRoot) === webRoot, 'history_artifact');
+  };
+  try {
+    const validated = validateArtifact(artifact);
+    check(typeof webRoot === 'string' && path.isAbsolute(webRoot) && webRoot !== '/'
+      && path.normalize(webRoot) === webRoot && fs.realpathSync(webRoot) === webRoot, 'history_artifact');
+    check(validated.files.every(file => file.bytes <= 64 * 1024 * 1024)
+      && validated.files.reduce((total, file) => total + file.bytes, 0) <= 256 * 1024 * 1024, 'history_artifact');
+    const mime = { html: 'text/html; charset=utf-8', js: 'text/javascript', json: 'application/json',
+      wasm: 'application/wasm', ttf: 'font/ttf', otf: 'font/otf', png: 'image/png', bin: 'application/octet-stream' };
+    for (const file of validated.files) {
+      let parent = webRoot;
+      for (const part of ['', ...file.path.split('/').slice(0, -1)]) {
+        if (part) parent = path.join(parent, part);
+        if (directories.has(parent)) continue;
+        const fd = open(parent, fs.constants.O_RDONLY | fs.constants.O_DIRECTORY); const before = fstat(fd);
+        check(before.isDirectory() && same(before, lstat(parent)), 'history_artifact');
+        directories.set(parent, { fd, before });
+      }
+      const target = path.join(webRoot, file.path);
+      const fd = open(target, fs.constants.O_RDONLY); const before = fstat(fd);
+      check(before.isFile() && before.nlink === 1n && before.size === BigInt(file.bytes)
+        && same(before, lstat(target)), 'history_artifact');
+      stableDirectories();
+      const bytes = Buffer.alloc(file.bytes); let offset = 0;
+      while (offset < bytes.length) { const count = fs.readSync(fd, bytes, offset, bytes.length - offset, offset); check(count > 0, 'history_artifact'); offset += count; }
+      check(fs.readSync(fd, Buffer.alloc(1), 0, 1, bytes.length) === 0
+        && same(before, fstat(fd)) && same(before, lstat(target))
+        && createHash('sha256').update(bytes).digest('hex') === file.sha256, 'history_artifact');
+      stableDirectories();
+      fs.closeSync(fd); descriptors.pop();
+      assets.set(`/${file.path}`, { bytes, contentType: mime[file.path.split('.').at(-1)] ?? 'application/octet-stream' });
+    }
+    stableDirectories();
+  } catch { throw Error('history_artifact'); }
+  finally {
+    let failed = false;
+    for (const fd of descriptors.reverse()) { try { fs.closeSync(fd); } catch { failed = true; } }
+    check(!failed, 'history_artifact');
+  }
+  return (method, url) => {
+    if (method !== 'GET' || typeof url !== 'string') return null;
+    const asset = assets.get(url);
+    return asset ? { body: Buffer.from(asset.bytes), contentType: asset.contentType } : null;
+  };
+}
+
 const fail = (code, diagnostic) => ({ schemaVersion: 1, mode, status: 'fail', code: codes.has(code) ? code : 'probe_failure',
   ...(diagnostic ? { diagnostic } : {}) });
 const targetClasses = ['pageBlank', 'pageOther', 'browserUi', 'extension', 'serviceWorker', 'other'];
@@ -526,17 +584,16 @@ async function worker(directory) {
     const webRoot = path.join(directory, 'checkout/build/web');
     check(artifactDigest(inventoryTree(webRoot)) === artifact.artifactDigest, 'history_artifact');
     const files = new Map(artifact.files.map(file => [file.path, file]));
+    const assetResponse = preloadHistoryAssetResponses(webRoot, artifact);
     const mime = { html: 'text/html; charset=utf-8', js: 'text/javascript', json: 'application/json',
       wasm: 'application/wasm', ttf: 'font/ttf', otf: 'font/otf', png: 'image/png', bin: 'application/octet-stream' };
     phase('asset-server', 'begin');
     assetServer = http.createServer((request, response) => {
-      const name = request.url?.slice(1); const file = files.get(name);
-      if (request.method !== 'GET' || !file) { response.writeHead(404); response.end(); failedRequest = true; return; }
+      const asset = assetResponse(request.method, request.url);
+      if (!asset) { response.writeHead(404); response.end(); failedRequest = true; return; }
       try {
-        const bytes = fs.readFileSync(path.join(webRoot, name));
-        check(createHash('sha256').update(bytes).digest('hex') === file.sha256, 'history_artifact');
-        response.writeHead(200, { 'Content-Type': mime[name.split('.').at(-1)] ?? 'application/octet-stream', 'Cache-Control': 'no-store' });
-        response.end(bytes);
+        response.writeHead(200, { 'Content-Type': asset.contentType, 'Cache-Control': 'no-store' });
+        response.end(asset.body);
       } catch { failedRequest = true; response.writeHead(500); response.end(); }
     });
     await new Promise((resolve, reject) => { assetServer.once('error', () => reject(Error('history_network'))); assetServer.listen(0, '127.0.0.1', resolve); });
