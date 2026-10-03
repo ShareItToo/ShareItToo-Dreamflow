@@ -1,6 +1,8 @@
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:lendify/models/mfa.dart';
 import 'package:lendify/navigation/main_navigation.dart';
 import 'package:lendify/screens/legal_privacy_screen.dart';
@@ -11,6 +13,7 @@ import 'package:lendify/services/data_service.dart';
 import 'package:lendify/services/developer_preview_service.dart';
 import 'package:lendify/services/firebase_runtime.dart';
 import 'package:lendify/services/mfa_auth_flow.dart';
+import 'package:lendify/services/staging_password_enrollment_client.dart';
 import 'package:lendify/theme.dart';
 import 'package:lendify/utils/registration_consent_bundle.dart';
 import 'package:lendify/utils/registration_input_policy.dart';
@@ -20,9 +23,31 @@ import 'package:lendify/widgets/social_auth_button.dart';
 import 'package:lendify/widgets/tracked_dialog_route.dart';
 import 'package:provider/provider.dart';
 
+typedef InvitedRegistration = Future<AuthResult> Function({
+  required String email,
+  required String password,
+  required String displayName,
+  required String enrollmentToken,
+  required int expectedSessionEpoch,
+  required bool Function() isActionCurrent,
+  required bool termsAccepted,
+  required bool privacyAccepted,
+  required bool minimumAgeConfirmed,
+  required bool privateUseConfirmed,
+  required String registrationActionLabel,
+});
+
 class RegisterScreen extends StatefulWidget {
   final int? returnTabIndex;
-  const RegisterScreen({super.key, this.returnTabIndex});
+  @visibleForTesting
+  final StagingPasswordEnrollmentEnvironment? debugEnrollmentEnvironment;
+  @visibleForTesting
+  final InvitedRegistration? debugInvitedRegistration;
+  const RegisterScreen(
+      {super.key,
+      this.returnTabIndex,
+      this.debugEnrollmentEnvironment,
+      this.debugInvitedRegistration});
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
@@ -36,6 +61,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _pwCtrl = TextEditingController();
+  final _enrollmentCtrl = TextEditingController();
+  String? _enrollmentError;
+
+  bool get _enrollmentAvailable =>
+      (!kReleaseMode && widget.debugEnrollmentEnvironment != null
+              ? widget.debugEnrollmentEnvironment!
+              : StagingPasswordEnrollmentEnvironment.current)
+          .available;
 
   Future<void> _syncRentalCartAfterAuthentication() async {
     try {
@@ -84,6 +117,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void dispose() {
     _socialActionEpoch += 1;
     _activeMfaRoute?.dismiss();
+    _enrollmentCtrl.clear();
+    _enrollmentCtrl.dispose();
     _nameCtrl.dispose();
     _emailCtrl.dispose();
     _pwCtrl.dispose();
@@ -197,6 +232,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _register() async {
+    if (_enrollmentAvailable) return _registerInvited();
     if (_busy) return;
     FocusScope.of(context).unfocus();
     final ok = _formKey.currentState?.validate() ?? false;
@@ -302,7 +338,119 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
+  Future<void> _registerInvited() async {
+    if (_busy || !_enrollmentAvailable) return;
+    var token = _enrollmentCtrl.text.trim();
+    _enrollmentCtrl.clear();
+    FocusScope.of(context).unfocus();
+    final validForm = _formKey.currentState?.validate() ?? false;
+    final validToken = RegExp(r'^[A-Za-z0-9_-]{43}$').hasMatch(token);
+    setState(() => _enrollmentError =
+        validToken ? null : 'Bitte gib deinen Einladungscode erneut ein.');
+    if (!validForm || !validToken) {
+      token = '';
+      return;
+    }
+    final actionEpoch = ++_socialActionEpoch;
+    final noSessionEpoch = AuthService.sessionEpoch;
+    setState(() => _busy = true);
+    AuthSessionOwner? successfulOwner;
+    try {
+      final register = !kReleaseMode && widget.debugInvitedRegistration != null
+          ? widget.debugInvitedRegistration!
+          : AuthService.registerInvitedStagingAccount;
+      final future = register(
+        email: _emailCtrl.text.trim(),
+        password: _pwCtrl.text,
+        displayName: _nameCtrl.text.trim(),
+        enrollmentToken: token,
+        expectedSessionEpoch: noSessionEpoch,
+        isActionCurrent: () => _isSocialActionCurrent(actionEpoch),
+        termsAccepted: true,
+        privacyAccepted: true,
+        minimumAgeConfirmed: true,
+        privateUseConfirmed: true,
+        registrationActionLabel: 'Kostenlos registrieren',
+      );
+      token = '';
+      final result = await future;
+      if (!_isSocialActionCurrent(actionEpoch)) {
+        if (result.session != null) {
+          await AuthService.clearSessionOwnerIfMatches(
+              AuthService.captureSessionOwner(result.session!),
+              runLogoutCleanup: false);
+        }
+        return;
+      }
+      if (!result.ok || result.session == null) {
+        if (result.failure == AuthFailure.principalChanged) return;
+        if (!mounted) return;
+        await AppPopup.info(context,
+            title: result.failure == AuthFailure.pilotRegistrationClosed
+                ? 'Einladung nicht verfügbar'
+                : 'Registrierung nicht bestätigt',
+            message:
+                'Bitte melde dich an, wenn dein Konto bereits erstellt wurde. '
+                'Für einen weiteren Versuch brauchst du deinen Einladungscode.');
+        return;
+      }
+      successfulOwner = AuthService.captureSessionOwner(result.session!);
+      await DataService.syncCurrentUserForSessionEmail(result.session!.email);
+      if (!await _retainSuccessfulSocialRegistrationOwner(
+          actionEpoch, successfulOwner)) {
+        return;
+      }
+      await _syncRentalCartAfterAuthentication();
+      if (!await _retainSuccessfulSocialRegistrationOwner(
+          actionEpoch, successfulOwner)) {
+        return;
+      }
+      if (result.verificationPending && !result.verificationEmailSent) {
+        if (!mounted) return;
+        await AppPopup.info(context,
+            title: 'E-Mail-Bestätigung ausstehend',
+            message:
+                'Der Versandstatus ist unklar. Nutze den Hinweis für eine erneute Anforderung.');
+        if (!await _retainSuccessfulSocialRegistrationOwner(
+            actionEpoch, successfulOwner)) {
+          return;
+        }
+      }
+      if (!mounted) return;
+      await context
+          .read<DeveloperPreviewController>()
+          .setState(DeveloperUserState.loggedIn);
+      if (!await _retainSuccessfulSocialRegistrationOwner(
+          actionEpoch, successfulOwner)) {
+        return;
+      }
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+              builder: (_) =>
+                  MainNavigation(initialIndex: widget.returnTabIndex ?? 0)),
+          (route) => false);
+    } catch (_) {
+      // Exceptions may contain request bodies. Never log invitation failures.
+      if (!_isSocialActionCurrent(actionEpoch)) return;
+      if (!mounted) return;
+      await AppPopup.info(context,
+          title: successfulOwner == null
+              ? 'Registrierung nicht bestätigt'
+              : 'Konto erstellt',
+          message:
+              'Bitte melde dich an, wenn dein Konto bereits erstellt wurde.');
+    } finally {
+      token = '';
+      if (mounted) {
+        _enrollmentCtrl.clear();
+        if (_isSocialActionCurrent(actionEpoch)) setState(() => _busy = false);
+      }
+    }
+  }
+
   Future<void> _socialRegister(AuthSocialProvider provider) async {
+    _enrollmentCtrl.clear();
     if (_busy || !mounted) return;
     final actionEpoch = ++_socialActionEpoch;
     final noSessionEpoch = AuthService.sessionEpoch;
@@ -723,6 +871,70 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                                               () => _pwVisible =
                                                                   !_pwVisible)),
                                                     ),
+                                                    if (_enrollmentAvailable) ...[
+                                                      const SizedBox(
+                                                          height: 10),
+                                                      TextField(
+                                                        key: const ValueKey(
+                                                            'staging-password-invitation'),
+                                                        controller:
+                                                            _enrollmentCtrl,
+                                                        enabled: !_busy,
+                                                        obscureText: true,
+                                                        autocorrect: false,
+                                                        enableSuggestions:
+                                                            false,
+                                                        enableIMEPersonalizedLearning:
+                                                            false,
+                                                        autofillHints: const <String>[],
+                                                        inputFormatters: [
+                                                          TextInputFormatter
+                                                              .withFunction(
+                                                                  (oldValue,
+                                                                      newValue) {
+                                                            final trimmed =
+                                                                newValue.text
+                                                                    .trim();
+                                                            return trimmed ==
+                                                                    newValue
+                                                                        .text
+                                                                ? newValue
+                                                                : TextEditingValue(
+                                                                    text:
+                                                                        trimmed,
+                                                                    selection: TextSelection
+                                                                        .collapsed(
+                                                                            offset:
+                                                                                trimmed.length));
+                                                          }),
+                                                          LengthLimitingTextInputFormatter(
+                                                              43,
+                                                              maxLengthEnforcement:
+                                                                  MaxLengthEnforcement
+                                                                      .enforced),
+                                                        ],
+                                                        onChanged: (_) {
+                                                          if (_enrollmentError !=
+                                                              null) {
+                                                            setState(() =>
+                                                                _enrollmentError =
+                                                                    null);
+                                                          }
+                                                        },
+                                                        decoration:
+                                                            InputDecoration(
+                                                          labelText:
+                                                              'Einladungscode',
+                                                          errorText:
+                                                              _enrollmentError,
+                                                        ),
+                                                        textInputAction:
+                                                            TextInputAction
+                                                                .done,
+                                                        onSubmitted: (_) =>
+                                                            _register(),
+                                                      ),
+                                                    ],
                                                     const SizedBox(height: 4),
                                                     _HintRow(
                                                         icon: Icons
@@ -840,8 +1052,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                           onSubmit: _busy ? null : _register,
                                           onOpenTerms: _openTerms,
                                           onOpenPrivacy: _openPrivacy,
-                                          onLogin: () =>
-                                              Navigator.of(context).maybePop(),
+                                          onLogin: () {
+                                            _enrollmentCtrl.clear();
+                                            Navigator.of(context).maybePop();
+                                          },
                                         ),
                                       ),
                                     ],

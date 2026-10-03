@@ -261,6 +261,7 @@ const sourcePaths = [
   'lib/services/account_deletion_service.dart',
   'lib/services/blue_ocean_draft_recovery_service.dart',
   'lib/services/auth_service.dart',
+  'lib/services/staging_password_enrollment_client.dart',
   'lib/services/web_google_auth.dart',
   'lib/services/web_facebook_auth.dart',
   'lib/services/web_facebook_auth_config.dart',

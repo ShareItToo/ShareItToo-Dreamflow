@@ -21,6 +21,7 @@ import 'remote_auth_attempt_transaction.dart';
 import 'shared_persistence_sync.dart';
 import 'web_google_auth.dart';
 import 'web_facebook_auth.dart';
+import 'staging_password_enrollment_client.dart';
 
 class _SocialSdkAcquisition {
   String? firebaseUid;
@@ -661,7 +662,8 @@ class AuthService {
     // Only the server's exact closed-pilot rejection proves this outcome.
     // An arbitrary 403 or transport error must never imply no account write.
     if (error.statusCode == 403 &&
-        error.code == 'staging_registration_disabled') {
+        (error.code == 'staging_registration_disabled' ||
+            error.code == 'staging_password_enrollment_unavailable')) {
       return AuthFailure.pilotRegistrationClosed;
     }
     return switch (error.code) {
@@ -677,6 +679,81 @@ class AuthService {
         AuthFailure.verificationDeliveryUnavailable,
       _ => AuthFailure.network,
     };
+  }
+
+  static Future<AuthResult> registerInvitedStagingAccount({
+    required String email,
+    required String password,
+    required String displayName,
+    required String enrollmentToken,
+    required int expectedSessionEpoch,
+    required bool Function() isActionCurrent,
+    required bool termsAccepted,
+    required bool privacyAccepted,
+    required bool minimumAgeConfirmed,
+    required bool privateUseConfirmed,
+    required String registrationActionLabel,
+  }) async {
+    try {
+      if (!StagingPasswordEnrollmentEnvironment.current.available) {
+        return const AuthResult.failure(AuthFailure.pilotRegistrationClosed);
+      }
+      final signedOut = await isStoredSessionDefinitelyAbsent();
+      if (!signedOut ||
+          !_authAttemptPreflightCurrent(
+              expectedSessionEpoch, isActionCurrent)) {
+        return const AuthResult.failure(AuthFailure.principalChanged);
+      }
+      return await submitStagingPasswordEnrollment<AuthResult>(
+        available: StagingPasswordEnrollmentEnvironment.current.available,
+        enrollmentToken: enrollmentToken,
+        email: email,
+        password: password,
+        displayName: displayName,
+        termsAccepted: termsAccepted,
+        privacyAccepted: privacyAccepted,
+        minimumAgeConfirmed: minimumAgeConfirmed,
+        privateUseConfirmed: privateUseConfirmed,
+        registrationActionLabel: registrationActionLabel,
+        preflightCurrent: () =>
+            _authAttemptPreflightCurrent(expectedSessionEpoch, isActionCurrent),
+        actionCurrent: () => _authAttemptActionCurrent(isActionCurrent),
+        send: (body) => BackendHttp.requestJson(
+            method: 'POST', path: '/auth/register', body: body),
+        persist: (response) async {
+          if (response['accepted'] != true || response['session'] is! Map) {
+            throw const BackendException(502, 'invalid_enrollment_response');
+          }
+          final session = await _saveRemoteSession(
+            Map<String, dynamic>.from(response['session'] as Map),
+            expectedGeneration: expectedSessionEpoch,
+          );
+          return AuthResult.success(
+              session: session,
+              verificationPending: response['verificationPending'] == true,
+              verificationEmailSent: response['verificationEmailSent'] == true);
+        },
+        discardRemote: (response) async {
+          if (response['session'] is Map) {
+            await _discardIssuedRemoteSession(
+                Map<String, dynamic>.from(response['session'] as Map));
+          }
+        },
+        persistedCurrent: _authResultSessionDefinitelyCurrent,
+        discardPersisted: _discardPersistedAuthResult,
+      );
+    } on StagingPasswordEnrollmentUnavailable {
+      return const AuthResult.failure(AuthFailure.pilotRegistrationClosed);
+    } on RemoteAuthAttemptSuperseded {
+      return const AuthResult.failure(AuthFailure.principalChanged);
+    } on BackendException catch (error) {
+      return AuthResult.failure(classifyRegistrationBackendError(error));
+    } catch (_) {
+      return const AuthResult.failure(AuthFailure.network);
+    } finally {
+      enrollmentToken = '';
+      password = '';
+    }
   }
 
   static Future<AuthResult> registerLocalAccount({
