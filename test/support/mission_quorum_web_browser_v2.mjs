@@ -17,7 +17,7 @@ const chrome = '/opt/google/chrome/chrome';
 const mode = 'synthetic-v2-browser';
 export const inventoryPhases = Object.freeze(['environment', 'chrome-version', 'git-identity', 'git-status', 'binary-check', 'byte-hash']);
 const phases = ['inventory', 'prepare', 'launch', 'cdp-connect', 'Browser.getVersion', 'Target.getTargets',
-  'Target.attachToTarget', 'Page.enable', 'Runtime.enable', 'Runtime.evaluate', 'SystemInfo.getProcessInfo',
+  'Target.attachToTarget', 'Page.enable', 'Runtime.enable', 'Runtime.evaluate', 'Runtime.callFunctionOn', 'Runtime.releaseObject', 'SystemInfo.getProcessInfo',
   'build', 'locked-dependencies', 'flutter-build', 'asset-server', 'Network.enable', 'Fetch.enable', 'Fetch.requestPaused', 'Fetch.fulfillRequest', 'Fetch.failRequest', 'Page.navigate', 'Page.reload', 'Page.captureScreenshot', 'Emulation.setDeviceMetricsOverride', 'Input.dispatchKeyEvent', 'Accessibility.enable', 'Accessibility.getFullAXTree', 'Input.dispatchMouseEvent', 'display-matrix', 'display-cases', 'network', 'Browser.close', 'observe', 'terminate', 'cleanup', ...inventoryPhases];
 const codes = new Set(['probe_arguments', 'probe_inventory', 'probe_network', 'probe_targets', 'probe_sandbox',
   'p7_matrix', 'p7_render', 'p7_artifact', 'p7_source', 'p7_toolchain', 'p7_build', 'p7_network', 'probe_version', 'probe_cleanup', 'probe_timeout', 'probe_aborted', 'probe_failure', 'probe_test_hooks']);
@@ -769,6 +769,50 @@ export async function requireControlPoint({read,advance,safe}) {
   throw Error('p7_matrix');
 }
 
+function resolveStaticBrowserPoint(document,label,viewport) {
+  const es=[...document.querySelectorAll('flt-semantics,[role="button"]')];
+  for(const e of es){if(e.getAttribute('aria-label')!==label&&e.textContent!==label)continue;
+    const r=e.getBoundingClientRect();if(r.width>0&&r.height>0&&r.left>=0&&r.right<=viewport.width&&r.top>=0&&r.bottom<=viewport.height)
+      return {x:r.x+r.width/2,y:r.y+r.height/2};}return null;
+}
+function resolveBrowserText(document,label,viewport,geometry) {
+  const elements=[...document.querySelectorAll('flt-semantics[aria-label]')]
+    .filter(e=>e.getAttribute('aria-label').split('\n').includes(label));
+  const rendered=elements.some(e=>{
+    if(!e.isConnected||e.getClientRects().length===0)return false;
+    const style=document.defaultView.getComputedStyle(e);
+    if(style.display==='none'||style.visibility!=='visible'||!(Number(style.opacity)>0))return false;
+    const r=e.getBoundingClientRect();
+    return geometry({x:r.x,y:r.y,width:r.width,height:r.height},viewport);
+  });return {exactLine:elements.length>0,rendered};
+}
+// Only module-owned function source is code. Labels and occurrence selection
+// travel as CDP CallArgument.value, never interpolated/escaped into JavaScript.
+const browserDomFunctions=Object.freeze({
+  point:`function(label){return (${resolveStaticBrowserPoint.toString()})(document,label,{width:innerWidth,height:innerHeight});}`,
+  text:`function(label){return (${resolveBrowserText.toString()})(document,label,{width:innerWidth,height:innerHeight},${renderedSemanticsRect.toString()});}`,
+  control:`function(label,index){return (${resolveBrowserControl.toString()})(document,label,index,{width:innerWidth,height:innerHeight});}`,
+});
+export async function readBrowserDom({cdp,session,kind,label,componentIndex=null}) {
+  check(typeof kind==='string'&&Object.hasOwn(browserDomFunctions,kind)&&typeof label==='string'&&label.length>0&&label.length<=512
+    &&(componentIndex===null||(kind==='control'&&componentIndex===0)),'p7_matrix');
+  let objectId;
+  try {
+    const context=await cdp('Runtime.evaluate',{expression:'globalThis',returnByValue:false},session);
+    const candidate=context?.result?.objectId;
+    if(typeof candidate==='string'&&candidate.length>0&&candidate.length<=512)objectId=candidate;
+    check(!context?.exceptionDetails&&objectId!==undefined,'p7_matrix');
+    const result=await cdp('Runtime.callFunctionOn',{objectId,functionDeclaration:browserDomFunctions[kind],
+      arguments:[{value:label},{value:componentIndex}],returnByValue:true,awaitPromise:true},session);
+    check(!result?.exceptionDetails,'p7_matrix');
+    const value=result?.result?.value;
+    check(kind==='text'?exact(value,['exactLine','rendered'])&&typeof value.exactLine==='boolean'&&typeof value.rendered==='boolean'
+      :value===null||(exact(value,['x','y'])&&Number.isFinite(value.x)&&Number.isFinite(value.y)&&value.x>=0&&value.y>=0),'p7_matrix');
+    return value;
+  } catch {throw Error('p7_matrix');}
+  finally {if(objectId!==undefined){try{await cdp('Runtime.releaseObject',{objectId},session);}catch{throw Error('p7_matrix');}}}
+}
+
 async function observeDisplayMatrix({cdp,evaluate,session,safe,emit,onTextDiagnostic}) {
   const call=(method,params={})=>cdp(method,params,session);
   const disclosure='Synthetischer Test – keine authentischen Fotos, keine vertragliche oder finanzielle Wirkung. Keine echte Miete. D1–D4 offen.';
@@ -779,26 +823,12 @@ async function observeDisplayMatrix({cdp,evaluate,session,safe,emit,onTextDiagno
     const names=(a.nodes??[]).map(n=>n.name?.value).filter(v=>typeof v==='string');
     const t=names.join('\n');check(!t.includes('P7 render failure'),'p7_render');
     check(!/p7v2-synthetic-|[a-f0-9]{64}/u.test(t),'p7_matrix');return t;};
-  const staticPoint=label=>evaluate(`(() => {const label=${JSON.stringify(label)};
-    const es=[...document.querySelectorAll('flt-semantics,[role="button"]')];
-    for(const e of es){if(e.getAttribute('aria-label')!==label&&e.textContent!==label)continue;
-      const r=e.getBoundingClientRect();if(r.width>0&&r.height>0&&r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight)
-        return {x:r.x+r.width/2,y:r.y+r.height/2};}return null;})()`);
+  const staticPoint=label=>readBrowserDom({cdp,session,kind:'point',label});
   const wheel=async(delta)=>{const size=await evaluate('({width:innerWidth,height:innerHeight})');
     await call('Input.dispatchMouseEvent',{type:'mouseWheel',x:size.width/2,y:size.height-80,deltaX:0,deltaY:delta});await delay(80);};
   const renderedText=label=>requireRenderedText(label,{readText:text,scroll: ()=>wheel(250),safe,
     ...(isStaticTextLabel(label)?{
-      readDomEvidence:()=>evaluate(`(() => {const label=${JSON.stringify(label)};
-        const geometry=${renderedSemanticsRect.toString()};
-        const elements=[...document.querySelectorAll('flt-semantics[aria-label]')]
-          .filter(e=>e.getAttribute('aria-label').split('\\n').includes(label));
-        const rendered=elements.some(e=>{
-          if(!e.isConnected||e.getClientRects().length===0)return false;
-          const style=getComputedStyle(e);
-          if(style.display==='none'||style.visibility!=='visible'||!(Number(style.opacity)>0))return false;
-          const r=e.getBoundingClientRect();
-          return geometry({x:r.x,y:r.y,width:r.width,height:r.height},{width:innerWidth,height:innerHeight});
-        });return {exactLine:elements.length>0,rendered};})()`),
+      readDomEvidence:()=>readBrowserDom({cdp,session,kind:'text',label}),
       onFailure:onTextDiagnostic,
     }:{})});
   const textStep=async(name,action)=>{
@@ -806,7 +836,7 @@ async function observeDisplayMatrix({cdp,evaluate,session,safe,emit,onTextDiagno
     try{await action();emit(name,'confirmed');}
     catch(error){emit(name,'failed');throw error;}
   };
-  const controlPoint=(label,componentIndex=null)=>evaluate(`(${resolveBrowserControl.toString()})(document,${JSON.stringify(label)},${JSON.stringify(componentIndex)},{width:innerWidth,height:innerHeight})`);
+  const controlPoint=(label,componentIndex=null)=>readBrowserDom({cdp,session,kind:'control',label,componentIndex});
   const visibleControl=(label,componentIndex)=>requireControlPoint({read:()=>controlPoint(label,componentIndex),advance:()=>wheel(250),safe});
   const waitControlState=(label,componentIndex)=>requireControlPoint({read:()=>controlPoint(label,componentIndex),advance:()=>delay(80),safe});
   const click=async(label,scroll=false,componentIndex=null)=>{const p=scroll?await visibleControl(label,componentIndex):await controlPoint(label,componentIndex);check(p,'p7_matrix');

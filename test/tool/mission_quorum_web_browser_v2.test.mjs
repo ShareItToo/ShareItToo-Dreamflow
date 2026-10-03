@@ -3,13 +3,114 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import vm from 'node:vm';
 import { execFileSync } from 'node:child_process';
 import { runProbe, parseArgs, contract, toolchain, boundFiles, buildArguments, project,
   artifactDigest, validateArtifact, matrixPlan, validateMatrix, classifyAsset,
   classifyBlockedRequest, networkReasonKeys, validateNetworkDiagnostic, ownsBuildGroup,
   launchArgs, privilegeArgs, validateInventory, validateNetwork, validateCleanup,
   requireRenderedText, classifyTextObservation, validateTextDiagnostic, renderedSemanticsRect,
-  isStaticTextLabel, resolveBrowserControl, requireControlPoint } from '../support/mission_quorum_web_browser_v2.mjs';
+  isStaticTextLabel, resolveBrowserControl, requireControlPoint, readBrowserDom } from '../support/mission_quorum_web_browser_v2.mjs';
+
+function domTransport(label,{hidden=false,exception=false,extra=false}={}) {
+  const calls=[];
+  const node={isConnected:true,disabled:false,textContent:label,hasAttribute:()=>true,
+    getAttribute:key=>key==='role'?'button':key==='aria-label'?label:null,
+    getClientRects:()=>[{}],contains:()=>false,
+    getBoundingClientRect:()=>({x:10,y:20,left:10,top:20,right:50,bottom:40,width:40,height:20})};
+  const context=vm.createContext({innerWidth:390,innerHeight:844,document:{querySelectorAll:()=>[node],
+    defaultView:{getComputedStyle:()=>({display:'block',visibility:hidden?'hidden':'visible',opacity:'1'})},
+    elementFromPoint:()=>node,elementsFromPoint:()=>[node]}});
+  const cdp=async(method,params,session)=>{
+    calls.push({method,params,session});
+    if(method==='Runtime.evaluate')return {result:{objectId:'synthetic-context'}};
+    if(method==='Runtime.releaseObject')return {};
+    assert.equal(method,'Runtime.callFunctionOn');
+    if(exception)return {exceptionDetails:{text:'https://provider.invalid /private/browser-error'}};
+    const fn=vm.runInContext('('+params.functionDeclaration+')',context);
+    const value=JSON.parse(JSON.stringify(fn(...params.arguments.map(argument=>argument.value))));
+    return {result:{value:extra?{...value,private:'https://provider.invalid /private/browser-error'}:value}};
+  };
+  return {cdp,calls,context};
+}
+
+test('DOM read code is invariant; injection strings travel only as structured CDP arguments',async()=>{
+  const payloads=['normal',"');globalThis.injected=true;//",'";globalThis.injected=true;//',
+    '</script>',String.raw`\\quotes`, 'line\u2028separator', 'https://provider.invalid /private/path'];
+  for(const kind of ['point','text','control']){
+    let declaration;
+    for(const label of payloads){
+      const t=domTransport(label);
+      const result=await readBrowserDom({cdp:t.cdp,session:'synthetic-session',kind,label});
+      assert.deepEqual(result,kind==='text'?{exactLine:true,rendered:true}:{x:30,y:30});
+      assert.equal(t.context.injected,undefined);
+      assert.deepEqual(t.calls.map(c=>c.method),['Runtime.evaluate','Runtime.callFunctionOn','Runtime.releaseObject']);
+      assert.ok(t.calls.every(c=>c.session==='synthetic-session'));
+      assert.deepEqual(t.calls[0].params,{expression:'globalThis',returnByValue:false});
+      const params=t.calls[1].params;
+      assert.deepEqual(params.arguments,[{value:label},{value:null}]);
+      assert.equal(params.objectId,'synthetic-context');assert.equal(params.returnByValue,true);
+      if(declaration===undefined)declaration=params.functionDeclaration;
+      assert.equal(params.functionDeclaration,declaration);
+      assert.deepEqual(t.calls[2].params,{objectId:'synthetic-context'});
+      assert.doesNotMatch(JSON.stringify(result),/private|provider|injected/u);
+    }
+  }
+});
+
+test('structured DOM reads preserve visible static text, hidden rejection and component-zero hit tests',async()=>{
+  const heading='Position 1 · Synthetischer Eigentümer 1';
+  for(const hidden of [true,false]){
+    const t=domTransport(heading,{hidden});
+    assert.deepEqual(await readBrowserDom({cdp:t.cdp,session:'s',kind:'text',label:heading}),{exactLine:true,rendered:!hidden});
+  }
+  for(const label of ['Synthetische Belegdetails öffnen','Belegdetails schließen']){
+    const t=domTransport(label);
+    assert.deepEqual(await readBrowserDom({cdp:t.cdp,session:'s',kind:'control',label,componentIndex:0}),{x:30,y:30});
+    const hidden=domTransport(label,{hidden:true});
+    assert.equal(await readBrowserDom({cdp:hidden.cdp,session:'s',kind:'control',label,componentIndex:0}),null);
+  }
+});
+
+test('DOM seam rejects invalid operations/arguments before CDP without coercion',async()=>{
+  for(const fields of [{kind:'constructor'},{kind:'__proto__'},{label:null},{label:{}},{label:''},
+    {label:'x'.repeat(513)},{componentIndex:1},{componentIndex:'0'},
+    {kind:'text',componentIndex:0}]){
+    let calls=0;
+    await assert.rejects(readBrowserDom({cdp:async()=>{calls++;},session:'s',kind:'control',label:'normal',...fields}),{message:'p7_matrix'});
+    assert.equal(calls,0);
+  }
+});
+
+test('browser exceptions and unexpected fields are discarded and the remote object released',async()=>{
+  for(const options of [{exception:true},{extra:true}]){
+    const t=domTransport('normal',options);
+    await assert.rejects(readBrowserDom({cdp:t.cdp,session:'s',kind:'point',label:'normal'}),{message:'p7_matrix'});
+    assert.equal(t.calls.at(-1).method,'Runtime.releaseObject');
+  }
+});
+
+for(const failure of ['Runtime.evaluate','Runtime.callFunctionOn','Runtime.releaseObject']){
+  test(`DOM ${failure} failure has a fixed code and releases any acquired context`,async()=>{
+    const calls=[];
+    const cdp=async method=>{calls.push(method);if(method===failure)throw Error('https://provider.invalid /private/error');
+      return method==='Runtime.evaluate'?{result:{objectId:'synthetic'}}:{result:{value:null}};};
+    await assert.rejects(readBrowserDom({cdp,session:'s',kind:'point',label:'normal'}),{message:'p7_matrix'});
+    assert.equal(calls.at(-1),failure==='Runtime.evaluate'?'Runtime.evaluate':'Runtime.releaseObject');
+  });
+}
+
+test('context mismatch fails closed without stale-context retry; expression interpolation is absent',async()=>{
+  const calls=[];
+  const cdp=async method=>{calls.push(method);return {exceptionDetails:{text:'/private/context'},result:{objectId:'synthetic'}};};
+  await assert.rejects(readBrowserDom({cdp,session:'s',kind:'text',label:'normal'}),{message:'p7_matrix'});
+  assert.deepEqual(calls,['Runtime.evaluate','Runtime.releaseObject']);
+  const source=fs.readFileSync('test/support/mission_quorum_web_browser_v2.mjs','utf8');
+  assert.doesNotMatch(source,/JSON\.stringify\((?:label|componentIndex)\)/u);
+  assert.match(source,/const staticPoint=label=>readBrowserDom/u);
+  assert.match(source,/readDomEvidence:\(\)=>readBrowserDom/u);
+  assert.match(source,/const controlPoint=\(label,componentIndex=null\)=>readBrowserDom/u);
+});
 
 const head = 'a'.repeat(40);
 const sha = 'b'.repeat(64);
