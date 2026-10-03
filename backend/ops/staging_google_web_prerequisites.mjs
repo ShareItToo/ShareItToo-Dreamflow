@@ -10,6 +10,7 @@ import { TARGET, bindGoogleWebConfig, readGoogleWebConfig, confinedDirectory, sh
 
 const root = path.resolve(fileURLToPath(new URL('../../', import.meta.url)));
 const host = 'staging.shareittoo.com';
+const schemaVersion = 2;
 const hashPattern = /^[a-f0-9]{64}$/u;
 const ownFile = fileURLToPath(import.meta.url);
 const phases = ['ready', 'create_intent', 'create_pending', 'app_verified', 'domain_intent', 'domain_verified', 'export_intent', 'complete'];
@@ -28,38 +29,54 @@ function canonical(value) {
 const equal = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
 export const prerequisiteSnapshotDigest = (value) => sha256(JSON.stringify(canonical(value)));
 
+function apiKeyBinding(value, projectId) {
+  requireThat(keys(value, ['apiKeyId', 'projectId', 'keyFingerprint', 'restrictionsDigest'])
+    && typeof value.apiKeyId === 'string' && /^[A-Za-z0-9_-]{1,200}$/u.test(value.apiKeyId)
+    && value.projectId === projectId && hashPattern.test(value.keyFingerprint)
+    && hashPattern.test(value.restrictionsDigest), 'api_key_binding_invalid');
+}
+
 function snapshot(value, binding) {
   requireThat(keys(value, ['complete', 'projectId', 'projectNumber', 'backendProjectId', 'authEnabled',
-    'emulatorEnabled', 'googleEnabled', 'webApps', 'authorizedDomains', 'authConfigDigest',
-    'providerConfigDigest', 'otherAppsDigest', 'runtimeDigest', 'revision']), 'snapshot_shape_invalid');
+    'emulatorEnabled', 'googleEnabled', 'webApps', 'webAppsInventory', 'apiKey', 'keyInventoryDigest',
+    'authorizedDomains', 'authConfigDigest', 'providerConfigDigest', 'otherAppsDigest', 'runtimeDigest', 'revision']), 'snapshot_shape_invalid');
   requireThat(value.complete === true && value.projectId === binding.projectId
     && value.projectNumber === binding.projectNumber && value.backendProjectId === binding.projectId
     && value.authEnabled === true && value.emulatorEnabled === false && value.googleEnabled === true,
   'snapshot_identity_invalid');
   // authConfigDigest covers every auth setting EXCEPT authorizedDomains and
   // revision metadata; providerConfigDigest covers every provider setting.
-  for (const key of ['authConfigDigest', 'providerConfigDigest', 'otherAppsDigest', 'runtimeDigest']) {
+  // keyInventoryDigest covers the complete existing key inventory and restrictions.
+  // keyFingerprint is SHA-256 of the UTF-8 public keyString, never the raw value.
+  for (const key of ['authConfigDigest', 'providerConfigDigest', 'otherAppsDigest', 'runtimeDigest', 'keyInventoryDigest']) {
     requireThat(hashPattern.test(value[key] ?? ''), 'snapshot_digest_invalid');
   }
+  requireThat(keys(value.apiKey, ['apiKeyId', 'projectId', 'keyFingerprint', 'restrictionsDigest', 'exists', 'webCompatible'])
+    && equal(value.apiKey, { ...binding.apiKey, exists: true, webCompatible: true }), 'existing_api_key_unverified');
+  requireThat(keys(value.webAppsInventory, ['showDeleted', 'exhausted', 'nextPageToken'])
+    && value.webAppsInventory.showDeleted === true && value.webAppsInventory.exhausted === true
+    && value.webAppsInventory.nextPageToken === '', 'app_inventory_incomplete');
   requireThat(typeof value.revision === 'string' && value.revision.length > 0 && value.revision.length <= 256, 'snapshot_revision_invalid');
   requireThat(Array.isArray(value.authorizedDomains) && value.authorizedDomains.length < 1000
     && value.authorizedDomains.every((domain) => typeof domain === 'string' && /^[a-z0-9.-]+$/u.test(domain))
     && new Set(value.authorizedDomains).size === value.authorizedDomains.length, 'domain_inventory_invalid');
   requireThat(Array.isArray(value.webApps) && value.webApps.length < 1000, 'app_inventory_invalid');
   for (const app of value.webApps) {
-    requireThat(keys(app, ['appId', 'projectId', 'state']) && app.projectId === binding.projectId
+    requireThat(keys(app, ['appId', 'projectId', 'state', 'apiKeyId']) && app.projectId === binding.projectId
       && new RegExp(`^1:${binding.projectNumber}:web:[a-f0-9]{16,64}$`, 'u').test(app.appId)
-      && app.state === 'ACTIVE', 'app_inventory_invalid');
+      && typeof app.apiKeyId === 'string' && /^[A-Za-z0-9_-]{1,200}$/u.test(app.apiKeyId)
+      && ['ACTIVE', 'DELETED'].includes(app.state), 'app_inventory_invalid');
   }
   requireThat(new Set(value.webApps.map((app) => app.appId)).size === value.webApps.length, 'app_inventory_invalid');
   return structuredClone(value);
 }
 
 function validateBinding(binding, now) {
-  requireThat(keys(binding, ['schemaVersion', 'projectId', 'projectNumber', 'origin', 'sourceCommit', 'runnerDigest', 'baselineDigest', 'gate']), 'binding_shape_invalid');
-  requireThat(binding.schemaVersion === 1 && /^[a-z][a-z0-9-]{4,28}[a-z0-9]$/u.test(binding.projectId)
+  requireThat(keys(binding, ['schemaVersion', 'projectId', 'projectNumber', 'origin', 'sourceCommit', 'runnerDigest', 'baselineDigest', 'apiKey', 'gate']), 'binding_shape_invalid');
+  requireThat(binding.schemaVersion === schemaVersion && /^[a-z][a-z0-9-]{4,28}[a-z0-9]$/u.test(binding.projectId)
     && /^[0-9]{6,20}$/u.test(binding.projectNumber) && binding.origin === TARGET
     && /^[a-f0-9]{40}$/u.test(binding.sourceCommit) && hashPattern.test(binding.baselineDigest), 'binding_invalid');
+  apiKeyBinding(binding.apiKey, binding.projectId);
   requireThat(binding.runnerDigest === sha256(fs.readFileSync(ownFile))
     && binding.sourceCommit === execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(), 'source_binding_invalid');
   const gate = binding.gate;
@@ -79,8 +96,10 @@ export function assertPrerequisiteOutputPath(file) {
   requireThat(parent.uid === process.getuid() && (parent.mode & 0o777) === 0o700, 'output_directory_unsafe');
 }
 function validateState(state, binding, configFile) {
-  requireThat(keys(state, ['binding', 'configFile', 'baseline', 'phase', 'appId', 'operation', 'configDigest'])
+  requireThat(keys(state, ['schemaVersion', 'binding', 'configFile', 'baseline', 'phase', 'appId', 'operation', 'configDigest'])
+    && state.schemaVersion === schemaVersion && state.binding?.schemaVersion === schemaVersion
     && phases.includes(state.phase), 'journal_state_invalid');
+  apiKeyBinding(state.binding.apiKey, state.binding.projectId);
   requireThat(equal(state.binding, binding) && state.configFile === configFile, 'journal_binding_invalid');
   requireThat(prerequisiteSnapshotDigest(snapshot(state.baseline, binding)) === binding.baselineDigest, 'journal_baseline_invalid');
   const phase = phases.indexOf(state.phase);
@@ -146,7 +165,7 @@ function append(file, previous, state) {
   return readJournal(file);
 }
 function expectedSnapshot(baseline, appId, withDomain) {
-  return { ...baseline, webApps: appId ? [{ appId, projectId: baseline.projectId, state: 'ACTIVE' }] : [],
+  return { ...baseline, webApps: appId ? [{ appId, projectId: baseline.projectId, state: 'ACTIVE', apiKeyId: baseline.apiKey.apiKeyId }] : [],
     authorizedDomains: [...baseline.authorizedDomains, ...(withDomain ? [host] : [])].sort() };
 }
 function sameSnapshot(actual, expected, { compareRevision = false } = {}) {
@@ -155,7 +174,13 @@ function sameSnapshot(actual, expected, { compareRevision = false } = {}) {
   return equal(normalize(actual), normalize(expected));
 }
 
-/** Adapter contract: readSnapshot, createWebApp, readOperation, readSdkConfig,
+/** Adapter contract: readSnapshot, createWebApp, readOperation, readWebApp, readSdkConfig,
+ * readSnapshot must enumerate ACTIVE + DELETED apps with showDeleted=true on
+ * every page until nextPageToken is exhausted; never persist short-lived tokens.
+ * It must independently verify the bound existing project-owned key, its web
+ * restrictions and fingerprint. createWebApp must send the exact apiKeyId;
+ * omission/fallback/automatic key provisioning is forbidden. readWebApp is an
+ * independent webApps.get response, not a cached list or operation response.
  * acquireDomainGuard, patchAuthorizedDomains. Guard acquisition must prove
  * provider-enforced CAS, or exclusive ownership across ALL configuration writers
  * (a local lock is insufficient). PATCH receives the proof and must enforce it.
@@ -188,7 +213,7 @@ export async function runStagingGoogleWebPrerequisites({ binding, adapter, journ
     // Re-open after taking the lock: another executor may have advanced it.
     journal = readJournal(journalFile);
     if (journal) validateState(journal.state, binding, configFile);
-    else journal = append(journalFile, null, { binding, configFile, baseline: observed, phase: 'ready', appId: null, operation: null, configDigest: null });
+    else journal = append(journalFile, null, { schemaVersion, binding, configFile, baseline: observed, phase: 'ready', appId: null, operation: null, configDigest: null });
     let state = journal.state;
     validateState(state, binding, configFile);
     const baseline = snapshot(state.baseline, binding);
@@ -200,7 +225,7 @@ export async function runStagingGoogleWebPrerequisites({ binding, adapter, journ
       requireThat(sameSnapshot(observed, baseline, { compareRevision: true }), 'baseline_stale');
       validateBinding(binding, now);
       save({ phase: 'create_intent' });
-      const operation = await adapter.createWebApp({ projectId: binding.projectId });
+      const operation = await adapter.createWebApp({ projectId: binding.projectId, apiKeyId: binding.apiKey.apiKeyId });
       requireThat(keys(operation, ['name']) && /^operations\/[A-Za-z0-9_-]{1,200}$/u.test(operation.name), 'operation_invalid');
       save({ phase: 'create_pending', operation: operation.name });
     } else if (state.phase === 'create_intent') fail('create_outcome_unknown');
@@ -212,6 +237,8 @@ export async function runStagingGoogleWebPrerequisites({ binding, adapter, journ
       requireThat(new RegExp(`^1:${binding.projectNumber}:web:[a-f0-9]{16,64}$`, 'u').test(operation.appId), 'operation_app_invalid');
       observed = await read();
       requireThat(sameSnapshot(observed, expectedSnapshot(baseline, operation.appId, false)), 'created_app_readback_drift');
+      requireThat(equal(await adapter.readWebApp({ projectId: binding.projectId, appId: operation.appId }),
+        expectedSnapshot(baseline, operation.appId, false).webApps[0]), 'created_app_identity_invalid');
       save({ phase: 'app_verified', appId: operation.appId });
     }
     if (state.phase === 'app_verified') {
@@ -240,9 +267,12 @@ export async function runStagingGoogleWebPrerequisites({ binding, adapter, journ
     requireThat(['domain_verified', 'export_intent', 'complete'].includes(state.phase), 'journal_phase_invalid');
     observed = await read();
     requireThat(sameSnapshot(observed, expectedSnapshot(baseline, state.appId, true)), 'final_readback_drift');
+    requireThat(equal(await adapter.readWebApp({ projectId: binding.projectId, appId: state.appId }),
+      expectedSnapshot(baseline, state.appId, true).webApps[0]), 'created_app_identity_invalid');
     const sdk = await adapter.readSdkConfig({ projectId: binding.projectId, appId: state.appId });
     requireThat(keys(sdk, ['projectId', 'messagingSenderId', 'appId', 'apiKey', 'authDomain'])
       && sdk.projectId === binding.projectId && sdk.messagingSenderId === binding.projectNumber && sdk.appId === state.appId, 'sdk_config_invalid');
+    requireThat(typeof sdk.apiKey === 'string' && sha256(sdk.apiKey) === binding.apiKey.keyFingerprint, 'sdk_key_binding_invalid');
     const config = { projectId: sdk.projectId, messagingSenderId: sdk.messagingSenderId, appId: sdk.appId,
       apiKey: sdk.apiKey, authDomain: sdk.authDomain, backendProjectId: binding.projectId, authorizedOrigin: TARGET };
     const digest = sha256(JSON.stringify(config));

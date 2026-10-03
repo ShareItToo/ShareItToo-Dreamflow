@@ -11,14 +11,19 @@ function fixture(t) {
   const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sit-google-prerequisite-')));
   fs.chmodSync(directory, 0o700);
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const publicKey = ['AI', 'za', 'x'.repeat(35)].join('');
+  const apiKey = { apiKeyId: 'synthetic-existing-key', projectId: 'synthetic-project',
+    keyFingerprint: sha256(publicKey), restrictionsDigest: 'f'.repeat(64) };
   const snapshot = {
     complete: true, projectId: 'synthetic-project', projectNumber: '123456789012', backendProjectId: 'synthetic-project',
     authEnabled: true, emulatorEnabled: false, googleEnabled: true, webApps: [],
+    webAppsInventory: { showDeleted: true, exhausted: true, nextPageToken: '' },
+    apiKey: { ...apiKey, exists: true, webCompatible: true }, keyInventoryDigest: '9'.repeat(64),
     authorizedDomains: ['synthetic-project.firebaseapp.com', 'localhost', 'shareittoo.com'],
     authConfigDigest: 'a'.repeat(64), providerConfigDigest: 'b'.repeat(64),
     otherAppsDigest: 'c'.repeat(64), runtimeDigest: 'd'.repeat(64), revision: 'revision-before',
   };
-  const binding = { schemaVersion: 1, projectId: snapshot.projectId, projectNumber: snapshot.projectNumber,
+  const binding = { schemaVersion: 2, apiKey, projectId: snapshot.projectId, projectNumber: snapshot.projectNumber,
     origin: 'https://staging.shareittoo.com', sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
     runnerDigest: sha256(fs.readFileSync(new URL('../ops/staging_google_web_prerequisites.mjs', import.meta.url))),
     baselineDigest: prerequisiteSnapshotDigest(snapshot) };
@@ -26,17 +31,17 @@ function fixture(t) {
     runnerDigest: binding.runnerDigest, baselineDigest: binding.baselineDigest, evidenceDigest: 'e'.repeat(64),
     expiresAt: new Date(Date.now() + 60_000).toISOString() };
   const appId = `1:${snapshot.projectNumber}:web:${'a'.repeat(32)}`;
-  const app = { appId, projectId: snapshot.projectId, state: 'ACTIVE' };
+  const app = { appId, projectId: snapshot.projectId, state: 'ACTIVE', apiKeyId: apiKey.apiKeyId };
   const sdk = { projectId: snapshot.projectId, messagingSenderId: snapshot.projectNumber, appId,
-    apiKey: ['AI', 'za', 'x'.repeat(35)].join(''), authDomain: `${snapshot.projectId}.firebaseapp.com` };
-  const calls = { create: 0, operation: 0, patch: 0, sdk: 0 };
+    apiKey: publicKey, authDomain: `${snapshot.projectId}.firebaseapp.com` };
+  const calls = { create: 0, operation: 0, app: 0, patch: 0, sdk: 0 };
   const journalFile = path.join(directory, 'journal.jsonl');
   const configFile = path.join(directory, 'public-config.json');
   const latest = () => JSON.parse(fs.readFileSync(journalFile, 'utf8').trimEnd().split('\n').at(-1)).state;
   const adapter = {
     async readSnapshot() { return structuredClone(snapshot); },
     async createWebApp(request) {
-      calls.create++; assert.deepEqual(request, { projectId: binding.projectId });
+      calls.create++; assert.deepEqual(request, { projectId: binding.projectId, apiKeyId: binding.apiKey.apiKeyId });
       assert.equal(latest().phase, 'create_intent');
       assert.equal(fs.statSync(journalFile).mode & 0o777, 0o600);
       return { name: 'operations/synthetic-create' };
@@ -45,6 +50,10 @@ function fixture(t) {
       calls.operation++; assert.equal(request.name, 'operations/synthetic-create');
       snapshot.webApps = [structuredClone(app)];
       return { name: request.name, done: true, appId, failed: false };
+    },
+    async readWebApp(request) {
+      calls.app++; assert.deepEqual(request, { projectId: binding.projectId, appId });
+      return structuredClone(app);
     },
     async acquireDomainGuard(request) { return { kind: 'conditional', providerEnforced: true, ...request }; },
     async patchAuthorizedDomains(request) {
@@ -64,7 +73,7 @@ test('default preflight creates no files or provider effects, even before gate a
   const f = fixture(t); f.binding.gate.decision = 'pending';
   assert.equal((await f.invoke()).status, 'preflight-passed-no-mutation');
   assert.deepEqual(fs.readdirSync(f.directory), []);
-  assert.deepEqual(f.calls, { create: 0, operation: 0, patch: 0, sdk: 0 });
+  assert.deepEqual(f.calls, { create: 0, operation: 0, app: 0, patch: 0, sdk: 0 });
   for (const execute of ['true', 1, {}, null]) {
     await assert.rejects(f.invoke({ execute }), /execute_flag_invalid/u);
   }
@@ -82,6 +91,7 @@ test('one create and one guarded patch preserve all domains/config and export co
   assert.equal(profile(f.binding.sourceCommit, '1.0.0+123', bound).SIT_SOCIAL_GOOGLE_ENABLED, 'true');
   assert.equal(profile(f.binding.sourceCommit, '1.0.0+123').SIT_SOCIAL_GOOGLE_ENABLED, 'false');
   assert.equal(f.latest().phase, 'complete');
+  assert.equal(f.latest().schemaVersion, 2); assert.equal(f.calls.app, 2);
   assert.equal(fs.statSync(f.configFile).mode & 0o777, 0o600);
   assert.ok(!fs.readFileSync(f.journalFile, 'utf8').includes(f.sdk.apiKey));
   assert.ok(!JSON.stringify(result).includes(f.sdk.apiKey));
@@ -228,7 +238,7 @@ for (const variant of ['configExists', 'symlink', 'hardlink', 'mode', 'truncated
 test('resumed config drift, missing output, journal tampering and different binding fail closed', async (t) => {
   const f = fixture(t); await f.invoke({ execute: true });
   f.sdk.apiKey = ['AI', 'za', 'y'.repeat(35)].join('');
-  await assert.rejects(f.invoke({ execute: true }), /public_config_drift/u);
+  await assert.rejects(f.invoke({ execute: true }), /sdk_key_binding_invalid/u);
   f.sdk.apiKey = ['AI', 'za', 'x'.repeat(35)].join('');
   fs.unlinkSync(f.configFile);
   await assert.rejects(f.invoke({ execute: true }), /completed_config_missing/u);
@@ -301,4 +311,166 @@ test('rehashed extra fields in an earlier journal record are rejected too', asyn
   fs.writeFileSync(f.journalFile, `${records.map((record) => JSON.stringify(record)).join('\n')}\n`);
   await assert.rejects(f.invoke(), /journal_state_invalid/u);
   assert.equal(f.calls.create, 1); assert.equal(f.calls.patch, 1);
+});
+
+for (const variant of ['version', 'missingKey', 'foreignKey', 'rawKey']) {
+  test(`version-2 binding rejects ${variant} before provider reads`, async (t) => {
+    const f = fixture(t); let reads = 0;
+    f.adapter.readSnapshot = async () => { reads++; return f.snapshot; };
+    if (variant === 'version') f.binding.schemaVersion = 1;
+    if (variant === 'missingKey') delete f.binding.apiKey;
+    if (variant === 'foreignKey') f.binding.apiKey.projectId = 'foreign-project';
+    if (variant === 'rawKey') f.binding.apiKey.keyString = f.sdk.apiKey;
+    await assert.rejects(f.invoke({ execute: true }), (error) => !error.message.includes(f.sdk.apiKey));
+    assert.equal(reads, 0); assert.equal(f.calls.create, 0); assert.deepEqual(fs.readdirSync(f.directory), []);
+  });
+}
+
+for (const variant of ['missingVersion', 'oldVersion', 'oldBinding']) {
+  test(`old journal ${variant} is rejected without migration or provider reads`, async (t) => {
+    const f = fixture(t); await f.invoke({ execute: true });
+    const records = fs.readFileSync(f.journalFile, 'utf8').trimEnd().split('\n').map(JSON.parse);
+    for (const [index, record] of records.entries()) {
+      if (variant === 'missingVersion') delete record.state.schemaVersion;
+      if (variant === 'oldVersion') record.state.schemaVersion = 1;
+      if (variant === 'oldBinding') record.state.binding.schemaVersion = 1;
+      record.previous = index === 0 ? null : records[index - 1].digest;
+      record.digest = prerequisiteSnapshotDigest(record.state);
+    }
+    const bytes = `${records.map((record) => JSON.stringify(record)).join('\n')}\n`;
+    fs.writeFileSync(f.journalFile, bytes);
+    f.adapter.readSnapshot = async () => { assert.fail('old journal must fail before provider read'); };
+    await assert.rejects(f.invoke({ execute: true }), /journal_state_invalid/u);
+    assert.equal(fs.readFileSync(f.journalFile, 'utf8'), bytes);
+    assert.equal(f.calls.create, 1); assert.equal(f.calls.patch, 1);
+  });
+}
+
+for (const variant of ['missing', 'activeOnly', 'notExhausted', 'remainingToken', 'missingToken', 'extra']) {
+  test(`inventory attestation ${variant} cannot authorize create`, async (t) => {
+    const f = fixture(t);
+    if (variant === 'missing') delete f.snapshot.webAppsInventory;
+    if (variant === 'activeOnly') f.snapshot.webAppsInventory.showDeleted = false;
+    if (variant === 'notExhausted') f.snapshot.webAppsInventory.exhausted = false;
+    if (variant === 'remainingToken') f.snapshot.webAppsInventory.nextPageToken = 'private-page-token';
+    if (variant === 'missingToken') delete f.snapshot.webAppsInventory.nextPageToken;
+    if (variant === 'extra') f.snapshot.webAppsInventory.pageSize = 100;
+    f.binding.baselineDigest = prerequisiteSnapshotDigest(f.snapshot);
+    f.binding.gate.baselineDigest = f.binding.baselineDigest;
+    await assert.rejects(f.invoke({ execute: true }), (error) => !error.message.includes('private-page-token'));
+    assert.equal(f.calls.create, 0); assert.equal(f.calls.patch, 0);
+  });
+}
+
+test('fully attested inventory containing only a DELETED app blocks the zero-app plan', async (t) => {
+  const f = fixture(t); f.snapshot.webApps = [{ ...f.app, state: 'DELETED' }];
+  f.binding.baselineDigest = prerequisiteSnapshotDigest(f.snapshot);
+  f.binding.gate.baselineDigest = f.binding.baselineDigest;
+  await assert.rejects(f.invoke({ execute: true }), /baseline_already_changed/u);
+  assert.equal(f.calls.create, 0);
+});
+
+for (const variant of ['absent', 'deleted', 'incompatible', 'foreign', 'differentId', 'restrictions', 'fingerprint', 'rawKey']) {
+  test(`existing key evidence ${variant} blocks before create`, async (t) => {
+    const f = fixture(t);
+    if (variant === 'absent') delete f.snapshot.apiKey;
+    if (variant === 'deleted') f.snapshot.apiKey.exists = false;
+    if (variant === 'incompatible') f.snapshot.apiKey.webCompatible = false;
+    if (variant === 'foreign') f.snapshot.apiKey.projectId = 'foreign-project';
+    if (variant === 'differentId') f.snapshot.apiKey.apiKeyId = 'other-key';
+    if (variant === 'restrictions') f.snapshot.apiKey.restrictionsDigest = '8'.repeat(64);
+    if (variant === 'fingerprint') f.snapshot.apiKey.keyFingerprint = '8'.repeat(64);
+    if (variant === 'rawKey') f.snapshot.apiKey.keyString = f.sdk.apiKey;
+    f.binding.baselineDigest = prerequisiteSnapshotDigest(f.snapshot);
+    f.binding.gate.baselineDigest = f.binding.baselineDigest;
+    await assert.rejects(f.invoke({ execute: true }), (error) => !error.message.includes(f.sdk.apiKey));
+    assert.equal(f.calls.create, 0); assert.equal(f.calls.patch, 0);
+  });
+}
+
+test('key inventory drift between preflight and create refuses submission', async (t) => {
+  const f = fixture(t); const read = f.adapter.readSnapshot; let reads = 0;
+  f.adapter.readSnapshot = async () => {
+    if (++reads === 2) f.snapshot.keyInventoryDigest = '8'.repeat(64);
+    return read();
+  };
+  await assert.rejects(f.invoke({ execute: true }), /baseline_stale/u);
+  assert.equal(f.calls.create, 0); assert.equal(f.latest().phase, 'ready');
+});
+
+for (const variant of ['keyInventory', 'appKey', 'restrictions', 'deletedApp']) {
+  test(`postcreate ${variant} drift preserves partial state without patch`, async (t) => {
+    const f = fixture(t); const complete = f.adapter.readOperation;
+    f.adapter.readOperation = async (request) => {
+      const result = await complete(request);
+      if (variant === 'keyInventory') f.snapshot.keyInventoryDigest = '8'.repeat(64);
+      if (variant === 'appKey') f.snapshot.webApps[0].apiKeyId = 'other-key';
+      if (variant === 'restrictions') f.snapshot.apiKey.restrictionsDigest = '8'.repeat(64);
+      if (variant === 'deletedApp') f.snapshot.webApps[0].state = 'DELETED';
+      return result;
+    };
+    await assert.rejects(f.invoke({ execute: true }));
+    assert.equal(f.calls.create, 1); assert.equal(f.calls.patch, 0);
+    assert.equal(f.latest().phase, 'create_pending'); assert.equal(fs.existsSync(f.configFile), false);
+  });
+}
+
+for (const variant of ['key', 'project', 'app', 'state', 'extra', 'missing']) {
+  test(`independent webApps.get ${variant} mismatch blocks domain patch`, async (t) => {
+    const f = fixture(t); const readApp = f.adapter.readWebApp;
+    f.adapter.readWebApp = async (request) => {
+      const result = await readApp(request);
+      if (variant === 'key') result.apiKeyId = 'other-key';
+      if (variant === 'project') result.projectId = 'foreign-project';
+      if (variant === 'app') result.appId = result.appId.replace(/a$/u, 'b');
+      if (variant === 'state') result.state = 'DELETED';
+      if (variant === 'extra') result.clientSecret = 'private-provider-value';
+      if (variant === 'missing') delete result.apiKeyId;
+      return result;
+    };
+    await assert.rejects(f.invoke({ execute: true }), /created_app_identity_invalid/u);
+    assert.equal(f.calls.create, 1); assert.equal(f.calls.patch, 0); assert.equal(f.calls.sdk, 0);
+  });
+}
+
+test('SDK key fingerprint mismatch never exports or replaces the existing key', async (t) => {
+  const f = fixture(t); f.sdk.apiKey = ['AI', 'za', 'y'.repeat(35)].join('');
+  await assert.rejects(f.invoke({ execute: true }), /sdk_key_binding_invalid/u);
+  await assert.rejects(f.invoke({ execute: true }), /sdk_key_binding_invalid/u);
+  assert.equal(f.calls.create, 1); assert.equal(f.calls.patch, 1);
+  assert.equal(fs.existsSync(f.configFile), false); assert.equal(f.latest().phase, 'domain_verified');
+});
+
+test('lost create response with unchanged inventory also never retries', async (t) => {
+  const f = fixture(t);
+  f.adapter.createWebApp = async () => { f.calls.create++; throw Error('private response'); };
+  await assert.rejects(f.invoke({ execute: true }), /google_web_prerequisite_operation_failed/u);
+  await assert.rejects(f.invoke({ execute: true }), /create_outcome_unknown/u);
+  assert.equal(f.calls.create, 1); assert.equal(f.calls.operation, 0); assert.equal(f.calls.patch, 0);
+});
+
+test('known operation disappearing after completion cannot authorize retry or app adoption', async (t) => {
+  const f = fixture(t);
+  f.adapter.readOperation = async () => { f.snapshot.webApps = [f.app]; throw Error('404 private operation'); };
+  await assert.rejects(f.invoke({ execute: true }), /google_web_prerequisite_operation_failed/u);
+  await assert.rejects(f.invoke({ execute: true }), /google_web_prerequisite_operation_failed/u);
+  assert.equal(f.calls.create, 1); assert.equal(f.calls.patch, 0); assert.equal(f.latest().phase, 'create_pending');
+});
+
+test('lost patch response without application is readback-only and preserves the existing app', async (t) => {
+  const f = fixture(t);
+  f.adapter.patchAuthorizedDomains = async () => { f.calls.patch++; throw Error('private response'); };
+  await assert.rejects(f.invoke({ execute: true }), /google_web_prerequisite_operation_failed/u);
+  await assert.rejects(f.invoke({ execute: true }), /domain_outcome_unknown_or_drift/u);
+  assert.equal(f.calls.create, 1); assert.equal(f.calls.patch, 1); assert.equal(f.snapshot.webApps.length, 1);
+});
+
+test('postpatch key inventory change stops export without rollback or replay', async (t) => {
+  const f = fixture(t); const patch = f.adapter.patchAuthorizedDomains;
+  f.adapter.patchAuthorizedDomains = async (request) => {
+    await patch(request); f.snapshot.keyInventoryDigest = '8'.repeat(64);
+  };
+  await assert.rejects(f.invoke({ execute: true }), /domain_outcome_unknown_or_drift/u);
+  await assert.rejects(f.invoke({ execute: true }), /domain_outcome_unknown_or_drift/u);
+  assert.equal(f.calls.create, 1); assert.equal(f.calls.patch, 1); assert.equal(fs.existsSync(f.configFile), false);
 });
