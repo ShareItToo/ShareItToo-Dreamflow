@@ -5,8 +5,27 @@ Date: 2026-10-03. ShareItToo, repository root `.`, branch
 `177a0628fd349bf2f4f6a1d26501c3c6236c3c50`.
 **Source-map PASS; live disk incident verified by Sol.** The original source
 inspection was read-only; the execution/readback supplement below records Sol's
-separate authorized work. This documentation update made no SSH request,
-environment/secret read, mail send, restart or live mutation.
+separate authorized work. The original source-only pass made no SSH request or
+live mutation; the named live sections record later bounded SSH readback and
+authorized remediation without environment/secret output or test mail.
+
+## Live mail-noise closure — Sol readback
+
+Walid requested that the repeated service-failure emails stop. The installed
+alert template now matches repository commit `458b76bf` and sets
+`ALERT_COOLDOWN_SECONDS=86400`; the effective backup and restore-check alert
+instances both read that one-reminder-per-24-hours value. The noisy health-alert
+instance is separately and persistently masked through its exact systemd
+instance link to `/dev/null`. The five-minute health timer itself remains active:
+the next natural run finished successfully at `2026-10-03 13:57:55 UTC` with
+exit status 0, while disk usage remained 84%.
+
+Readback after the mask timestamp `2026-10-03 11:10:50 UTC` found **zero further
+alert-delivered events**. This is server-side suppression, not an inbox filter,
+and it does not disable health collection. Existing mail already accepted by the
+mail provider is not deleted. Future health-mail reactivation is a separate
+explicit operation; the 24-hour template limit must remain in force if that
+instance is unmasked.
 
 ## Current live diagnosis — Sol readback
 
