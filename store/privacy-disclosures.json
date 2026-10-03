@@ -824,11 +824,11 @@
     },
     {
       "path": "lib/services/app_link_service.dart",
-      "sha256": "d3e71f7f10aaa556441722a5b5b036f8d1d9fb9ab891dcbe5eb3922214b597bb"
+      "sha256": "1206ec4fce074259987680311293f8e9ba80218c22e817cf82774959268e1500"
     },
     {
       "path": "lib/screens/app_link_destination_screen.dart",
-      "sha256": "33d19b546932a3a3c542f9e74d72dcdddc1b5f5e30a7d0ad48fa815154fd098a"
+      "sha256": "bdf6783b506f3fede1229a480d9bb260420373f9d98182a22e83bced95d375d3"
     },
     {
       "path": "android/app/src/main/kotlin/com/shareittoo/app/MainActivity.kt",

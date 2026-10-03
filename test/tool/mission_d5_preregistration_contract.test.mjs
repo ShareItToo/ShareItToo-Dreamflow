@@ -61,15 +61,22 @@ test('D5 candidate is a sealed valid draft with unresolved product thresholds, n
   assert.equal(registered.governance.walidEscalation, 'unavoidable_physical_action_only');
 });
 
-test('D5 source HEAD and each primary source byte hash exist and match current files', () => {
+test('D5 source HEAD and each primary source byte hash bind the recorded Git snapshot', () => {
   assert.match(registered.source.head, /^[a-f0-9]{40}$/u);
   execFileSync('git', ['cat-file', '-e', `${registered.source.head}^{commit}`], { cwd: root });
   for (const source of registered.source.inventory) {
     assert.match(source.path, /^(?:docs|store|backend)\/[A-Za-z0-9_./-]+$/u);
     assert.ok(!source.path.split('/').includes('..'));
-    assert.equal(bytesHash(readFileSync(root + source.path)), source.sha256, source.path);
     assert.equal(bytesHash(execFileSync('git', ['show', `${registered.source.head}:${source.path}`], { cwd: root })), source.sha256);
   }
+  // Later worktree drift cannot rebind this immutable preregistration, even
+  // when every dependent section digest is recomputed consistently.
+  const rebound = fixture();
+  const driftHash = bytesHash(Buffer.from('synthetic later worktree source bytes'));
+  assert.notEqual(driftHash, rebound.source.inventory[0].sha256);
+  rebound.source.inventory[0].sha256 = driftHash;
+  reseal(rebound);
+  assert.deepEqual(validate(rebound), denied);
 });
 
 test('D5 all seven metrics, complete nine-task register and exact evidence classes remain separate', () => {
