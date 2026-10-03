@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import http from 'node:http';
 import test from 'node:test';
+import { parseAppleOwnershipRequest } from '../src/apple_ownership.js';
 import { normalizeAppleRevocationMaterial } from '../src/apple_revocation.js';
 
 process.env.FIREBASE_AUTH_ENABLED = 'false';
@@ -16,10 +17,46 @@ const claims = (changes = {}) => ({
   ...changes,
 });
 
-test('Apple payload keys exactly match existing backend credential contract', () => {
-  const source = fs.readFileSync(new URL('../../lib/services/web_apple_auth.dart', import.meta.url), 'utf8');
-  const payload = source.slice(source.indexOf('toBackendPayload()'), source.indexOf('@override'));
-  assert.deepEqual([...payload.matchAll(/'([^']+)':/g)].map((match) => match[1]), ['idToken', 'appleAuthorizationCode']);
+test('Apple Web payload exactly matches the v2 ownership acquire contract', () => {
+  const source = fs.readFileSync(
+    new URL('../../lib/services/apple_web_v2_client.dart', import.meta.url), 'utf8',
+  );
+  const start = source.indexOf('Map<String, dynamic> acquireBody(');
+  const payload = source.slice(start, source.indexOf('@override', start));
+  assert.ok(start >= 0);
+  assert.deepEqual([...payload.matchAll(/^\s*'([^']+)':/gmu)].map((match) => match[1]), [
+    'idToken', 'appleAuth', 'version', 'operation', 'requestId', 'authorizationCode',
+  ]);
+  assert.match(payload, /'idToken': idToken,\s*'appleAuth': \{\s*'version': 2,\s*'operation': 'acquire',\s*'requestId': requestId,\s*'authorizationCode': _authorizationCode,\s*\},/u);
+  assert.doesNotMatch(payload, /appleAuthorizationCode|provider|accessToken/u);
+
+  const command = {
+    idToken: 'synthetic-firebase-id-token-'.repeat(5),
+    appleAuth: {
+      version: 2,
+      operation: 'acquire',
+      requestId: Buffer.alloc(32, 7).toString('base64url'),
+      authorizationCode: 'synthetic-code',
+    },
+  };
+  assert.deepEqual(parseAppleOwnershipRequest(Buffer.from(JSON.stringify(command)), command), command);
+  const legacyTopLevel = {
+    idToken: command.idToken,
+    appleAuthorizationCode: command.appleAuth.authorizationCode,
+  };
+  assert.throws(
+    () => parseAppleOwnershipRequest(Buffer.from(JSON.stringify(legacyTopLevel)), legacyTopLevel),
+    (error) => error.code === 'invalid_apple_ownership_request',
+  );
+
+  const auth = fs.readFileSync(new URL('../../lib/services/auth_service.dart', import.meta.url), 'utf8');
+  const webStart = auth.indexOf('static Future<AuthResult> _signInWithWebAppleOwned(');
+  const webOwner = auth.slice(webStart, auth.indexOf('@visibleForTesting', webStart));
+  assert.ok(webStart >= 0);
+  assert.doesNotMatch(webOwner, /appleAuthorizationCode|_firebaseSocialIdToken|signInWithProvider/u);
+});
+
+test('native and legacy Apple revocation material contract remains covered independently', () => {
   assert.deepEqual(normalizeAppleRevocationMaterial({ authorizationCode: 'synthetic-code' }), {
     kind: 'authorization_code', value: 'synthetic-code',
   });
