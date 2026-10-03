@@ -13,15 +13,30 @@ export const contract = Object.freeze({ inventoryCommit: 'db776964592d0362a6bed8
 const self = fileURLToPath(import.meta.url);
 const chrome = '/opt/google/chrome/chrome';
 const mode = 'linux-blank-preflight';
+export const inventoryPhases = Object.freeze(['environment', 'chrome-version', 'git-identity', 'git-status', 'binary-check', 'byte-hash']);
 const phases = ['inventory', 'prepare', 'launch', 'cdp-connect', 'Browser.getVersion', 'Target.getTargets',
   'Target.attachToTarget', 'Page.enable', 'Runtime.enable', 'Runtime.evaluate', 'SystemInfo.getProcessInfo',
-  'network', 'Browser.close', 'observe', 'terminate', 'cleanup'];
+  'network', 'Browser.close', 'observe', 'terminate', 'cleanup', ...inventoryPhases];
 const codes = new Set(['probe_arguments', 'probe_inventory', 'probe_network', 'probe_targets', 'probe_sandbox',
   'probe_version', 'probe_cleanup', 'probe_timeout', 'probe_aborted', 'probe_failure', 'probe_test_hooks']);
 const check = (ok, code) => { if (!ok) throw Error(code); };
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-const command = (bin, args, options = {}) => execFileSync(bin, args, { encoding: 'utf8', timeout: 3000,
-  maxBuffer: 1024 * 1024, stdio: ['pipe', 'pipe', 'pipe'], ...options }).trim();
+export function classifyCommandFailure(error) {
+  return error?.code === 'ETIMEDOUT' || error?.killed === true || ['SIGTERM', 'SIGKILL'].includes(error?.signal)
+    ? 'probe_timeout' : 'probe_failure';
+}
+export function runInventoryPhases(emit, operations) {
+  for (const name of inventoryPhases) {
+    emit(name, 'begin');
+    try { operations[name](); emit(name, 'confirmed'); }
+    catch (error) { emit(name, 'failed'); throw Error(codes.has(error?.message) ? error.message : classifyCommandFailure(error)); }
+  }
+}
+const command = (bin, args, options = {}) => {
+  try { return execFileSync(bin, args, { encoding: 'utf8', timeout: 3000,
+    maxBuffer: 1024 * 1024, stdio: ['pipe', 'pipe', 'pipe'], ...options }).trim(); }
+  catch (error) { throw Error(classifyCommandFailure(error)); }
+};
 const rootCommand = (bin, args, options) => command('/usr/bin/sudo', ['-n', '--', bin, ...args], options);
 const hash = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const fail = (code, diagnostic) => ({ schemaVersion: 1, mode, status: 'fail', code: codes.has(code) ? code : 'probe_failure',
@@ -173,19 +188,33 @@ function realAdapter(expectedHead, emit, signal) {
     targetDiagnostic: () => targetSummary,
     cleanupReadback: () => resourceReadback,
     async inventory() {
-      check(process.platform === 'linux' && process.env.GITHUB_ACTIONS === 'true' && !process.env.NODE_TEST_CONTEXT, 'probe_inventory');
-      inventory = { platform: process.platform, arch: process.arch, imageOS: process.env.ImageOS,
-        imageVersion: process.env.ImageVersion, node: process.versions.node,
-        chrome: command(chrome, ['--version']).match(/\b(\d+\.\d+\.\d+\.\d+)\b/u)?.[1],
-        uid: process.getuid(), gid: process.getgid(), head: command('/usr/bin/git', ['rev-parse', 'HEAD']),
-        clean: command('/usr/bin/git', ['status', '--porcelain', '--untracked-files=all']) === '' };
-      command('/usr/bin/git', ['ls-files', '--error-unmatch', self]);
-      for (const executable of [chrome, process.execPath, '/usr/bin/setpriv', '/usr/sbin/ip', '/usr/bin/ss'])
-        check(fs.statSync(executable).isFile(), 'probe_inventory');
-      // Byte provenance is verified before and after execution; no source or binary download.
-      inventory.bytes = [self, chrome, process.execPath].map(file => ({ file, digest: hash(file) }));
-      inventory.digests = { runnerSha256: inventory.bytes[0].digest, chromeSha256: inventory.bytes[1].digest,
-        nodeSha256: inventory.bytes[2].digest };
+      runInventoryPhases(emit, {
+        environment: () => {
+          check(process.platform === 'linux' && process.env.GITHUB_ACTIONS === 'true' && !process.env.NODE_TEST_CONTEXT, 'probe_inventory');
+          inventory = { platform: process.platform, arch: process.arch, imageOS: process.env.ImageOS,
+            imageVersion: process.env.ImageVersion, node: process.versions.node, uid: process.getuid(), gid: process.getgid() };
+        },
+        'chrome-version': () => {
+          inventory.chrome = command(chrome, ['--version'], { timeout: 10000 }).match(/\b(\d+\.\d+\.\d+\.\d+)\b/u)?.[1];
+        },
+        'git-identity': () => {
+          inventory.head = command('/usr/bin/git', ['rev-parse', 'HEAD']);
+          command('/usr/bin/git', ['ls-files', '--error-unmatch', self]);
+        },
+        'git-status': () => {
+          inventory.clean = command('/usr/bin/git', ['status', '--porcelain', '--untracked-files=all'], { timeout: 15000 }) === '';
+        },
+        'binary-check': () => {
+          for (const executable of [chrome, process.execPath, '/usr/bin/setpriv', '/usr/sbin/ip', '/usr/bin/ss'])
+            check(fs.statSync(executable).isFile(), 'probe_inventory');
+        },
+        'byte-hash': () => {
+          // Byte provenance is verified before and after execution; no source or binary download.
+          inventory.bytes = [self, chrome, process.execPath].map(file => ({ file, digest: hash(file) }));
+          inventory.digests = { runnerSha256: inventory.bytes[0].digest, chromeSha256: inventory.bytes[1].digest,
+            nodeSha256: inventory.bytes[2].digest };
+        },
+      });
       validateInventory(inventory, expectedHead);
       return inventory;
     },

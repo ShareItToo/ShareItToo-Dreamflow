@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { contract, parseArgs, validateInventory, validateNetwork, validateObservation,
-  validateCleanup, runProbe, launchArgs, privilegeArgs, summarizeTargets, validateTargetDiagnostic } from '../support/mission_web_entry_linux_probe.mjs';
+  validateCleanup, runProbe, launchArgs, privilegeArgs, summarizeTargets, validateTargetDiagnostic,
+  inventoryPhases, runInventoryPhases, classifyCommandFailure } from '../support/mission_web_entry_linux_probe.mjs';
 
 const sha = 'a'.repeat(40);
 const digests = () => ({ runnerSha256: '1'.repeat(64), chromeSha256: '2'.repeat(64), nodeSha256: '3'.repeat(64) });
@@ -23,6 +24,34 @@ function fake(overrides = {}) { const calls = []; return { calls, adapter: {
   observe: async () => { calls.push('observe'); return observation(); },
   cleanup: async () => { calls.push('cleanup'); return cleanup(); }, ...overrides,
 } }; }
+test('inventory subphases are ordered, bracket every step and stop at the failed phase', () => {
+  assert.deepEqual(inventoryPhases, ['environment', 'chrome-version', 'git-identity', 'git-status', 'binary-check', 'byte-hash']);
+  const journal = []; const called = [];
+  runInventoryPhases((phase, result) => journal.push([phase, result]),
+    Object.fromEntries(inventoryPhases.map(name => [name, () => called.push(name)])));
+  assert.deepEqual(called, inventoryPhases);
+  assert.deepEqual(journal, inventoryPhases.flatMap(name => [[name, 'begin'], [name, 'confirmed']]));
+  for (const failed of inventoryPhases) {
+    const rows = [];
+    assert.throws(() => runInventoryPhases((phase, result) => rows.push([phase, result]),
+      Object.fromEntries(inventoryPhases.map(name => [name, () => { if (name === failed) throw Error('private-command-path-output'); }]))), /^(Error: )?probe_failure$/);
+    assert.deepEqual(rows.at(-1), [failed, 'failed']);
+    assert.equal(rows.length, (inventoryPhases.indexOf(failed) + 1) * 2);
+    assert.doesNotMatch(JSON.stringify(rows), /private-command-path-output/);
+  }
+});
+test('exec timeout or kill maps to stable timeout without command or output leakage', async () => {
+  for (const properties of [{ code: 'ETIMEDOUT' }, { killed: true }, { signal: 'SIGTERM' }, { signal: 'SIGKILL' }]) {
+    const error = Object.assign(Error('private-command-path-output'), properties, { stdout: 'secret', stderr: 'secret' });
+    assert.equal(classifyCommandFailure(error), 'probe_timeout');
+    const f = fake({ inventory: async () => runInventoryPhases(() => {}, Object.fromEntries(inventoryPhases.map(name =>
+      [name, () => { if (name === 'chrome-version') throw error; }]))) });
+    const result = await runProbe({ expectedHead: sha, adapter: f.adapter });
+    assert.equal(result.code, 'probe_timeout'); assert.doesNotMatch(JSON.stringify(result), /private|secret|SIGTERM|SIGKILL/);
+  }
+  for (const error of [{ code: 'EACCES' }, { code: 'ENOENT' }, { signal: 'SIGABRT' }, undefined])
+    assert.equal(classifyCommandFailure(error), 'probe_failure');
+});
 test('closed CLI, source and exact official image versions reject drift', () => {
   assert.equal(parseArgs(['--linux-blank-preflight', '--source-head', sha]), sha);
   for (const args of [[], ['--linux-blank-preflight'], ['--worker'], ['--linux-blank-preflight', '--source-head', sha, 'https://foreign.invalid']]) assert.throws(() => parseArgs(args));
@@ -159,6 +188,12 @@ test('real execution is explicitly gated; tests and regression only exercise fak
   assert.match(source, /hash\(item\.file\) === item\.digest/);
   assert.match(source, /send\(\{ event: 'targets', value: summarizeTargets\(targets\) \}\);\s+check\(targets\.length === 1 && targets\[0\]\.type === 'page' && targets\[0\]\.url === 'about:blank'/);
   assert.match(source, /targetSummary = validateTargetDiagnostic\(row\.value\)/);
+  assert.match(source, /encoding: 'utf8', timeout: 3000/);
+  assert.match(source, /command\(chrome, \['--version'\], \{ timeout: 10000 \}\)/);
+  assert.match(source, /command\('\/usr\/bin\/git', \['status', '--porcelain', '--untracked-files=all'\], \{ timeout: 15000 \}\)/);
+  assert.match(source, /command\('\/usr\/bin\/git', \['rev-parse', 'HEAD'\]\)/);
+  assert.match(source, /command\('\/usr\/bin\/git', \['ls-files', '--error-unmatch', self\]\)/);
+  assert.equal((source.match(/\{ timeout: (?:10000|15000) \}/gu) ?? []).length, 2);
   assert.match(source, /'route', 'show', 'table', 'all'/);
   assert.doesNotMatch(source, /--no-sandbox|--disable-setuid-sandbox|--ignore-certificate-errors/);
   const suite = fs.readFileSync(import.meta.filename, 'utf8'); assert.doesNotMatch(suite, /execFileSync\(|spawn\(/);
