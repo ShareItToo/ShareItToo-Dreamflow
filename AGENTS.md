@@ -54,6 +54,12 @@ discover a mechanically stale source hash.
   immutable parent relationship and the same principal. Require both expected
   principals and a real-database reassignment negative test that preserves
   aggregate counts while changing ownership.
+- Synthetic acceptance-outcome fixtures must keep planned request bindings
+  separate from observed effects. `not_started`, unknown/readback and proven
+  no-effect states must not preallocate or invent booking, contract, payment or
+  provider identifiers; those identifiers may appear only in a complete,
+  exact, server-supplied effect observation, with deterministic negative tests
+  for missing, partial and mismatched effect identities.
 - Non-root bind-source mentor invariant: keep protected host evidence parents
   root-owned `0700`; do not weaken them merely to make host-side UID traversal
   pass. Before starting any non-root worker, the root Docker daemon must verify
