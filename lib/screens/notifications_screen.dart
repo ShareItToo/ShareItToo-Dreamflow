@@ -158,7 +158,7 @@ bool notificationAllowedByPreferences(
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
-  final _supportPrincipal = SupportPrincipalController();
+  var _supportPrincipal = SupportPrincipalController();
   _NotifFilter _filter = _NotifFilter.all;
   bool _loading = true;
   bool _loadFailed = false;
@@ -187,9 +187,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (initial != null && initial.isNotEmpty) {
       _filter = _filterForCategory(initial);
     }
-    Future.microtask(_load);
+    Future.microtask(() => _refreshCoordinator.schedule(_load));
     _persistenceSubscription = SharedPersistenceSync.changes.listen((key) {
-      if (!mounted || key != SharedPersistenceSync.localSafetyPrivacyStateKey) {
+      if (!mounted) return;
+      if (key == SharedPersistenceSync.accountSecurityStateKey) {
+        // A detail/CTA belongs to its original exact session, including when
+        // a successor signs back into the same account.
+        _supportPrincipal.dispose();
+        _supportPrincipal = SupportPrincipalController();
+        setState(() {
+          _currentUserId = null;
+          _feed = [];
+        });
+      } else if (key != SharedPersistenceSync.localSafetyPrivacyStateKey) {
         return;
       }
       unawaited(_refreshCoordinator.schedule(() async {
@@ -200,6 +210,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Future<void> _load() async {
+    if (!mounted) return;
+    final principal = _supportPrincipal;
     setState(() {
       _loading = true;
       _loadFailed = false;
@@ -208,8 +220,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       _prefs = NotificationPreferences.defaults();
     });
     try {
+      await principal.ready;
+      final owner = principal.capture();
+      if (owner == null || !mounted || principal != _supportPrincipal) return;
       final prefs = await NotificationPreferencesService.get();
       final user = await DataService.getCurrentUser();
+      if (!mounted ||
+          principal != _supportPrincipal ||
+          !principal.isCurrentNow(owner)) {
+        return;
+      }
       final userId = user?.id;
       if (userId == null || userId.isEmpty) {
         setState(() {
@@ -221,7 +241,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       }
       final feed = await DataService.getNotificationFeedForUser(userId);
       final currentAfterLoad = await DataService.getCurrentUser();
-      if (!mounted) return;
+      if (!await principal.isCurrent(owner) ||
+          !mounted ||
+          principal != _supportPrincipal) {
+        return;
+      }
       if (currentAfterLoad?.id.trim() != userId.trim()) {
         setState(() {
           _currentUserId = null;
@@ -237,9 +261,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       });
     } catch (e) {
       debugPrint('[NotificationsScreen] load failed: $e');
-      if (mounted) setState(() => _loadFailed = true);
+      if (mounted && principal == _supportPrincipal) {
+        setState(() => _loadFailed = true);
+      }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && principal == _supportPrincipal) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -331,14 +359,25 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
-  Future<void> _openNotification(Map<String, dynamic> n) async {
+  Future<void> _openNotification(
+      Map<String, dynamic> n, SupportPrincipalController principal) async {
+    final owner = principal.capture();
     final uid = _currentUserId;
-    if (uid == null) return;
+    if (uid == null ||
+        principal != _supportPrincipal ||
+        n['userId'] != uid ||
+        owner == null ||
+        uid != owner.userId ||
+        !await principal.isCurrent(owner) ||
+        !mounted) {
+      return;
+    }
 
     final id = (n['id'] ?? '').toString();
     if (id.isNotEmpty) {
       // Mark read immediately to make the UI feel responsive.
       await DataService.markNotificationRead(userId: uid, notificationId: id);
+      if (!await principal.isCurrent(owner) || !mounted) return;
       if (mounted) {
         setState(() {
           _feed = [
@@ -352,21 +391,37 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (!mounted) return;
 
     // Always open a full-screen detail page (no popups / bottom sheets).
-    await Navigator.of(context).push(
-      MaterialPageRoute(
+    await principal.pushOwnedRoute<void>(
+      context: context,
+      owner: owner,
+      route: MaterialPageRoute(
         builder: (_) => NotificationDetailScreen(
           notification: n,
-          onCta: () => _handleNotificationCta(n),
+          onCta: () {
+            if (principal.isCurrentNow(owner)) _handleNotificationCta(n);
+          },
         ),
       ),
     );
-    if (mounted) await _load();
+    if (mounted && principal == _supportPrincipal) {
+      await _refreshCoordinator.schedule(_load);
+    }
   }
 
   Future<void> _handleNotificationCta(Map<String, dynamic> n) async {
-    final supportOwner = _supportPrincipal.capture();
+    final principal = _supportPrincipal;
+    final supportOwner = principal.capture();
     final uid = _currentUserId;
-    if (uid == null || !mounted) return;
+    if (uid == null ||
+        supportOwner == null ||
+        uid != supportOwner.userId ||
+        !await principal.isCurrent(supportOwner) ||
+        !mounted) {
+      return;
+    }
+
+    Future<void> push(Route<void> route) => principal.pushOwnedRoute<void>(
+        context: context, owner: supportOwner, route: route);
 
     try {
       final resolution = await NotificationCtaResolver.resolve(
@@ -378,7 +433,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         case NotificationTargetKind.ownerRequestDetail:
           final requestId = resolution.requestId;
           if (requestId == null || requestId.isEmpty || !mounted) return;
-          await Navigator.of(context).push(
+          await push(
             MaterialPageRoute(
               builder: (_) => OngoingOwnerDetailScreen(
                 requestId: requestId,
@@ -389,7 +444,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           return;
         case NotificationTargetKind.ownerRequestsOverview:
           if (!mounted) return;
-          await Navigator.of(context).push(
+          await push(
             MaterialPageRoute(
               builder: (_) => const OwnerRequestsScreen(initialTabIndex: 2),
             ),
@@ -398,7 +453,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         case NotificationTargetKind.ownerBookingDetail:
           final requestId = resolution.requestId;
           if (requestId == null || requestId.isEmpty || !mounted) return;
-          await Navigator.of(context).push(
+          await push(
             MaterialPageRoute(
               builder: (_) => OngoingOwnerDetailScreen(requestId: requestId),
             ),
@@ -414,7 +469,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           final owner = await DataService.getUserById(req.ownerId);
           final booking = _toBookingMap(req, item, owner);
           if (!mounted) return;
-          await Navigator.of(context).push(
+          await push(
             MaterialPageRoute(
               builder: (_) => BookingDetailScreen(booking: booking),
             ),
@@ -443,7 +498,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         final owner = await DataService.getUserById(req.ownerId);
         final booking = _toBookingMap(req, item, owner);
         if (!mounted) return;
-        await Navigator.of(context).push(MaterialPageRoute(
+        await push(MaterialPageRoute(
             builder: (_) => BookingDetailScreen(
                 booking: booking, viewerIsOwner: uid == req.ownerId)));
         return;
@@ -458,7 +513,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             (thread.user1Id == uid) ? thread.user2Id : thread.user1Id;
         final other = await DataService.getUserById(otherId);
         if (!mounted) return;
-        await Navigator.of(context).push(
+        await push(
           MaterialPageRoute(
             builder: (_) => MessageThreadScreen(
               threadId: thread.id,
@@ -473,7 +528,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
       if (entityType == 'payment' || sitCategory == 'payments') {
         if (!mounted) return;
-        await Navigator.of(context).push(
+        await push(
             MaterialPageRoute(builder: (_) => const PaymentMethodsScreen()));
         return;
       }
@@ -482,22 +537,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           category == 'security' ||
           sitCategory == 'important') {
         if (!mounted) return;
-        await Navigator.of(context).push(
+        await push(
             MaterialPageRoute(builder: (_) => const VerificationScreen()));
         return;
       }
 
       if (sitCategory == 'support') {
-        if (supportOwner == null ||
-            uid != supportOwner.userId ||
-            !await _supportPrincipal.isCurrent(supportOwner) ||
-            !mounted) {
+        if (!await principal.isCurrent(supportOwner) || !mounted) {
           return;
         }
         if (entityType == 'support' &&
             entityId.isNotEmpty &&
             !entityId.startsWith('mock')) {
-          await _supportPrincipal.pushOwnedRoute<void>(
+          await principal.pushOwnedRoute<void>(
             context: context,
             owner: supportOwner,
             route: MaterialPageRoute(
@@ -510,7 +562,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           return;
         }
         if (!mounted) return;
-        await _supportPrincipal.pushOwnedRoute<void>(
+        await principal.pushOwnedRoute<void>(
             context: context,
             owner: supportOwner,
             route: MaterialPageRoute(
@@ -1015,11 +1067,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         final n = list[index];
+        final principal = _supportPrincipal;
         final critical = n['critical'] == true;
         final archivable =
             !critical && (n['category']?.toString() == 'platform');
         final card = _NotificationCard(
-            notification: n, onTap: () => _openNotification(n));
+            notification: n, onTap: () => _openNotification(n, principal));
         if (!archivable) return card;
         return Dismissible(
           key: ValueKey('notif_${n['id']}'),
@@ -1287,9 +1340,10 @@ class _CategoryHeader extends StatelessWidget {
           child: Icon(icon, size: 16, color: AppTheme.textPrimary(context)),
         ),
         const SizedBox(width: 10),
-        Text(label,
-            style: theme.textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.w900)),
+        Flexible(
+            child: Text(label,
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w900))),
         const SizedBox(width: 10),
         Expanded(
             child: Container(height: 1, color: AppTheme.glassStroke(context))),
@@ -1351,77 +1405,82 @@ class _NotificationCard extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(18),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(
-              color: read
-                  ? AppTheme.surfacePrimary(context)
-                  : AppTheme.surfaceSecondary(context),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                  color: read
-                      ? AppTheme.glassStroke(context)
-                      : accent.withValues(alpha: 0.18)),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight:
-                                      read ? FontWeight.w700 : FontWeight.w900),
+          child: Semantics(
+            button: true,
+            value: read ? 'Gelesen' : 'Ungelesen',
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: read
+                    ? AppTheme.surfacePrimary(context)
+                    : AppTheme.surfaceSecondary(context),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                    color: read
+                        ? AppTheme.glassStroke(context)
+                        : accent.withValues(alpha: 0.18)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: read
+                                        ? FontWeight.w700
+                                        : FontWeight.w900),
+                              ),
                             ),
+                            if (!read)
+                              Container(
+                                width: 7.5,
+                                height: 7.5,
+                                margin: const EdgeInsets.only(left: 8),
+                                decoration: BoxDecoration(
+                                    color: accent.withValues(alpha: 0.9),
+                                    shape: BoxShape.circle),
+                              ),
+                          ],
+                        ),
+                        if (body.trim().isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            body,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium
+                                ?.copyWith(color: AppTheme.textBody(context)),
                           ),
-                          if (!read)
-                            Container(
-                              width: 7.5,
-                              height: 7.5,
-                              margin: const EdgeInsets.only(left: 8),
-                              decoration: BoxDecoration(
-                                  color: accent.withValues(alpha: 0.9),
-                                  shape: BoxShape.circle),
-                            ),
                         ],
-                      ),
-                      if (body.trim().isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          body,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyMedium
-                              ?.copyWith(color: AppTheme.textBody(context)),
-                        ),
+                        if (timeLabel.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          Text(
+                            timeLabel,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                                color: AppTheme.textDisabled(context),
+                                fontSize: 11),
+                          ),
+                        ],
                       ],
-                      if (timeLabel.isNotEmpty) ...[
-                        const SizedBox(height: 10),
-                        Text(
-                          timeLabel,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                              color: AppTheme.textDisabled(context),
-                              fontSize: 11),
-                        ),
-                      ],
-                    ],
+                    ),
                   ),
-                ),
-                if (showChevron) ...[
-                  const SizedBox(width: 10),
-                  Icon(Icons.chevron_right,
-                      color: AppTheme.textDisabled(context)),
+                  if (showChevron) ...[
+                    const SizedBox(width: 10),
+                    Icon(Icons.chevron_right,
+                        color: AppTheme.textDisabled(context)),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
