@@ -25,6 +25,67 @@ const git = (...args) => execFileSync('/usr/bin/git', args, { cwd: root, encodin
 // enforced outer network boundary. This is test-runner debt, not release flags.
 export const headlessTestFlags = ['--no-sandbox', '--disable-gpu', '--window-size=1024,900'];
 
+// The only HTTP-derived persisted field is a validated browser version, never a
+// download or a destination path. Keep the owned DevTools handshake loopback-only
+// even though this supervisor runs outside Chrome's network sandbox.
+export async function readOwnedBrowserVersion(port, { fetchImpl = fetch, timeoutMs = 3000 } = {}) {
+  const code = 'browser-version';
+  check(Number.isInteger(port) && port > 0 && port < 65536
+    && Number.isInteger(timeoutMs) && timeoutMs > 0 && timeoutMs <= 3000, code);
+  const url = `http://127.0.0.1:${port}/json/version`;
+  const controller = new AbortController(); const expiresAt = performance.now() + timeoutMs;
+  let response; let reader; let complete = false;
+  const bounded = async operation => {
+    const remaining = expiresAt - performance.now(); check(remaining > 0, code);
+    let timer;
+    try {
+      return await Promise.race([operation(), new Promise((_, reject) => {
+        timer = setTimeout(() => { controller.abort(); reject(Error(code)); }, remaining);
+      })]);
+    } finally { clearTimeout(timer); }
+  };
+  try {
+    response = await bounded(() => fetchImpl(url, {
+      method: 'GET', redirect: 'error', signal: controller.signal,
+      headers: { Accept: 'application/json', 'Accept-Encoding': 'identity' },
+    }));
+    check(response.status === 200 && response.redirected === false && response.url === url, code);
+    check(/^application\/json(?:\s*;\s*charset=utf-8)?$/iu.test(response.headers.get('content-type') ?? ''), code);
+    const encoding = response.headers.get('content-encoding'); check(encoding === null || encoding === 'identity', code);
+    const length = response.headers.get('content-length'); const maximum = 65536;
+    check(length === null || (/^[1-9][0-9]{0,4}$/u.test(length) && Number(length) <= maximum), code);
+    const bytes = Buffer.alloc(maximum); let size = 0;
+    reader = response.body.getReader();
+    while (true) {
+      const { done, value } = await bounded(() => reader.read());
+      if (done) break;
+      check(value instanceof Uint8Array && value.length > 0 && value.length <= maximum - size, code);
+      bytes.set(value, size); size += value.length;
+    }
+    check(size > 0 && (length === null || Number(length) === size), code);
+    const info = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(0, size)));
+    check(info !== null && typeof info === 'object' && !Array.isArray(info)
+      && typeof info.Browser === 'string'
+      && /^(?:Headless)?Chrome\/[0-9]{1,4}(?:\.[0-9]{1,5}){3}$/u.test(info.Browser)
+      && typeof info.webSocketDebuggerUrl === 'string' && info.webSocketDebuggerUrl.length <= 128, code);
+    const ws = new URL(info.webSocketDebuggerUrl);
+    check(ws.protocol === 'ws:' && ws.hostname === '127.0.0.1' && ws.port === String(port)
+      && !ws.username && !ws.password && !ws.search && !ws.hash
+      && ws.href === info.webSocketDebuggerUrl
+      && /^\/devtools\/browser\/[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/u.test(ws.pathname), code);
+    complete = true;
+    // Discard all other response fields; do not persist URLs, arbitrary text or bytes.
+    return Object.freeze({ version: info.Browser, debuggerUrl: ws.href });
+  } catch { throw Error(code); }
+  finally {
+    if (!complete) {
+      controller.abort();
+      try { Promise.resolve(reader ? reader.cancel() : response?.body?.cancel()).catch(() => {}); } catch {}
+    }
+    try { reader?.releaseLock(); } catch {}
+  }
+}
+
 export function assetName(raw, origin, files) {
   let url; try { url = new URL(raw); } catch { return null; }
   if (url.origin !== origin || url.search || url.hash || url.username || url.password) return null;
@@ -146,10 +207,8 @@ async function browser(profile, origin, files, network) {
       await delay(100);
     }
     check(port > 0 && port < 65536 && !exited, 'browser-start');
-    const info = await (await fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(3000) })).json();
-    const ws = new URL(info.webSocketDebuggerUrl);
-    check(ws.protocol === 'ws:' && ws.hostname === '127.0.0.1' && ws.port === String(port), 'browser-websocket');
-    socket = new WebSocket(ws);
+    const info = await readOwnedBrowserVersion(port);
+    socket = new WebSocket(info.debuggerUrl);
     socket.addEventListener('message', event => {
       const value = JSON.parse(event.data); const p = pending.get(value.id);
       if (p) { pending.delete(value.id); value.error ? p.reject(Error(`cdp-error:${value.error.code}`)) : p.resolve(value.result); return; }
@@ -173,7 +232,7 @@ async function browser(profile, origin, files, network) {
       const result = await cdp('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
       check(!result.exceptionDetails, 'evaluation'); return result.result?.value;
     };
-    return { pid: child.pid, version: info.Browser, cdp, evaluate, stop,
+    return { pid: child.pid, version: info.version, cdp, evaluate, stop,
       async close() { await cdp('Browser.close', {}, null); for (let i = 0; i < 50 && !exited; i++) await delay(100); return stop(); } };
   } catch (error) { await stop(); throw error; }
 }
