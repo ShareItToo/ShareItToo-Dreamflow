@@ -3,10 +3,82 @@ import test from 'node:test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { assetName, checkMatrix, readOwnedBrowserVersion, readProbeSourceFile } from '../support/notification_release_probe.mjs';
+import vm from 'node:vm';
+import { assetName, checkMatrix, readOwnedBrowserVersion, readProbeSourceFile,
+  notificationActionExpression, notificationDiagnostic, notificationFailureCode,
+  notificationToolchainMetadata } from '../support/notification_release_probe.mjs';
 
 const origin = 'http://127.0.0.1:49152';
 const files = new Set(['index.html', 'main.dart.js', 'canvaskit/canvaskit.wasm']);
+
+test('browser action code uses only literal selectors and fixture commands', () => {
+  for (const label of ['owner thread update', 'Zum Chat']) {
+    const expression = notificationActionExpression('click', label);
+    const context = { document: { querySelectorAll: () => [{
+      getAttribute: () => label, getBoundingClientRect: () => ({ x: 10, y: 20, width: 8, height: 6 }),
+    }] } };
+    assert.equal(JSON.stringify(vm.runInNewContext(expression, context)), '{"x":14,"y":23}');
+    assert.equal(vm.runInNewContext(expression, { document: { querySelectorAll: () => [] } }), null);
+  }
+  for (const cmd of ['capture-row', 'capture-cta', 'replay-row', 'replay-cta', 'renter', 'owner', 'logout']) {
+    const events = [];
+    const context = { document: { dispatchEvent: event => events.push(event) },
+      CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options.detail; } } };
+    assert.equal(vm.runInNewContext(notificationActionExpression('fixture', cmd), context), true);
+    assert.deepEqual(events.map(({ type, detail }) => ({ type, detail })), [{ type: 'sit-notification-command', detail: cmd }]);
+  }
+});
+
+test('untrusted labels, commands and action names never become executable source', () => {
+  for (const value of ['\");globalThis.injected=true;//', "');globalThis.injected=true;//", '</script>',
+    'owner thread update\n', 'https://provider.invalid/private', '/private/synthetic', '__proto__', 'toString',
+    1, null, { toJSON: () => 'owner' }]) {
+    for (const action of ['click', 'fixture', 'untrusted']) {
+      assert.throws(() => notificationActionExpression(action, value), { message: 'probe-action' });
+    }
+  }
+});
+
+test('timeout diagnostics preserve only bounded counts and booleans, never raw AX/provider/path data', () => {
+  const raw = 'owner https://provider.invalid/private /Users/synthetic token browser-error';
+  const ax = [{ role: { value: raw }, name: { value: raw }, value: { value: raw }, description: { value: raw } }];
+  const diagnostic = notificationDiagnostic(ax, { mode: raw, session: raw, rows: [raw], failure: raw, instance: raw });
+  assert.deepEqual(diagnostic, { providerOff: false, session: false, rowCount: 1, accessibilityNodeCount: 1 });
+  assert.doesNotMatch(JSON.stringify(diagnostic), /provider\.invalid|Users|token|browser-error|owner/u);
+  assert.deepEqual(notificationDiagnostic(new Array(10001), { mode: 'release-provider-off', session: true, rows: new Array(10001) }),
+    { providerOff: true, session: true, rowCount: 10000, accessibilityNodeCount: 10000 });
+  assert.deepEqual(notificationDiagnostic(raw, { rows: { length: raw } }),
+    { providerOff: false, session: false, rowCount: null, accessibilityNodeCount: null });
+});
+
+test('failure output accepts exact static codes only and never reads a changing error twice', () => {
+  for (const message of ['https://provider.invalid/private', '/Users/synthetic/private', 'owned-command-failed\nprivate',
+    'cdp-error:provider details', 'observation-timeout:private', '<script>', 'x'.repeat(20000)]) {
+    assert.equal(notificationFailureCode(new Error(message)), 'probe-failure');
+  }
+  assert.equal(notificationFailureCode(new Error('owned-command-failed')), 'owned-command-failed');
+  assert.equal(notificationFailureCode({ get message() { throw Error('private'); } }), 'probe-failure');
+  let reads = 0;
+  assert.equal(notificationFailureCode({ get message() { return ++reads === 1 ? 'evaluation' : '/private/path'; } }), 'evaluation');
+  assert.equal(reads, 1);
+});
+
+test('toolchain evidence drops raw output and unrelated fields instead of persisting private paths', () => {
+  const fields = { frameworkVersion: '3.41.7', frameworkRevision: 'a'.repeat(40), dartSdkVersion: '3.11.5' };
+  assert.equal(notificationToolchainMetadata(JSON.stringify({ ...fields, flutterRoot: '/private/path', providerError: 'raw error' })), JSON.stringify(fields));
+  for (const raw of ['invalid /private/path', 'x'.repeat(16001), 'null', JSON.stringify({ ...fields, dartSdkVersion: '/private/path' }),
+    JSON.stringify({ ...fields, frameworkVersion: 'https://provider.invalid' }), JSON.stringify({ ...fields, frameworkRevision: { raw: 'private' } })]) {
+    assert.throws(() => notificationToolchainMetadata(raw), { message: 'toolchain-metadata' });
+  }
+});
+
+test('probe routes diagnostics, command failure and evidence through safe projections', () => {
+  const source = fs.readFileSync(new URL('../support/notification_release_probe.mjs', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /JSON\.stringify\((?:label|cmd)\)|process\.stderr\.write\(output\)|\$\{error\.message\}/u);
+  assert.match(source, /diagnostic = notificationDiagnostic\(ax, state\)/u);
+  assert.match(source, /toolchain: notificationToolchainMetadata\(await command/u);
+  assert.match(source, /notification-release: \$\{notificationFailureCode\(error\)\}/u);
+});
 function sourceFixture(t) {
   const outer = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sit-notification-source-')));
   t.after(() => fs.rmSync(outer, { recursive: true, force: true }));

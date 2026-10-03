@@ -25,6 +25,47 @@ const git = (...args) => execFileSync('/usr/bin/git', args, { cwd: root, encodin
 // enforced outer network boundary. This is test-runner debt, not release flags.
 export const headlessTestFlags = ['--no-sandbox', '--disable-gpu', '--window-size=1024,900'];
 
+// These fragments are source literals, not escaped caller/browser text.
+export function notificationActionExpression(action, value) {
+  const labels = { 'owner thread update': "'owner thread update'", 'Zum Chat': "'Zum Chat'" };
+  const commands = { 'capture-row': "'capture-row'", 'capture-cta': "'capture-cta'",
+    'replay-row': "'replay-row'", 'replay-cta': "'replay-cta'", renter: "'renter'", owner: "'owner'", logout: "'logout'" };
+  check(typeof value === 'string', 'probe-action');
+  if (action === 'click' && Object.hasOwn(labels, value)) {
+    return "(()=>{const e=[...document.querySelectorAll('[role=\"button\"]')].find(e=>(e.getAttribute('aria-label')||e.textContent||'').includes(" + labels[value]
+      + "));if(!e)return null;const r=e.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()";
+  }
+  check(action === 'fixture' && Object.hasOwn(commands, value), 'probe-action');
+  return "document.dispatchEvent(new CustomEvent('sit-notification-command',{detail:" + commands[value] + '}));true';
+}
+
+export function notificationDiagnostic(ax, state) {
+  const count = value => Array.isArray(value) ? Math.min(value.length, 10000) : null;
+  return { providerOff: state?.mode === 'release-provider-off', session: state?.session === true,
+    rowCount: count(state?.rows), accessibilityNodeCount: count(ax) };
+}
+
+export function notificationFailureCode(error) {
+  const allowed = ['owned-command-failed', 'source-file', 'source-file-changed', 'browser-version',
+    'fixture-failure', 'evaluation', 'network-or-runtime-failure', 'click-target', 'fixture-ack',
+    'probe-action', 'observation-timeout', 'toolchain-metadata'];
+  try { const message = error?.message; return allowed.includes(message) ? message : 'probe-failure'; }
+  catch { return 'probe-failure'; }
+}
+
+export function notificationToolchainMetadata(raw) {
+  try {
+    check(typeof raw === 'string' && raw.length <= 16000, 'toolchain-metadata');
+    const value = JSON.parse(raw);
+    check(value && typeof value.frameworkVersion === 'string' && typeof value.dartSdkVersion === 'string'
+      && /^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$/u.test(value.frameworkVersion)
+      && /^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$/u.test(value.dartSdkVersion)
+      && typeof value.frameworkRevision === 'string' && /^[a-f0-9]{40}$/u.test(value.frameworkRevision), 'toolchain-metadata');
+    // Preserve the evidence field's JSON-string type without retaining raw output.
+    return JSON.stringify({ frameworkVersion: value.frameworkVersion, frameworkRevision: value.frameworkRevision, dartSdkVersion: value.dartSdkVersion });
+  } catch { throw Error('toolchain-metadata'); }
+}
+
 // The only HTTP-derived persisted field is a validated browser version, never a
 // download or a destination path. Keep the owned DevTools handshake loopback-only
 // even though this supervisor runs outside Chrome's network sandbox.
@@ -116,7 +157,8 @@ async function command(bin, args, cwd, timeout = 180000) {
     child.once('exit', (code, signal) => {
       clearTimeout(timer);
       if (code !== 0 || signal) {
-        process.stderr.write(output); reject(Error('owned-command-failed'));
+        // Subprocess diagnostics may contain private paths or arbitrary output.
+        reject(Error('owned-command-failed'));
       } else resolve(output);
     });
   });
@@ -318,21 +360,19 @@ export async function run() {
       app = await browser(profile, origin, files, network); pids.push(app.pid); version = app.version;
       await app.cdp('Page.navigate', { url: `${origin}/` });
     }
-    async function observe(predicate, code) {
+    async function observe(predicate) {
       let diagnostic;
       for (let i = 0; i < 150; i++) {
         check(network.blocked === 0 && network.runtimeErrors === 0 && network.controlErrors === 0 && network.serverRejected === 0, 'network-or-runtime-failure');
         const ax = (await app.cdp('Accessibility.getFullAXTree')).nodes ?? [];
         const state = await app.evaluate(`({mode:document.documentElement.dataset.sitMode,instance:document.documentElement.dataset.sitInstance,failure:document.documentElement.dataset.sitFailure,rows:JSON.parse(JSON.parse(localStorage.getItem('flutter.notifications')||'"[]"')),session:!!localStorage.getItem('flutter.auth_session_v1')})`);
-        diagnostic = { mode: state.mode, session: state.session, rowCount: state.rows.length,
-          ax: ax.filter(n => /owner|renter|gelesen|nachricht|anmelden|Sitzung/i.test(String(n.name?.value ?? '')))
-            .map(n => ({ role: n.role?.value, name: n.name?.value, value: n.value?.value, description: n.description?.value })).slice(0, 15) };
+        diagnostic = notificationDiagnostic(ax, state);
         if (state.failure) throw Error('fixture-failure');
         if (state.mode === 'release-provider-off' && predicate(ax, state)) return { ax, state };
         await delay(100);
       }
       process.stderr.write(`synthetic-diagnostic:${JSON.stringify(diagnostic)}\n`);
-      throw Error(`observation-timeout:${code}`);
+      throw Error('observation-timeout');
     }
     const contains = (ax, value) => ax.some(n => String(n.name?.value ?? '').includes(value));
     const row = (ax, value, status) => ax.some(n => n.role?.value === 'button' && String(n.name?.value ?? '').includes(value) &&
@@ -341,13 +381,13 @@ export async function run() {
       !contains(ax, `${user === 'owner' ? 'renter' : 'owner'} booking update`);
     const record = phase => { matrix.push({ phase, passed: true }); process.stdout.write(`phase=${phase}:pass\n`); };
     async function click(label) {
-      const point = await app.evaluate(`(()=>{const e=[...document.querySelectorAll('[role="button"]')].find(e=>(e.getAttribute('aria-label')||e.textContent||'').includes(${JSON.stringify(label)}));if(!e)return null;const r=e.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()`);
+      const point = await app.evaluate(notificationActionExpression('click', label));
       check(point && Number.isFinite(point.x), 'click-target');
       for (const type of ['mousePressed', 'mouseReleased']) await app.cdp('Input.dispatchMouseEvent', { type, x: point.x, y: point.y, button: 'left', clickCount: 1 });
     }
     async function fixture(cmd) {
       const before = await app.evaluate('document.documentElement.dataset.sitAck');
-      await app.evaluate(`document.dispatchEvent(new CustomEvent('sit-notification-command',{detail:${JSON.stringify(cmd)}}));true`);
+      await app.evaluate(notificationActionExpression('fixture', cmd));
       for (let i = 0; i < 50; i++) { const ack = await app.evaluate('document.documentElement.dataset.sitAck'); if (ack !== before && ack?.endsWith(`:${cmd}`)) return; await delay(100); }
       throw Error('fixture-ack');
     }
@@ -391,7 +431,7 @@ export async function run() {
       runnerSources: ['test/support/notification_release_probe.mjs', 'test/support/mission_web_history_build.mjs',
         'test/support/mission_web_entry_browser_probe.mjs', 'test/tool/notification_release_probe.test.mjs']
         .map(name => ({ path: name, sha256: hash(fs.readFileSync(path.join(root, name))) })),
-      browser: version, toolchain: await command('/usr/bin/sandbox-exec', ['-p', policy, flutter, '--suppress-analytics', '--no-version-check', '--version', '--machine'], root),
+      browser: version, toolchain: notificationToolchainMetadata(await command('/usr/bin/sandbox-exec', ['-p', policy, flutter, '--suppress-analytics', '--no-version-check', '--version', '--machine'], root)),
       headlessTestFlags, kernelExternalConnectDenied: denied.trim() === 'EPERM',
       matrix, network, threeDistinctBrowserProcesses: true, cleanup, scope: 'synthetic-release-harness-not-AppRoot-or-human-AT' };
   } finally {
@@ -412,5 +452,5 @@ export async function run() {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   check(process.argv.length === 3 && process.argv[2] === '--run', 'arguments');
-  run().catch(error => { process.stderr.write(`notification-release: ${error.message}\n`); process.exitCode = 1; });
+  run().catch(error => { process.stderr.write(`notification-release: ${notificationFailureCode(error)}\n`); process.exitCode = 1; });
 }
