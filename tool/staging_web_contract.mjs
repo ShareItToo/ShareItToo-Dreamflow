@@ -96,20 +96,74 @@ export function confinedDirectory(directory) {
 export function inventory(directory) {
   confinedDirectory(directory);
   const files = {};
-  function visit(relative) {
-    for (const name of fs.readdirSync(path.join(directory, relative)).sort()) {
-      requireThat(/^[A-Za-z0-9_.@+-]+$/.test(name) && name !== '.' && name !== '..', 'artifact_path_unsafe');
-      const key = relative ? `${relative}/${name}` : name;
-      const file = path.join(directory, key);
-      const stat = fs.lstatSync(file);
-      if (stat.isDirectory()) visit(key);
-      else {
-        requireThat(stat.isFile() && !stat.isSymbolicLink() && stat.nlink === 1, 'artifact_special_file');
-        files[key] = sha256(fs.readFileSync(file));
-      }
+  const directories = [];
+  const stat = (file) => fs.lstatSync(file, { bigint: true });
+  const fstat = (fd) => fs.fstatSync(fd, { bigint: true });
+  const same = (a, b) => ['dev', 'ino', 'mode', 'uid', 'gid', 'nlink', 'size', 'mtimeNs', 'ctimeNs']
+    .every((key) => a[key] === b[key]);
+  const unchanged = (expected, actual) => requireThat(same(expected, actual), 'artifact_inventory_changed');
+  const checkDirectories = () => {
+    for (const entry of directories) {
+      unchanged(entry.stat, fstat(entry.fd));
+      unchanged(entry.stat, stat(entry.file));
     }
+  };
+  function readFile(file, expected) {
+    // Never re-open a checked pathname for the actual read. NONBLOCK also
+    // prevents a raced FIFO from blocking before its descriptor is rejected.
+    const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+    try {
+      unchanged(expected, fstat(fd));
+      checkDirectories();
+      unchanged(expected, stat(file));
+      requireThat(expected.size <= BigInt(Number.MAX_SAFE_INTEGER), 'artifact_inventory_changed');
+      const digest = crypto.createHash('sha256'); const buffer = Buffer.alloc(64 * 1024);
+      const size = Number(expected.size); let offset = 0;
+      while (offset < size) {
+        const count = fs.readSync(fd, buffer, 0, Math.min(buffer.length, size - offset), offset);
+        requireThat(count > 0, 'artifact_inventory_changed');
+        digest.update(buffer.subarray(0, count)); offset += count;
+      }
+      requireThat(fs.readSync(fd, buffer, 0, 1, size) === 0, 'artifact_inventory_changed');
+      unchanged(expected, fstat(fd));
+      unchanged(expected, stat(file));
+      checkDirectories();
+      return digest.digest('hex');
+    } finally { fs.closeSync(fd); }
   }
-  visit('');
+  function visit(relative, expected) {
+    const file = path.join(directory, relative);
+    requireThat(expected.isDirectory() && !expected.isSymbolicLink(), 'artifact_special_file');
+    const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW);
+    try {
+      unchanged(expected, fstat(fd));
+      directories.push({ file, fd, stat: expected });
+      try {
+        checkDirectories();
+        const names = fs.readdirSync(file).sort();
+        checkDirectories();
+        for (const name of names) {
+          requireThat(/^[A-Za-z0-9_.@+-]+$/.test(name) && name !== '.' && name !== '..', 'artifact_path_unsafe');
+          checkDirectories();
+          const key = relative ? `${relative}/${name}` : name;
+          const child = path.join(directory, key); const observed = stat(child);
+          if (observed.isDirectory()) visit(key, observed);
+          else {
+            requireThat(observed.isFile() && !observed.isSymbolicLink() && observed.nlink === 1n, 'artifact_special_file');
+            files[key] = readFile(child, observed);
+          }
+        }
+        checkDirectories();
+      } finally { directories.pop(); }
+    } finally { fs.closeSync(fd); }
+  }
+  try {
+    visit('', stat(directory));
+  } catch (error) {
+    // Filesystem exceptions can contain paths. Do not publish partial inventory.
+    if (['artifact_inventory_changed', 'artifact_special_file', 'artifact_path_unsafe'].includes(error.message)) throw error;
+    throw Error('artifact_inventory_changed');
+  }
   return files;
 }
 
