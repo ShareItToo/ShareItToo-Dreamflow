@@ -18,10 +18,19 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '.
 // Staging Web and the existing internal client only; never infer origins from
 // request Host/Origin or broaden the general API CORS middleware.
 export const greenWebCorsOrigins = 'http://shareittoo-staging-api:8080,https://staging.shareittoo.com';
+export const greenWebPublicBaseUrl = 'https://staging.shareittoo.com/api/v1';
+export const greenWebAppPublicUrl = 'https://staging.shareittoo.com';
 
 export function assertGreenWebCorsEnvironment(values) {
   if (values?.DEPLOYMENT_ENVIRONMENT !== 'test'
       || values?.CORS_ORIGINS !== greenWebCorsOrigins) fail('green_web_cors_environment_invalid');
+  return true;
+}
+
+export function assertGreenWebOriginEnvironment(values) {
+  if (values?.DEPLOYMENT_ENVIRONMENT !== 'test'
+      || values?.PUBLIC_BASE_URL !== greenWebPublicBaseUrl
+      || values?.APP_PUBLIC_URL !== greenWebAppPublicUrl) fail('green_web_origin_environment_invalid');
   return true;
 }
 
@@ -614,6 +623,7 @@ const requiredConfigKeys = Object.freeze([
 
 const requiredGreenEnvNames = Object.freeze([
   'NODE_ENV', 'DEPLOYMENT_ENVIRONMENT', 'DATABASE_URL', 'JWT_SECRET',
+  'PUBLIC_BASE_URL', 'APP_PUBLIC_URL',
   'PAYMENT_TRANSPORT', 'STRIPE_LIVEMODE',
   'MAIL_TRANSPORT', 'PUSH_TRANSPORT', 'IDENTITY_VERIFICATION_TRANSPORT', 'SIT_LISTING_AI_PROVIDER',
   'SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', 'SIT_STAGING_ACCESS_GATE_ENABLED', 'SIT_STAGING_ALLOWED_USER_IDS',
@@ -649,6 +659,7 @@ export function assertGreenProtectedEnvironment(values, config, authProfile = nu
   assertGreenAuthProfileReadback(values, authProfile);
   assertGreenTechnicalSandboxProviderOff(values);
   assertGreenWebCorsEnvironment(values);
+  assertGreenWebOriginEnvironment(values);
   for (const name of ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_CONNECT_WEBHOOK_SECRET', 'OPENAI_API_KEY']) {
     if (Object.hasOwn(values, name) && values[name] !== '') fail('green_main_provider_secret_forbidden');
   }
@@ -686,6 +697,7 @@ export function assertGreenRuntimeEnvironmentReadback(values, authProfile = null
   assertGreenAuthProfileReadback(values, authProfile);
   assertGreenTechnicalSandboxProviderOff(values);
   assertGreenWebCorsEnvironment(values);
+  assertGreenWebOriginEnvironment(values);
   return true;
 }
 
@@ -1620,7 +1632,7 @@ export function buildGreenPromotionCommands({ plan, configFile, config } = {}) {
     { phase: 'candidate_health_and_feature_probes', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', 'http://127.0.0.1:18082/health/ready'] },
     { phase: 'candidate_ready_probe', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', 'http://127.0.0.1:18082/health/ready'] },
     { phase: 'candidate_public_catalog_readback', command: 'node', args: ['--input-type=module', '-e', syntheticCatalogPublicScript('http://127.0.0.1:18082/v1/listings?sort=newest&limit=100&offset=0', false)], envFile: configFile, redacted: true },
-    { phase: 'candidate_runtime_flags_readback', command: 'docker', args: ['exec', isolated.candidate, 'node', '--input-type=module', '-e', `import crypto from 'node:crypto';const hash=(value)=>crypto.createHash('sha256').update(value).digest('hex');const summarize=(value,prefix)=>{const entries=(value??'').split(',');return {[prefix+'Count']:entries.length,[prefix+'Digest']:hash(value??'')}};const names=['CORS_ORIGINS','DEPLOYMENT_ENVIRONMENT','FIREBASE_AUTH_ENABLED','FIREBASE_PHONE_VERIFICATION_ENABLED','SIT_STAGING_ACCESS_GATE_ENABLED','SIT_STAGING_GOOGLE_REGISTRATION_ENABLED','SIT_STAGING_SYNTHETIC_CATALOG_ENABLED','PAYMENT_TRANSPORT','STRIPE_LIVEMODE','MAIL_TRANSPORT','PUSH_TRANSPORT','IDENTITY_VERIFICATION_TRANSPORT','SIT_LISTING_AI_PROVIDER','SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED','SIT_LISTING_AI_BUDGET_CENTS','TECHNICAL_SANDBOX_ENABLED','TECHNICAL_SANDBOX_KILL_SWITCH','TECHNICAL_SANDBOX_ACCOUNT_ID','TECHNICAL_SANDBOX_USER_IDS','TECHNICAL_SANDBOX_AUTHORIZATION_ID','TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT','TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT','TECHNICAL_SANDBOX_SECRET_KEY_FILE','TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE'];process.stdout.write(JSON.stringify({...Object.fromEntries(names.map((name)=>[name,process.env[name]??null])),...summarize(process.env.SIT_STAGING_PUBLIC_LISTING_IDS,'publicListingIds'),...summarize(process.env.SIT_STAGING_PUBLIC_UPLOAD_NAMES,'publicUploadNames'),googleRegistrationAllowlistEmpty:(process.env.SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST??'').trim()==='',${greenAllowedIdsProbeExpression}}))`] },
+    { phase: 'candidate_runtime_flags_readback', command: 'docker', args: ['exec', isolated.candidate, 'node', '--input-type=module', '-e', `import crypto from 'node:crypto';const hash=(value)=>crypto.createHash('sha256').update(value).digest('hex');const summarize=(value,prefix)=>{const entries=(value??'').split(',');return {[prefix+'Count']:entries.length,[prefix+'Digest']:hash(value??'')}};const names=['CORS_ORIGINS','PUBLIC_BASE_URL','APP_PUBLIC_URL','DEPLOYMENT_ENVIRONMENT','FIREBASE_AUTH_ENABLED','FIREBASE_PHONE_VERIFICATION_ENABLED','SIT_STAGING_ACCESS_GATE_ENABLED','SIT_STAGING_GOOGLE_REGISTRATION_ENABLED','SIT_STAGING_SYNTHETIC_CATALOG_ENABLED','PAYMENT_TRANSPORT','STRIPE_LIVEMODE','MAIL_TRANSPORT','PUSH_TRANSPORT','IDENTITY_VERIFICATION_TRANSPORT','SIT_LISTING_AI_PROVIDER','SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED','SIT_LISTING_AI_BUDGET_CENTS','TECHNICAL_SANDBOX_ENABLED','TECHNICAL_SANDBOX_KILL_SWITCH','TECHNICAL_SANDBOX_ACCOUNT_ID','TECHNICAL_SANDBOX_USER_IDS','TECHNICAL_SANDBOX_AUTHORIZATION_ID','TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT','TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT','TECHNICAL_SANDBOX_SECRET_KEY_FILE','TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE'];process.stdout.write(JSON.stringify({...Object.fromEntries(names.map((name)=>[name,process.env[name]??null])),...summarize(process.env.SIT_STAGING_PUBLIC_LISTING_IDS,'publicListingIds'),...summarize(process.env.SIT_STAGING_PUBLIC_UPLOAD_NAMES,'publicUploadNames'),googleRegistrationAllowlistEmpty:(process.env.SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST??'').trim()==='',${greenAllowedIdsProbeExpression}}))`] },
     { phase: 'candidate_version_probe', command: 'curl', args: ['--fail', '--silent', '--show-error', '--retry', '30', '--retry-delay', '1', '--retry-connrefused', '--retry-all-errors', 'http://127.0.0.1:18082/version'] },
     { phase: 'candidate_mfa_identity_probes', command: 'node', args: ['backend/ops/staging_controlled_acceptance.mjs', 'probe'], envFile: isolated.envFile, runtimeEnv: { STAGING_ACCEPTANCE_CONTAINER: isolated.candidate }, redacted: true },
     { phase: 'candidate_cleanup', command: 'docker', args: ['rm', '--force', '--volumes', isolated.candidate] },

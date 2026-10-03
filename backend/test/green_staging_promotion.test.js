@@ -23,6 +23,8 @@ import {
   buildGreenPromotionPlan,
   greenTarget,
   greenWebCorsOrigins,
+  greenWebPublicBaseUrl,
+  greenWebAppPublicUrl,
   greenBroadPromotionEnvironment,
   greenPublicFixtureProfile,
   greenSyntheticCatalogItemKeys,
@@ -109,7 +111,7 @@ function enrolledTargetManifest() {
 }
 const config = {
   environment: 'test', envFile: '/docker/shareittoo/staging-secrets/green.env',
-  envNames: ['NODE_ENV', 'DEPLOYMENT_ENVIRONMENT', 'DATABASE_URL', 'JWT_SECRET', 'PAYMENT_TRANSPORT', 'STRIPE_LIVEMODE', 'MAIL_TRANSPORT', 'PUSH_TRANSPORT', 'IDENTITY_VERIFICATION_TRANSPORT', 'SIT_LISTING_AI_PROVIDER', 'SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', 'SIT_STAGING_ACCESS_GATE_ENABLED', 'SIT_STAGING_ALLOWED_USER_IDS', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED', 'SIT_STAGING_SYNTHETIC_CATALOG_ENABLED', 'SIT_STAGING_PUBLIC_LISTING_IDS', 'SIT_STAGING_PUBLIC_UPLOAD_NAMES', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'MAIL_FROM', 'FIREBASE_PROJECT_ID', 'FIREBASE_AUTH_ENABLED', 'FIREBASE_PHONE_VERIFICATION_ENABLED', 'SIT_STAGING_COMPOSE_PROJECT', 'SIT_LISTING_AI_BUDGET_CENTS', 'ENABLE_STAGING_STRIPE', 'TECHNICAL_SANDBOX_ENABLED', 'TECHNICAL_SANDBOX_KILL_SWITCH', 'TECHNICAL_SANDBOX_ACCOUNT_ID', 'TECHNICAL_SANDBOX_USER_IDS', 'TECHNICAL_SANDBOX_AUTHORIZATION_ID', 'TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT', 'TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT', 'TECHNICAL_SANDBOX_SECRET_KEY_FILE', 'TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE', 'SIT_STAGING_PILOT_ID', 'SYNTHETIC_SANDBOX_PASSWORD_FILE'],
+  envNames: ['NODE_ENV', 'DEPLOYMENT_ENVIRONMENT', 'DATABASE_URL', 'JWT_SECRET', 'PUBLIC_BASE_URL', 'APP_PUBLIC_URL', 'PAYMENT_TRANSPORT', 'STRIPE_LIVEMODE', 'MAIL_TRANSPORT', 'PUSH_TRANSPORT', 'IDENTITY_VERIFICATION_TRANSPORT', 'SIT_LISTING_AI_PROVIDER', 'SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', 'SIT_STAGING_ACCESS_GATE_ENABLED', 'SIT_STAGING_ALLOWED_USER_IDS', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED', 'SIT_STAGING_SYNTHETIC_CATALOG_ENABLED', 'SIT_STAGING_PUBLIC_LISTING_IDS', 'SIT_STAGING_PUBLIC_UPLOAD_NAMES', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'MAIL_FROM', 'FIREBASE_PROJECT_ID', 'FIREBASE_AUTH_ENABLED', 'FIREBASE_PHONE_VERIFICATION_ENABLED', 'SIT_STAGING_COMPOSE_PROJECT', 'SIT_LISTING_AI_BUDGET_CENTS', 'ENABLE_STAGING_STRIPE', 'TECHNICAL_SANDBOX_ENABLED', 'TECHNICAL_SANDBOX_KILL_SWITCH', 'TECHNICAL_SANDBOX_ACCOUNT_ID', 'TECHNICAL_SANDBOX_USER_IDS', 'TECHNICAL_SANDBOX_AUTHORIZATION_ID', 'TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT', 'TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT', 'TECHNICAL_SANDBOX_SECRET_KEY_FILE', 'TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE', 'SIT_STAGING_PILOT_ID', 'SYNTHETIC_SANDBOX_PASSWORD_FILE'],
   mfaFile: '/docker/shareittoo/staging-secrets/mfa-encryption-key',
   firebaseFile: '/docker/shareittoo/staging-secrets/firebase.json',
   technicalSandboxKeyFile: '/docker/shareittoo/staging-secrets/technical-sandbox-key',
@@ -154,7 +156,7 @@ const greenFixtureEnvironment = Object.freeze({
   SIT_STAGING_PUBLIC_LISTING_IDS: dedicatedFixture.listing,
   SIT_STAGING_PUBLIC_UPLOAD_NAMES: dedicatedFixture.upload,
 });
-const greenRuntimeEnvEntries = Object.entries({ ...greenBroadPromotionEnvironment, ...greenTechnicalSandboxEnvironment, ...greenFixtureEnvironment, CORS_ORIGINS: greenWebCorsOrigins, FIREBASE_AUTH_ENABLED: 'true', SIT_STAGING_ALLOWED_USER_IDS: enrolledAllowedIds }).map(([name, value]) => `${name}=${value}`);
+const greenRuntimeEnvEntries = Object.entries({ ...greenBroadPromotionEnvironment, ...greenTechnicalSandboxEnvironment, ...greenFixtureEnvironment, CORS_ORIGINS: greenWebCorsOrigins, PUBLIC_BASE_URL: greenWebPublicBaseUrl, APP_PUBLIC_URL: greenWebAppPublicUrl, FIREBASE_AUTH_ENABLED: 'true', SIT_STAGING_ALLOWED_USER_IDS: enrolledAllowedIds }).map(([name, value]) => `${name}=${value}`);
 const originalApiIdentityRecord = {
   Id: 'api-original-id',
   State: { Running: false },
@@ -476,6 +478,8 @@ test('Green provider-off contract matches the real Listing-AI server parser', ()
 test('protected Green runtime environment binds memory payment, pilot, paths and no provider secrets', () => {
   const values = {
     CORS_ORIGINS: greenWebCorsOrigins,
+    PUBLIC_BASE_URL: greenWebPublicBaseUrl,
+    APP_PUBLIC_URL: greenWebAppPublicUrl,
     NODE_ENV: 'production', DEPLOYMENT_ENVIRONMENT: 'test', FIREBASE_AUTH_ENABLED: 'false', FIREBASE_PHONE_VERIFICATION_ENABLED: 'false', SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'false', SIT_STAGING_ACCESS_GATE_ENABLED: 'true',
     ENABLE_STAGING_STRIPE: '0', PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false',
     MAIL_TRANSPORT: 'memory', PUSH_TRANSPORT: 'memory', IDENTITY_VERIFICATION_TRANSPORT: 'memory', SIT_LISTING_AI_PROVIDER: 'on_device', SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '0', SIT_LISTING_AI_BUDGET_CENTS: '0',
@@ -489,6 +493,14 @@ test('protected Green runtime environment binds memory payment, pilot, paths and
   for (const CORS_ORIGINS of [undefined, 'http://shareittoo-staging-api:8080', 'https://staging.shareittoo.com', `${greenWebCorsOrigins},https://shareittoo.com`]) {
     assert.throws(() => assertGreenProtectedEnvironment({ ...values, CORS_ORIGINS }, config), /green_web_cors_environment_invalid/u);
   }
+  for (const [name, value] of [
+    ['PUBLIC_BASE_URL', undefined],
+    ['PUBLIC_BASE_URL', 'http://shareittoo-staging-api:8080/api/v1'],
+    ['PUBLIC_BASE_URL', 'https://shareittoo.com/api/v1'],
+    ['APP_PUBLIC_URL', undefined],
+    ['APP_PUBLIC_URL', 'http://shareittoo-staging-web'],
+    ['APP_PUBLIC_URL', 'https://shareittoo.com'],
+  ]) assert.throws(() => assertGreenProtectedEnvironment({ ...values, [name]: value }, config), /green_web_origin_environment_invalid/u);
   assert.equal(assertGreenTechnicalSandboxProviderOff(values), true);
   assert.equal(assertGreenPublicFixtureEnvironment(values), greenPublicFixtureProfile);
   assert.throws(() => assertGreenProtectedEnvironment({ ...values, FIREBASE_AUTH_ENABLED: 'true' }, config));
@@ -526,6 +538,8 @@ test('Green promotion has an explicit provider-off technical Sandbox plan and re
   assert.equal(commands.some((entry) => entry.args.some((arg) => /technical-sandbox-(?:key|webhook)/u.test(arg))), false);
   assert.equal(assertGreenRuntimeEnvironmentReadback({
     CORS_ORIGINS: greenWebCorsOrigins,
+    PUBLIC_BASE_URL: greenWebPublicBaseUrl,
+    APP_PUBLIC_URL: greenWebAppPublicUrl,
     DEPLOYMENT_ENVIRONMENT: 'test', FIREBASE_AUTH_ENABLED: 'false',
     FIREBASE_PHONE_VERIFICATION_ENABLED: 'false', SIT_STAGING_ACCESS_GATE_ENABLED: 'true',
     SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'false', PAYMENT_TRANSPORT: 'memory',
@@ -888,6 +902,8 @@ test('executor preserves required post-enrollment auth through candidate, recove
   const catalogPublicReadback = (photoReachable) => JSON.stringify({ status: 200, count: 1, pageCount: 1, rowKeys: greenSyntheticCatalogItemKeys, idDigest: greenSyntheticCatalogProjection.idDigest, ownerIdDigest: greenSyntheticCatalogProjection.ownerIdDigest, titleDigest: greenSyntheticCatalogProjection.titleDigest, noticeDigest: greenSyntheticCatalogProjection.noticeDigest, photoCount: 1, photoDigest: greenSyntheticCatalogProjection.photoDigest, locationText: greenSyntheticCatalogProjection.locationText, city: greenSyntheticCatalogProjection.city, country: greenSyntheticCatalogProjection.country, lat: greenSyntheticCatalogProjection.lat, lng: greenSyntheticCatalogProjection.lng, catalogClass: greenSyntheticCatalogProjection.catalogClass, realOffer: false, ownerDeclaration: false, bookingAllowed: false, paymentAllowed: false, isActive: true, listingStatus: 'active', verificationStatus: 'unverified', strictItemCompatible: true, canonicalValues: true, attempts: 1, converged: true, photoReachable });
   const envValues = {
     CORS_ORIGINS: greenWebCorsOrigins,
+    PUBLIC_BASE_URL: greenWebPublicBaseUrl,
+    APP_PUBLIC_URL: greenWebAppPublicUrl,
     NODE_ENV: 'production', DEPLOYMENT_ENVIRONMENT: 'test',
     DATABASE_URL: `postgres://shareittoo_green:fixture@${greenTarget.databaseContainer}:5432/shareittoo_green`,
     JWT_SECRET: 'synthetic-fixture-jwt', PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false',
@@ -1074,7 +1090,7 @@ test('executor preserves required post-enrollment auth through candidate, recove
       if (phase === 'failure_candidate_identity_readback') return { stdout: JSON.stringify({ Id: candidateId, Name: `/${plan.isolated.candidate}`, Config: { Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.green.candidate': plan.target.runId, 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } } }) };
       if (phase === 'failure_isolated_database_identity_readback') return { stdout: JSON.stringify({ Id: isolatedDatabaseId, Name: `/${plan.isolated.database}`, Config: { Labels: { 'com.shareittoo.sit.green': 'true', 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } } }) };
       if (phase === 'failure_isolated_network_identity_readback') return { stdout: JSON.stringify({ Id: isolatedNetworkId, Name: plan.isolated.network, Labels: { 'com.shareittoo.green.rehearsal': 'true', 'com.shareittoo.green.rehearsal_id': plan.isolated.rehearsalId } }) };
-      if (phase === 'candidate_runtime_flags_readback') return { stdout: JSON.stringify({ CORS_ORIGINS: greenWebCorsOrigins, DEPLOYMENT_ENVIRONMENT: 'test', FIREBASE_AUTH_ENABLED: 'false', FIREBASE_PHONE_VERIFICATION_ENABLED: 'false', SIT_STAGING_ACCESS_GATE_ENABLED: 'true', SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'false', PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false', ...greenBroadPromotionEnvironment, ...greenTechnicalSandboxEnvironment, ...greenPublicFixtureProfile, googleRegistrationAllowlistEmpty: true, ...(postEnrollment ? { FIREBASE_AUTH_ENABLED: 'true', ...summarizeGreenAllowedIds(enrolledAllowedIds) } : {}) }) };
+      if (phase === 'candidate_runtime_flags_readback') return { stdout: JSON.stringify({ CORS_ORIGINS: greenWebCorsOrigins, PUBLIC_BASE_URL: greenWebPublicBaseUrl, APP_PUBLIC_URL: greenWebAppPublicUrl, DEPLOYMENT_ENVIRONMENT: 'test', FIREBASE_AUTH_ENABLED: 'false', FIREBASE_PHONE_VERIFICATION_ENABLED: 'false', SIT_STAGING_ACCESS_GATE_ENABLED: 'true', SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'false', PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false', ...greenBroadPromotionEnvironment, ...greenTechnicalSandboxEnvironment, ...greenPublicFixtureProfile, googleRegistrationAllowlistEmpty: true, ...(postEnrollment ? { FIREBASE_AUTH_ENABLED: 'true', ...summarizeGreenAllowedIds(enrolledAllowedIds) } : {}) }) };
       if (phase === 'candidate_health_and_feature_probes' || phase === 'candidate_ready_probe') return { stdout: JSON.stringify(payload) };
       if (phase === 'candidate_version_probe') return { stdout: JSON.stringify({ commit: runtimeCommit, environment: 'test' }) };
       if (phase === 'fresh_protected_backup') return { stdout: 'synthetic protected backup' };
@@ -1438,6 +1454,13 @@ test('final readback binds topology and required post-enrollment cohort', () => 
   for (const value of ['http://shareittoo-staging-api:8080', `${greenWebCorsOrigins},https://shareittoo.com`]) {
     const drifted = { ...record, Config: { ...record.Config, Env: record.Config.Env.map((entry) => entry.startsWith('CORS_ORIGINS=') ? `CORS_ORIGINS=${value}` : entry) } };
     assert.throws(() => assertGreenFinalContainerReadback({ record: drifted, plan, expectedId: record.Id, expectedNetworkIds }), /green_web_cors_environment_invalid/u);
+  }
+  for (const [name, value] of [
+    ['PUBLIC_BASE_URL', 'https://shareittoo.com/api/v1'],
+    ['APP_PUBLIC_URL', 'http://shareittoo-staging-web'],
+  ]) {
+    const drifted = { ...record, Config: { ...record.Config, Env: record.Config.Env.map((entry) => entry.startsWith(`${name}=`) ? `${name}=${value}` : entry) } };
+    assert.throws(() => assertGreenFinalContainerReadback({ record: drifted, plan, expectedId: record.Id, expectedNetworkIds }), /green_web_origin_environment_invalid/u);
   }
   assert.equal(summarizeGreenFinalContainerReadback(record, plan, expectedNetworkIds, record.Id).hostPorts, 0);
   assert.throws(() => assertGreenFinalContainerReadback({ record: { ...record, Id: 'b'.repeat(64) }, plan, expectedId: record.Id, expectedNetworkIds }), /green_final_inventory_mismatch/u);
