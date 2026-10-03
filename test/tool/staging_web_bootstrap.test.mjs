@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { bootstrap, gatewayFromCandidate, GATEWAY_BODY, mountDigest, normalizedCaddyConfig } from '../../tool/staging_web_bootstrap.mjs';
+import { bootstrap, gatewayFromCandidate, GATEWAY_BODY, mountDigest, normalizedCaddyConfig, privateFile } from '../../tool/staging_web_bootstrap.mjs';
 import { serverAdapter } from '../../tool/bootstrap_staging_web.mjs';
 import { sealArtifact, sha256, TARGET } from '../../tool/staging_web_contract.mjs';
 
@@ -55,6 +55,148 @@ function restored(f) {
   assert.equal(fs.existsSync(path.join(f.root, 'previous')), false);
   assert.equal(fs.readFileSync(f.backupPath, 'utf8'), f.gateway);
 }
+function descriptorTracker(t) {
+  const descriptors = new Set(); const open = fs.openSync; const close = fs.closeSync;
+  t.mock.method(fs, 'openSync', (...args) => { const fd = open(...args); descriptors.add(fd); return fd; });
+  t.mock.method(fs, 'closeSync', fd => { close(fd); descriptors.delete(fd); });
+  return descriptors;
+}
+function changeFile(f, file, variant) {
+  if (variant === 'permissions') fs.chmodSync(file, 0o666);
+  else if (variant === 'hardlink') fs.linkSync(file, path.join(f.temp, 'extra-link'));
+  else if (variant === 'content') fs.writeFileSync(file, 'foreign-content');
+  else {
+    fs.renameSync(file, path.join(f.temp, 'original-file'));
+    if (variant === 'regular') fs.writeFileSync(file, 'foreign-content', { mode: 0o600 });
+    if (variant === 'symlink') {
+      fs.writeFileSync(path.join(f.temp, 'foreign-file'), 'foreign-content');
+      fs.symlinkSync(path.join(f.temp, 'foreign-file'), file);
+    }
+  }
+}
+for (const kind of ['private', 'host']) {
+  for (const variant of ['regular', 'symlink', 'hardlink', 'permissions']) {
+    test(`${kind} read refuses ${variant} between path check and descriptor open`, t => {
+      const f = fixture(t); const file = kind === 'private' ? f.backupPath : f.config;
+      const descriptors = descriptorTracker(t); const open = fs.openSync; let changed = false;
+      t.mock.method(fs, 'openSync', (name, ...args) => {
+        if (name === file && !changed) { changed = true; changeFile(f, file, variant); }
+        return open(name, ...args);
+      });
+      assert.throws(() => kind === 'private' ? privateFile(file) : bootstrap(f.args), /^Error: bootstrap_/);
+      assert.equal(changed, true); assert.equal(descriptors.size, 0); assert.equal(f.reloads(), 0);
+      if (['regular', 'symlink'].includes(variant)) assert.equal(fs.readFileSync(file, 'utf8'), 'foreign-content');
+    });
+  }
+}
+for (const variant of ['regular', 'hardlink', 'permissions', 'content']) {
+  test(`private read detects ${variant} during descriptor read`, t => {
+    const f = fixture(t); const descriptors = descriptorTracker(t); const open = fs.openSync; const read = fs.readSync;
+    let target; let changed = false;
+    t.mock.method(fs, 'openSync', (name, ...args) => { const fd = open(name, ...args); if (name === f.backupPath) target = fd; return fd; });
+    t.mock.method(fs, 'readSync', (...args) => {
+      const count = read(...args);
+      if (args[0] === target && !changed) { changed = true; changeFile(f, f.backupPath, variant); }
+      return count;
+    });
+    assert.throws(() => privateFile(f.backupPath), /^Error: bootstrap_/);
+    assert.equal(changed, true); assert.equal(descriptors.size, 0);
+  });
+}
+for (const variant of ['regular', 'symlink', 'hardlink', 'permissions', 'content']) {
+  test(`existing journal ${variant} is never overwritten and retains manual-recovery lock`, t => {
+    const f = fixture(t); const descriptors = descriptorTracker(t);
+    const evidence = path.join(f.backupDirectory, `${f.manifest.runId}.json`); let changedBytes;
+    assert.throws(() => bootstrap({ ...f.args, execute: true, fault: at => {
+      if (at === 'copy') { changeFile(f, evidence, variant); changedBytes = fs.readFileSync(evidence); }
+    } }), /bootstrap_rollback_failed_manual_recovery_required/);
+    assert.deepEqual(fs.readFileSync(evidence), changedBytes);
+    assert.equal(fs.readFileSync(f.config, 'utf8'), f.gateway);
+    assert.equal(fs.readFileSync(f.backupPath, 'utf8'), f.gateway);
+    assert.equal(f.reloads(), 0); assert.equal(descriptors.size, 0);
+    assert.equal(fs.existsSync(path.join(f.root, '.deployment-lock')), true);
+  });
+}
+for (const variant of ['regular', 'hardlink', 'permissions']) {
+  test(`Caddy writable descriptor rejects late ${variant} before truncation`, t => {
+    const f = fixture(t); const descriptors = descriptorTracker(t); const open = fs.openSync; let changed = false; let changedBytes;
+    t.mock.method(fs, 'openSync', (file, flags, ...args) => {
+      if (file === f.config && (flags & fs.constants.O_RDWR) && !changed) {
+        changed = true; changeFile(f, file, variant); changedBytes = fs.readFileSync(file);
+      }
+      return open(file, flags, ...args);
+    });
+    assert.throws(() => bootstrap({ ...f.args, execute: true }), /bootstrap_rollback_failed_manual_recovery_required/);
+    assert.equal(changed, true); assert.deepEqual(fs.readFileSync(f.config), changedBytes);
+    assert.equal(f.reloads(), 0); assert.equal(descriptors.size, 0);
+    assert.equal(fs.existsSync(path.join(f.root, '.deployment-lock')), true);
+    assert.equal(fs.readFileSync(f.backupPath, 'utf8'), f.gateway);
+  });
+}
+test('Caddy readback and rollback do not adopt a substituted inode', t => {
+  const f = fixture(t); const descriptors = descriptorTracker(t);
+  assert.throws(() => bootstrap({ ...f.args, execute: true, fault: at => {
+    if (at === 'readback') throw Error('trigger-recovery');
+    if (at === 'rollback') changeFile(f, f.config, 'regular');
+  } }), /bootstrap_rollback_failed_manual_recovery_required/);
+  assert.equal(fs.readFileSync(f.config, 'utf8'), 'foreign-content');
+  assert.equal(fs.readFileSync(f.backupPath, 'utf8'), f.gateway);
+  assert.equal(f.reloads(), 1); assert.equal(descriptors.size, 0);
+  assert.equal(fs.existsSync(path.join(f.root, '.deployment-lock')), true);
+});
+test('foreign Caddy bytes after the bound read are rejected before descriptor truncation', t => {
+  const f = fixture(t); const descriptors = descriptorTracker(t);
+  const open = fs.openSync; const read = fs.readSync; const lstat = fs.lstatSync;
+  let target; let readCompleted = false; let changed = false;
+  t.mock.method(fs, 'openSync', (file, flags, ...args) => {
+    const fd = open(file, flags, ...args);
+    if (file === f.config && (flags & fs.constants.O_RDWR)) target = fd;
+    return fd;
+  });
+  t.mock.method(fs, 'readSync', (...args) => {
+    const count = read(...args); if (args[0] === target && count === 0) readCompleted = true; return count;
+  });
+  t.mock.method(fs, 'lstatSync', (file, ...args) => {
+    const stat = lstat(file, ...args);
+    if (file === f.config && readCompleted && !changed) { changed = true; fs.writeFileSync(file, 'foreign-content'); }
+    return stat;
+  });
+  assert.throws(() => bootstrap({ ...f.args, execute: true }), /bootstrap_rollback_failed_manual_recovery_required/);
+  assert.equal(changed, true); assert.equal(fs.readFileSync(f.config, 'utf8'), 'foreign-content');
+  assert.equal(f.reloads(), 0); assert.equal(descriptors.size, 0);
+  assert.equal(fs.existsSync(path.join(f.root, '.deployment-lock')), true);
+});
+test('existing journal writes use the original descriptor and preserve its inode', t => {
+  const f = fixture(t); const descriptors = descriptorTracker(t); const open = fs.openSync;
+  const evidence = path.join(f.backupDirectory, `${f.manifest.runId}.json`); let journalOpens = 0; let identity;
+  t.mock.method(fs, 'openSync', (file, ...args) => { if (file === evidence) journalOpens++; return open(file, ...args); });
+  assert.equal(bootstrap({ ...f.args, execute: true, fault: at => {
+    if (at === 'copy') identity = fs.statSync(evidence).ino;
+  } }).status, 'bootstrap-passed');
+  assert.equal(journalOpens, 1); assert.equal(fs.statSync(evidence).ino, identity);
+  assert.equal(JSON.parse(fs.readFileSync(evidence)).status, 'bootstrap-passed');
+  assert.equal(fs.statSync(f.config).ino, f.manifest.hostFile.inode); assert.equal(descriptors.size, 0);
+});
+test('private descriptor close failures have stable sanitized errors', t => {
+  const f = fixture(t); const close = fs.closeSync; let closed = false;
+  t.mock.method(fs, 'closeSync', fd => { close(fd); closed = true; throw Error('/private/synthetic-close-detail'); });
+  assert.throws(() => privateFile(f.backupPath), { message: 'bootstrap_file_operation_failed' });
+  assert.equal(closed, true);
+});
+test('journal close failure never masks the manual-recovery result or releases its lock', t => {
+  const f = fixture(t); const open = fs.openSync; const close = fs.closeSync;
+  const evidence = path.join(f.backupDirectory, `${f.manifest.runId}.json`); let journalFd; let closed = false;
+  t.mock.method(fs, 'openSync', (file, ...args) => { const fd = open(file, ...args); if (file === evidence) journalFd = fd; return fd; });
+  t.mock.method(fs, 'closeSync', fd => {
+    close(fd);
+    if (fd === journalFd) { closed = true; journalFd = undefined; throw Error('/private/synthetic-close-detail'); }
+  });
+  assert.throws(() => bootstrap({ ...f.args, execute: true, fault: at => {
+    if (['readback', 'rollback'].includes(at)) throw Error('injected');
+  } }), { message: 'bootstrap_rollback_failed_manual_recovery_required' });
+  assert.equal(closed, true); assert.equal(fs.existsSync(path.join(f.root, '.deployment-lock')), true);
+  assert.equal(fs.readFileSync(f.backupPath, 'utf8'), f.gateway);
+});
 test('default bootstrap preflight validates exact gateway truth without filesystem mutation/reload', (t) => {
   const f = fixture(t);
   assert.equal(bootstrap(f.args).status, 'bootstrap-preflight-passed-no-mutation');
@@ -77,7 +219,8 @@ test('first Web install preserves file-bind inode and owner-only real gateway ba
 for (const phase of ['copy', 'copied', 'config-install', 'config-installed', 'reload', 'reloaded', 'readback', 'verified']) {
   test(`${phase} failure restores exact gateway, config inode, permissions and absent current`, (t) => {
     const f = fixture(t);
-    assert.throws(() => bootstrap({ ...f.args, execute: true, fault: (at) => { if (at === phase) throw Error('injected'); } }), /injected/);
+    assert.throws(() => bootstrap({ ...f.args, execute: true, fault: (at) => { if (at === phase) throw Error('injected'); } }),
+      phase === 'config-install' ? /bootstrap_file_operation_failed/ : /injected/);
     restored(f);
     assert.equal(fs.existsSync(path.join(f.root, '.deployment-lock')), false);
     assert.equal(JSON.parse(fs.readFileSync(path.join(f.backupDirectory, `${f.manifest.runId}.json`))).status, 'failed-gateway-restored');

@@ -36,35 +36,83 @@ function ownedDirectory(directory, mode) {
   confinedDirectory(directory);
   const stat = fs.statSync(directory);
   check(stat.uid === process.getuid() && (mode ? (stat.mode & 0o777) === mode : (stat.mode & 0o022) === 0), 'directory_permissions');
+  return stat;
+}
+const sameFile = (a, b) => ['dev', 'ino', 'mode', 'uid', 'gid', 'nlink', 'size', 'mtimeNs', 'ctimeNs'].every(key => a[key] === b[key]);
+const fileStat = file => fs.lstatSync(file, { bigint: true });
+function fileIo(action) {
+  try { return action(); } catch (error) {
+    if (/^bootstrap_[a-z_]+$/.test(error?.message)) throw error;
+    throw Error('bootstrap_file_operation_failed');
+  }
+}
+function permissions(stat, mode, expected) {
+  check(stat.isFile() && !stat.isSymbolicLink() && stat.nlink === 1n && stat.uid === BigInt(process.getuid())
+    && (stat.mode & 0o7777n) === BigInt(mode), 'file_permissions');
+  if (expected) check(stat.ino === BigInt(expected.inode) && stat.dev === BigInt(expected.device)
+    && stat.uid === BigInt(expected.uid) && stat.gid === BigInt(expected.gid), 'host_file_identity');
+}
+function descriptorState(file, fd, mode, expected, parent) {
+  const currentParent = ownedDirectory(path.dirname(file), mode === 0o600 ? 0o700 : undefined);
+  check(['dev', 'ino', 'uid', 'gid', 'mode'].every(key => parent[key] === currentParent[key]), 'file_parent_changed');
+  const stat = fs.fstatSync(fd, { bigint: true }); permissions(stat, mode, expected);
+  check(sameFile(stat, fileStat(file)), 'file_identity_changed');
+  return stat;
+}
+function readDescriptor(file, fd, mode, expected, parent) {
+  const before = descriptorState(file, fd, mode, expected, parent);
+  // Match the server adapter's 8 MiB command ceiling; never allocate a raced size.
+  check(before.size <= 8n * 1024n * 1024n, 'file_size_limit');
+  const bytes = Buffer.alloc(Number(before.size)); let offset = 0;
+  while (offset < bytes.length) {
+    const count = fs.readSync(fd, bytes, offset, bytes.length - offset, offset);
+    check(count > 0, 'file_changed'); offset += count;
+  }
+  check(fs.readSync(fd, Buffer.alloc(1), 0, 1, bytes.length) === 0
+    && sameFile(before, descriptorState(file, fd, mode, expected, parent)), 'file_changed');
+  return bytes;
+}
+function withFile(file, mode, expected, flags, action) {
+  return fileIo(() => {
+    const parent = ownedDirectory(path.dirname(file), mode === 0o600 ? 0o700 : undefined);
+    const before = fileStat(file); permissions(before, mode, expected);
+    const fd = fs.openSync(file, flags | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+    try {
+      check(sameFile(before, descriptorState(file, fd, mode, expected, parent)), 'file_changed');
+      return action(fd, parent, before);
+    } finally { fs.closeSync(fd); }
+  });
 }
 export function privateFile(file) {
-  ownedDirectory(path.dirname(file), 0o700);
-  const stat = fs.lstatSync(file);
-  check(stat.isFile() && !stat.isSymbolicLink() && stat.nlink === 1 && stat.uid === process.getuid() && (stat.mode & 0o777) === 0o600, 'private_file_permissions');
-  return fs.readFileSync(file);
+  return withFile(file, 0o600, null, fs.constants.O_RDONLY,
+    (fd, parent) => readDescriptor(file, fd, 0o600, null, parent));
 }
 export function mountDigest(mounts) {
   const selected = mounts.map(({ Type, Source, Destination, RW, Mode }) => ({ Type, Source, Destination, RW, Mode }));
   return sha256(canonicalJson(selected.sort((a, b) => a.Destination.localeCompare(b.Destination))));
 }
 function hostFile(file, expected) {
-  const stat = fs.lstatSync(file);
-  check(stat.isFile() && !stat.isSymbolicLink() && stat.nlink === 1 && stat.uid === expected.uid && stat.gid === expected.gid && (stat.mode & 0o777) === 0o644 && stat.ino === expected.inode && stat.dev === expected.device, 'host_file_identity');
-  return fs.readFileSync(file);
+  return withFile(file, 0o644, expected, fs.constants.O_RDONLY,
+    (fd, parent) => readDescriptor(file, fd, 0o644, expected, parent));
+}
+function replaceDescriptor(file, fd, mode, expected, parent, content, before, afterTruncate = () => {}) {
+  check(sameFile(before, descriptorState(file, fd, mode, expected, parent)), 'file_changed');
+  fs.ftruncateSync(fd, 0); afterTruncate();
+  check(descriptorState(file, fd, mode, expected, parent).size === 0n, 'file_changed');
+  const bytes = Buffer.from(content); let offset = 0;
+  while (offset < bytes.length) {
+    const count = fs.writeSync(fd, bytes, offset, bytes.length - offset, offset);
+    check(count > 0, 'file_write_failed'); offset += count;
+  }
+  fs.fsyncSync(fd);
+  check(readDescriptor(file, fd, mode, expected, parent).equals(bytes), 'config_write_readback');
 }
 // An existing read-only Docker FILE bind requires preserving this exact inode.
-function installInPlace(file, content, expected, afterTruncate = () => {}) {
-  hostFile(file, expected);
-  const fd = fs.openSync(file, fs.constants.O_WRONLY | fs.constants.O_NOFOLLOW);
-  try {
-    const stat = fs.fstatSync(fd);
-    check(stat.ino === expected.inode && stat.dev === expected.device, 'host_file_raced');
-    fs.ftruncateSync(fd, 0);
-    afterTruncate();
-    fs.writeFileSync(fd, content);
-    fs.fsyncSync(fd);
-  } finally { fs.closeSync(fd); }
-  check(sha256(hostFile(file, expected)) === sha256(content), 'config_write_readback');
+function installInPlace(file, content, expected, previous, afterTruncate = () => {}) {
+  return withFile(file, 0o644, expected, fs.constants.O_RDWR, (fd, parent, before) => {
+    check(readDescriptor(file, fd, 0o644, expected, parent).equals(Buffer.from(previous)), 'host_file_content_changed');
+    replaceDescriptor(file, fd, 0o644, expected, parent, content, before, afterTruncate);
+  });
 }
 
 /** Server adapter is mandatory. Tests inject it; the CLI binds actual commands. */
@@ -130,16 +178,26 @@ export function bootstrap({ hostRoot, manifest: m, sourceRoot, artifact, adapter
   let currentCreated = false;
   let recoveryFailed = false;
   let journalCreated = false;
+  let journalFd; let journalIdentity; let journalParent; let journalState; let journalBytes = Buffer.alloc(0);
   const journal = { schemaVersion: 1, status: 'started', source: m.source, artifactHash: m.artifactHash, gatewayConfigHash: m.gatewayConfigHash, candidateConfigHash: m.candidateConfigHash };
   function record(status) {
-    journal.status = status;
-    if (!journalCreated) {
-      fs.writeFileSync(evidencePath, `${JSON.stringify(journal)}\n`, { flag: 'wx', mode: 0o600 });
-      journalCreated = true;
-    } else {
-      privateFile(evidencePath);
-      fs.writeFileSync(evidencePath, `${JSON.stringify(journal)}\n`);
-    }
+    fileIo(() => {
+      journal.status = status;
+      if (!journalCreated) {
+        journalParent = ownedDirectory(backupDirectory, 0o700);
+        journalFd = fs.openSync(evidencePath, fs.constants.O_RDWR | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK, 0o600);
+        journalCreated = true;
+        const stat = fs.fstatSync(journalFd, { bigint: true });
+        journalIdentity = { inode: stat.ino, device: stat.dev, uid: stat.uid, gid: stat.gid };
+        journalState = descriptorState(evidencePath, journalFd, 0o600, journalIdentity, journalParent);
+      }
+      check(sameFile(journalState, descriptorState(evidencePath, journalFd, 0o600, journalIdentity, journalParent))
+        && readDescriptor(evidencePath, journalFd, 0o600, journalIdentity, journalParent).equals(journalBytes), 'journal_changed');
+      const bytes = Buffer.from(`${JSON.stringify(journal)}\n`);
+      replaceDescriptor(evidencePath, journalFd, 0o600, journalIdentity, journalParent, bytes, journalState);
+      journalBytes = bytes;
+      journalState = descriptorState(evidencePath, journalFd, 0o600, journalIdentity, journalParent);
+    });
   }
   try {
     check(!exists(current) && !exists(path.join(root, 'previous')) && !exists(destination), 'state_changed');
@@ -161,7 +219,7 @@ export function bootstrap({ hostRoot, manifest: m, sourceRoot, artifact, adapter
     cleanSource(sourceRoot, m.source);
     record('installing-config');
     configTouched = true;
-    installInPlace(config, candidate, m.hostFile, () => fault('config-install'));
+    installInPlace(config, candidate, m.hostFile, backup, () => fault('config-install'));
     configWriteCompleted = true;
     fault('config-installed');
     check(sha256(adapter.mountedConfig()) === m.candidateConfigHash, 'mounted_candidate_readback');
@@ -191,7 +249,7 @@ export function bootstrap({ hostRoot, manifest: m, sourceRoot, artifact, adapter
           (currentConfig.length <= candidateBytes.length && candidateBytes.subarray(0, currentConfig.length).equals(currentConfig));
         check(ownInterruptedWrite && (!configWriteCompleted || currentConfig.equals(candidateBytes)), 'rollback_foreign_config');
         fault('rollback');
-        installInPlace(config, backup, m.hostFile);
+        installInPlace(config, backup, m.hostFile, currentConfig);
         adapter.validate(backup);
         adapter.reload();
       }
@@ -208,5 +266,9 @@ export function bootstrap({ hostRoot, manifest: m, sourceRoot, artifact, adapter
       throw Error('bootstrap_rollback_failed_manual_recovery_required');
     }
     throw error;
-  } finally { if (!recoveryFailed) fs.rmdirSync(lock); }
+  } finally {
+    try { fileIo(() => { if (journalFd !== undefined) fs.closeSync(journalFd); }); }
+    catch (error) { if (!recoveryFailed) throw error; } // Preserve the hard manual-recovery result.
+    if (!recoveryFailed) fileIo(() => fs.rmdirSync(lock));
+  }
 }
