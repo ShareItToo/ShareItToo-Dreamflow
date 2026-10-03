@@ -21,6 +21,9 @@ export const integrationDatabaseUser = 'sit_runner';
 // Each group runs against the same isolated database, so groups stay
 // sequential while suites inside a group may use Node's normal test runner.
 export const integrationTestGroups = Object.freeze({
+  missionAdmission: Object.freeze([
+    'backend/test/mission_admission_postgres.integration.test.js',
+  ]),
   notificationLifecycle: Object.freeze([
     'backend/test/notification_lifecycle_postgres.integration.test.js',
   ]),
@@ -74,6 +77,7 @@ export const integrationTestGroups = Object.freeze({
 });
 
 export function integrationTestPlan({
+  focusedMissionAdmission = false,
   focusedNotifications = false,
   focusedPasswordEnrollment = false,
   focusedGoogleRegistration = false,
@@ -90,6 +94,7 @@ export function integrationTestPlan({
   focusedMissionQuorumProjection = false,
   focusedPrivateShelf = false,
 } = {}) {
+  if (focusedMissionAdmission) return [integrationTestGroups.missionAdmission];
   if (focusedNotifications) return [integrationTestGroups.notificationLifecycle];
   if (focusedPasswordEnrollment) return [integrationTestGroups.passwordEnrollment];
   if (focusedMissionQuorumProjection) return [integrationTestGroups.missionQuorumProjection];
@@ -133,6 +138,7 @@ export function integrationTestPlan({
     integrationTestGroups.missionSupplyDemand,
     integrationTestGroups.missionSupplyParticipation,
     integrationTestGroups.missionQuorumProjection,
+    integrationTestGroups.missionAdmission,
     integrationTestGroups.stagingGoogleRegistration,
     integrationTestGroups.passwordEnrollment,
     integrationTestGroups.notificationLifecycle,
@@ -342,7 +348,9 @@ export async function runLocalPostgresIntegration({
   const focusedPrivateShelf = environment.SIT_POSTGRES_FOCUSED_PRIVATE_SHELF === '1';
   const focusedPasswordEnrollment = environment.SIT_POSTGRES_FOCUSED_PASSWORD_ENROLLMENT === '1';
   const focusedNotifications = environment.SIT_POSTGRES_FOCUSED_NOTIFICATIONS === '1';
+  const focusedMissionAdmission = environment.SIT_POSTGRES_FOCUSED_MISSION_ADMISSION === '1';
   const integrationGroups = integrationTestPlan({
+    focusedMissionAdmission,
     focusedNotifications,
     focusedPasswordEnrollment,
     focusedGoogleRegistration,

@@ -31,6 +31,7 @@ import {
   revokeSessionByRefreshToken,
 } from './auth_session_actions.js';
 import { config } from './config.js';
+import { assertMissionAdmission, MissionAdmissionError } from './mission_admission.js';
 import {
   resolveStagingPasswordEnrollment,
   reserveStagingPasswordEnrollment,
@@ -5766,6 +5767,7 @@ export function createApp({
 
   app.post('/v1/mission-needs', requireAuth, requireActiveAccount, requireUnsuspendedScope('booking'), asyncRoute(async (req, res) => {
     assertMissionNeedTechnicalAccess(config);
+    assertMissionAdmission(config, 'create');
     const result = await inTransaction((client) => createMissionNeed(client, {
       actorId: req.auth.userId,
       raw: req.body,
@@ -5778,6 +5780,7 @@ export function createApp({
 
   app.post('/v1/mission-needs/:id/revisions', requireAuth, requireActiveAccount, requireUnsuspendedScope('booking'), asyncRoute(async (req, res) => {
     assertMissionNeedTechnicalAccess(config);
+    assertMissionAdmission(config, 'correct');
     const result = await inTransaction((client) => correctMissionNeed(client, {
       actorId: req.auth.userId,
       missionNeedId: safeText(req.params.id, 160),
@@ -5800,6 +5803,7 @@ export function createApp({
 
   app.post('/v1/mission-needs/:id/fit-checks', requireAuth, requireActiveAccount, requireUnsuspendedScope('booking'), asyncRoute(async (req, res) => {
     assertMissionFitCheckTechnicalAccess(config);
+    assertMissionAdmission(config, 'create');
     const result = await inTransaction((client) => createMissionFitCheck(client, {
       actorId: req.auth.userId,
       missionNeedId: safeText(req.params.id, 160),
@@ -5822,6 +5826,7 @@ export function createApp({
 
   app.post('/v1/mission-fit-checks/:id/revisions', requireAuth, requireActiveAccount, requireUnsuspendedScope('booking'), asyncRoute(async (req, res) => {
     assertMissionFitCheckTechnicalAccess(config);
+    assertMissionAdmission(config, 'correct');
     const result = await inTransaction((client) => correctMissionFitCheck(client, {
       actorId: req.auth.userId,
       fitCheckId: safeText(req.params.id, 160),
@@ -5846,6 +5851,7 @@ export function createApp({
 
   app.post('/v1/mission-needs/:id/inventory-resolutions', requireAuth, requireActiveAccount, requireUnsuspendedScope('booking'), asyncRoute(async (req, res) => {
     assertMissionInventoryResolutionTechnicalAccess(config);
+    assertMissionAdmission(config, 'create');
     const result = await inTransaction((client) => createMissionInventoryResolution(client, {
       actorId: req.auth.userId,
       missionNeedId: safeText(req.params.id, 160),
@@ -5872,6 +5878,7 @@ export function createApp({
 
   app.post('/v1/mission-inventory-resolutions/:id/revisions', requireAuth, requireActiveAccount, requireUnsuspendedScope('booking'), asyncRoute(async (req, res) => {
     assertMissionInventoryResolutionTechnicalAccess(config);
+    assertMissionAdmission(config, 'correct');
     const result = await inTransaction((client) => reviseMissionInventoryResolution(client, {
       actorId: req.auth.userId,
       resolutionId: safeText(req.params.id, 160),
@@ -5904,6 +5911,7 @@ export function createApp({
 
   app.post('/v1/mission-inventory-resolutions/:id/supply-demands', missionSupplyDemandCreateLimiter, requireAuth, requireActiveAccount, requireUnsuspendedScope('booking'), asyncRoute(async (req, res) => {
     assertMissionSupplyDemandCreateTechnicalAccess(config, resolveMissionSupplyRecipient);
+    assertMissionAdmission(config, 'create');
     const result = await inTransaction((client) => createMissionSupplyDemand(client, {
       actorId: req.auth.userId,
       resolutionId: safeText(req.params.id, 160),
@@ -5918,6 +5926,7 @@ export function createApp({
 
   app.post('/v1/mission-supply-demands/:id/respond', requireAuth, requireActiveAccount, requireUnsuspendedScope('booking'), asyncRoute(async (req, res) => {
     assertMissionSupplyDemandTechnicalAccess(config);
+    assertMissionAdmission(config, 'respond', req.body);
     const result = await inTransaction((client) => respondToMissionSupplyDemand(client, {
       actorId: req.auth.userId,
       demandId: safeText(req.params.id, 160),
@@ -5954,16 +5963,20 @@ export function createApp({
   }));
   app.post('/v1/mission-supply-participation', requireAuth, requireActiveAccount, asyncRoute(async (req, res) => {
     assertMissionSupplyParticipationTechnicalAccess(config);
+    assertMissionAdmission(config, 'participation', req.body);
     const result = await inTransaction((client) => setMissionSupplyParticipation(client, {
       actorId: req.auth.userId, raw: req.body, idempotencyKey: req.get('Idempotency-Key'),
+      newEntriesEnabled: config.planner.newEntriesEnabled,
     }));
     res.status(result.replayed ? 200 : 201).json(result);
   }));
   app.post('/v1/mission-supply-participation/items/:shelfItemId', requireAuth, requireActiveAccount, asyncRoute(async (req, res) => {
     assertMissionSupplyParticipationTechnicalAccess(config);
+    assertMissionAdmission(config, 'participationItem', req.body);
     const result = await inTransaction((client) => setMissionSupplyParticipationItem(client, {
       actorId: req.auth.userId, shelfItemId: req.params.shelfItemId,
       raw: req.body, idempotencyKey: req.get('Idempotency-Key'),
+      newEntriesEnabled: config.planner.newEntriesEnabled,
     }));
     res.status(result.replayed ? 200 : 201).json(result);
   }));
@@ -5992,6 +6005,7 @@ export function createApp({
 
   app.post('/v1/private-shelf', requireAuth, requireActiveAccount, asyncRoute(async (req, res) => {
     assertPrivateShelfTechnicalAccess(config);
+    assertMissionAdmission(config, 'create');
     const result = await inTransaction((client) => createPrivateShelfItem(client, {
       actorId: req.auth.userId,
       raw: req.body,
@@ -6025,6 +6039,7 @@ export function createApp({
     requireVerifiedEmailForUpload,
     asyncRoute(async (req, res) => {
       assertPrivateShelfTechnicalAccess(config);
+      assertMissionAdmission(config, 'upload');
       if (!req.file?.buffer) throw new HttpError(400, 'file_required');
       const detected = await fileTypeFromBuffer(req.file.buffer);
       if (!detected || !new Set(['image/jpeg', 'image/png', 'image/webp']).has(detected.mime)) {
@@ -8297,7 +8312,7 @@ export function createApp({
     const missionFitCheckError = error instanceof MissionFitCheckError;
     const missionInventoryResolutionError = error instanceof MissionInventoryResolutionError;
     const missionSupplyDemandError = error instanceof MissionSupplyDemandError
-      || error instanceof MissionSupplyParticipationError;
+      || error instanceof MissionSupplyParticipationError || error instanceof MissionAdmissionError;
     const privateShelfError = error instanceof PrivateShelfError;
     const listingSupplyEnrichmentError = error instanceof ListingSupplyEnrichmentError;
     const listingSetError = error instanceof ListingSetError;

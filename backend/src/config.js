@@ -21,6 +21,7 @@ import { readSyntheticCatalogConfiguration } from './staging_synthetic_catalog.j
 import { readStagingGoogleRegistrationConfiguration } from './staging_google_registration.js';
 import { readStagingPasswordEnrollmentConfiguration } from './staging_password_enrollment.js';
 import { readMissionSupplyParticipationEnabled } from './mission_supply_participation_workflow.js';
+import { readMissionNewEntriesEnabled } from './mission_admission.js';
 
 function required(name) {
   const value = process.env[name]?.trim();
@@ -109,6 +110,9 @@ const plannerSupplyParticipationEnabled = readMissionSupplyParticipationEnabled(
   coreEnabled: plannerCoreEnabled,
   inventoryEnabled: plannerInventoryEnabled,
   demandEnabled: plannerDemandEnabled,
+});
+const plannerNewEntriesEnabled = readMissionNewEntriesEnabled(process.env, {
+  deploymentEnvironment, coreEnabled: plannerCoreEnabled,
 });
 const listingSupplyEnrichmentEnabled = (
   process.env.LISTING_SUPPLY_ENRICHMENT_ENABLED ?? 'false'
@@ -473,6 +477,7 @@ export const config = Object.freeze({
     inventoryResolutionEnabled: plannerInventoryEnabled,
     demandEnabled: plannerDemandEnabled,
     supplyParticipationEnabled: plannerSupplyParticipationEnabled,
+    newEntriesEnabled: plannerNewEntriesEnabled,
     demandActivationAllowed: false,
     publicReleaseAllowed: false,
     externalGenerativeAiAllowed: false,

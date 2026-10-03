@@ -189,7 +189,7 @@ export async function getMissionSupplyParticipation(client, { actorId }) {
   return snapshot(client, actorId);
 }
 
-export async function setMissionSupplyParticipation(client, { actorId, raw, idempotencyKey }) {
+export async function setMissionSupplyParticipation(client, { actorId, raw, idempotencyKey, newEntriesEnabled = false }) {
   const payload = normalizeMissionSupplyParticipation(raw);
   const key = commandKey(idempotencyKey);
   const commandType = payload.status === 'active' ? 'activate' : 'withdraw';
@@ -199,6 +199,7 @@ export async function setMissionSupplyParticipation(client, { actorId, raw, idem
   if (prior) return response(client, actorId, prior, false, true);
   if (payload.status === 'active') assertCanEnable(owner);
   let root = await rootForOwner(client, actorId);
+  if (!root && payload.status === 'withdrawn' && newEntriesEnabled !== true) fail(404, 'not_enabled');
   if ((root?.current_revision ?? 0) !== payload.expectedRevision) fail(409, 'revision_conflict');
   if (!root) {
     root = (await client.query(
@@ -222,7 +223,7 @@ export async function setMissionSupplyParticipation(client, { actorId, raw, idem
   return response(client, actorId, command, false, false);
 }
 
-export async function setMissionSupplyParticipationItem(client, { actorId, shelfItemId, raw, idempotencyKey }) {
+export async function setMissionSupplyParticipationItem(client, { actorId, shelfItemId, raw, idempotencyKey, newEntriesEnabled = false }) {
   const payload = normalizeMissionSupplyParticipationItem(raw);
   const id = itemId(shelfItemId);
   const key = commandKey(idempotencyKey);
@@ -244,6 +245,7 @@ export async function setMissionSupplyParticipationItem(client, { actorId, shelf
       WHERE participation_id = $1 AND owner_id = $2 AND shelf_item_id = $3 AND need_key = $4`,
     [root.id, actorId, id, payload.needKey],
   )).rows[0].revision;
+  if (latest === 0 && payload.availabilityStatus === 'withdrawn' && newEntriesEnabled !== true) fail(404, 'not_enabled');
   if (latest !== payload.expectedRevision) fail(409, 'revision_conflict');
   const next = latest + 1;
   await client.query(

@@ -20,6 +20,7 @@ if (!databaseUrl) {
       PAYMENT_TRANSPORT: 'memory',
       PUSH_TRANSPORT: 'memory',
       PLANNER_CORE_ENABLED: 'true',
+      PLANNER_NEW_ENTRIES_ENABLED: 'true',
       PLANNER_INVENTORY_ENABLED: 'true',
       PLANNER_DEMAND_ENABLED: 'true',
       PRIVATE_PILOT_V4_ENABLED: 'false',

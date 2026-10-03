@@ -24,6 +24,7 @@ if (!databaseUrl) {
       PAYMENT_TRANSPORT: 'memory',
       PUSH_TRANSPORT: 'memory',
       PLANNER_CORE_ENABLED: 'true',
+      PLANNER_NEW_ENTRIES_ENABLED: 'true',
       PLANNER_INVENTORY_ENABLED: 'false',
       UPLOAD_DIR: uploadDir,
     });

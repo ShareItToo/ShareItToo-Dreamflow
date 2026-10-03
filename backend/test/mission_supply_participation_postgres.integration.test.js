@@ -307,6 +307,7 @@ if (databaseUrl) {
       JWT_SECRET: crypto.randomBytes(48).toString('base64url'),
       MAIL_TRANSPORT: 'memory', PAYMENT_TRANSPORT: 'memory', PUSH_TRANSPORT: 'memory',
       PLANNER_CORE_ENABLED: 'true', PLANNER_INVENTORY_ENABLED: 'true',
+      PLANNER_NEW_ENTRIES_ENABLED: 'true',
       PLANNER_DEMAND_ENABLED: 'true', PLANNER_SUPPLY_PARTICIPATION_ENABLED: 'true',
       PRIVATE_PILOT_V4_ENABLED: 'false',
     });
