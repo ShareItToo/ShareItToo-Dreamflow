@@ -4,13 +4,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
+import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { runProbe, parseArgs, contract, toolchain, boundFiles, buildArguments, project,
   artifactDigest, validateArtifact, matrixPlan, validateMatrix, classifyAsset,
   classifyBlockedRequest, networkReasonKeys, validateNetworkDiagnostic, ownsBuildGroup,
   launchArgs, privilegeArgs, validateInventory, validateNetwork, validateCleanup,
   requireRenderedText, classifyTextObservation, validateTextDiagnostic, renderedSemanticsRect,
-  isStaticTextLabel, resolveBrowserControl, requireControlPoint, readBrowserDom } from '../support/mission_quorum_web_browser_v2.mjs';
+  isStaticTextLabel, resolveBrowserControl, requireControlPoint, readBrowserDom,
+  loadBoundArtifactFiles } from '../support/mission_quorum_web_browser_v2.mjs';
 
 function domTransport(label,{hidden=false,exception=false,extra=false}={}) {
   const calls=[];
@@ -185,6 +187,41 @@ test('artifact contract rejects drift, extra metadata, wrong SDK and unsafe inve
     x=>x.files[0].sha256='bad',x=>x.artifactDigest='f'.repeat(64),x=>x.projectDigest='bad']){
     const x=artifact();mutate(x);assert.throws(()=>validateArtifact(x));
   }
+});
+test('asset server preload binds validated bytes and leaves request names outside filesystem reads',(t)=>{
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'sit-p7-assets-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+  const contents={
+    'flutter_bootstrap.js':Buffer.from('bootstrap'),
+    'index.html':Buffer.from('index'),
+    'main.dart.js':Buffer.from('main'),
+  };
+  for(const [name,bytes]of Object.entries(contents))fs.writeFileSync(path.join(root,name),bytes,{mode:0o600});
+  const value=artifact();value.files=Object.entries(contents).sort().map(([file,bytes])=>({
+    path:file,sha256:createHash('sha256').update(bytes).digest('hex'),bytes:bytes.length,
+  }));value.artifactDigest=artifactDigest(value.files);
+  const loaded=loadBoundArtifactFiles(root,value);
+  assert.deepEqual([...loaded.keys()],[...Object.keys(contents)].sort());
+  for(const [name,bytes]of Object.entries(contents))assert.deepEqual(loaded.get(name).bytes,bytes);
+  assert.equal(loaded.get('../private'),undefined);
+  const source=fs.readFileSync('test/support/mission_quorum_web_browser_v2.mjs','utf8');
+  assert.doesNotMatch(source,/readFileSync\(path\.join\(webRoot,\s*name\)\)/u);
+  assert.match(source,/const files = loadBoundArtifactFiles\(webRoot,artifact\)/u);
+});
+for(const variant of ['symlink','growth'])test(`asset preload rejects ${variant} after manifest binding`,(t)=>{
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'sit-p7-assets-race-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+  const contents={
+    'flutter_bootstrap.js':Buffer.from('bootstrap'),
+    'index.html':Buffer.from('index'),
+    'main.dart.js':Buffer.from('main'),
+  };
+  for(const [name,bytes]of Object.entries(contents))fs.writeFileSync(path.join(root,name),bytes,{mode:0o600});
+  const value=artifact();value.files=Object.entries(contents).sort().map(([file,bytes])=>({
+    path:file,sha256:createHash('sha256').update(bytes).digest('hex'),bytes:bytes.length,
+  }));value.artifactDigest=artifactDigest(value.files);
+  const target=path.join(root,'main.dart.js');
+  if(variant==='symlink'){fs.rmSync(target);fs.symlinkSync(path.join(root,'index.html'),target);}
+  else fs.appendFileSync(target,'growth');
+  assert.throws(()=>loadBoundArtifactFiles(root,value),/p7_artifact/u);
 });
 test('asset admission stays exact local and all external failures have fixed actionable classes',()=>{
   const files=new Set(['index.html','main.dart.js']);

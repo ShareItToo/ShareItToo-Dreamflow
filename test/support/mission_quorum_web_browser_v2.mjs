@@ -79,15 +79,43 @@ export function validateArtifact(a) {
     && Object.values(a.sourceHashes).every(hex) && a.sourceDigest===artifactDigest(a.sourceHashes)
     && hex(a.lockSha256) && hex(a.projectDigest) && JSON.stringify(a.toolchain)===JSON.stringify(toolchain)
     && Array.isArray(a.files) && a.files.length>2 && a.files.length<10000, 'p7_artifact');
-  let last='';
+  let last='';let totalBytes=0;
   for(const f of a.files) {
     check(exact(f,['path','sha256','bytes']) && typeof f.path==='string' && /^[a-zA-Z0-9_.\-/]+$/u.test(f.path)
       && !f.path.split('/').some(p=>!p||p==='.'||p==='..') && f.path>last && hex(f.sha256)
-      && Number.isSafeInteger(f.bytes) && f.bytes>=0, 'p7_artifact'); last=f.path;
+      && Number.isSafeInteger(f.bytes) && f.bytes>=0&&f.bytes<=64*1024*1024, 'p7_artifact');
+    totalBytes+=f.bytes;check(totalBytes<=256*1024*1024,'p7_artifact');last=f.path;
   }
   check(['index.html','main.dart.js','flutter_bootstrap.js'].every(p=>a.files.some(f=>f.path===p))
     && artifactDigest(a.files)===a.artifactDigest, 'p7_artifact');
   return a;
+}
+function sameBoundFile(a,b) {
+  return ['dev','ino','mode','uid','gid','nlink','size','mtimeNs','ctimeNs']
+    .every(key=>a[key]===b[key]);
+}
+// Load the validated inventory before the HTTP server starts. Request paths
+// select immutable Map values only; they never reach a filesystem operation.
+export function loadBoundArtifactFiles(webRoot,artifact) {
+  check(typeof webRoot==='string'&&path.isAbsolute(webRoot)&&path.normalize(webRoot)===webRoot,'p7_artifact');
+  const validated=validateArtifact(artifact);const files=new Map();
+  for(const entry of validated.files) {
+    const absolute=path.resolve(webRoot,entry.path);
+    check(path.relative(webRoot,absolute)===entry.path,'p7_artifact');
+    let fd;
+    try {
+      fd=fs.openSync(absolute,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW|fs.constants.O_NONBLOCK);
+      const before=fs.fstatSync(fd,{bigint:true});
+      check(before.isFile()&&before.nlink===1n&&before.size===BigInt(entry.bytes),'p7_artifact');
+      const bytes=fs.readFileSync(fd);const after=fs.fstatSync(fd,{bigint:true});
+      const pathAfter=fs.lstatSync(absolute,{bigint:true});
+      check(sameBoundFile(before,after)&&sameBoundFile(after,pathAfter)
+        &&bytes.length===entry.bytes&&digest(bytes)===entry.sha256,'p7_artifact');
+      files.set(entry.path,Object.freeze({...entry,bytes}));
+    } catch {throw Error('p7_artifact');}
+    finally {if(fd!==undefined){try{fs.closeSync(fd);}catch{throw Error('p7_artifact');}}}
+  }
+  return files;
 }
 const origin = 'https://p7-synthetic.invalid/';
 export function classifyAsset(url,type,files) {
@@ -984,7 +1012,7 @@ async function worker(directory) {
     const artifact = validateArtifact(JSON.parse(fs.readFileSync(path.join(directory, 'artifact.json'), 'utf8')));
     const webRoot = path.join(directory, 'checkout/build/web');
     check(artifactDigest(inventoryTree(webRoot)) === artifact.artifactDigest, 'p7_artifact');
-    const files = new Map(artifact.files.map(file => [file.path, file]));
+    const files = loadBoundArtifactFiles(webRoot,artifact);
     const mime = { html: 'text/html; charset=utf-8', js: 'text/javascript', json: 'application/json',
       wasm: 'application/wasm', ttf: 'font/ttf', otf: 'font/otf', png: 'image/png', bin: 'application/octet-stream' };
     phase('asset-server', 'begin');
@@ -992,10 +1020,8 @@ async function worker(directory) {
       const name = request.url?.slice(1); const file = files.get(name);
       if (request.method !== 'GET' || !file) { response.writeHead(404); response.end(); failedRequest = true; return; }
       try {
-        const bytes = fs.readFileSync(path.join(webRoot, name));
-        check(createHash('sha256').update(bytes).digest('hex') === file.sha256, 'p7_artifact');
-        response.writeHead(200, { 'Content-Type': mime[name.split('.').at(-1)] ?? 'application/octet-stream', 'Cache-Control': 'no-store' });
-        response.end(bytes);
+        response.writeHead(200, { 'Content-Type': mime[file.path.split('.').at(-1)] ?? 'application/octet-stream', 'Cache-Control': 'no-store' });
+        response.end(file.bytes);
       } catch { failedRequest = true; response.writeHead(500); response.end(); }
     });
     await new Promise((resolve, reject) => { assetServer.once('error', () => reject(Error('p7_network'))); assetServer.listen(0, '127.0.0.1', resolve); });
