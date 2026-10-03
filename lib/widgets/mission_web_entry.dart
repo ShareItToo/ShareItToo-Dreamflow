@@ -116,15 +116,176 @@ class MissionWebEntryView {
       units.every((u) => u.label.trim().isNotEmpty && u.quantity > 0);
 }
 
-/// Unwired presentation. Omitted/invalid view means unavailable and no actions.
+enum MissionPickupArea { exampleA, exampleB }
+
+enum MissionPickupWindowLabel { october4Morning, october5Afternoon }
+
+enum MissionPickupValueStatus { syntheticExample, unknown, changed }
+
+/// UTC stays internal. Only the exact closed synthetic windows below have a
+/// localized Berlin-time label; arbitrary instants never gain a display label.
+class MissionPickupWindow {
+  const MissionPickupWindow(
+      {required this.start, required this.end, required this.zone});
+  final String start, end, zone;
+  MissionPickupWindowLabel? get label => switch ((start, end, zone)) {
+        ('2026-10-04T08:00:00Z', '2026-10-04T09:00:00Z', 'Europe/Berlin') =>
+          MissionPickupWindowLabel.october4Morning,
+        ('2026-10-05T13:00:00Z', '2026-10-05T14:00:00Z', 'Europe/Berlin') =>
+          MissionPickupWindowLabel.october5Afternoon,
+        _ => null,
+      };
+  static DateTime? _instant(String value) {
+    if (!RegExp(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$').hasMatch(value)) {
+      return null;
+    }
+    final parsed = DateTime.tryParse(value);
+    return parsed != null &&
+            parsed.toIso8601String().replaceFirst('.000Z', 'Z') == value
+        ? parsed
+        : null;
+  }
+
+  bool get valid {
+    final first = _instant(start);
+    final last = _instant(end);
+    return label != null &&
+        zone == 'Europe/Berlin' &&
+        first != null &&
+        last != null &&
+        first.isBefore(last);
+  }
+}
+
+class MissionPickupEntry {
+  const MissionPickupEntry(
+      {required this.componentOrdinal,
+      required this.sourceRevision,
+      required this.areaStatus,
+      required this.timeStatus,
+      this.area,
+      this.window});
+  final int componentOrdinal, sourceRevision;
+  final MissionPickupValueStatus areaStatus, timeStatus;
+  final MissionPickupArea? area;
+  final MissionPickupWindow? window;
+  bool get _valid =>
+      sourceRevision > 0 &&
+      (areaStatus == MissionPickupValueStatus.syntheticExample
+          ? area != null
+          : area == null) &&
+      (timeStatus == MissionPickupValueStatus.syntheticExample
+          ? window?.valid == true
+          : window == null);
+}
+
+/// Binds to the exact immutable D6 display snapshot, not just its unit count.
+/// Revisions are synthetic display-source facts, never server or owner IDs.
+class MissionPickupBinding {
+  MissionPickupBinding(
+      {required this.display, required List<int> sourceRevisions})
+      : sourceRevisions = List.unmodifiable(sourceRevisions);
+  final MissionWebEntryView display;
+  final List<int> sourceRevisions;
+}
+
+/// Separate additive D7 contract; no field or schema change to D6-v1.
+class MissionPickupPlan {
+  MissionPickupPlan(
+      {required this.version,
+      required this.synthetic,
+      required List<MissionPickupEntry> entries})
+      : entries = List.unmodifiable(entries);
+  static const schemaVersion = 'D7-pickup-presentation-2026-10-03.1';
+  final String version;
+  final bool synthetic;
+  final List<MissionPickupEntry> entries;
+  bool validFor(MissionWebEntryView display, MissionPickupBinding binding) {
+    if (version != schemaVersion ||
+        !synthetic ||
+        !display._valid ||
+        !identical(binding.display, display) ||
+        entries.length != display.units.length ||
+        binding.sourceRevisions.length != display.units.length ||
+        binding.sourceRevisions.any((revision) => revision <= 0)) {
+      return false;
+    }
+    final seen = <int>{};
+    for (final entry in entries) {
+      final ordinal = entry.componentOrdinal;
+      if (!entry._valid ||
+          ordinal < 0 ||
+          ordinal >= display.units.length ||
+          !seen.add(ordinal) ||
+          entry.sourceRevision != binding.sourceRevisions[ordinal]) {
+        return false;
+      }
+    }
+    return seen.length == display.units.length;
+  }
+}
+
+class MissionPickupCopy {
+  MissionPickupCopy(
+      {required this.title,
+      required this.separate,
+      required this.syntheticNotAgreed,
+      required this.noDeliveryOrCombined,
+      required this.unavailable,
+      required this.area,
+      required this.time,
+      required this.unknownArea,
+      required this.changedArea,
+      required this.unknownTime,
+      required this.changedTime,
+      required Map<MissionPickupArea, String> areas,
+      required Map<MissionPickupWindowLabel, String> windows})
+      : areas = Map.unmodifiable(areas),
+        windows = Map.unmodifiable(windows);
+  final String title,
+      separate,
+      syntheticNotAgreed,
+      noDeliveryOrCombined,
+      unavailable;
+  final String area, time, unknownArea, changedArea, unknownTime, changedTime;
+  final Map<MissionPickupArea, String> areas;
+  final Map<MissionPickupWindowLabel, String> windows;
+  bool get _complete => [
+        title,
+        separate,
+        syntheticNotAgreed,
+        noDeliveryOrCombined,
+        unavailable,
+        area,
+        time,
+        unknownArea,
+        changedArea,
+        unknownTime,
+        changedTime,
+        ...MissionPickupArea.values.map((value) => areas[value] ?? ''),
+        ...MissionPickupWindowLabel.values.map((value) => windows[value] ?? ''),
+      ].every((value) => value.trim().isNotEmpty);
+}
+
+/// Omitted/invalid view means unavailable and no actions.
 /// Corrections return only a display ordinal, never a command or domain identity.
 class MissionWebEntry extends StatefulWidget {
   const MissionWebEntry(
-      {super.key, required this.copy, this.view, this.onCorrect, this.onReset});
+      {super.key,
+      required this.copy,
+      this.view,
+      this.onCorrect,
+      this.onReset,
+      this.pickupPlan,
+      this.pickupBinding,
+      this.pickupCopy});
   final MissionWebEntryCopy copy;
   final MissionWebEntryView? view;
   final ValueChanged<int>? onCorrect;
   final VoidCallback? onReset;
+  final MissionPickupPlan? pickupPlan;
+  final MissionPickupBinding? pickupBinding;
+  final MissionPickupCopy? pickupCopy;
 
   @override
   State<MissionWebEntry> createState() => _MissionWebEntryState();
@@ -138,6 +299,44 @@ class _MissionWebEntryState extends State<MissionWebEntry> {
 
   MissionWebEntryView? get _view =>
       widget.copy._complete && widget.view?._valid == true ? widget.view : null;
+  MissionPickupCopy? get _pickupCopy =>
+      _view != null && widget.pickupCopy?._complete == true
+          ? widget.pickupCopy
+          : null;
+  MissionPickupPlan? get _pickupPlan => _pickupCopy != null &&
+          widget.pickupBinding != null &&
+          widget.pickupPlan?.validFor(_view!, widget.pickupBinding!) == true
+      ? widget.pickupPlan
+      : null;
+
+  Widget _pickup(int ordinal) {
+    final copy = _pickupCopy!;
+    final entry = _pickupPlan!.entries
+        .singleWhere((entry) => entry.componentOrdinal == ordinal);
+    final areaText = switch (entry.areaStatus) {
+      MissionPickupValueStatus.syntheticExample => copy.areas[entry.area]!,
+      MissionPickupValueStatus.unknown => copy.unknownArea,
+      MissionPickupValueStatus.changed => copy.changedArea,
+    };
+    final timeText = switch (entry.timeStatus) {
+      MissionPickupValueStatus.syntheticExample =>
+        copy.windows[entry.window!.label]!,
+      MissionPickupValueStatus.unknown => copy.unknownTime,
+      MissionPickupValueStatus.changed => copy.changedTime,
+    };
+    return Semantics(
+        container: true,
+        key: ValueKey('mission-pickup-$ordinal'),
+        child:
+            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          const SizedBox(height: 8),
+          Text(copy.title),
+          Text(copy.area),
+          Text(areaText),
+          Text(copy.time),
+          Text(timeText),
+        ]));
+  }
 
   @override
   void initState() {
@@ -208,6 +407,7 @@ class _MissionWebEntryState extends State<MissionWebEntry> {
           ]),
           const SizedBox(height: 8),
           Text(copy.unknownFit),
+          if (_pickupPlan != null) _pickup(index),
           if (widget.onCorrect != null) ...[
             const SizedBox(height: 12),
             OutlinedButton(
@@ -253,6 +453,11 @@ class _MissionWebEntryState extends State<MissionWebEntry> {
                   Text(copy.noReservation),
                   Text(copy.noGroupBooking),
                   if (view != null) Text(copy.synthetic),
+                  if (_pickupCopy != null) ...[
+                    Text(_pickupCopy!.separate),
+                    Text(_pickupCopy!.syntheticNotAgreed),
+                    Text(_pickupCopy!.noDeliveryOrCombined),
+                  ],
                 ])),
         Expanded(
             child: SingleChildScrollView(
@@ -267,6 +472,8 @@ class _MissionWebEntryState extends State<MissionWebEntry> {
                         Text(copy.source),
                         Text(view.source),
                         Text(copy.statuses[view.status]!),
+                        if (_pickupCopy != null && _pickupPlan == null)
+                          Text(_pickupCopy!.unavailable),
                         for (final necessity
                             in MissionWebUnitNecessity.values) ...[
                           const SizedBox(height: 16),

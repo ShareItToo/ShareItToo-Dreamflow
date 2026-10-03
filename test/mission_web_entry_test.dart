@@ -56,6 +56,9 @@ Widget host(
         MissionWebEntryCopy? words,
         ValueChanged<int>? onCorrect,
         VoidCallback? onReset,
+        MissionPickupPlan? pickupPlan,
+        MissionPickupBinding? pickupBinding,
+        MissionPickupCopy? pickupCopy,
         double scale = 1}) =>
     MaterialApp(
       theme: ThemeData(fontFamily: 'Roboto'),
@@ -66,15 +69,263 @@ Widget host(
       home: MissionWebEntry(
           copy: words ?? copy,
           view: view,
+          pickupPlan: pickupPlan,
+          pickupBinding: pickupBinding,
+          pickupCopy: pickupCopy,
           onCorrect: onCorrect,
           onReset: onReset),
     );
+
+const pickupWindow = MissionPickupWindow(
+    start: '2026-10-04T08:00:00Z',
+    end: '2026-10-04T09:00:00Z',
+    zone: 'Europe/Berlin');
+MissionPickupEntry pickupEntry(int ordinal, int revision,
+        {MissionPickupArea? area = MissionPickupArea.exampleA,
+        MissionPickupValueStatus areaStatus =
+            MissionPickupValueStatus.syntheticExample,
+        MissionPickupWindow? window = pickupWindow,
+        MissionPickupValueStatus timeStatus =
+            MissionPickupValueStatus.syntheticExample}) =>
+    MissionPickupEntry(
+        componentOrdinal: ordinal,
+        sourceRevision: revision,
+        area: area,
+        areaStatus: areaStatus,
+        window: window,
+        timeStatus: timeStatus);
+MissionPickupPlan pickupPlan(
+        {List<MissionPickupEntry>? entries,
+        String version = MissionPickupPlan.schemaVersion,
+        bool synthetic = true}) =>
+    MissionPickupPlan(
+        version: version,
+        synthetic: synthetic,
+        entries: entries ?? [pickupEntry(0, 1), pickupEntry(1, 2)]);
+final pickupWords = MissionPickupCopy(
+  title: 'Abholplanung',
+  separate: 'Abholung je Komponente getrennt planen.',
+  syntheticNotAgreed: 'Synthetische Beispiele, nicht vereinbart.',
+  noDeliveryOrCombined: 'Keine Lieferung oder gemeinsame Abholung zugesagt.',
+  unavailable: 'Abholplanung nicht verfügbar',
+  area: 'Beispielbereich',
+  time: 'Beispielzeitfenster',
+  unknownArea: 'Bereich unbekannt',
+  changedArea: 'Bereich geändert; neu prüfen',
+  unknownTime: 'Zeit unbekannt',
+  changedTime: 'Zeit geändert; neu prüfen',
+  areas: {
+    MissionPickupArea.exampleA: 'Bereich A',
+    MissionPickupArea.exampleB: 'Bereich B'
+  },
+  windows: {
+    MissionPickupWindowLabel.october4Morning:
+        '4. Oktober 2026, 10–11 Uhr (Berlin)',
+    MissionPickupWindowLabel.october5Afternoon:
+        '5. Oktober 2026, 15–16 Uhr (Berlin)',
+  },
+);
 
 void main() {
   setUpAll(() async {
     final font = FontLoader('Roboto')
       ..addFont(rootBundle.load('assets/fonts/Roboto-Regular.ttf'));
     await font.load();
+  });
+
+  test(
+      'D7 independently binds complete unique ordinals and exact positive source revisions',
+      () {
+    final view = model();
+    final binding =
+        MissionPickupBinding(display: view, sourceRevisions: [1, 2]);
+    expect(pickupPlan().validFor(view, binding), true);
+    expect(
+        pickupPlan(entries: [pickupEntry(1, 2), pickupEntry(0, 1)])
+            .validFor(view, binding),
+        true);
+    for (final plan in [
+      pickupPlan(version: 'future'),
+      pickupPlan(synthetic: false),
+      pickupPlan(entries: []),
+      pickupPlan(entries: [pickupEntry(0, 1)]),
+      pickupPlan(entries: [pickupEntry(0, 1), pickupEntry(0, 1)]),
+      pickupPlan(entries: [pickupEntry(1, 1), pickupEntry(0, 2)]),
+      pickupPlan(entries: [pickupEntry(0, 0), pickupEntry(1, 2)]),
+      pickupPlan(entries: [pickupEntry(0, 2), pickupEntry(1, 1)]),
+      pickupPlan(entries: [pickupEntry(0, 1), pickupEntry(2, 2)]),
+    ]) {
+      expect(plan.validFor(view, binding), false);
+    }
+    expect(pickupPlan().validFor(model(), binding), false);
+    expect(
+        pickupPlan().validFor(
+            view, MissionPickupBinding(display: view, sourceRevisions: [1])),
+        false);
+    expect(MissionWebEntryView.schemaVersion, 'D6-presentation-2026-10-03.1');
+  });
+
+  test(
+      'D7 refuses stale positive values, malformed instants, wrong zone and reversed windows',
+      () {
+    final view = model();
+    final binding =
+        MissionPickupBinding(display: view, sourceRevisions: [1, 2]);
+    for (final status in [
+      MissionPickupValueStatus.unknown,
+      MissionPickupValueStatus.changed
+    ]) {
+      expect(
+          pickupPlan(entries: [
+            pickupEntry(0, 1, areaStatus: status),
+            pickupEntry(1, 2)
+          ]).validFor(view, binding),
+          false);
+      expect(
+          pickupPlan(entries: [
+            pickupEntry(0, 1, timeStatus: status),
+            pickupEntry(1, 2)
+          ]).validFor(view, binding),
+          false);
+      expect(
+          pickupPlan(entries: [
+            pickupEntry(0, 1,
+                areaStatus: status,
+                area: null,
+                timeStatus: status,
+                window: null),
+            pickupEntry(1, 2)
+          ]).validFor(view, binding),
+          true);
+    }
+    for (final window in [
+      const MissionPickupWindow(
+          start: '2026-10-04T09:00:00Z',
+          end: '2026-10-04T10:00:00Z',
+          zone: 'Europe/Berlin'),
+      const MissionPickupWindow(
+          start: 'private-address',
+          end: '2026-10-04T09:00:00Z',
+          zone: 'Europe/Berlin'),
+      const MissionPickupWindow(
+          start: '2026-10-04T08:00:00',
+          end: '2026-10-04T09:00:00Z',
+          zone: 'Europe/Berlin'),
+      const MissionPickupWindow(
+          start: '2026-10-04T08:00:00Z',
+          end: '2026-10-04T09:00:00Z',
+          zone: 'UTC'),
+      const MissionPickupWindow(
+          start: '2026-10-04T09:00:00Z',
+          end: '2026-10-04T08:00:00Z',
+          zone: 'Europe/Berlin'),
+      const MissionPickupWindow(
+          start: '2026-10-04T08:00:00Z',
+          end: '2026-10-04T08:00:00Z',
+          zone: 'Europe/Berlin'),
+    ]) {
+      expect(
+          pickupPlan(entries: [
+            pickupEntry(0, 1, window: window),
+            pickupEntry(1, 2)
+          ]).validFor(view, binding),
+          false);
+    }
+    expect(
+        pickupPlan(entries: [pickupEntry(0, 1, area: null), pickupEntry(1, 2)])
+            .validFor(view, binding),
+        false);
+    expect(
+        pickupPlan(
+                entries: [pickupEntry(0, 1, window: null), pickupEntry(1, 2)])
+            .validFor(view, binding),
+        false);
+  });
+
+  testWidgets(
+      'D7 same coarse area never merges components; invalid mapping hides all values, v1 stays unchanged',
+      (tester) async {
+    final view = model();
+    final binding =
+        MissionPickupBinding(display: view, sourceRevisions: [1, 2]);
+    await tester.pumpWidget(host(
+        view: view,
+        pickupPlan: pickupPlan(),
+        pickupBinding: binding,
+        pickupCopy: pickupWords));
+    expect(find.text('Bereich A'), findsNWidgets(2));
+    expect(find.byKey(const ValueKey('mission-pickup-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('mission-pickup-1')), findsOneWidget);
+    expect(find.text(pickupWords.noDeliveryOrCombined), findsOneWidget);
+    expect(find.byType(OutlinedButton), findsNothing);
+    await tester.pumpWidget(host(
+        view: view,
+        pickupPlan: pickupPlan(entries: [pickupEntry(0, 1)]),
+        pickupBinding: binding,
+        pickupCopy: pickupWords));
+    expect(find.text(pickupWords.unavailable), findsOneWidget);
+    expect(find.text('Bereich A'), findsNothing);
+    expect(find.text(requiredUnit.label), findsOneWidget);
+    await tester.pumpWidget(host(view: view));
+    expect(find.text(pickupWords.separate), findsNothing);
+    expect(find.text(requiredUnit.label), findsOneWidget);
+  });
+
+  test('D7 source collections are detached and immutable', () {
+    final entries = [pickupEntry(0, 1), pickupEntry(1, 2)];
+    final revisions = [1, 2];
+    final view = model();
+    final plan = pickupPlan(entries: entries);
+    final binding =
+        MissionPickupBinding(display: view, sourceRevisions: revisions);
+    entries.clear();
+    revisions.clear();
+    expect(plan.validFor(view, binding), true);
+    expect(() => plan.entries.clear(), throwsUnsupportedError);
+    expect(() => binding.sourceRevisions.clear(), throwsUnsupportedError);
+  });
+
+  testWidgets('D7 unknown and changed render no stale positive values',
+      (tester) async {
+    final view = model();
+    final binding =
+        MissionPickupBinding(display: view, sourceRevisions: [1, 2]);
+    for (final status in [
+      MissionPickupValueStatus.unknown,
+      MissionPickupValueStatus.changed
+    ]) {
+      final plan = pickupPlan(entries: [
+        pickupEntry(0, 1,
+            area: null, areaStatus: status, window: null, timeStatus: status),
+        pickupEntry(1, 2,
+            area: null, areaStatus: status, window: null, timeStatus: status),
+      ]);
+      await tester.pumpWidget(host(
+          view: view,
+          pickupPlan: plan,
+          pickupBinding: binding,
+          pickupCopy: pickupWords));
+      expect(find.text('Bereich A'), findsNothing);
+      expect(find.textContaining('2026-10-04'), findsNothing);
+      expect(find.textContaining('Europe/Berlin'), findsNothing);
+      for (final label in pickupWords.windows.values) {
+        expect(find.text(label), findsNothing);
+      }
+      expect(
+          find.text(status == MissionPickupValueStatus.unknown
+              ? pickupWords.unknownArea
+              : pickupWords.changedArea),
+          findsNWidgets(2));
+      expect(
+          find.text(status == MissionPickupValueStatus.unknown
+              ? pickupWords.unknownTime
+              : pickupWords.changedTime),
+          findsNWidgets(2));
+    }
+    await tester.pumpWidget(
+        host(view: view, pickupPlan: pickupPlan(), pickupCopy: pickupWords));
+    expect(find.text(pickupWords.unavailable), findsOneWidget);
+    expect(find.text('Bereich A'), findsNothing);
   });
 
   testWidgets(

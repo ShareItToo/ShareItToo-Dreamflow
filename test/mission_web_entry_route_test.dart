@@ -139,6 +139,12 @@ void main() {
       expect(find.byType(OutlinedButton), findsNothing);
       expect(tester.widget<MissionWebEntry>(find.byType(MissionWebEntry)).view,
           null);
+      expect(
+          tester
+              .widget<MissionWebEntry>(find.byType(MissionWebEntry))
+              .pickupPlan,
+          null);
+      expect(find.byKey(const ValueKey('mission-pickup-0')), findsNothing);
     }
   });
   testWidgets(
@@ -150,6 +156,22 @@ void main() {
       await l.setLanguage(language);
       await tester.pumpWidget(host(l, enabled: true));
       var entry = tester.widget<MissionWebEntry>(find.byType(MissionWebEntry));
+      expect(
+          entry.pickupPlan!.validFor(entry.view!, entry.pickupBinding!), true);
+      expect(entry.pickupPlan!.entries[0].area, MissionPickupArea.exampleA);
+      expect(entry.pickupPlan!.entries[1].area, MissionPickupArea.exampleB);
+      expect(
+          entry.pickupPlan!.entries[0].window!.start ==
+              entry.pickupPlan!.entries[1].window!.start,
+          false);
+      for (final text in [
+        entry.pickupCopy!.separate,
+        entry.pickupCopy!.syntheticNotAgreed,
+        entry.pickupCopy!.noDeliveryOrCombined
+      ]) {
+        expect(text.startsWith('missionWeb.'), false);
+        expect(find.text(text), findsOneWidget);
+      }
       for (final value in [
         entry.copy.title,
         entry.copy.unavailable,
@@ -167,11 +189,27 @@ void main() {
       await tester.pump();
       entry = tester.widget<MissionWebEntry>(find.byType(MissionWebEntry));
       expect(entry.view!.units[0].quantity, 3);
+      expect(entry.pickupPlan!.entries[0].areaStatus,
+          MissionPickupValueStatus.changed);
+      expect(entry.pickupPlan!.entries[0].timeStatus,
+          MissionPickupValueStatus.changed);
+      expect(entry.pickupPlan!.entries[0].area, null);
+      expect(entry.pickupPlan!.entries[0].window, null);
+      expect(entry.pickupPlan!.entries[0].sourceRevision, 2);
+      expect(find.text(l.t('missionWeb.pickup.areaA')), findsNothing);
+      expect(find.textContaining('2026-10-04'), findsNothing);
+      expect(
+          find.text(entry
+              .pickupCopy!.windows[MissionPickupWindowLabel.october4Morning]!),
+          findsNothing);
       expect(before.units[0].quantity, 2);
       final reset = find.byKey(const ValueKey('mission-entry-reset'));
       await tester.ensureVisible(reset);
       await tester.tap(reset);
       await tester.pump();
+      entry = tester.widget<MissionWebEntry>(find.byType(MissionWebEntry));
+      expect(entry.pickupPlan!.entries[0].area, MissionPickupArea.exampleA);
+      expect(entry.pickupPlan!.entries[0].sourceRevision, 1);
       expect(
           tester
               .widget<MissionWebEntry>(find.byType(MissionWebEntry))
@@ -185,10 +223,55 @@ void main() {
     expect(
         tester
             .widget<MissionWebEntry>(find.byType(MissionWebEntry))
+            .pickupPlan!
+            .entries[0]
+            .sourceRevision,
+        1);
+    expect(
+        tester
+            .widget<MissionWebEntry>(find.byType(MissionWebEntry))
             .view!
             .units[0]
             .quantity,
         2);
+  });
+  testWidgets(
+      'D7 shows localized Berlin windows without UTC or technical revisions in text or semantics',
+      (tester) async {
+    final l = LocalizationController();
+    addTearDown(l.dispose);
+    final semantics = tester.ensureSemantics();
+    try {
+      for (final language in [AppLanguage.de, AppLanguage.en]) {
+        await l.setLanguage(language);
+        await tester.pumpWidget(host(l, enabled: true));
+        expect(
+            find.textContaining(
+                RegExp(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z')),
+            findsNothing);
+        expect(
+            find.textContaining(
+                RegExp(r'Quellrevision|source revision', caseSensitive: false)),
+            findsNothing);
+        expect(
+            find.bySemanticsLabel(RegExp(
+                r'Quellrevision|source revision|T08:00:00Z',
+                caseSensitive: false)),
+            findsNothing);
+        expect(
+            find.text(language == AppLanguage.de
+                ? '4. Oktober 2026, 10–11 Uhr (Berlin)'
+                : '4 October 2026, 10–11 am (Berlin)'),
+            findsOneWidget);
+        expect(
+            find.text(language == AppLanguage.de
+                ? '5. Oktober 2026, 15–16 Uhr (Berlin)'
+                : '5 October 2026, 3–4 pm (Berlin)'),
+            findsOneWidget);
+      }
+    } finally {
+      semantics.dispose();
+    }
   });
   for (final width in [390.0, 1440.0, 1920.0, 3840.0]) {
     for (final scale in [1.0, 2.0]) {
@@ -201,18 +284,50 @@ void main() {
         addTearDown(l.dispose);
         final semantics = tester.ensureSemantics();
         try {
-          await tester.pumpWidget(host(l, enabled: true, scale: scale));
-          await tester
-              .ensureVisible(find.byKey(const ValueKey('mission-entry-reset')));
-          expect(tester.takeException(), null);
-          expect(
-              find.bySemanticsLabel(l.t('missionWeb.title')), findsOneWidget);
+          for (final language in [AppLanguage.de, AppLanguage.en]) {
+            await l.setLanguage(language);
+            await tester.pumpWidget(host(l, enabled: true, scale: scale));
+            await tester.ensureVisible(
+                find.byKey(const ValueKey('mission-entry-reset')));
+            expect(tester.takeException(), null);
+            expect(
+                find.bySemanticsLabel(l.t('missionWeb.title')), findsOneWidget);
+            expect(
+                find.byKey(const ValueKey('mission-pickup-0')), findsOneWidget);
+            expect(
+                find.byKey(const ValueKey('mission-pickup-1')), findsOneWidget);
+            expect(
+                find.text(l.t('missionWeb.pickup.separate')), findsOneWidget);
+          }
         } finally {
           semantics.dispose();
         }
       });
     }
   }
+  testWidgets(
+      'D7 adds no focusable controls and keyboard correction/reset remains functional',
+      (tester) async {
+    final l = LocalizationController();
+    addTearDown(l.dispose);
+    await tester.pumpWidget(host(l, enabled: true));
+    expect(find.byType(OutlinedButton), findsNWidgets(3));
+    final first = find.byKey(const ValueKey('mission-entry-correct-0'));
+    await tester.ensureVisible(first);
+    tester.widget<OutlinedButton>(first).focusNode!.requestFocus();
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(find.text(l.t('missionWeb.pickup.changedArea')), findsOneWidget);
+    final reset = find.byKey(const ValueKey('mission-entry-reset'));
+    await tester.ensureVisible(reset);
+    tester.widget<OutlinedButton>(reset).focusNode!.requestFocus();
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(find.text(l.t('missionWeb.pickup.areaA')), findsOneWidget);
+    expect(tester.takeException(), null);
+  });
   testWidgets(
       'principal-owned host dispatches isolated mission screen, never general data destination; navigator back preserves base',
       (tester) async {

@@ -121,6 +121,25 @@ class LocalizationController extends ChangeNotifier {
     'missionWeb.exampleSource': 'Festes synthetisches Ansichtsbeispiel v1',
     'missionWeb.container': 'Beispielbehälter',
     'missionWeb.tool': 'Beispielwerkzeug',
+    'missionWeb.pickup.title': 'Abholplanung',
+    'missionWeb.pickup.separate': 'Abholung je Komponente getrennt planen.',
+    'missionWeb.pickup.syntheticNotAgreed':
+        'Synthetische Beispiele, nicht vereinbart.',
+    'missionWeb.pickup.noDeliveryOrCombined':
+        'Keine Lieferung oder gemeinsame Abholung zugesagt.',
+    'missionWeb.pickup.unavailable': 'Abholplanung nicht verfügbar.',
+    'missionWeb.pickup.area':
+        'Grober Beispielbereich – keine genaue Ortsangabe',
+    'missionWeb.pickup.time': 'Beispielzeitfenster',
+    'missionWeb.pickup.october4Morning': '4. Oktober 2026, 10–11 Uhr (Berlin)',
+    'missionWeb.pickup.october5Afternoon':
+        '5. Oktober 2026, 15–16 Uhr (Berlin)',
+    'missionWeb.pickup.unknownArea': 'Bereich unbekannt',
+    'missionWeb.pickup.changedArea': 'Bereich geändert; neu prüfen',
+    'missionWeb.pickup.unknownTime': 'Zeit unbekannt',
+    'missionWeb.pickup.changedTime': 'Zeit geändert; neu prüfen',
+    'missionWeb.pickup.areaA': 'Synthetischer Bereich A',
+    'missionWeb.pickup.areaB': 'Synthetischer Bereich B',
     // Navigation
     'Entdecken': 'Entdecken',
     'Mietkorb': 'Mietkorb',
@@ -372,6 +391,22 @@ class LocalizationController extends ChangeNotifier {
     'missionWeb.exampleSource': 'Fixed synthetic display example v1',
     'missionWeb.container': 'Example container',
     'missionWeb.tool': 'Example tool',
+    'missionWeb.pickup.title': 'Pickup planning',
+    'missionWeb.pickup.separate': 'Plan pickup separately for each component.',
+    'missionWeb.pickup.syntheticNotAgreed': 'Synthetic examples, not agreed.',
+    'missionWeb.pickup.noDeliveryOrCombined':
+        'No delivery or combined pickup promised.',
+    'missionWeb.pickup.unavailable': 'Pickup planning unavailable.',
+    'missionWeb.pickup.area': 'Coarse example area – not an exact place',
+    'missionWeb.pickup.time': 'Example time window',
+    'missionWeb.pickup.october4Morning': '4 October 2026, 10–11 am (Berlin)',
+    'missionWeb.pickup.october5Afternoon': '5 October 2026, 3–4 pm (Berlin)',
+    'missionWeb.pickup.unknownArea': 'Area unknown',
+    'missionWeb.pickup.changedArea': 'Area changed; recheck needed',
+    'missionWeb.pickup.unknownTime': 'Time unknown',
+    'missionWeb.pickup.changedTime': 'Time changed; recheck needed',
+    'missionWeb.pickup.areaA': 'Synthetic area A',
+    'missionWeb.pickup.areaB': 'Synthetic area B',
     // Navigation
     'Entdecken': 'Discover',
     'Mietkorb': 'Rental cart',
