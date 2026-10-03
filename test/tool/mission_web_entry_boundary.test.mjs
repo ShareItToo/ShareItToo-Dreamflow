@@ -61,6 +61,7 @@ test('D6 consumers are limited to the isolated route and its exact tests', () =>
     'test/mission_web_entry_route_test.dart',
     'test/mission_web_entry_test.dart',
     'test/tool/mission_web_entry_browser_probe.test.mjs',
+    'test/tool/mission_web_entry_linux_probe.test.mjs',
   ].sort());
 });
 
@@ -72,6 +73,18 @@ test('blank browser probe is test support only and has no product consumer', () 
       const path = `${directory}/${name}`;
       if (!/\.(?:dart|js|mjs|json|sh|html)$/u.test(name) || allowed.includes(path)) continue;
       assert.doesNotMatch(read(path), /mission_web_entry_browser_probe|runBlankPreflight/u, path);
+    }
+  }
+});
+
+test('Linux infrastructure probe has only its dedicated tests and workflow as consumers', () => {
+  const allowed = ['test/support/mission_web_entry_linux_probe.mjs', 'test/tool/mission_web_entry_linux_probe.test.mjs',
+    'test/tool/mission_web_entry_boundary.test.mjs', '.github/workflows/mission-browser-preflight.yml'];
+  for (const directory of ['lib', 'backend/src', 'backend/ops', 'tool', 'scripts', 'web', 'test', '.github/workflows']) {
+    for (const name of readdirSync(root + directory, { recursive: true })) {
+      const path = `${directory}/${name}`;
+      if (!/\.(?:dart|js|mjs|json|sh|html|yml)$/u.test(name) || allowed.includes(path)) continue;
+      assert.doesNotMatch(read(path), /mission_web_entry_linux_probe/u, path);
     }
   }
 });
