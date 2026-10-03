@@ -358,6 +358,12 @@ export async function runProbe({ expectedHead, adapter, journal = () => {}, sign
       try { networkDiagnostic = validateNetworkDiagnostic(active.networkDiagnostic?.()); }
       catch { code = 'probe_failure'; }
     }
+    if (code === 'p7_matrix') {
+      try {
+        const value=active.textDiagnostic?.();
+        if(value!==undefined)diagnostic=validateTextDiagnostic(value);
+      } catch { code='probe_failure'; diagnostic=undefined; }
+    }
   }
   finally {
     emit('cleanup', 'begin');
@@ -439,6 +445,7 @@ function realAdapter(expectedHead, emit, signal) {
   };
   let child; let group; let workerIdentity; let childExit; let proof; let port; let inventory; let closing; let targetSummary;
   let networkSummary = Object.fromEntries(networkReasonKeys.map(key => [key, 0]));
+  let textSummary;
   let resourceReadback = Object.fromEntries(cleanupFields.map(key => [key, false]));
   const ip = args => rootCommand('/usr/sbin/ip', args);
   const ownsNamespace = () => {
@@ -468,6 +475,7 @@ function realAdapter(expectedHead, emit, signal) {
   return {
     targetDiagnostic: () => targetSummary,
     networkDiagnostic: () => networkSummary,
+    textDiagnostic: () => textSummary,
     cleanupReadback: () => resourceReadback,
     async inventory() {
       runInventoryPhases(emit, {
@@ -558,6 +566,10 @@ function realAdapter(expectedHead, emit, signal) {
               else if (row.event === 'network') {
                 check(Object.keys(row).length === 2, 'probe_failure');
                 networkSummary = validateNetworkDiagnostic(row.value, networkSummary);
+              }
+              else if (row.event === 'text-diagnostic') {
+                check(textSummary===undefined && exact(row,['event','value']), 'probe_failure');
+                textSummary=validateTextDiagnostic(row.value);
               }
               else if (row.event === 'port') { check(Number.isInteger(row.port) && row.port > 0 && row.port < 65536, 'probe_failure'); port = row.port; }
               else if (row.event === 'observation') {
@@ -653,16 +665,45 @@ function realAdapter(expectedHead, emit, signal) {
 // Static Flutter text may share a merged semantics label and has no clickable
 // DOM rectangle. Require its exact AX line, including after lazy scroll builds;
 // never substitute substring matching or a control's DOM hit-test contract.
-export async function requireRenderedText(label,{readText,scroll,safe}) {
+const componentHeadings=['Position 1 · Synthetischer Eigentümer 1','Position 2 · Synthetischer Eigentümer 2'];
+const textDiagnosticKeys=['observations','exact_ax_line','exact_dom_label_line','flattened_ax_boundary_match','absent'];
+export function classifyTextObservation(label,text,domExact) {
+  check(componentHeadings.includes(label)&&typeof text==='string'&&typeof domExact==='boolean','probe_failure');
+  const lines=text.split('\n');
+  const ax=lines.includes(label);
+  // Diagnostic only: exact heading followed by a closed necessity label is a
+  // known boundary, never a substring/private suffix admission rule.
+  const flat=lines.some(line=>['Pflichtkomponente','Optionale Komponente'].some(next=>{
+    const prefix=`${label} ${next}`;return line===prefix||line.startsWith(`${prefix} `);
+  }));
+  return {exact_ax_line:Number(ax),exact_dom_label_line:Number(domExact),
+    flattened_ax_boundary_match:Number(flat),absent:Number(!ax&&!domExact&&!flat)};
+}
+export function validateTextDiagnostic(value) {
+  check(exact(value,textDiagnosticKeys)&&Object.values(value).every(n=>Number.isInteger(n)&&n>=0&&n<=18)
+    && value.observations===18&&value.exact_ax_line===0
+    && value.absent+Math.max(value.exact_dom_label_line,value.flattened_ax_boundary_match)<=18
+    && value.absent+value.exact_dom_label_line+value.flattened_ax_boundary_match>=18,'probe_failure');
+  return Object.fromEntries(textDiagnosticKeys.map(key=>[key,value[key]]));
+}
+export async function requireRenderedText(label,{readText,scroll,safe,readDomExact,onFailure}) {
+  const diagnostic=readDomExact?Object.fromEntries(textDiagnosticKeys.map(key=>[key,0])):null;
   for(let attempt=0;attempt<18;attempt++) {
     safe();
-    if((await readText()).split('\n').includes(label))return;
+    const text=await readText();
+    if(text.split('\n').includes(label))return;
+    if(diagnostic){
+      const observation=classifyTextObservation(label,text,await readDomExact());
+      diagnostic.observations++;
+      for(const [key,count]of Object.entries(observation))diagnostic[key]+=count;
+    }
     if(attempt<17)await scroll();
   }
+  if(diagnostic)onFailure(validateTextDiagnostic(diagnostic));
   throw Error('p7_matrix');
 }
 
-async function observeDisplayMatrix({cdp,evaluate,session,safe,emit}) {
+async function observeDisplayMatrix({cdp,evaluate,session,safe,emit,onTextDiagnostic}) {
   const call=(method,params={})=>cdp(method,params,session);
   const disclosure='Synthetischer Test – keine authentischen Fotos, keine vertragliche oder finanzielle Wirkung. Keine echte Miete. D1–D4 offen.';
   const labels={incomplete:'unvollständig',readback_required:'Ergebnis muss geprüft werden',needs_clarification:'Klärung erforderlich',
@@ -679,7 +720,13 @@ async function observeDisplayMatrix({cdp,evaluate,session,safe,emit}) {
         return {x:r.x+r.width/2,y:r.y+r.height/2};}return null;})()`);
   const wheel=async(delta)=>{const size=await evaluate('({width:innerWidth,height:innerHeight})');
     await call('Input.dispatchMouseEvent',{type:'mouseWheel',x:size.width/2,y:size.height-80,deltaX:0,deltaY:delta});await delay(80);};
-  const renderedText=label=>requireRenderedText(label,{readText:text,scroll: ()=>wheel(250),safe});
+  const renderedText=label=>requireRenderedText(label,{readText:text,scroll: ()=>wheel(250),safe,
+    ...(componentHeadings.includes(label)?{
+      readDomExact:()=>evaluate(`(() => {const label=${JSON.stringify(label)};
+        return [...document.querySelectorAll('flt-semantics[aria-label]')]
+          .some(e=>e.getAttribute('aria-label').split('\\n').includes(label));})()`),
+      onFailure:onTextDiagnostic,
+    }:{})});
   const textStep=async(name,action)=>{
     emit(name,'begin');
     try{await action();emit(name,'confirmed');}
@@ -878,7 +925,8 @@ async function worker(directory) {
     };
     phase('display-matrix', 'begin');
     const { matrix, reloadReset } = await observeDisplayMatrix({ cdp, evaluate, session,
-      safe: () => { check(!failedRequest, 'p7_network'); check(!renderFailure, 'p7_render'); }, emit: phase });
+      safe: () => { check(!failedRequest, 'p7_network'); check(!renderFailure, 'p7_render'); }, emit: phase,
+      onTextDiagnostic:value=>send({event:'text-diagnostic',value:validateTextDiagnostic(value)}) });
     await Promise.all(requests); check(!failedRequest, 'p7_network'); validateMatrix(matrix);
     check(artifactDigest(inventoryTree(webRoot)) === artifact.artifactDigest, 'p7_artifact');
     const finalTargets = (await cdp('Target.getTargets')).targetInfos;
