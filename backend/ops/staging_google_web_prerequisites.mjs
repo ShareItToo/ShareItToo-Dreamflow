@@ -13,6 +13,8 @@ const host = 'staging.shareittoo.com';
 export const STAGING_GOOGLE_WEB_DISPLAY_NAME = 'ShareItToo Staging Web';
 const schemaVersion = 4;
 const legacySchemaVersion = 3;
+export const STAGING_GOOGLE_WEB_PREREQUISITE_MAXIMUM_AGE_MS = 2 * 60 * 60 * 1000;
+const maximumJournalRecords = 128;
 const hashPattern = /^[a-f0-9]{64}$/u;
 const ownFile = fileURLToPath(import.meta.url);
 const phases = ['ready', 'create_intent', 'create_pending', 'app_verified', 'domain_intent', 'domain_verified', 'export_intent', 'complete'];
@@ -182,6 +184,9 @@ function validateCompletion(completion, state) {
     && completion.publicConfigSha256 === state.configDigest,
   'journal_completion_invalid');
 }
+function stableCompletionEvidence(completion) {
+  return { ...completion, collectedAtUtc: null, finalRevisionSha256: null };
+}
 function validateState(state, binding, configFile) {
   const historical = state?.schemaVersion === legacySchemaVersion;
   const stateKeys = historical
@@ -315,14 +320,16 @@ function readJournal(file) {
     requireThat(bytes.endsWith('\n'), 'journal_incomplete');
     const lines = bytes.trimEnd().split('\n');
     const records = lines.map((line) => JSON.parse(line));
-    requireThat(records.length > 0 && records.length <= phases.length, 'journal_invalid');
+    requireThat(records.length > 0 && records.length <= maximumJournalRecords,
+      'journal_invalid');
     let previous = null;
     for (const [index, record] of records.entries()) {
       requireThat(JSON.stringify({ sequence: record.sequence, previous: record.previous,
         state: record.state, digest: record.digest }) === lines[index]
         && keys(record, ['sequence', 'previous', 'state', 'digest']) && record.sequence === index
         && record.previous === previous && record.digest === prerequisiteSnapshotDigest(record.state)
-        && record.state.phase === phases[index], 'journal_invalid');
+        && record.state.phase === phases[Math.min(index, phases.length - 1)],
+      'journal_invalid');
       validateState(record.state, record.state.binding, record.state.configFile);
       if (index > 0) {
         const prior = records[index - 1].state;
@@ -330,6 +337,16 @@ function readJournal(file) {
           && prior.configFile === record.state.configFile && (!prior.operation || prior.operation === record.state.operation)
           && (!prior.appId || prior.appId === record.state.appId)
           && (!prior.configDigest || prior.configDigest === record.state.configDigest), 'journal_invalid');
+        if (prior.phase === 'complete') {
+          requireThat(prior.schemaVersion === schemaVersion
+            && record.state.schemaVersion === schemaVersion
+            && record.state.phase === 'complete'
+            && Date.parse(record.state.completion.collectedAtUtc)
+              > Date.parse(prior.completion.collectedAtUtc)
+            && equal(stableCompletionEvidence(record.state.completion),
+              stableCompletionEvidence(prior.completion)),
+          'journal_refresh_invalid');
+        }
       }
       previous = record.digest;
     }
@@ -522,12 +539,24 @@ export async function runStagingGoogleWebPrerequisites({ binding, adapter, journ
     const finalSnapshot = await read();
     requireThat(sameSnapshot(finalSnapshot, expectedSnapshot(baseline, state.appId, true)),
       'final_readback_drift');
+    const observedAt = now();
+    requireThat(Number.isFinite(observedAt), 'completion_clock_invalid');
+    const previousCollectedAt = state.completion === null
+      ? null : Date.parse(state.completion.collectedAtUtc);
+    const refreshRequired = previousCollectedAt !== null
+      && observedAt - previousCollectedAt > STAGING_GOOGLE_WEB_PREREQUISITE_MAXIMUM_AGE_MS;
     const completion = completionEvidence({ binding, appId: state.appId, finalSnapshot,
       finalWebApp, configDigest: digest,
-      collectedAtUtc: state.completion?.collectedAtUtc ?? new Date(now()).toISOString() });
-    if (state.phase === 'complete') requireThat(equal(completion, state.completion),
-      'completed_readback_drift');
-    else save({ phase: 'complete', completion });
+      collectedAtUtc: new Date(refreshRequired || previousCollectedAt === null
+        ? observedAt : previousCollectedAt).toISOString() });
+    if (state.phase === 'complete') {
+      requireThat(observedAt >= previousCollectedAt, 'completion_clock_invalid');
+      if (refreshRequired) {
+        requireThat(journal.records.length < maximumJournalRecords,
+          'journal_refresh_limit_reached');
+        save({ completion });
+      } else requireThat(equal(completion, state.completion), 'completed_readback_drift');
+    } else save({ phase: 'complete', completion });
     return { status: 'prerequisites-verified-config-awaiting-review', configDigest: digest,
       addedDomain: host, webAppCount: 1, providerApprovalInferred: false, buildExecuted: false };
   } catch (error) {

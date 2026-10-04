@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   readStagingGoogleWebPrerequisiteJournal,
+  STAGING_GOOGLE_WEB_PREREQUISITE_MAXIMUM_AGE_MS,
 } from './staging_google_web_prerequisites.mjs';
 import {
   readProtectedActivationFile,
@@ -17,7 +18,6 @@ import {
 const repositoryRoot = path.resolve(fileURLToPath(new URL('../../', import.meta.url)));
 const runnerFile = fileURLToPath(new URL('./staging_google_web_prerequisites.mjs', import.meta.url));
 const hashPattern = /^[a-f0-9]{64}$/u;
-const maximumAgeMs = 2 * 60 * 60 * 1000;
 
 export class StagingGoogleWebPrerequisiteReadinessError extends Error {
   constructor() {
@@ -84,7 +84,7 @@ export function collectStagingGoogleWebPrerequisiteReadiness({
     const collected = Date.parse(completion.collectedAtUtc);
     const observedNow = now();
     if (!Number.isFinite(observedNow) || observedNow < collected
-        || observedNow - collected > maximumAgeMs
+        || observedNow - collected > STAGING_GOOGLE_WEB_PREREQUISITE_MAXIMUM_AGE_MS
         || completion.runnerSha256 !== sha256(fs.readFileSync(runnerFile))
         || completion.sourceCommit !== execFileSync(
           'git', ['-C', repositoryRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' },
@@ -122,7 +122,8 @@ export function collectStagingGoogleWebPrerequisiteReadiness({
       prerequisiteJournalSha256: journal.journalSha256,
       prerequisiteFinalRecordSha256: journal.finalRecordSha256,
       collectedAtUtc: completion.collectedAtUtc,
-      validUntilUtc: new Date(collected + maximumAgeMs).toISOString(),
+      validUntilUtc: new Date(collected
+        + STAGING_GOOGLE_WEB_PREREQUISITE_MAXIMUM_AGE_MS).toISOString(),
     });
     return Object.freeze({
       schemaVersion: 1,

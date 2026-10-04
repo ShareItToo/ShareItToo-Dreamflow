@@ -165,6 +165,49 @@ test('complete journal produces a non-activating canonical readiness candidate',
   ]);
 });
 
+test('stale COMPLETE refreshes from read-only provider evidence without replaying mutation', async (t) => {
+  const f = fixture(t);
+  let clock = Date.now();
+  f.binding.gate.expiresAt = new Date(clock + 12 * 60 * 60 * 1000).toISOString();
+  await f.invoke({ execute: true, now: () => clock });
+  const original = readStagingGoogleWebPrerequisiteJournal(f.journalFile);
+  const originalRecords = fs.readFileSync(f.journalFile, 'utf8').trimEnd().split('\n').length;
+  assert.throws(() => collectStagingGoogleWebPrerequisiteReadiness({
+    journalFile: f.journalFile,
+    configFile: f.configFile,
+    expectedJournalSha256: original.journalSha256,
+    now: () => clock + 2 * 60 * 60 * 1000 + 1,
+  }), /google_web_prerequisite_readiness_denied/u);
+
+  clock += 2 * 60 * 60 * 1000 + 1;
+  const before = { ...f.calls };
+  const refreshed = await f.invoke({ execute: true, now: () => clock });
+  assert.equal(refreshed.status, 'prerequisites-verified-config-awaiting-review');
+  assert.equal(f.calls.create, before.create);
+  assert.equal(f.calls.patch, before.patch);
+  assert.ok(f.calls.app > before.app);
+  assert.ok(f.calls.sdk > before.sdk);
+  assert.equal(fs.readFileSync(f.journalFile, 'utf8').trimEnd().split('\n').length,
+    originalRecords + 1);
+  assert.equal(f.latest().completion.collectedAtUtc, new Date(clock).toISOString());
+  const journal = readStagingGoogleWebPrerequisiteJournal(f.journalFile);
+  assert.doesNotThrow(() => collectStagingGoogleWebPrerequisiteReadiness({
+    journalFile: f.journalFile,
+    configFile: f.configFile,
+    expectedJournalSha256: journal.journalSha256,
+    now: () => clock + 1,
+  }));
+
+  clock += 2 * 60 * 60 * 1000 + 1;
+  const recordsBeforeDrift = fs.readFileSync(f.journalFile, 'utf8').trimEnd().split('\n').length;
+  f.snapshot.providerConfigDigest = 'f'.repeat(64);
+  await assert.rejects(f.invoke({ execute: true, now: () => clock }), /final_readback_drift/u);
+  assert.equal(fs.readFileSync(f.journalFile, 'utf8').trimEnd().split('\n').length,
+    recordsBeforeDrift);
+  assert.equal(f.calls.create, before.create);
+  assert.equal(f.calls.patch, before.patch);
+});
+
 test('collector rejects stale, replayed, mismatched and self-declared completion hashes', async (t) => {
   const f = fixture(t);
   await f.invoke({ execute: true });
