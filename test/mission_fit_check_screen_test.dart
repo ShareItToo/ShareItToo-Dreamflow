@@ -363,6 +363,14 @@ void main() {
 
     expect(find.byKey(const Key('mission-fit-new')), findsNothing);
     expect(find.text('Kein passender Bedarfspunkt'), findsOneWidget);
+    expect(
+      find.text(
+        'Diese Mission enthält keinen Bedarf für Pflanzkübel-Ausstattung. '
+        'Es wird kein FitCheck angeboten.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('plant_container_equipment'), findsNothing);
     expect(find.text('Pflanzkübel'), findsOneWidget);
     expect(find.textContaining('veraltet/blockiert'), findsOneWidget);
     await tester.tap(find.text('Pflanzkübel'));

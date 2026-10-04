@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:lendify/config/planner_technical_config.dart';
 import 'package:lendify/models/mission_fit_check.dart';
 import 'package:lendify/models/mission_need.dart';
+import 'package:lendify/models/mission_need_display.dart';
 import 'package:lendify/models/private_shelf_item.dart';
 import 'package:lendify/services/backend_http.dart';
 import 'package:lendify/services/listing_mutation_service.dart';
@@ -629,12 +630,12 @@ class _MissionFitCheckScreenState extends State<MissionFitCheckScreen> {
                             label: const Text('Neuen Maß-FitCheck anlegen'),
                           )
                         else
-                          const Card(
+                          Card(
                             child: ListTile(
                               leading: Icon(Icons.block_outlined),
                               title: Text('Kein passender Bedarfspunkt'),
                               subtitle: Text(
-                                'Diese Mission enthält keinen Bedarf plant_container_equipment. Es wird kein FitCheck angeboten.',
+                                'Diese Mission enthält keinen Bedarf für ${missionNeedDisplayLabel(plantContainerNeedKey)}. Es wird kein FitCheck angeboten.',
                               ),
                             ),
                           ),

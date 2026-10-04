@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:lendify/config/planner_technical_config.dart';
 import 'package:lendify/models/mission_inventory_resolution.dart';
 import 'package:lendify/models/mission_need.dart';
+import 'package:lendify/models/mission_need_display.dart';
 import 'package:lendify/models/mission_quorum_readback.dart';
 import 'package:lendify/models/mission_supply_demand.dart';
 import 'package:lendify/screens/mission_supply_demand_screen.dart';
@@ -896,7 +897,10 @@ class _MissionInventoryResolutionScreenState
         dense: true,
         contentPadding: EdgeInsets.zero,
         leading: Icon(_quorumSlotIcon(value.state)),
-        title: Text(_quorumNeedLabel(value.necessity)),
+        title: Text(
+          '${_quorumNeedLabel(value.necessity)} · '
+          '${missionNeedDisplayLabel(value.needKey)}',
+        ),
         subtitle: Text(
           '${value.necessity == 'required' ? 'Erforderlich' : 'Optional'} · '
           'Einheit ${value.ordinal} · ${_quorumSlotLabel(value.state)}',
@@ -924,7 +928,7 @@ class _MissionInventoryResolutionScreenState
 
   Widget _buildCoverage(MissionInventoryCoverage value) => Card(
         child: ListTile(
-          title: Text(value.needKey),
+          title: Text(missionNeedDisplayLabel(value.needKey)),
           subtitle: Text(
             '${value.necessity == 'required' ? 'Erforderlich' : 'Optional'} · '
             '${value.coveredQuantity}/${value.requestedQuantity} zugeordnet · '
@@ -959,7 +963,8 @@ class _MissionInventoryResolutionScreenState
             ),
             subtitle: assignment == null
                 ? Text(
-                    '${value.necessity == 'required' ? 'Erforderlich' : 'Optional'} · ${value.needKey} · Menge 1',
+                    '${value.necessity == 'required' ? 'Erforderlich' : 'Optional'} · '
+                    '${missionNeedDisplayLabel(value.needKey)} · Menge 1',
                   )
                 : Text(
                     '${assignment.city ?? 'Ort nicht angegeben'}${assignment.country == null ? '' : ', ${assignment.country}'} · ${assignment.distanceKm.toStringAsFixed(1)} km · unverbindliche Quote',

@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart' show kReleaseMode, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:lendify/config/planner_technical_config.dart';
+import 'package:lendify/models/mission_need_display.dart';
 import 'package:lendify/models/mission_supply_demand.dart';
 import 'package:lendify/services/backend_http.dart';
 import 'package:lendify/services/listing_mutation_service.dart';
@@ -433,7 +434,7 @@ class _MissionSupplyDemandScreenState extends State<MissionSupplyDemandScreen> {
                                         .textTheme
                                         .titleMedium),
                                 Text(
-                                  '${create.necessity == 'required' ? 'Erforderlich' : 'Optional'} · ${create.needKey} · Menge 1',
+                                  '${create.necessity == 'required' ? 'Erforderlich' : 'Optional'} · ${missionNeedDisplayLabel(create.needKey)} · Menge 1',
                                 ),
                                 const SizedBox(height: 12),
                                 if (_hasDemandForCreateGap)
@@ -493,7 +494,7 @@ class _MissionSupplyDemandScreenState extends State<MissionSupplyDemandScreen> {
           children: <Widget>[
             Text(recipient ? 'An dich gerichtet' : 'Von dir angefragt'),
             Text(
-              '${demand.necessity == 'required' ? 'Erforderlich' : 'Optional'} · ${demand.needKey} · Menge ${demand.quantity}',
+              '${demand.necessity == 'required' ? 'Erforderlich' : 'Optional'} · ${missionNeedDisplayLabel(demand.needKey)} · Menge ${demand.quantity}',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             Text(

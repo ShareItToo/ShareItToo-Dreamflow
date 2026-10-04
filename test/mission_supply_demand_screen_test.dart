@@ -46,6 +46,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Ablauf ausdrücklich wählen'), findsOneWidget);
+    expect(
+      find.text('Erforderlich · Pflanzkübel-Ausstattung · Menge 1'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('plant_container_equipment'), findsNothing);
     expect(find.textContaining('Menge 1'), findsOneWidget);
     expect(find.textContaining('Menge 2'), findsNothing);
     await tester.tap(find.byKey(const Key('mission-demand-expiry')));
@@ -63,6 +68,11 @@ void main() {
     expect(gateway.createExpiries.toSet(),
         <DateTime>{DateTime.utc(2026, 11, 9, 12)});
     expect(find.text('Von dir angefragt'), findsOneWidget);
+    expect(
+      find.text('Erforderlich · Pflanzkübel-Ausstattung · Menge 1'),
+      findsNWidgets(2),
+    );
+    expect(find.textContaining('plant_container_equipment'), findsNothing);
     expect(
         find.byKey(const Key('mission-demand-existing-gap')), findsOneWidget);
     expect(find.byKey(const Key('mission-demand-create')), findsNothing);
@@ -84,6 +94,11 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
+    expect(
+      find.text('Erforderlich · Pflanzkübel-Ausstattung · Menge 1'),
+      findsNWidgets(2),
+    );
+    expect(find.textContaining('plant_container_equipment'), findsNothing);
     expect(
       find.text('Für diese Lücke besteht bereits eine private Anfrage.'),
       findsOneWidget,

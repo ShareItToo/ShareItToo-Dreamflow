@@ -74,7 +74,7 @@ void main() {
     expect(find.byKey(const Key('mission-quorum-card')), findsOneWidget);
     expect(find.textContaining('keine Eignungs- oder Buchungsbestätigung'),
         findsOneWidget);
-    expect(find.text('plant_container_equipment'), findsWidgets);
+    expect(find.textContaining('plant_container_equipment'), findsNothing);
     await tester.tap(find.byKey(const Key('mission-quorum-refresh')));
     await tester.pumpAndSettle();
     expect(quorumGateway.calls, 1);
@@ -87,8 +87,16 @@ void main() {
         find.byKey(const Key(
             'mission-quorum-slot-optional:plant_container_equipment:1')),
         findsOneWidget);
-    expect(find.text('Optionaler Gegenstand'), findsOneWidget);
+    expect(
+      find.text('Erforderlicher Gegenstand · Pflanzkübel-Ausstattung'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Optionaler Gegenstand · Pflanzkübel-Ausstattung'),
+      findsOneWidget,
+    );
     expect(find.text('Optional · Einheit 1 · offen'), findsOneWidget);
+    expect(find.textContaining('plant_container_equipment'), findsNothing);
     expect(find.textContaining('veraltet oder unbekannt'), findsOneWidget);
     expect(
       find.byKey(const ValueKey(
@@ -274,14 +282,14 @@ void main() {
       find.descendant(
         of: ordinalTwoCard,
         matching: find.text(
-          'Erforderlich · plant_container_equipment · Menge 1',
+          'Erforderlich · Pflanzkübel-Ausstattung · Menge 1',
         ),
       ),
       findsOneWidget,
     );
     expect(
       find.text(
-        'Erforderlich · plant_container_equipment · Menge 2',
+        'Erforderlich · Pflanzkübel-Ausstattung · Menge 2',
       ),
       findsNothing,
     );
