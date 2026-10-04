@@ -44,3 +44,5 @@ find /docker/shareittoo/backups/daily -type f \
 
 trap - EXIT
 echo "ShareItToo backup completed: $task_timestamp"
+# Notification failure cannot retroactively fail the verified backup.
+bash "$(dirname -- "${BASH_SOURCE[0]}")/alert.sh" shareittoo-backup.service recovery || true

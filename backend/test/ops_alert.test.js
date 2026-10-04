@@ -63,7 +63,7 @@ fi
       PATH: `${fakeBin}:${process.env.PATH}`,
       ALERT_ENV_FILE: envFile,
       ALERT_STATE_DIR: stateDir,
-      ALERT_COOLDOWN_SECONDS: '3600',
+      ALERT_COOLDOWN_SECONDS: '86400',
       ALERT_CAPTURE_ARGS: argumentCapture,
       ALERT_CAPTURE_CONFIG: configCapture,
       ALERT_CAPTURE_COUNT: countCapture,

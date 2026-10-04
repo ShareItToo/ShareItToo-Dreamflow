@@ -116,3 +116,5 @@ trap - EXIT
 cleanup
 printf 'ShareItToo isolated restore verified: %s\nEvidence: %s\n' \
   "$task_timestamp" "$task_report"
+# Notification failure cannot retroactively fail the verified restore check.
+bash "$(dirname -- "${BASH_SOURCE[0]}")/alert.sh" shareittoo-restore-check.service recovery || true

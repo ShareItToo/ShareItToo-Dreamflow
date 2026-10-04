@@ -604,7 +604,33 @@ The health, backup and restore-check services call `shareittoo-alert@.service`
 on failure. `alert.sh` uses the already configured SMTP transport to deliver a
 critical notification to `ALERT_EMAIL_TO` (default:
 `contact@shareittoo.com`). It keeps SMTP credentials out of process arguments
-and suppresses repeat alerts for the same service for one hour by default.
+and calls the adjacent Python 3 stdlib helper `alert_state.py`. A service incident
+gets an immediate first attempt, at most one unresolved reminder every 24 hours,
+and one recovery attempt after a later successful job. A new incident after
+recovery alerts immediately. The deployed units and script default both use
+86,400 seconds; shorter overrides are rejected. State and locks remain private
+in `/var/lib/shareittoo-alerts`, with per-service atomic, fsynced state replacement.
+
+The helper reserves attempts durably before SMTP. A timeout or interrupted
+attempt means **delivery unknown**, not proof of nondelivery: it does not retry
+rapidly. Unresolved incidents remain eligible for their daily reminder; recovery
+has one attempt only, so SMTP cannot guarantee exactly-once recipient delivery.
+Known pre-transport configuration failures are `not_sent` and do not consume
+that attempt: after repair, the next natural failure/recovery run can send
+immediately. Only started or uncertain transport attempts consume the limit.
+Sanitized failures remain visible in the journal. No SMTP error or credential is
+printed. TLS is required for authenticated and IP-allowlisted relay delivery.
+
+The health unit's best-effort success hook reports recovery. Backup and restore
+scripts call recovery only after verified completion: their lock-busy exit 0 is
+a skipped job, not evidence of recovery. Notification errors do not fail an
+otherwise successful job. Legacy `.last` timestamps are imported conservatively
+and retained unchanged; malformed/private-state failures stop before SMTP.
+
+Installing this source requires Python 3 with `fcntl` and directory-fsync support
+on the target Linux host, plus the existing curl/Docker tooling. Source tests do
+not prove target readiness. Any existing masked alert instance remains masked;
+unmasking and live readback require their separate operational authorization.
 
 After the first version-labelled rollout and successful isolated restore, set
 `REQUIRE_RELEASE_IDENTITY=true` and `REQUIRE_RECENT_RESTORE_CHECK=true` in the
@@ -616,6 +642,7 @@ backup, health and restore-check services once, then enable all three timers.
 
 ```sh
 install -m 0750 ops/alert.sh /docker/shareittoo/backend/ops/alert.sh
+install -m 0640 ops/alert_state.py /docker/shareittoo/backend/ops/alert_state.py
 install -m 0644 ops/systemd/shareittoo-*.service /etc/systemd/system/
 install -m 0644 ops/systemd/shareittoo-*.timer /etc/systemd/system/
 systemctl daemon-reload

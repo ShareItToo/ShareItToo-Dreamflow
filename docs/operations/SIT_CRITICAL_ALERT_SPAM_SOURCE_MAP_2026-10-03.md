@@ -11,6 +11,44 @@ authorized remediation without environment/secret output or test mail.
 
 ## Live mail-noise closure — Sol readback
 
+### ALERT-RECOVERY-W1 source successor — 2026-10-04
+
+The successor source uses `backend/ops/alert.sh` as the stable entrypoint and
+`backend/ops/alert_state.py` for a version-1 per-service incident state machine.
+It does not change any installed unit, existing mask or live host. The older
+source line anchors and fingerprints below describe the predecessor only.
+
+Failure opens an incident immediately; unresolved reminders have a minimum
+86,400-second interval. A later successful run closes the incident and makes one
+recovery notification attempt; another failure then starts a new immediate
+incident. The health service uses an ignored-error `ExecStartPost` recovery hook.
+Backup/restore use a best-effort hook only at their terminal verified-success
+branch, because their lock-busy exit 0 must never be interpreted as recovery.
+
+The helper holds an exclusive per-service `fcntl` lock across state read,
+reservation, SMTP and outcome persistence. Exact raw service names get distinct
+SHA-256 keys. Owner-only files/directories, descriptor-based metadata validation,
+no-follow file opening, fsynced temporary state plus atomic replacement and
+directory fsync protect the state boundary. Valid legacy timestamps are imported
+once, conservatively as an open incident with unknown delivery, and left intact.
+Malformed, unterminated, inaccessible or unsafe state fails before mail.
+
+SMTP is not an exactly-once delivery protocol. Every attempt is reserved durably
+before transport; interrupted pending attempts become `unknown`. Transport
+failure/timeout is `unknown`, never proof that no mail arrived. It preserves the
+daily unresolved reminder policy without rapid retries. Recovery gets one
+attempt; if delivery is unknown, a later healthy run does not resend it. Known
+configuration failure is `not_sent` and journal-visible; it consumes no transport
+attempt and the next natural run retries immediately after repair. Neither
+status claims delivery. A new incident may alert immediately after recovery. Mandatory TLS,
+secret-free argv/logs and the alert unit's sandbox remain in force.
+
+Focused tests live in `backend/test/ops_alert.test.js` and
+`backend/test/ops_alert_incident.test.js`. Target-host Python 3/`fcntl`, installed
+byte hashes, managed state permissions, unit semantics and a natural timer cycle
+still require separate Linux/runtime validation. No local mocked transport test
+claims live delivery, recovery, unmasking or deployment.
+
 Walid requested that the repeated service-failure emails stop. The installed
 alert template now matches repository commit `458b76bf` and sets
 `ALERT_COOLDOWN_SECONDS=86400`; the effective backup and restore-check alert
