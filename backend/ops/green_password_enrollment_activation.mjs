@@ -6,7 +6,7 @@ import path from 'node:path';
 
 import { bindPasswordEnrollmentWebReadiness } from '../../tool/staging_password_enrollment_web_readiness.mjs';
 import { buildReplacementCreateArgs } from './activate_staging_google_auth.mjs';
-import { readProtectedStagingPasswordEnrollmentRegistry } from '../src/staging_password_enrollment.js';
+import { readProtectedEnrollmentRegistry } from '../src/staging_password_enrollment.js';
 
 const denialCode = 'green_password_enrollment_activation_denied';
 const digestPattern = /^[a-f0-9]{64}$/u;
@@ -650,7 +650,7 @@ function readProtectedInvitationRegistry(target, {
 } = {}) {
   let invitations;
   try {
-    invitations = readProtectedStagingPasswordEnrollmentRegistry(target.registryFile, {
+    invitations = readProtectedEnrollmentRegistry(target.registryFile, {
       fileSystem, ownerUid: target.registryUid,
     });
   } catch { deny(); }

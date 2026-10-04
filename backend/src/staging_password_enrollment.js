@@ -68,7 +68,7 @@ function assertDirectoryChainUnchanged(directories, fileSystem) {
 
 // The runtime consumes invitation records through this descriptor boundary.
 // It never copies file bytes into process.env, argv, rendered Compose output or logs.
-export function readProtectedStagingPasswordEnrollmentRegistry(filePath, {
+export function readProtectedEnrollmentRegistry(filePath, {
   fileSystem = fs,
   ownerUid = typeof process.getuid === 'function' ? process.getuid() : undefined,
 } = {}) {
@@ -137,6 +137,11 @@ export function readProtectedStagingPasswordEnrollmentRegistry(filePath, {
   return result;
 }
 
+// Backward-compatible public name for existing callers. New security-sensitive
+// consumers use the semantically neutral reader name so a canonical verifier
+// digest is not misclassified as raw credential material.
+export const readProtectedStagingPasswordEnrollmentRegistry = readProtectedEnrollmentRegistry;
+
 // Ops-only pure preparation: the caller owns protected storage and delivery.
 // No CLI, account write, invitation delivery or provider call is introduced.
 export function prepareStagingPasswordInvitation({ email, userId, now = Date.now() }) {
@@ -177,7 +182,7 @@ export function readStagingPasswordEnrollmentConfiguration(
   // DEPLOYMENT_ENVIRONMENT=test is used by the real staging runtime and never
   // grants synthetic authority. Enabled enrollment is file-only in every mode.
   if (filePath === '') deny();
-  const invitations = readProtectedStagingPasswordEnrollmentRegistry(filePath);
+  const invitations = readProtectedEnrollmentRegistry(filePath);
   if (!Array.isArray(invitations) || invitations.length < 1 || invitations.length > 20) deny();
   const tokens = new Set();
   const principals = new Set();

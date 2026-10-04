@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 import {
+  readProtectedEnrollmentRegistry,
   readProtectedStagingPasswordEnrollmentRegistry,
   readStagingPasswordEnrollmentConfiguration,
 } from '../src/staging_password_enrollment.js';
@@ -48,7 +49,8 @@ function enabledFileEnvironment(file) {
 
 test('staging consumes the canonical protected registry directly from a file', async (t) => {
   const { file } = await fixture(t);
-  const records = readProtectedStagingPasswordEnrollmentRegistry(file);
+  assert.equal(readProtectedStagingPasswordEnrollmentRegistry, readProtectedEnrollmentRegistry);
+  const records = readProtectedEnrollmentRegistry(file);
   assert.deepEqual(records, [invitation]);
 
   const configuration = readStagingPasswordEnrollmentConfiguration(

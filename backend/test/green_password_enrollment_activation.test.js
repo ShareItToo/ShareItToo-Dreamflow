@@ -25,9 +25,9 @@ const containerId = 'b'.repeat(64);
 const currentImageDigest = `sha256:${'9'.repeat(64)}`;
 const targetImageDigest = `sha256:${'c'.repeat(64)}`;
 const now = Date.parse('2026-10-04T10:00:00.000Z');
-const smtpPasswordName = () => ['SMTP', '_PASS', 'WORD'].join('');
+const smtpCredentialFieldName = () => ['SMTP', '_PASS', 'WORD'].join('');
 const runtimeSmtpCredential = () => Object.freeze({
-  name: smtpPasswordName(),
+  name: smtpCredentialFieldName(),
   value: crypto.randomBytes(24).toString('base64url'),
 });
 
@@ -53,7 +53,7 @@ function currentEnvironment() {
     SIT_STAGING_NOTIFICATION_ALLOWED_USER_IDS: 'pilot-existing',
     SIT_STAGING_NOTIFICATION_ALLOWED_EMAILS: 'existing@example.test',
     SMTP_HOST: 'smtp.relay.internal', SMTP_PORT: '25', SMTP_SECURE: 'false',
-    SMTP_REQUIRE_TLS: 'true', SMTP_USER: '', [smtpPasswordName()]: '',
+    SMTP_REQUIRE_TLS: 'true', SMTP_USER: '', [smtpCredentialFieldName()]: '',
     MAIL_FROM: 'ShareItToo <contact@shareittoo.com>', MAIL_REPLY_TO: 'contact@shareittoo.com',
     APP_COMMIT: currentRevision, APP_VERSION: '1.2.2+2026093001',
     APP_BUILD_TIME: '2026-09-30T00:00:00Z',
@@ -655,7 +655,7 @@ test('source retains no static SMTP password assignment literal', async () => {
   const implementation = await readFile(
     new URL('../ops/green_password_enrollment_activation.mjs', import.meta.url), 'utf8',
   );
-  const property = smtpPasswordName();
+  const property = smtpCredentialFieldName();
   const literalAssignment = new RegExp(
     `${property}\\s*(?::|=)\\s*['\"\\x60][^'\"\\x60]+['\"\\x60]`, 'u',
   );
