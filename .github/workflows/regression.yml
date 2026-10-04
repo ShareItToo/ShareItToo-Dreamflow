@@ -270,6 +270,21 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: backend/package.json
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: backend/pnpm-lock.yaml
+
+      # The complete root Node inventory imports backend operations (including pg).
+      - name: Install locked backend dependencies for tool regression
+        working-directory: backend
+        run: pnpm install --frozen-lockfile
+
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
