@@ -58,6 +58,31 @@ test('accepts a structurally exact detached CI execution result', () => {
   ci.android.identity.targetSdk = 36;
   assert.equal(validate(ci, { executionOnly: true }).implementationHead, 'a'.repeat(40));
 
+  const successor = structuredClone(ci);
+  successor.schemaVersion = 2;
+  successor.cleanCheckout = {
+    mechanism: 'local-git-clone-no-hardlinks-detached-head',
+    dependencyCaches: 'fresh-bounded-temp-directories-with-verified-gradle-dependencies',
+    dependencyHandoff: {
+      mechanism: 'same-run-exact-head-gradle-dependencies',
+      manifestSha256: 'b'.repeat(64), sourceHead: ci.source.implementationHead,
+      dependencyInputsSha256: 'c'.repeat(64),
+      pins: { ...androidToolchain, flutter: '3.41.7', dart: '3.11.5', javaMajor: 17 },
+      files: 3, bytes: 1024, offlineBuilds: true, projectOutputsCopied: false,
+    },
+    undocumentedMachineCacheRequired: false,
+    privateInputs: { checked: 6, present: 0 },
+  };
+  assert.equal(validate(successor, { executionOnly: true }).implementationHead, 'a'.repeat(40));
+  for (const change of [{ sourceHead: 'd'.repeat(40) }, { offlineBuilds: false },
+    { projectOutputsCopied: true }, { manifestSha256: 'invalid' }, { files: 0 }]) {
+    const invalid = structuredClone(successor);
+    Object.assign(invalid.cleanCheckout.dependencyHandoff, change);
+    assert.throws(() => validate(invalid, { executionOnly: true }), /dependency handoff/u);
+  }
+  successor.schemaVersion = 1;
+  assert.throws(() => validate(successor, { executionOnly: true }), /clean checkout contract/u);
+
   ci.toolchain.gradle = '8.12';
   assert.throws(() => validate(ci, { executionOnly: true }), /toolchain identity/u);
   ci.toolchain.gradle = androidToolchain.gradle;

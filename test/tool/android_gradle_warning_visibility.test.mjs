@@ -14,7 +14,7 @@ test('Android build exposes every Gradle warning without adding another build', 
   );
   assert.match(
     regression,
-    /android_build_output="\$\([\s\S]*?\.\/android\/gradlew -p android :app:assembleDebug --no-daemon --warning-mode all 2>&1[\s\S]*?\)"/u,
+    /android_build_output="\$\([\s\S]*?\.\/android\/gradlew -p android :app:assembleDebug --no-daemon --warning-mode all \$\{android_dependency_flag:\+--offline\} 2>&1[\s\S]*?\)"/u,
   );
   assert.match(regression, /printf '%s\\n' "\$android_build_output"/u);
   assert.doesNotMatch(regression, /--warning-mode (?:none|summary)/u);

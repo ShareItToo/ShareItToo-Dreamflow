@@ -270,7 +270,7 @@ export function validateR10CleanReproducibility(value, { executionOnly = false }
   const observedOnValid = executionOnly
     ? isIsoCalendarDate(value?.observedOn)
     : value?.observedOn === '2026-08-24';
-  if (value?.schemaVersion !== 1
+  if (!(value?.schemaVersion === 1 || (executionOnly && value?.schemaVersion === 2))
       || value?.kind !== 'sit-48h-r10-clean-reproducibility'
       || value?.status !== expectedStatus
       || !observedOnValid) {
@@ -301,9 +301,30 @@ export function validateR10CleanReproducibility(value, { executionOnly = false }
     apiBillingUsed: false,
     pullRequestMerged: false,
   }, 'R10 live or credential boundary changed.');
+  const dependencyHandoff = value.cleanCheckout?.dependencyHandoff;
+  if (value.schemaVersion === 2) {
+    if (!shaPattern.test(dependencyHandoff?.manifestSha256 ?? '')
+        || !shaPattern.test(dependencyHandoff?.dependencyInputsSha256 ?? '')
+        || !Number.isSafeInteger(dependencyHandoff?.files) || dependencyHandoff.files <= 0
+        || dependencyHandoff.files > 100000
+        || !Number.isSafeInteger(dependencyHandoff?.bytes) || dependencyHandoff.bytes <= 0
+        || dependencyHandoff.bytes > 4 * 1024 ** 3) fail('R10 dependency handoff invalid.');
+    requireExact(dependencyHandoff, {
+      mechanism: 'same-run-exact-head-gradle-dependencies',
+      manifestSha256: dependencyHandoff.manifestSha256,
+      sourceHead: value.source.implementationHead,
+      dependencyInputsSha256: dependencyHandoff.dependencyInputsSha256,
+      pins: { ...androidToolchain, flutter: '3.41.7', dart: '3.11.5', javaMajor: 17 },
+      files: dependencyHandoff.files, bytes: dependencyHandoff.bytes,
+      offlineBuilds: true, projectOutputsCopied: false,
+    }, 'R10 dependency handoff contract changed.');
+  }
   requireExact(value.cleanCheckout, {
     mechanism: 'local-git-clone-no-hardlinks-detached-head',
-    dependencyCaches: 'fresh-bounded-temp-directories',
+    dependencyCaches: value.schemaVersion === 2
+      ? 'fresh-bounded-temp-directories-with-verified-gradle-dependencies'
+      : 'fresh-bounded-temp-directories',
+    ...(value.schemaVersion === 2 ? { dependencyHandoff } : {}),
     undocumentedMachineCacheRequired: false,
     privateInputs: { checked: 6, present: 0 },
   }, 'R10 clean checkout contract changed.');

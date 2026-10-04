@@ -1300,9 +1300,15 @@ if printf '%s\n' "$web_build_output" \
 fi
 bash scripts/p0a_web_smoke.sh
 
+android_dependency_flag=''
+case "${SIT_R10_GRADLE_OFFLINE:-0}" in
+  0) ;;
+  1) android_dependency_flag=--offline ;;
+  *) echo "ERROR: Invalid R10 Gradle offline mode." >&2; exit 1 ;;
+esac
 node tool/prepare_android_debug_build_metadata.mjs
 if ! android_build_output="$(
-  ./android/gradlew -p android :app:assembleDebug --no-daemon --warning-mode all 2>&1
+  ./android/gradlew -p android :app:assembleDebug --no-daemon --warning-mode all ${android_dependency_flag:+--offline} 2>&1
 )"; then
   printf '%s\n' "$android_build_output"
   echo "ERROR: Android debug build failed." >&2

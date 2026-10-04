@@ -19,6 +19,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { androidToolchain } from './validate_android_toolchain.mjs';
+import { importR10GradleDependencies, r10DependencyIdentity } from './r10_gradle_dependency_handoff.mjs';
 
 const repositoryRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const tempPrefix = 'sit-r10-clean-reproducibility-';
@@ -754,6 +755,7 @@ export async function executeR10CleanReproducibility({
   output,
   observedOn = new Date().toISOString().slice(0, 10),
   inspectStorage = statfs,
+  gradleDependencies,
 } = {}) {
   const storage = await assertR10StorageCapacity(os.tmpdir(), { inspect: inspectStorage });
   process.stdout.write(`[R10] temp capacity: available=${storage.availableKiB} KiB, required=${storage.requiredKiB} KiB\n`);
@@ -795,6 +797,7 @@ export async function executeR10CleanReproducibility({
       GRADLE_USER_HOME: path.join(cacheRoot, 'gradle'),
       CI: 'true',
       SIT_ALLOW_CANDIDATE_ROLLOVER: '1',
+      SIT_R10_GRADLE_OFFLINE: gradleDependencies ? '1' : '0',
     };
     const aapt = await resolveAapt(androidSdkRoot);
     const beforeFootprint = await generatedFootprint(checkout, cacheRoot);
@@ -803,6 +806,10 @@ export async function executeR10CleanReproducibility({
       fail('r10_clean_checkout_generated_footprint_not_zero');
     }
     const beforeInventories = await sourceInventories(checkout);
+    const dependencyHandoff = gradleDependencies ? await importR10GradleDependencies({
+      source: path.resolve(gradleDependencies), destination: env.GRADLE_USER_HOME,
+      identity: await r10DependencyIdentity(checkout, checkoutHead),
+    }) : undefined;
     const toolchain = await captureR10Toolchain(checkout, env);
     const commands = {};
     commands.backendLockedRestore = await commandProof(
@@ -848,7 +855,8 @@ export async function executeR10CleanReproducibility({
     await cp(builtApk, firstApk);
     commands.secondAndroidBuild = await commandProof(
       './android/gradlew',
-      ['-p', 'android', ':app:assembleDebug', '--rerun-tasks', '--no-daemon', '--warning-mode', 'all'],
+      ['-p', 'android', ':app:assembleDebug', '--rerun-tasks', '--no-daemon', '--warning-mode', 'all',
+        ...(dependencyHandoff ? ['--offline'] : [])],
       { cwd: checkout, env, label: 'second equivalent Android debug build' },
     );
     await cp(builtApk, secondApk);
@@ -872,7 +880,7 @@ export async function executeR10CleanReproducibility({
     const footprintBounds = validateR10GeneratedFootprint(afterFootprint);
 
     evidence = {
-      schemaVersion: 1,
+      schemaVersion: dependencyHandoff ? 2 : 1,
       kind: 'sit-48h-r10-clean-reproducibility',
       status: 'verified-local-clean-checkout-ci-pending',
       observedOn,
@@ -900,7 +908,10 @@ export async function executeR10CleanReproducibility({
       },
       cleanCheckout: {
         mechanism: 'local-git-clone-no-hardlinks-detached-head',
-        dependencyCaches: 'fresh-bounded-temp-directories',
+        dependencyCaches: dependencyHandoff
+          ? 'fresh-bounded-temp-directories-with-verified-gradle-dependencies'
+          : 'fresh-bounded-temp-directories',
+        ...(dependencyHandoff ? { dependencyHandoff } : {}),
         undocumentedMachineCacheRequired: false,
         privateInputs,
       },
@@ -992,5 +1003,6 @@ if (process.argv[1] !== undefined
     sourceBranch: args['source-branch'],
     output: args.output,
     observedOn: args['observed-on'],
+    gradleDependencies: args['gradle-dependencies'],
   });
 }
