@@ -2989,6 +2989,29 @@ export function createApp({
     let existingSocialAccount = null;
     let exactExistingSocialIdentity = false;
     let precheckedSocialAccountId = null;
+    // Facebook is login-only. Email is metadata, never authority to enroll,
+    // link, reconcile another account, or select a Staging principal.
+    const facebookLoginOnly = identity.provider === 'facebook';
+    if (facebookLoginOnly) {
+      if (req.body?.registrationActionLabel === 'Mit Facebook registrieren') {
+        throw new HttpError(403, 'facebook_login_only');
+      }
+      const linked = await pool.query(
+        `SELECT account.id, identity.firebase_user_id
+           FROM auth_identities AS identity
+           JOIN users AS account ON account.id = identity.user_id
+          WHERE identity.provider = $1 AND identity.provider_subject = $2`,
+        [identity.provider, identity.subject],
+      );
+      existingSocialAccount = linked.rows[0] ?? null;
+      if (!existingSocialAccount) throw new HttpError(403, 'facebook_login_only');
+      if (existingSocialAccount.firebase_user_id !== identity.firebaseUserId) {
+        throw new HttpError(403, 'social_identity_conflict');
+      }
+      assertStagingUserAllowed(existingSocialAccount.id);
+      exactExistingSocialIdentity = true;
+      precheckedSocialAccountId = existingSocialAccount.id;
+    }
     const googleRegistrationLaneEnabled = config.stagingGoogleRegistration.enabled
       && identity.provider === 'google';
     if (googleRegistrationLaneEnabled) {
@@ -3073,7 +3096,7 @@ export function createApp({
       throw new HttpError(400, 'invalid_social_provider_material');
     }
     let encryptedAppleRevocationMaterial = null;
-    if (config.stagingAccess.enabled) {
+    if (config.stagingAccess.enabled && !facebookLoginOnly) {
       const existing = await pool.query(
         "SELECT id FROM users WHERE email = $1 AND deactivated_at IS NULL AND account_status = 'active'",
         [identity.email],
@@ -3119,7 +3142,7 @@ export function createApp({
         throw error;
       }
     }
-    await reconcileExpiredAccountSuspension(identity.email);
+    if (!facebookLoginOnly) await reconcileExpiredAccountSuspension(identity.email);
     const consentsAccepted = req.body?.termsAccepted === true
       && req.body?.privacyAccepted === true
       && req.body?.minimumAgeConfirmed === true
@@ -3164,6 +3187,7 @@ export function createApp({
           throw new HttpError(403, 'staging_google_identity_conflict');
         }
       } else {
+        if (facebookLoginOnly) throw new HttpError(403, 'facebook_login_only');
         if (exactExistingSocialIdentity) {
           throw new HttpError(409, 'social_identity_changed');
         }
@@ -3309,6 +3333,7 @@ export function createApp({
           || !user.privacy_accepted_at
           || !user.minimum_age_confirmed_at
           || (config.privatePilotV4Enabled && !user.private_use_confirmed_at)) {
+        if (facebookLoginOnly) throw new HttpError(403, 'facebook_login_only');
         if (!consentsAccepted) {
           throw new HttpError(400, 'social_registration_consents_required');
         }

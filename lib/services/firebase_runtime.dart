@@ -408,8 +408,7 @@ class FirebaseRuntime {
         initialized: _webAuthInitialized,
       );
 
-  /// Configuration readiness only. Facebook UI/acquisition remains disabled
-  /// until the separately reviewed FB-W2 package exists.
+  /// Independent, expiring Facebook login approval for the shared bound app.
   static bool get webFacebookConfigurationReady =>
       kIsWeb &&
       _webAuthInitialized &&

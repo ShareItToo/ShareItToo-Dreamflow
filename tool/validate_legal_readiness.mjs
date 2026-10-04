@@ -189,7 +189,7 @@ function assertExplicitConsentContract({ root, sourceTexts, consent }) {
     'Kostenlos registrieren',
     'Mit Google registrieren',
     'Mit Apple registrieren',
-    'Mit Facebook registrieren',
+    'Facebook ist nur zur Anmeldung bestehender Konten verfügbar.',
     'termsAccepted: true',
     'privacyAccepted: true',
     'minimumAgeConfirmed: true',

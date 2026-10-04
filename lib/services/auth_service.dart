@@ -203,6 +203,11 @@ class AuthService {
     };
   }
 
+  /// Facebook can authenticate an enrolled identity but cannot create/link one.
+  static bool socialRegistrationProviderEnabled(AuthSocialProvider provider) =>
+      provider != AuthSocialProvider.facebook &&
+      socialProviderEnabled(provider);
+
   static Future<void> ensureSeeded() async {
     if (BackendConfig.enabled) return;
     try {
@@ -1451,7 +1456,9 @@ class AuthService {
             'minimumAgeConfirmed': minimumAgeConfirmed,
             'privateUseConfirmed': privateUseConfirmed,
             'registrationActionLabel': registrationActionLabel ??
-                'Mit ${provider.name[0].toUpperCase()}${provider.name.substring(1)} registrieren',
+                (provider == AuthSocialProvider.facebook
+                    ? 'Mit Facebook anmelden'
+                    : 'Mit ${provider.name[0].toUpperCase()}${provider.name.substring(1)} registrieren'),
           },
         ),
         persist: (response) async {
@@ -1700,6 +1707,7 @@ class AuthService {
         'staging_google_identity_not_allowlisted' =>
           AuthFailure.pilotAccountDenied,
         'staging_registration_disabled' => AuthFailure.pilotRegistrationClosed,
+        'facebook_login_only' => AuthFailure.pilotAccountDenied,
         'staging_google_identity_conflict' ||
         'social_identity_conflict' ||
         'social_identity_changed' =>

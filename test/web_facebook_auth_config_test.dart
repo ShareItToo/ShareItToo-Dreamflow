@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lendify/services/web_facebook_auth_config.dart';
 import 'package:lendify/services/web_firebase_auth_startup.dart';
 import 'package:lendify/services/web_google_auth.dart';
+import 'web_apple_direct_config_test.dart' as apple_fixture;
 
 const origin = WebGooglePublicConfig.stagingOrigin;
 final now = DateTime.utc(2026, 10, 3, 12);
@@ -143,12 +144,11 @@ void main() {
     final both = select(google: true);
     expect(both.options!.asMap, fb.options!.asMap);
     expect(both.google && both.facebook, isTrue);
-    expect(select(google: true, validated: false).options, isNull);
-    expect(select(google: true, rawEvidence: '').options, isNull);
+    expect(select(google: true, validated: false).google, isTrue);
+    expect(select(google: true, rawEvidence: '').google, isTrue);
   });
 
-  test(
-      'Facebook-only needs no Google options; invalid requested Google blocks both',
+  test('missing Google approval cannot disable independently approved Facebook',
       () {
     const missingGoogle = WebGooglePublicConfig(
         projectId: '',
@@ -160,8 +160,8 @@ void main() {
         authorizedOrigin: '',
         approvedDigest: '');
     expect(select(googlePublicConfig: missingGoogle).facebook, isTrue);
-    expect(select(google: true, googlePublicConfig: missingGoogle).options,
-        isNull);
+    expect(select(google: true, googlePublicConfig: missingGoogle).facebook,
+        isTrue);
     expect(
         select(
                 google: true,
@@ -170,6 +170,57 @@ void main() {
                 rawEvidence: 'invalid')
             .google,
         isTrue);
+  });
+
+  test(
+      'expired Facebook approval preserves Google but never borrows its approval',
+      () {
+    final selected = select(google: true, clock: DateTime.utc(2026, 10, 3, 13));
+    expect(selected.google, isTrue);
+    expect(selected.facebook, isFalse);
+    expect(selected.options!.asMap,
+        select(google: true, facebook: false).options!.asMap);
+    final foreign = facebookConfig(changes: {
+      'project': 'foreign-project',
+      'backend': 'foreign-project',
+      'domain': 'foreign-project.firebaseapp.com'
+    });
+    expect(
+        select(
+                google: true,
+                config: foreign,
+                clock: DateTime.utc(2026, 10, 3, 13))
+            .options,
+        isNull);
+  });
+
+  test(
+      'expired or missing Facebook approval preserves independently approved Apple',
+      () {
+    final apple = apple_fixture.directConfig();
+    final appleRaw = jsonEncode(apple_fixture.evidence(apple));
+    final fb = facebookConfig();
+    for (final raw in ['', jsonEncode(evidence(fb))]) {
+      final selected = selectWebFirebaseAuth(
+          googleConfig: googleConfig(),
+          facebookConfig: fb,
+          googleEnabled: true,
+          facebookEnabled: true,
+          activationValidated: true,
+          backendEnabled: true,
+          apiBaseUrl: '$origin/api/v1',
+          origin: origin,
+          facebookReadinessJson: raw,
+          facebookReadinessDigest: digest(raw),
+          now: apple_fixture.now,
+          appleConfig: apple,
+          appleEnabled: true,
+          appleReadinessJson: appleRaw,
+          appleReadinessDigest: digest(appleRaw));
+      expect(selected.facebook, isFalse);
+      expect(selected.google, isTrue);
+      expect(selected.apple, isTrue);
+    }
   });
 
   for (final mutation in <Map<String, String>>[

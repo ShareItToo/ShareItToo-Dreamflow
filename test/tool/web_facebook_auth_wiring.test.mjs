@@ -35,12 +35,16 @@ test('same transaction, minimal backend payload, exact cleanup ownership, no nat
   assert.match(auth, /_providerSdkMutationQueue.run\(\(\) => _signInWithSocialProviderOwned\(/);
 });
 
-test('login and registration controls use the same gate; no source activation', () => {
-  for (const path of ['lib/screens/login_screen.dart', 'lib/screens/register_screen.dart']) {
+test('Facebook is login-only; registration has no Facebook action or source activation', () => {
+  for (const path of ['lib/screens/login_screen.dart']) {
     const screen = read(path);
     assert.ok(/AuthService\s*\.socialProviderEnabled\(/.test(screen), `${path} gate consumer`);
     assert.ok(/AuthSocialProvider\s*\.facebook/.test(screen), `${path} Facebook control`);
   }
+  const registration = read('lib/screens/register_screen.dart');
+  assert.ok(registration.includes('!AuthService.socialRegistrationProviderEnabled(provider)'));
+  assert.doesNotMatch(registration, /Mit Facebook registrieren/);
+  assert.match(auth, /provider != AuthSocialProvider.facebook &&\s*socialProviderEnabled\(provider\)/);
   assert.match(auth, /SIT_SOCIAL_FACEBOOK_ENABLED',\s*defaultValue: false/);
   assert.doesNotMatch(read('tool/staging_web_contract.mjs'), /SIT_SOCIAL_FACEBOOK_ENABLED:\s*'true'/);
 });

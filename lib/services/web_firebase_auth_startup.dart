@@ -68,23 +68,52 @@ WebFirebaseAuthSelection selectWebFirebaseAuth({
     approvedReadinessDigest: appleReadinessDigest,
     now: now,
   );
-  // A requested but unbound provider must not silently borrow the other's app.
-  if ((googleEnabled && google == null) ||
-      (facebookEnabled && facebook == null) ||
-      (appleEnabled && apple == null) ||
-      (google != null &&
-          facebook != null &&
-          !sameWebFirebaseApp(google, facebook)) ||
-      (google != null &&
-          apple != null &&
-          !sameWebFirebaseApp(google, apple.firebaseOptions)) ||
-      (facebook != null &&
-          apple != null &&
-          !sameWebFirebaseApp(facebook, apple.firebaseOptions))) {
+  final options = google ?? facebook ?? apple?.firebaseOptions;
+  if (options == null) return WebFirebaseAuthSelection.unavailable;
+  // Runtime approvals are provider-owned: an expired/missing approval cannot
+  // disable another valid provider. Configured identity fields still bind the
+  // one shared app even if that provider's approval has expired. Empty fields
+  // grant nothing; contradictory nonempty fields fail the entire app closed.
+  bool conflicts(String project, String backendProject, String app,
+      String sender, String key, String domain) {
+    bool differs(String value, String? expected) =>
+        value.isNotEmpty && value != expected;
+    return differs(project, options.projectId) ||
+        differs(backendProject, options.projectId) ||
+        differs(app, options.appId) ||
+        differs(sender, options.messagingSenderId) ||
+        differs(key, options.apiKey) ||
+        differs(domain, options.authDomain);
+  }
+
+  if ((googleEnabled &&
+          conflicts(
+              googleConfig.projectId,
+              googleConfig.backendProjectId,
+              googleConfig.appId,
+              googleConfig.messagingSenderId,
+              googleConfig.apiKey,
+              googleConfig.authDomain)) ||
+      (facebookEnabled &&
+          conflicts(
+              facebookConfig.projectId,
+              facebookConfig.backendProjectId,
+              facebookConfig.appId,
+              facebookConfig.messagingSenderId,
+              facebookConfig.apiKey,
+              facebookConfig.authDomain)) ||
+      (appleEnabled &&
+          conflicts(
+              appleConfig.projectId,
+              appleConfig.backendProjectId,
+              appleConfig.appId,
+              appleConfig.messagingSenderId,
+              appleConfig.apiKey,
+              appleConfig.authDomain))) {
     return WebFirebaseAuthSelection.unavailable;
   }
   return WebFirebaseAuthSelection._(
-    google ?? facebook ?? apple?.firebaseOptions,
+    options,
     google != null,
     facebook != null,
     apple != null,

@@ -332,7 +332,7 @@ if (!databaseUrl) {
         `SELECT u.id, i.provider, i.provider_subject
            FROM users AS u
            JOIN auth_identities AS i ON i.user_id = u.id
-          WHERE u.id = $1`,
+          WHERE u.id = $1 ORDER BY i.provider DESC`,
         [userId],
       );
       assert.deepEqual(stored.rows, [

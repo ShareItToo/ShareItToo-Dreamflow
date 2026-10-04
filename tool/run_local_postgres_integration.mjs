@@ -63,6 +63,7 @@ export const integrationTestGroups = Object.freeze({
   ]),
   stagingGoogleRegistration: Object.freeze([
     'backend/test/staging_google_registration.integration.test.js',
+    'backend/test/facebook_login_postgres.integration.test.js',
   ]),
   listingAi: Object.freeze([
     'backend/test/listing_ai_lifetime_budget_migration.integration.test.js',

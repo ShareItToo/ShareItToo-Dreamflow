@@ -452,7 +452,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _socialRegister(AuthSocialProvider provider) async {
     _enrollmentCtrl.clear();
-    if (_busy || !mounted) return;
+    if (_busy ||
+        !mounted ||
+        !AuthService.socialRegistrationProviderEnabled(provider)) {
+      return;
+    }
     final actionEpoch = ++_socialActionEpoch;
     final noSessionEpoch = AuthService.sessionEpoch;
     final providerLabel = switch (provider) {
@@ -993,36 +997,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                                                 AuthSocialProvider
                                                                     .apple)),
                                                     const SizedBox(height: 8),
-                                                    if (AuthService
-                                                        .socialProviderEnabled(
-                                                            AuthSocialProvider
-                                                                .facebook)) ...[
-                                                      _LegalText(
-                                                        actionLabel:
-                                                            'Mit Facebook registrieren',
-                                                        onOpenTerms: _openTerms,
-                                                        onOpenPrivacy:
-                                                            _openPrivacy,
-                                                      ),
-                                                      const SizedBox(height: 4),
-                                                    ],
-                                                    SocialAuthButton(
-                                                        brand: SocialAuthBrand
-                                                            .facebook,
-                                                        label:
-                                                            'Mit Facebook registrieren',
-                                                        available: AuthService
-                                                            .socialProviderEnabled(
-                                                                AuthSocialProvider
-                                                                    .facebook),
-                                                        onTap: _busy ||
-                                                                !AuthService.socialProviderEnabled(
-                                                                    AuthSocialProvider
-                                                                        .facebook)
-                                                            ? null
-                                                            : () => _socialRegister(
-                                                                AuthSocialProvider
-                                                                    .facebook)),
+                                                    const Text(
+                                                      'Facebook ist nur zur Anmeldung bestehender Konten verfügbar.',
+                                                      textAlign:
+                                                          TextAlign.center,
+                                                    ),
                                                   ]),
                                             ),
                                           ),

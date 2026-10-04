@@ -22,7 +22,11 @@ void main() {
     expect(find.text('Kostenlos registrieren'), findsOneWidget);
     expect(find.text('Mit Google registrieren'), findsOneWidget);
     expect(find.text('Mit Apple registrieren'), findsOneWidget);
-    expect(find.text('Mit Facebook registrieren'), findsOneWidget);
+    expect(find.text('Mit Facebook registrieren'), findsNothing);
+    expect(
+        find.text(
+            'Facebook ist nur zur Anmeldung bestehender Konten verfügbar.'),
+        findsOneWidget);
     expect(find.text('SIT-Plattformbedingungen'), findsWidgets);
     expect(find.text('Datenschutzerklärung'), findsWidgets);
     expect(

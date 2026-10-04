@@ -37,7 +37,12 @@ void main() {
         child: MaterialApp(home: screen),
       ));
       await tester.pumpAndSettle();
-      expect(find.text('Im Privatpiloten nicht verfügbar'), findsNWidgets(3));
+      expect(find.text('Im Privatpiloten nicht verfügbar'),
+          findsNWidgets(screen is RegisterScreen ? 2 : 3));
+      if (screen is RegisterScreen) {
+        expect(find.text('Mit Facebook registrieren'), findsNothing);
+        expect(AuthService.socialRegistrationProviderEnabled(AuthSocialProvider.facebook), isFalse);
+      }
       for (final button in tester
           .widgetList<SocialAuthButton>(find.byType(SocialAuthButton))) {
         expect(button.available, isFalse);

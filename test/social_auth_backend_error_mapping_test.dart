@@ -5,6 +5,9 @@ import 'package:lendify/services/auth_service.dart';
 import 'package:lendify/services/web_google_auth.dart';
 
 void main() {
+  test('Facebook login-only denial is a pilot account boundary', () {
+    expect(AuthService.classifySocialBackendError('facebook_login_only'), AuthFailure.pilotAccountDenied);
+  });
   const backendCases = {
     'staging_account_not_allowlisted': AuthFailure.pilotAccountDenied,
     'staging_google_identity_not_allowlisted': AuthFailure.pilotAccountDenied,

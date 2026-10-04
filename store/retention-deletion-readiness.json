@@ -73,7 +73,7 @@
     },
     {
       "path": "backend/src/app.js",
-      "sha256": "caf17872edfddc8a19e40aeeb56291f2a648b2e3c5ee947d56f2c5cbf31bce81"
+      "sha256": "f99b29170224c901a2bcfcb06705eb8e467049aa216b9f52fcd604df8e3ba1e9"
     },
     {
       "path": "backend/src/rate_limit_policy.js",
@@ -841,11 +841,11 @@
     },
     {
       "path": "lib/services/firebase_runtime.dart",
-      "sha256": "837303da10279fa5b23f1727267dd9055b290f6b9fcbfd4d08b7634a047c35e8"
+      "sha256": "017237dcbeff99ed590cdda4ff468a9602591177cd9cb7af03ee149b79be005e"
     },
     {
       "path": "lib/services/auth_service.dart",
-      "sha256": "e734dec3485411472e2d4beaf4ec3bec7981fe19deca5b8b8c9db95a1527cd95"
+      "sha256": "7ee88ddce47468736e7be17ae07ddb4f0acedf35848b925070e4ceb3d6c7b9f8"
     },
     {
       "path": "lib/services/backend_http.dart",
@@ -889,7 +889,7 @@
     },
     {
       "path": "lib/services/web_firebase_auth_startup.dart",
-      "sha256": "0999c7fa1571c7d1ebbd16383afce00dc806770a8fc83027b84e13817f071c17"
+      "sha256": "2925c66cabc90fa85ff3357b23cdc3856ac0cfcb16b78d84769e105d9b0cd2ec"
     },
     {
       "path": "lib/services/firebase_service_preferences.dart",

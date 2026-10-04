@@ -27,8 +27,10 @@ test('runtime consumer remains independently gated and defaults empty', () => {
   for (const key of ['SIT_APPLE_WEB_CLIENT_ID', 'SIT_APPLE_WEB_REDIRECT_URI', 'SIT_APPLE_WEB_READINESS_JSON', 'SIT_APPLE_WEB_READINESS_SHA256']) {
     assert.match(runtime, new RegExp(key, 'u'));
   }
-  assert.match(startup, /appleEnabled && apple == null/u);
-  assert.match(startup, /sameWebFirebaseApp\(google, apple\.firebaseOptions\)/u);
+  assert.match(startup, /appleEnabled &&\s*conflicts\(\s*appleConfig\.projectId/u);
+  assert.match(startup, /google \?\? facebook \?\? apple\?\.firebaseOptions/u);
+  assert.match(startup, /google != null,\s*facebook != null,\s*apple != null/u);
+  assert.doesNotMatch(startup, /appleEnabled && apple == null/u);
   assert.match(auth, /_appleSocialAuthEnabled &&[\s\S]*_socialProviderActivationValidated &&[\s\S]*FirebaseRuntime\.webAppleReady/u);
 });
 

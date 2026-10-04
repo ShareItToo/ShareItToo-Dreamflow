@@ -12657,19 +12657,19 @@ if (!databaseUrl) {
         'facebook-existing',
         true,
       );
-      assert.equal(unsafeFacebookLink.status, 409);
+      assert.equal(unsafeFacebookLink.status, 403);
       assert.equal(
         (await unsafeFacebookLink.json()).error,
-        'social_account_link_requires_reauthentication',
+        'facebook_login_only',
       );
 
-      socialClaims.set('facebook-delivery-unavailable', {
-        provider: 'facebook',
-        subject: 'firebase-facebook-delivery-unavailable',
-        firebaseUserId: 'firebase-user-facebook-delivery-unavailable',
+      socialClaims.set('google-unverified-delivery-unavailable', {
+        provider: 'google',
+        subject: 'firebase-google-unverified-delivery-unavailable',
+        firebaseUserId: 'firebase-user-google-unverified-delivery-unavailable',
         email: 'social-delivery-unavailable@example.com',
         emailVerified: false,
-        displayName: 'Facebook Delivery Unavailable',
+        displayName: 'GoogleUnverified Delivery Unavailable',
       });
       applicationOptions.deliverVerification = async () => {
         const error = new Error('synthetic_social_verification_delivery_unavailable');
@@ -12677,74 +12677,74 @@ if (!databaseUrl) {
         throw error;
       };
       await restartApplicationServer();
-      const unavailableFacebookRegistration = await socialRequest(
-        'facebook-delivery-unavailable',
+      const unavailableGoogleUnverifiedRegistration = await socialRequest(
+        'google-unverified-delivery-unavailable',
         true,
-        'Mit Facebook registrieren',
+        'Mit Google registrieren',
       );
-      assert.equal(unavailableFacebookRegistration.status, 202);
-      const unavailableFacebookResponse = await unavailableFacebookRegistration.json();
-      assert.equal(unavailableFacebookResponse.accepted, true);
-      assert.equal(unavailableFacebookResponse.verificationEmailSent, false);
-      assert.equal(unavailableFacebookResponse.session.user.capabilities.limitedSession, true);
+      assert.equal(unavailableGoogleUnverifiedRegistration.status, 202);
+      const unavailableGoogleUnverifiedResponse = await unavailableGoogleUnverifiedRegistration.json();
+      assert.equal(unavailableGoogleUnverifiedResponse.accepted, true);
+      assert.equal(unavailableGoogleUnverifiedResponse.verificationEmailSent, false);
+      assert.equal(unavailableGoogleUnverifiedResponse.session.user.capabilities.limitedSession, true);
       applicationOptions.deliverVerification = undefined;
       await restartApplicationServer();
 
-      socialClaims.set('facebook-new', {
-        provider: 'facebook',
-        subject: 'firebase-facebook-new',
-        firebaseUserId: 'firebase-user-facebook-new',
-        email: 'social-facebook@example.com',
+      socialClaims.set('google-unverified-new', {
+        provider: 'google',
+        subject: 'firebase-google-unverified-new',
+        firebaseUserId: 'firebase-user-google-unverified-new',
+        email: 'social-google-unverified@example.com',
         emailVerified: false,
-        displayName: 'Facebook Member',
+        displayName: 'GoogleUnverified Member',
       });
-      const facebookRegistration = await socialRequest(
-        'facebook-new',
+      const googleUnverifiedRegistration = await socialRequest(
+        'google-unverified-new',
         true,
-        'Mit Facebook registrieren',
+        'Mit Google registrieren',
       );
-      assert.equal(facebookRegistration.status, 202);
-      const facebookRegistrationResponse = await facebookRegistration.json();
+      assert.equal(googleUnverifiedRegistration.status, 202);
+      const googleUnverifiedRegistrationResponse = await googleUnverifiedRegistration.json();
       assert.deepEqual(
         {
-          accepted: facebookRegistrationResponse.accepted,
-          verificationEmailSent: facebookRegistrationResponse.verificationEmailSent,
-          verificationPending: facebookRegistrationResponse.verificationPending,
-          email: facebookRegistrationResponse.email,
+          accepted: googleUnverifiedRegistrationResponse.accepted,
+          verificationEmailSent: googleUnverifiedRegistrationResponse.verificationEmailSent,
+          verificationPending: googleUnverifiedRegistrationResponse.verificationPending,
+          email: googleUnverifiedRegistrationResponse.email,
         },
         {
           accepted: true,
           verificationEmailSent: true,
           verificationPending: true,
-          email: 'social-facebook@example.com',
+          email: 'social-google-unverified@example.com',
         },
       );
-      assert.equal(facebookRegistrationResponse.session.user.emailVerified, false);
-      assert.equal(facebookRegistrationResponse.session.user.capabilities.canCreateBindingBooking, false);
-      const facebookAccount = await setupPool.query(
+      assert.equal(googleUnverifiedRegistrationResponse.session.user.emailVerified, false);
+      assert.equal(googleUnverifiedRegistrationResponse.session.user.capabilities.canCreateBindingBooking, false);
+      const googleUnverifiedAccount = await setupPool.query(
         `SELECT account.id, account.email_verified_at, identity.email_verified
          FROM users AS account
          JOIN auth_identities AS identity ON identity.user_id = account.id
-         WHERE account.email = 'social-facebook@example.com'`,
+         WHERE account.email = 'social-google-unverified@example.com'`,
       );
-      assert.equal(facebookAccount.rowCount, 1);
-      assert.equal(facebookAccount.rows[0].email_verified_at, null);
-      assert.equal(facebookAccount.rows[0].email_verified, false);
+      assert.equal(googleUnverifiedAccount.rowCount, 1);
+      assert.equal(googleUnverifiedAccount.rows[0].email_verified_at, null);
+      assert.equal(googleUnverifiedAccount.rows[0].email_verified, false);
       await setupPool.query(
         `UPDATE users
          SET email_verified_at = now(),
              profile = jsonb_set(profile, '{emailVerified}', 'true'::jsonb, true)
          WHERE id = $1`,
-        [facebookAccount.rows[0].id],
+        [googleUnverifiedAccount.rows[0].id],
       );
-      const verifiedFacebookLogin = await socialRequest(
-        'facebook-new',
+      const verifiedGoogleUnverifiedLogin = await socialRequest(
+        'google-unverified-new',
         false,
       );
-      assert.equal(verifiedFacebookLogin.status, 200);
+      assert.equal(verifiedGoogleUnverifiedLogin.status, 200);
       assert.equal(
-        (await verifiedFacebookLogin.json()).user.id,
-        facebookAccount.rows[0].id,
+        (await verifiedGoogleUnverifiedLogin.json()).user.id,
+        googleUnverifiedAccount.rows[0].id,
       );
 
       const s4lAppointment = new Date(Date.now() - (5 * 60 * 1000));
