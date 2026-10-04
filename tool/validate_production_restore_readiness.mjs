@@ -7,6 +7,15 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 function fail(message) { throw new Error(message); }
 
+// The retained restore result predates this notification-only addition. Bind
+// the complete prior body without rebinding historical live evidence to newer
+// source bytes or implying that the current script ran against a backup.
+const recoverySuffix = Buffer.from([
+  '# Notification failure cannot retroactively fail the verified restore check.',
+  'bash "$(dirname -- "${BASH_SOURCE[0]}")/alert.sh" shareittoo-restore-check.service recovery || true',
+  '',
+].join('\n'));
+
 export function validateProductionRestoreReadiness({
   repositoryRoot,
   evidencePath = resolve(repositoryRoot,
@@ -47,10 +56,18 @@ export function validateProductionRestoreReadiness({
     fail('Restore automation or live health verification is incomplete.');
   }
   const source = evidence.source ?? {};
-  const sourceText = readFileSync(resolve(repositoryRoot, source.path ?? ''), 'utf8');
-  const sourceHash = createHash('sha256').update(sourceText).digest('hex');
-  if (source.path !== 'backend/ops/verify_restore.sh' ||
-      source.sha256 !== sourceHash || source.tcpReadinessHost !== '127.0.0.1' ||
+  if (source.path !== 'backend/ops/verify_restore.sh') {
+    fail('Restore script is not bound to stable TCP readiness.');
+  }
+  const sourceBytes = readFileSync(resolve(repositoryRoot, source.path));
+  const suffixOffset = sourceBytes.length - recoverySuffix.length;
+  if (suffixOffset < 0 || !sourceBytes.subarray(suffixOffset).equals(recoverySuffix)) {
+    fail('Restore source compatibility requires the exact terminal recovery hook.');
+  }
+  const historicalBodyHash = createHash('sha256')
+    .update(sourceBytes.subarray(0, suffixOffset)).digest('hex');
+  const sourceText = sourceBytes.toString('utf8');
+  if (source.sha256 !== historicalBodyHash || source.tcpReadinessHost !== '127.0.0.1' ||
       (sourceText.match(/pg_isready -h 127\.0\.0\.1/g) ?? []).length !== 2 ||
       /pg_isready -U shareittoo_restore/.test(sourceText)) {
     fail('Restore script is not bound to stable TCP readiness.');
@@ -66,6 +83,9 @@ export function validateProductionRestoreReadiness({
     status: evidence.status,
     databaseTables: restore.databaseTables,
     uploadFiles: restore.uploadFiles,
+    retainedEvidenceValidated: true,
+    currentSourceCompatible: true,
+    currentRuntimeVerified: false,
   };
 }
 
@@ -73,7 +93,7 @@ function main() {
   const repositoryRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
   const result = validateProductionRestoreReadiness({ repositoryRoot });
   process.stdout.write(
-    `Production restore readiness: PASS (${result.databaseTables} tables, ${result.uploadFiles} upload files)\n`,
+    `Retained restore evidence validation and current source compatibility PASS (${result.databaseTables} historical tables, ${result.uploadFiles} historical upload files); current runtime NOT VERIFIED\n`,
   );
 }
 
