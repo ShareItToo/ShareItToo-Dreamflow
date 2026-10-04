@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:lendify/models/mission_quorum_readback.dart';
 import 'package:lendify/services/auth_service.dart';
+import 'package:lendify/services/backend_config.dart';
 import 'package:lendify/services/backend_http.dart';
 import 'package:lendify/services/mission_quorum_readback_gateway.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -75,9 +76,15 @@ void main() {
         missionPayloadDigest: _digest,
         resolutionDigest: _digest,
       ),
-      throwsA(isA<BackendException>()),
+      throwsA(
+        isA<BackendException>().having(
+          (error) => error.code,
+          'code',
+          'principal_changed',
+        ),
+      ),
     );
-  });
+  }, skip: !BackendConfig.enabled);
 
   test('gateway rejects post-response principal drift and digest mismatch',
       () async {
@@ -116,7 +123,13 @@ void main() {
           missionPayloadDigest: _digest,
           resolutionDigest: _digest,
         ),
-        throwsA(isA<BackendException>()),
+        throwsA(
+          isA<BackendException>().having(
+            (error) => error.code,
+            'code',
+            'principal_changed',
+          ),
+        ),
       ),
       () => MockClient((_) async => response),
     );
@@ -140,7 +153,7 @@ void main() {
       ),
       () => MockClient((_) async => response),
     );
-  });
+  }, skip: !BackendConfig.enabled);
 }
 
 Future<bool> _changedPrincipal(AuthSessionOwner owner) async => false;

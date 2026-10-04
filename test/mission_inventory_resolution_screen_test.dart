@@ -79,7 +79,16 @@ void main() {
     await tester.pumpAndSettle();
     expect(quorumGateway.calls, 1);
     expect(find.byKey(const Key('mission-quorum-error')), findsNothing);
-    expect(find.byKey(const Key('mission-quorum-slot-required:plant_container_equipment:1')), findsOneWidget);
+    expect(
+        find.byKey(const Key(
+            'mission-quorum-slot-required:plant_container_equipment:1')),
+        findsOneWidget);
+    expect(
+        find.byKey(const Key(
+            'mission-quorum-slot-optional:plant_container_equipment:1')),
+        findsOneWidget);
+    expect(find.text('Optionaler Gegenstand'), findsOneWidget);
+    expect(find.text('Optional · Einheit 1 · offen'), findsOneWidget);
     expect(find.textContaining('veraltet oder unbekannt'), findsOneWidget);
     expect(
       find.byKey(const ValueKey(
@@ -106,6 +115,8 @@ void main() {
       'Hei',
     );
     await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView), const Offset(0, -400));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Heilbronn, Deutschland'));
     await tester.pumpAndSettle();
@@ -451,6 +462,13 @@ class _QuorumGateway implements MissionQuorumReadbackGateway {
           'necessity': 'required',
           'ordinal': 1,
           'state': 'stale_or_unknown',
+        },
+        <String, dynamic>{
+          'slotKey': 'optional:plant_container_equipment:1',
+          'needKey': 'plant_container_equipment',
+          'necessity': 'optional',
+          'ordinal': 1,
+          'state': 'open',
         },
       ],
     });

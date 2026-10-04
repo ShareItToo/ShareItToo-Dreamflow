@@ -870,10 +870,7 @@ class _MissionInventoryResolutionScreenState
                 'Der Serverstand ist nicht bestätigt. Bitte erneut lesen.',
                 key: Key('mission-quorum-error'),
               ),
-            if (quorum != null)
-              ...quorum.components
-                  .where((entry) => entry.necessity == 'required')
-                  .map(_buildQuorumSlot),
+            if (quorum != null) ...quorum.components.map(_buildQuorumSlot),
             OutlinedButton.icon(
               key: const Key('mission-quorum-refresh'),
               onPressed: _quorumLoading ? null : _loadQuorum,
@@ -901,7 +898,8 @@ class _MissionInventoryResolutionScreenState
         leading: Icon(_quorumSlotIcon(value.state)),
         title: Text(_quorumNeedLabel(value.necessity)),
         subtitle: Text(
-          'Erforderlich · Einheit ${value.ordinal} · ${_quorumSlotLabel(value.state)}',
+          '${value.necessity == 'required' ? 'Erforderlich' : 'Optional'} · '
+          'Einheit ${value.ordinal} · ${_quorumSlotLabel(value.state)}',
         ),
       );
 
