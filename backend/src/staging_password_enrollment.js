@@ -85,12 +85,12 @@ export function readProtectedStagingPasswordEnrollmentRegistry(filePath, {
     const parent = directories.at(-1).before;
     if (parent.nlink < 1n || ![0n, BigInt(ownerUid)].includes(parent.uid)
         || (parent.mode & 0o022n) !== 0n) deny();
-    const linkBefore = fileSystem.lstatSync(filePath, { bigint: true });
     const descriptor = fileSystem.openSync(filePath,
       fileSystem.constants.O_RDONLY | fileSystem.constants.O_NOFOLLOW
         | fileSystem.constants.O_NONBLOCK | fileSystem.constants.O_CLOEXEC);
     descriptors.push(descriptor);
     const before = fileSystem.fstatSync(descriptor, { bigint: true });
+    const linkBefore = fileSystem.lstatSync(filePath, { bigint: true });
     if (!regularFile(before) || !sameFileMetadata(before, linkBefore)
         || before.nlink !== 1n || (before.mode & 0o777n) !== 0o600n
         || before.uid !== BigInt(ownerUid) || before.size < 3n

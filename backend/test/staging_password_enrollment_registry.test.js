@@ -182,6 +182,70 @@ test('registry reader rejects descriptor metadata drift and exposes only the gen
   );
 });
 
+test('registry opens its non-following descriptor before inspecting leaf path metadata', async (t) => {
+  const { file } = await fixture(t);
+  let opened = false;
+  let descriptorInspected = false;
+  let registryDescriptor;
+  const fileSystem = {
+    ...fs,
+    openSync(name, flags, ...args) {
+      const descriptor = fs.openSync(name, flags, ...args);
+      if (name === file) {
+        assert.notEqual(flags & fs.constants.O_NOFOLLOW, 0);
+        registryDescriptor = descriptor;
+        opened = true;
+      }
+      return descriptor;
+    },
+    fstatSync(descriptor, options) {
+      if (descriptor === registryDescriptor) descriptorInspected = true;
+      return fs.fstatSync(descriptor, options);
+    },
+    lstatSync(name, options) {
+      if (name === file) {
+        assert.equal(opened, true);
+        assert.equal(descriptorInspected, true);
+      }
+      return fs.lstatSync(name, options);
+    },
+  };
+  assert.deepEqual(readProtectedStagingPasswordEnrollmentRegistry(file, { fileSystem }), [invitation]);
+});
+
+test('leaf replacement after opening rejects before reading and closes every descriptor', async (t) => {
+  const { file } = await fixture(t);
+  const opened = [];
+  const closed = [];
+  let replaced = false;
+  let reads = 0;
+  const fileSystem = {
+    ...fs,
+    openSync(name, flags, ...args) {
+      const descriptor = fs.openSync(name, flags, ...args);
+      opened.push(descriptor);
+      if (name === file) {
+        fs.renameSync(file, `${file}.retained`);
+        fs.writeFileSync(file, canonicalBytes, { mode: 0o600 });
+        replaced = true;
+      }
+      return descriptor;
+    },
+    readSync(...args) {
+      reads += 1;
+      return fs.readSync(...args);
+    },
+    closeSync(descriptor) {
+      fs.closeSync(descriptor);
+      closed.push(descriptor);
+    },
+  };
+  assert.throws(() => readProtectedStagingPasswordEnrollmentRegistry(file, { fileSystem }), denied);
+  assert.equal(replaced, true);
+  assert.equal(reads, 0);
+  assert.deepEqual(closed.toSorted(), opened.toSorted());
+});
+
 test('reader retains its chain and rejects parent substitution even when the name is restored', async (t) => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'sit-password-parent-race-')));
   const parent = join(root, 'private');
