@@ -25,6 +25,7 @@ import {
   validateCandidateRolloverAndroidCompatibilityFiles,
   validateExplicitHistoricalRolloverCandidate,
   validateGooglePlayInternalHandoff,
+  validateRetainedPlayMetadata,
 } from '../../tool/validate_google_play_internal_handoff.mjs';
 
 const repositoryRoot = new URL('../../', import.meta.url).pathname;
@@ -267,6 +268,37 @@ test('validates the dynamic current pointer through its versioned manifest', asy
   assert.deepEqual(result.runtimeDrift, []);
 });
 
+test('Web source mode validates retained metadata without accepting current runtime or archive readiness', async (t) => {
+  const data = await currentRolloverFixture();
+  t.after(async () => {
+    await rm(data.root, { recursive: true, force: true });
+    await rm(data.manifestPath, { force: true });
+  });
+  await rm(data.archiveRoot, { recursive: true });
+  const result = validateRetainedPlayMetadata({ repositoryRoot, currentPath: data.pointerPath });
+  assert.equal(result.evidenceClass, 'historical-metadata-only');
+  assert.equal(result.playArtifactStatus, 'stale');
+  assert.ok(result.runtimeDrift.includes('lib/main.dart'));
+  assert.equal(result.currentCandidateReady, false);
+  assert.equal(result.releaseProof, false);
+  assert.equal(result.privateArtifactVerified, false);
+  assert.equal(Object.hasOwn(result, 'archive'), false);
+  await assert.rejects(validateCurrentRolloverCandidate({ repositoryRoot,
+    currentPath: data.pointerPath, archiveRoot: data.archiveRoot }), /Runtime-affecting files changed/u);
+  for (const change of [
+    (record) => { record.artifact.apkSha256 = 'invalid'; },
+    (record) => { record.artifact.aabBytes = 0; },
+    (record) => { record.artifact.signatureVerified = false; },
+    (record) => { record.candidate.applicationId = 'foreign.app'; },
+    (record) => { record.playStateAtLastReadback.candidateUploaded = true; },
+  ]) {
+    const record = structuredClone(data.rollover); change(record);
+    await writeFile(data.manifestPath, JSON.stringify(record));
+    await writeFile(data.pointerPath, JSON.stringify({ ...record, candidateManifestRef: data.manifestRef }));
+    assert.throws(() => validateRetainedPlayMetadata({ repositoryRoot, currentPath: data.pointerPath }));
+  }
+});
+
 test('current Web successor cannot reuse the historical Android compatibility lane', async (t) => {
   const data = await currentRolloverFixture();
   t.after(async () => {
@@ -487,6 +519,22 @@ test('CI can validate repository metadata while the owner-only archive is unavai
   });
   assert.equal(result.artifactVerified, false);
   assert.equal(result.buildNumber, canonicalHandoff.candidate.buildNumber);
+});
+
+test('historical-only handoff never verifies private bytes and still rejects corrupt metadata', async (t) => {
+  const data = await fixture();
+  t.after(() => rm(data.root, { recursive: true, force: true }));
+  await writeFile(data.artifactPath, 'not-valid-artifact-bytes');
+  const result = validateGooglePlayInternalHandoff({ repositoryRoot, ...data, historicalMetadataOnly: true });
+  assert.equal(result.artifactVerified, false);
+  assert.equal(result.currentCandidateReady, false);
+  assert.equal(result.releaseProof, false);
+  assert.equal(result.evidenceClass, 'historical-metadata-only');
+  assert.throws(() => validateGooglePlayInternalHandoff({ repositoryRoot, ...data }), /archived AAB SHA-256/u);
+  data.handoff.hardStops.productionRelease = false;
+  await writeFile(data.handoffPath, JSON.stringify(data.handoff));
+  assert.throws(() => validateGooglePlayInternalHandoff({ repositoryRoot, ...data,
+    historicalMetadataOnly: true }), /hardStops.productionRelease/u);
 });
 
 test('rejects different AAB bytes', async (t) => {

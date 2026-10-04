@@ -25,6 +25,13 @@ head SHA and required job set match the source change. Never manually duplicate
 source-only Regression or CodeQL runs; use `workflow_dispatch` only for a
 capability absent from the automatic run, such as immutable GHCR publication.
 
+During the Web-first iteration phase, use `SIT_WEB_SOURCE_GATE=1` for the full
+local source/test/build gate when the retained Play artifact is intentionally
+older than the working source. That mode is never Play or release evidence and
+must report `currentCandidateReady=false`; do not combine it with CI or candidate
+rollover. A final Android/Play release still requires the unchanged strict gate
+against the exact current signed artifact.
+
 Before every SIT turn, read
 `docs/operations/SIT_PILOT_PHASE_CAPSULE_2026-09-23.md` as the compact entry
 point. Read larger status histories only when a concrete discrepancy requires

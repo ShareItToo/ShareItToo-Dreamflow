@@ -220,20 +220,7 @@ function changedPathsSince(repositoryRoot, sourceCommit) {
  * missing historical private artifact can only be tolerated in this explicit
  * mode, never as a CI or implicit fallback.
  */
-export async function validateExplicitHistoricalRolloverCandidate({
-  repositoryRoot,
-  archiveRoot = resolve(homedir(), 'Library', 'Application Support', 'ShareItToo', 'release', 'android'),
-  rolloverPath,
-  changedPaths = null,
-  allowReviewedAndroidBackendCompatibility = false,
-} = {}) {
-  const root = resolve(repositoryRoot ?? fileURLToPath(new URL('../', import.meta.url)));
-  if (typeof rolloverPath !== 'string' || rolloverPath.trim() === '') {
-    fail('Historical rollover candidate path is required.');
-  }
-  const path = resolve(rolloverPath);
-  const rollover = object(readCanonicalJson(path, 'explicit historical rollover candidate'),
-    'explicit historical rollover candidate');
+function validateRolloverMetadata(rollover) {
   assertNoCredentials(rollover, 'explicit historical rollover candidate');
   same(rollover.schemaVersion, 1, 'explicit rollover schemaVersion');
   same(rollover.kind, 'android-current-rollover-candidate', 'explicit rollover kind');
@@ -328,6 +315,24 @@ export async function validateExplicitHistoricalRolloverCandidate({
       || !/^[a-f0-9]{40}$/u.test(expectedIdentity.commit ?? '')) {
     fail('Explicit rollover candidate identity is invalid.');
   }
+  return { candidate, expectedIdentity };
+}
+
+export async function validateExplicitHistoricalRolloverCandidate({
+  repositoryRoot,
+  archiveRoot = resolve(homedir(), 'Library', 'Application Support', 'ShareItToo', 'release', 'android'),
+  rolloverPath,
+  changedPaths = null,
+  allowReviewedAndroidBackendCompatibility = false,
+} = {}) {
+  const root = resolve(repositoryRoot ?? fileURLToPath(new URL('../', import.meta.url)));
+  if (typeof rolloverPath !== 'string' || rolloverPath.trim() === '') {
+    fail('Historical rollover candidate path is required.');
+  }
+  const path = resolve(rolloverPath);
+  const rollover = object(readCanonicalJson(path, 'explicit historical rollover candidate'),
+    'explicit historical rollover candidate');
+  const { candidate, expectedIdentity } = validateRolloverMetadata(rollover);
 
   try {
     execFileSync('git', ['merge-base', '--is-ancestor', expectedIdentity.commit, 'HEAD'], {
@@ -440,13 +445,10 @@ function sameCandidateBinding(pointer, manifest) {
  * Historical candidates stay on validateExplicitHistoricalRolloverCandidate so
  * their evidence remains reproducible and cannot be silently replaced.
  */
-export async function validateCurrentRolloverCandidate({
+function resolveCurrentRolloverMetadata({
   repositoryRoot,
-  archiveRoot = resolve(homedir(), 'Library', 'Application Support', 'ShareItToo', 'release', 'android'),
   currentPath = null,
   candidateManifestPath = null,
-  changedPaths = null,
-  allowReviewedAndroidBackendCompatibility = false,
   beforeManifestOpen = null,
 } = {}) {
   const root = resolve(repositoryRoot ?? fileURLToPath(new URL('../', import.meta.url)));
@@ -487,6 +489,21 @@ export async function validateCurrentRolloverCandidate({
     'current versioned candidate manifest');
   assertNoCredentials(manifest, 'current versioned candidate manifest');
   sameCandidateBinding(pointer, manifest);
+  return { root, pointerPath, manifestPath, manifest };
+}
+
+export async function validateCurrentRolloverCandidate({
+  repositoryRoot,
+  archiveRoot = resolve(homedir(), 'Library', 'Application Support', 'ShareItToo', 'release', 'android'),
+  currentPath = null,
+  candidateManifestPath = null,
+  changedPaths = null,
+  allowReviewedAndroidBackendCompatibility = false,
+  beforeManifestOpen = null,
+} = {}) {
+  const { root, pointerPath, manifestPath } = resolveCurrentRolloverMetadata({
+    repositoryRoot, currentPath, candidateManifestPath, beforeManifestOpen,
+  });
   const result = await validateExplicitHistoricalRolloverCandidate({
     repositoryRoot: root,
     archiveRoot,
@@ -498,6 +515,44 @@ export async function validateCurrentRolloverCandidate({
     ...result,
     pointerPath,
     candidateManifestPath: manifestPath,
+  });
+}
+
+// This result deliberately has no candidate/archive readiness shape. All
+// recorded Console/source-verification claims belong to the retained snapshot.
+export function validateRetainedPlayMetadata({ repositoryRoot, currentPath = null } = {}) {
+  const { root, manifest } = resolveCurrentRolloverMetadata({ repositoryRoot, currentPath });
+  const { candidate, expectedIdentity } = validateRolloverMetadata(manifest);
+  const artifact = object(manifest.artifact, 'retained artifact metadata');
+  for (const key of ['aabSha256', 'apkSha256', 'privacyReportSha256', 'uploadCertificateSha256']) {
+    if (!/^[a-f0-9]{64}$/u.test(artifact[key] ?? '')) fail('Retained artifact digest is invalid.');
+  }
+  for (const key of ['aabBytes', 'apkBytes']) {
+    if (!Number.isSafeInteger(artifact[key]) || artifact[key] <= 0) fail('Retained artifact size is invalid.');
+  }
+  same(artifact.archiveDirectoryName, `${candidate.versionCode}-${expectedIdentity.commit}`,
+    'retained archive basename');
+  for (const extension of ['aab', 'apk']) {
+    same(artifact[`${extension}FileName`],
+      `shareittoo-${candidate.versionName}-${candidate.versionCode}-${expectedIdentity.commit}.${extension}`,
+      'retained artifact basename');
+  }
+  for (const key of ['signatureVerified', 'ownerOnlyPermissionsVerified', 'nonOverwritingArchive']) {
+    same(artifact[key], true, `retained artifact.${key}`);
+  }
+  same(artifact.zipStructureValidation, 'passed', 'retained artifact.zipStructureValidation');
+  same(artifact.binaryPrivacyScan, 'passed', 'retained artifact.binaryPrivacyScan');
+  try {
+    execFileSync('git', ['merge-base', '--is-ancestor', expectedIdentity.commit, 'HEAD'],
+      { cwd: root, stdio: 'ignore' });
+  } catch { fail('Retained Play source is not a verified ancestor of repository HEAD.'); }
+  const runtimeDrift = candidateRolloverRuntimeDrift(changedPathsSince(root, expectedIdentity.commit));
+  return Object.freeze({
+    mode: 'web-source-only', evidenceClass: 'historical-metadata-only',
+    buildNumber: candidate.versionCode, artifactSourceHead: expectedIdentity.commit,
+    playArtifactStatus: runtimeDrift.length ? 'stale' : 'not-assessed',
+    currentCandidateReady: false, releaseProof: false, privateArtifactVerified: false,
+    runtimeDrift: Object.freeze(runtimeDrift),
   });
 }
 
@@ -602,7 +657,9 @@ export function validateGooglePlayInternalHandoff({
   internalReleasePath = null,
   shortDescriptionPath = null,
   allowMissingPrivateArtifact = false,
+  historicalMetadataOnly = false,
 }) {
+  if (typeof historicalMetadataOnly !== 'boolean') fail('Historical metadata mode must be boolean.');
   const handoff = object(readJson(handoffPath, 'Google Play handoff'), 'handoff');
   const resolvedEvidencePath = evidencePath ?? resolve(repositoryRoot, handoff.evidenceRef ?? '');
   const evidence = object(readJson(resolvedEvidencePath, 'candidate evidence'), 'candidate evidence');
@@ -667,7 +724,10 @@ export function validateGooglePlayInternalHandoff({
   same(artifact.ownerOnlyPermissionsRequired, true, 'ownerOnlyPermissionsRequired');
   const artifactPath = resolve(archiveRoot, artifact.archiveDirectoryName, artifact.fileName);
   let artifactVerified = false;
-  if (!existsSync(archiveRoot) || !existsSync(artifactPath)) {
+  if (historicalMetadataOnly) {
+    // Historical record validation deliberately performs no private archive IO.
+    artifactVerified = false;
+  } else if (!existsSync(archiveRoot) || !existsSync(artifactPath)) {
     if (!allowMissingPrivateArtifact) {
       fail('The bound AAB is unavailable in the private release archive.');
     }
@@ -1150,6 +1210,8 @@ export function validateGooglePlayInternalHandoff({
     releaseNotes: notes,
     status: handoff.status,
     artifactVerified,
+    ...(historicalMetadataOnly ? { evidenceClass: 'historical-metadata-only',
+      currentCandidateReady: false, releaseProof: false } : {}),
   };
 }
 
@@ -1157,9 +1219,18 @@ async function runCli() {
   const repositoryRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
   const ciMetadataOnly = process.argv.slice(2).includes('--ci-metadata-only');
   const candidateRollover = process.argv.slice(2).includes('--candidate-rollover');
+  const webSourceOnly = process.argv.slice(2).includes('--web-source-only');
   if (process.argv.slice(2).some((value) =>
-    !['--ci-metadata-only', '--candidate-rollover'].includes(value))) {
+    !['--ci-metadata-only', '--candidate-rollover', '--web-source-only'].includes(value))) {
     fail('Unknown Google Play internal handoff argument.');
+  }
+  if (webSourceOnly && (ciMetadataOnly || candidateRollover
+      || !['', '0', 'false'].includes(process.env.CI ?? '')
+      || !['', '0'].includes(process.env.SIT_ALLOW_CANDIDATE_ROLLOVER ?? ''))) {
+    fail('Web source mode cannot combine with CI or candidate rollover.');
+  }
+  if (webSourceOnly && process.env.SIT_WEB_SOURCE_GATE !== '1') {
+    fail('--web-source-only requires SIT_WEB_SOURCE_GATE=1.');
   }
   if (ciMetadataOnly && candidateRollover) {
     fail('Google Play internal handoff modes are mutually exclusive.');
@@ -1169,6 +1240,18 @@ async function runCli() {
   }
   if (candidateRollover && process.env.SIT_ALLOW_CANDIDATE_ROLLOVER !== '1') {
     fail('--candidate-rollover requires the explicit candidate-rollover environment.');
+  }
+  if (webSourceOnly) {
+    const retained = validateRetainedPlayMetadata({ repositoryRoot });
+    const historical = validateGooglePlayInternalHandoff({ repositoryRoot, historicalMetadataOnly: true });
+    if (BigInt(retained.buildNumber) <= BigInt(historical.buildNumber)) {
+      fail('The retained Play pointer must be newer than the historical handoff.');
+    }
+    process.stdout.write(`Google Play historical metadata: PASS (mode=web-source-only; `
+      + `historicalBuild=${historical.buildNumber}; retainedBuild=${retained.buildNumber}; `
+      + `playArtifact=${retained.playArtifactStatus}; not release proof; `
+      + 'currentCandidateReady=false; privateArtifactVerified=false; livePlayReadback=false)\n');
+    return;
   }
   let rolloverCandidate = null;
   let rolloverMode = null;

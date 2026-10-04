@@ -19,6 +19,20 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 cd "$ROOT"
 
+# Explicit local Web-first source gate. Reject conflicting intent before any
+# capacity probe, dependency fetch or build. This does not authorize a release.
+case "${SIT_WEB_SOURCE_GATE:-0}" in
+  0) ;;
+  1)
+    if [[ ! "${CI:-false}" =~ ^(false|0)$ || "${SIT_ALLOW_CANDIDATE_ROLLOVER:-0}" != "0" ]]; then
+      echo "ERROR: Web source mode cannot combine with CI or candidate rollover." >&2
+      exit 1
+    fi
+    echo "Web source gate: Play artifact is historical/stale, not release proof; currentCandidateReady=false."
+    ;;
+  *) echo "ERROR: SIT_WEB_SOURCE_GATE must be 0 or 1." >&2; exit 1 ;;
+esac
+
 source scripts/release_host_capacity_guard.sh
 release_host_capacity_begin
 
@@ -55,7 +69,7 @@ node --test test/tool/*.test.mjs
 
 bash scripts/test_temp_fixture_boundedness.sh
 
-if [[ "${SIT_ALLOW_CANDIDATE_ROLLOVER:-0}" == "1" ]]; then
+if [[ "${SIT_ALLOW_CANDIDATE_ROLLOVER:-0}" == "1" || "${SIT_WEB_SOURCE_GATE:-0}" == "1" ]]; then
   dart run tool/validate_store_metadata.dart --allow-candidate-rollover
 else
   dart run tool/validate_store_metadata.dart
@@ -182,7 +196,7 @@ node --test test/tool/archive_android_release_candidate.test.mjs
 node --check tool/validate_b11_release_docs.mjs
 node --test test/tool/validate_b11_release_docs.test.mjs
 node --test test/tool/ci_candidate_rollover_wiring.test.mjs
-if [[ "${SIT_ALLOW_CANDIDATE_ROLLOVER:-0}" == "1" ]]; then
+if [[ "${SIT_ALLOW_CANDIDATE_ROLLOVER:-0}" == "1" || "${SIT_WEB_SOURCE_GATE:-0}" == "1" ]]; then
   node tool/validate_b11_release_docs.mjs --allow-candidate-rollover
 else
   node tool/validate_b11_release_docs.mjs
@@ -192,6 +206,8 @@ node --check tool/validate_google_play_internal_handoff.mjs
 node --test test/tool/validate_google_play_internal_handoff.test.mjs
 if [[ "${CI:-false}" == "true" ]]; then
   node tool/validate_google_play_internal_handoff.mjs --ci-metadata-only
+elif [[ "${SIT_WEB_SOURCE_GATE:-0}" == "1" ]]; then
+  node tool/validate_google_play_internal_handoff.mjs --web-source-only
 elif [[ "${SIT_ALLOW_CANDIDATE_ROLLOVER:-0}" == "1" ]]; then
   node tool/validate_google_play_internal_handoff.mjs --candidate-rollover
 else
@@ -200,7 +216,7 @@ fi
 node --test test/tool/upload_exact_crashlytics_mapping_wiring.test.mjs
 node --check tool/validate_google_play_app_content_handoff.mjs
 node --test test/tool/validate_google_play_app_content_handoff.test.mjs
-if [[ "${SIT_ALLOW_CANDIDATE_ROLLOVER:-0}" == "1" ]]; then
+if [[ "${SIT_ALLOW_CANDIDATE_ROLLOVER:-0}" == "1" || "${SIT_WEB_SOURCE_GATE:-0}" == "1" ]]; then
   node tool/validate_google_play_app_content_handoff.mjs --allow-candidate-rollover
 else
   node tool/validate_google_play_app_content_handoff.mjs
@@ -214,7 +230,7 @@ node --test test/tool/google_play_closed_testing_wiring.test.mjs
 node tool/validate_google_play_closed_testing.mjs
 node --check tool/validate_google_play_closed_testing_feedback.mjs
 node --test test/tool/validate_google_play_closed_testing_feedback.test.mjs
-if [[ "${SIT_ALLOW_CANDIDATE_ROLLOVER:-0}" == "1" ]]; then
+if [[ "${SIT_ALLOW_CANDIDATE_ROLLOVER:-0}" == "1" || "${SIT_WEB_SOURCE_GATE:-0}" == "1" ]]; then
   node tool/validate_google_play_closed_testing_feedback.mjs --allow-candidate-rollover
 else
   node tool/validate_google_play_closed_testing_feedback.mjs
@@ -227,7 +243,7 @@ node --check tool/validate_apple_testflight_handoff.mjs
 node --test test/tool/validate_apple_testflight_handoff.test.mjs
 node --check tool/diagnose_ios_tooling_readiness.mjs
 node --test test/tool/diagnose_ios_tooling_readiness.test.mjs
-if [[ "${SIT_ALLOW_CANDIDATE_ROLLOVER:-0}" == "1" ]]; then
+if [[ "${SIT_ALLOW_CANDIDATE_ROLLOVER:-0}" == "1" || "${SIT_WEB_SOURCE_GATE:-0}" == "1" ]]; then
   node tool/validate_apple_testflight_handoff.mjs --allow-android-candidate-rollover
 else
   node tool/validate_apple_testflight_handoff.mjs
@@ -647,14 +663,14 @@ node --test test/tool/validate_google_play_app_content_progress.test.mjs
 node --check tool/validate_google_play_data_safety_answer_matrix.mjs
 node --test test/tool/validate_google_play_data_safety_answer_matrix.test.mjs
 node --test test/tool/on_device_listing_ai_data_safety_handoff.test.mjs
-if [[ "${SIT_ALLOW_CANDIDATE_ROLLOVER:-0}" == "1" ]]; then
+if [[ "${SIT_ALLOW_CANDIDATE_ROLLOVER:-0}" == "1" || "${SIT_WEB_SOURCE_GATE:-0}" == "1" ]]; then
   node tool/validate_google_play_data_safety_answer_matrix.mjs --allow-candidate-rollover
 else
   node tool/validate_google_play_data_safety_answer_matrix.mjs
 fi
 node --check tool/validate_google_play_service_provider_sharing_classification.mjs
 node --test test/tool/validate_google_play_service_provider_sharing_classification.test.mjs
-if [[ "${SIT_ALLOW_CANDIDATE_ROLLOVER:-0}" == "1" ]]; then
+if [[ "${SIT_ALLOW_CANDIDATE_ROLLOVER:-0}" == "1" || "${SIT_WEB_SOURCE_GATE:-0}" == "1" ]]; then
   node tool/validate_google_play_service_provider_sharing_classification.mjs --allow-candidate-rollover
 else
   node tool/validate_google_play_service_provider_sharing_classification.mjs
@@ -758,7 +774,7 @@ node tool/validate_google_only_next_candidate.mjs
 
 node --check tool/validate_phone_verification_readiness.mjs
 node --test test/tool/validate_phone_verification_readiness.test.mjs
-if [[ "${SIT_ALLOW_CANDIDATE_ROLLOVER:-0}" == "1" ]]; then
+if [[ "${SIT_ALLOW_CANDIDATE_ROLLOVER:-0}" == "1" || "${SIT_WEB_SOURCE_GATE:-0}" == "1" ]]; then
   node tool/validate_phone_verification_readiness.mjs --allow-candidate-rollover
 else
   node tool/validate_phone_verification_readiness.mjs
@@ -1366,3 +1382,6 @@ node tool/audit_r11_android_security_surface.mjs \
   --output "$r11_audit_output"
 
 release_host_capacity_end
+if [[ "${SIT_WEB_SOURCE_GATE:-0}" == "1" ]]; then
+  echo "Web source gate: PASS (source/tests/builds only; Play artifact historical/stale, not release proof; currentCandidateReady=false)."
+fi
