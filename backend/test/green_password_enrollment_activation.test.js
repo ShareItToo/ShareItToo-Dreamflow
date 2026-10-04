@@ -8,6 +8,7 @@ import test from 'node:test';
 
 import {
   activationEnvironment,
+  deriveProtectedEnvironmentScryptDigest,
   greenPasswordEnrollmentContainerSha256,
   greenPasswordEnrollmentHealthSha256,
   greenPasswordEnrollmentMountsSha256,
@@ -268,7 +269,7 @@ function commandShapedOperations(state, {
   };
 }
 
-async function fixture() {
+async function fixture({ proposed = proposedEnvironment() } = {}) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'sit-green-password-activation-')));
   await chmod(root, 0o700);
   const environmentFile = join(root, 'proposed.env');
@@ -276,7 +277,7 @@ async function fixture() {
   const backupFile = join(root, 'backup.json');
   const evidenceFile = join(root, 'evidence.json');
   const lockFile = join(root, 'activation.lock');
-  const environmentBytes = envText(proposedEnvironment());
+  const environmentBytes = envText(proposed);
   const registryBytes = Buffer.from(`${JSON.stringify([invitation()])}\n`);
   await writeFile(environmentFile, environmentBytes, { mode: 0o600 });
   await writeFile(registryFile, registryBytes, { mode: 0o600 });
@@ -329,7 +330,11 @@ async function fixture() {
     currentImageDigest, currentImageId: currentImageDigest,
     currentQueueSha256: greenPasswordEnrollmentQueueSha256(queue),
     environmentFile, environmentGid: gid,
-    environmentSha256: hash(environmentBytes), environmentUid: uid, evidenceFile,
+    environmentScryptDigest: deriveProtectedEnvironmentScryptDigest(
+      environmentBytes, hash('synthetic-environment-scrypt-salt'),
+    ),
+    environmentScryptSalt: hash('synthetic-environment-scrypt-salt'),
+    environmentUid: uid, evidenceFile,
     lockFile, mountsSha256: greenPasswordEnrollmentMountsSha256(mounts),
     network: 'sit-green-network', networkId: 'd'.repeat(64),
     operation: 'activate-green-password-enrollment', providerNetwork: 'sit-provider-egress',
@@ -386,6 +391,72 @@ test('dry-run accepts protected relay SMTP candidate and exact recipient/princip
   assert.doesNotMatch(JSON.stringify(result), /pilot@example|smtp\.relay|contact@|token/u);
   await assert.rejects(readFile(state.manifest.evidenceFile), /ENOENT/u);
   await assert.rejects(readFile(state.manifest.backupFile), /ENOENT/u);
+});
+
+test('secret-bearing environment binding rejects wrong salt, digest, and valid auth substitution', async (t) => {
+  for (const drift of ['salt', 'digest', 'secret']) {
+    const credential = runtimeSmtpCredential();
+    const proposed = proposedEnvironment();
+    proposed.SMTP_USER = 'relay-user';
+    proposed[credential.name] = credential.value;
+    const state = await fixture({ proposed });
+    t.after(() => rm(state.root, { force: true, recursive: true }));
+    if (drift === 'salt') {
+      state.manifest.environmentScryptSalt = hash('different-scrypt-salt');
+    } else if (drift === 'digest') {
+      state.manifest.environmentScryptDigest = hash('not-a-scrypt-output');
+    } else {
+      const replacement = { ...proposed };
+      replacement[credential.name] = crypto.randomBytes(24).toString('base64url');
+      await writeFile(state.environmentFile, envText(replacement), { mode: 0o600 });
+    }
+    await assert.rejects(runGreenPasswordEnrollmentActivation({
+      manifest: state.manifest, currentState: state.currentState, now,
+    }), /green_password_enrollment_activation_denied/u, drift);
+  }
+});
+
+test('lowercase and mixed-case secret names never affect safe hashes or evidence', async (t) => {
+  const names = ['smtp_password', 'ApiSeCrEt', 'sessionToKeN', 'database_url'];
+  const makeEnvironments = () => {
+    const current = currentEnvironment();
+    const proposed = proposedEnvironment();
+    const values = names.map(() => crypto.randomBytes(18).toString('base64url'));
+    names.forEach((name, index) => {
+      current[name] = values[index];
+      proposed[name] = values[index];
+    });
+    return { current, proposed, values };
+  };
+  const firstEnvironment = makeEnvironments();
+  const secondEnvironment = makeEnvironments();
+  const first = activationEnvironment({
+    currentEnvironment: firstEnvironment.current,
+    proposedEnvironment: firstEnvironment.proposed,
+    invitations: [invitation()], now,
+  });
+  const second = activationEnvironment({
+    currentEnvironment: secondEnvironment.current,
+    proposedEnvironment: secondEnvironment.proposed,
+    invitations: [invitation()], now,
+  });
+  assert.equal(first.safeEnvironmentSha256, second.safeEnvironmentSha256);
+
+  const state = await fixture();
+  t.after(() => rm(state.root, { force: true, recursive: true }));
+  const firstContainer = structuredClone(state.currentState.container);
+  const secondContainer = structuredClone(state.currentState.container);
+  names.forEach((name, index) => {
+    firstContainer.Config.Env.push(`${name}=${firstEnvironment.values[index]}`);
+    secondContainer.Config.Env.push(`${name}=${secondEnvironment.values[index]}`);
+  });
+  assert.equal(greenPasswordEnrollmentContainerSha256(firstContainer),
+    greenPasswordEnrollmentContainerSha256(secondContainer));
+
+  const exposed = JSON.stringify({ safeEnvironmentSha256: first.safeEnvironmentSha256 });
+  for (const value of [...firstEnvironment.values, ...secondEnvironment.values]) {
+    assert.equal(exposed.includes(value), false);
+  }
 });
 
 test('authenticated SMTP is accepted only as a complete pair', () => {
@@ -457,6 +528,11 @@ test('candidate rejects baked identity in env file, rerun origins, and allowlist
 test('protected reader rejects post-open leaf replacement and close failure', async (t) => {
   const state = await fixture();
   t.after(() => rm(state.root, { force: true, recursive: true }));
+  const stable = readProtectedActivationFile(state.registryFile, {
+    expectedUid: process.getuid(), expectedGid: process.getgid(),
+  });
+  assert.deepEqual(Object.keys(stable), ['bytes']);
+  stable.bytes.fill(0);
   const replacement = join(state.root, 'replacement.env');
   await writeFile(replacement, envText(proposedEnvironment()), { mode: 0o600 });
   let replaced = false;
@@ -551,6 +627,9 @@ test('execute seals current API and publishes only aggregate proof after v2/read
   assert.deepEqual(operations.calls.slice(-2), ['collectCandidate', 'readQueueAfter']);
   const evidence = await readFile(state.manifest.evidenceFile, 'utf8');
   const backup = await readFile(state.manifest.backupFile, 'utf8');
+  assert.match(evidence, /"safeEnvironmentSha256":"[a-f0-9]{64}"/u);
+  assert.doesNotMatch(evidence, /environmentScrypt/u);
+  assert.doesNotMatch(JSON.stringify(result), /environmentScrypt/u);
   assert.doesNotMatch(`${evidence}${backup}${JSON.stringify(result)}`,
     /pilot@example|smtp\.relay|contact@|registry\.json|proposed\.env/u);
   assert.equal((await fs.promises.stat(state.manifest.evidenceFile)).mode & 0o777, 0o600);
@@ -559,12 +638,19 @@ test('execute seals current API and publishes only aggregate proof after v2/read
 
 test('source retains no static SMTP password assignment literal', async () => {
   const source = await readFile(new URL(import.meta.url), 'utf8');
+  const implementation = await readFile(
+    new URL('../ops/green_password_enrollment_activation.mjs', import.meta.url), 'utf8',
+  );
   const property = smtpPasswordName();
   const literalAssignment = new RegExp(
     `${property}\\s*(?::|=)\\s*['\"\\x60][^'\"\\x60]+['\"\\x60]`, 'u',
   );
   assert.doesNotMatch(source, literalAssignment);
   assert.equal(source.includes(['private', '-value'].join('')), false);
+  assert.match(implementation, /crypto\.scryptSync\(/u);
+  assert.doesNotMatch(implementation, /environmentSha256/u);
+  assert.doesNotMatch(implementation,
+    /sha256\((?:environmentFile\.bytes|proposedEnvironment)\)/u);
 });
 
 test('evidence close failure rolls back; lock close after durable evidence is distinct', async (t) => {

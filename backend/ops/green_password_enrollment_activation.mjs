@@ -17,12 +17,19 @@ const canonicalEmailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 const registryTarget = '/run/secrets/staging-password-enrollment-registry.json';
 const publicOrigin = 'https://staging.shareittoo.com';
 const maximumFileBytes = 64 * 1024;
+const environmentScryptParameters = Object.freeze({
+  N: 16_384,
+  r: 8,
+  p: 1,
+  maxmem: 32 * 1024 * 1024,
+});
 
 const manifestKeys = Object.freeze([
   'apiContainer', 'backupFile', 'currentConfigurationSha256', 'currentContainerId',
   'currentHealthSha256', 'currentImage', 'currentImageDigest', 'currentImageId',
-  'currentQueueSha256', 'currentRevision', 'environmentFile', 'environmentGid', 'environmentSha256',
-  'environmentUid', 'evidenceFile', 'mountsSha256',
+  'currentQueueSha256', 'currentRevision', 'environmentFile', 'environmentGid',
+  'environmentScryptDigest', 'environmentScryptSalt', 'environmentUid', 'evidenceFile',
+  'mountsSha256',
   'lockFile', 'network', 'networkId', 'operation', 'providerNetwork', 'providerNetworkId',
   'registryFile', 'registryGid', 'registrySha256', 'registryTarget', 'registryUid',
   'schemaVersion', 'sourceCommit', 'sourceVersion', 'targetImage', 'targetImageDigest',
@@ -120,8 +127,19 @@ export function greenPasswordEnrollmentMountsSha256(mounts) {
 export function greenPasswordEnrollmentContainerSha256(container) {
   if (!container || typeof container !== 'object' || !container.Config
       || !container.HostConfig || !container.NetworkSettings) deny();
+  const { Env: environmentEntries, ...configWithoutEnvironment } = container.Config;
+  const safeConfig = {
+    ...configWithoutEnvironment,
+    Env: Array.isArray(environmentEntries) ? environmentEntries.map((entry) => {
+      const separator = typeof entry === 'string' ? entry.indexOf('=') : -1;
+      if (separator < 1) deny();
+      const name = entry.slice(0, separator);
+      return /(?:password|secret|token|database_url)/iu.test(name)
+        ? `${name}=<redacted>` : entry;
+    }) : environmentEntries,
+  };
   return canonicalDigest({
-    Config: container.Config,
+    Config: safeConfig,
     HostConfig: container.HostConfig,
     Mounts: (container.Mounts ?? []).map(normalizedMount),
     Networks: container.NetworkSettings.Networks ?? {},
@@ -352,7 +370,9 @@ export function readProtectedActivationFile(filePath, {
     const linkedAfter = fileSystem.lstatSync(filePath, { bigint: true });
     if (!sameFileMetadata(before, after) || !sameFileMetadata(after, linkedAfter)) deny();
     assertDirectoryChainUnchanged(directories, fileSystem);
-    result = Object.freeze({ bytes, sha256: sha256(bytes) });
+    // The caller chooses a binding suitable for the payload. Secret-bearing
+    // environment bytes must never pass through a generic fast hash.
+    result = Object.freeze({ bytes });
   } catch {
     failure = new GreenPasswordEnrollmentActivationError();
   } finally {
@@ -363,6 +383,23 @@ export function readProtectedActivationFile(filePath, {
     throw failure;
   }
   return result;
+}
+
+export function deriveProtectedEnvironmentScryptDigest(bytes, saltHex) {
+  if (!Buffer.isBuffer(bytes) || bytes.length < 2 || bytes.length > maximumFileBytes
+      || typeof saltHex !== 'string' || !digestPattern.test(saltHex)
+      || /^([a-f0-9])\1{63}$/u.test(saltHex)) deny();
+  const salt = Buffer.from(saltHex, 'hex');
+  let derived;
+  try {
+    derived = crypto.scryptSync(bytes, salt, 32, environmentScryptParameters);
+    return derived.toString('hex');
+  } catch {
+    deny();
+  } finally {
+    salt.fill(0);
+    derived?.fill(0);
+  }
 }
 
 function parseEnvironmentText(bytes) {
@@ -523,10 +560,9 @@ export function activationEnvironment({
   assertSmtp(proposedEnvironment);
   const bindings = assertInvitations(invitations, proposedEnvironment, now, currentEnvironment);
   const safeEnvironment = Object.fromEntries(Object.entries(proposedEnvironment)
-    .filter(([name]) => !/(?:PASSWORD|SECRET|TOKEN|DATABASE_URL)/u.test(name)));
+    .filter(([name]) => !/(?:password|secret|token|database_url)/iu.test(name)));
   return Object.freeze({
     ...bindings,
-    environmentSha256: canonicalDigest(proposedEnvironment),
     safeEnvironmentSha256: canonicalDigest(safeEnvironment),
     smtpConfigurationSha256: canonicalDigest({
       host: proposedEnvironment.SMTP_HOST,
@@ -555,10 +591,13 @@ export function assertGreenPasswordEnrollmentActivationManifest(manifest) {
       || manifest.targetRevision !== manifest.sourceCommit
       || !manifest.currentImage.endsWith(`:${manifest.currentRevision}`)
       || !manifest.targetImage.endsWith(`:${manifest.targetRevision}`)
-      || ![manifest.environmentSha256, manifest.registrySha256, manifest.mountsSha256,
+      || ![manifest.environmentScryptDigest, manifest.registrySha256, manifest.mountsSha256,
         manifest.currentConfigurationSha256, manifest.currentHealthSha256,
         manifest.currentQueueSha256]
         .every((value) => digestPattern.test(value))
+      || !digestPattern.test(manifest.environmentScryptSalt)
+      || /^([a-f0-9])\1{63}$/u.test(manifest.environmentScryptSalt)
+      || manifest.environmentScryptSalt === manifest.environmentScryptDigest
       || manifest.registryTarget !== registryTarget
       || ![manifest.environmentUid, manifest.environmentGid,
         manifest.registryUid, manifest.registryGid]
@@ -587,7 +626,17 @@ export function readGreenPasswordEnrollmentActivationInputs(manifest, {
   });
   let environment;
   try {
-    if (environmentFile.sha256 !== target.environmentSha256) deny();
+    const observedDigest = deriveProtectedEnvironmentScryptDigest(
+      environmentFile.bytes, target.environmentScryptSalt,
+    );
+    const expectedDigest = Buffer.from(target.environmentScryptDigest, 'hex');
+    const observedDigestBytes = Buffer.from(observedDigest, 'hex');
+    try {
+      if (!crypto.timingSafeEqual(observedDigestBytes, expectedDigest)) deny();
+    } finally {
+      observedDigestBytes.fill(0);
+      expectedDigest.fill(0);
+    }
     environment = parseEnvironmentText(environmentFile.bytes);
   } finally {
     environmentFile.bytes.fill(0);
@@ -604,7 +653,7 @@ export function readGreenPasswordEnrollmentActivationInputs(manifest, {
   });
   try {
     const canonical = Buffer.from(`${JSON.stringify(invitations)}\n`);
-    if (registryBytes.sha256 !== target.registrySha256
+    if (sha256(registryBytes.bytes) !== target.registrySha256
         || !registryBytes.bytes.equals(canonical)) deny();
   } finally {
     registryBytes.bytes.fill(0);
@@ -690,7 +739,8 @@ export function assertGreenPasswordEnrollmentCurrentState(state, manifest) {
 function environmentObjectsEqual(left, right) {
   const withoutImageIdentity = (environment) => Object.fromEntries(Object.entries(environment)
     .filter(([name]) => !['APP_COMMIT', 'APP_VERSION', 'APP_BUILD_TIME'].includes(name)));
-  return canonicalDigest(withoutImageIdentity(left)) === canonicalDigest(right);
+  return JSON.stringify(canonicalValue(withoutImageIdentity(left)))
+    === JSON.stringify(canonicalValue(right));
 }
 
 function cloneConfigWithoutActivationDelta(container) {
@@ -1080,7 +1130,7 @@ export async function runGreenPasswordEnrollmentActivation({
         candidateContainerId: candidateBindings.candidateContainerId,
         targetImageId: target.targetImageId,
         targetImageDigest: target.targetImageDigest,
-        environmentSha256: target.environmentSha256,
+        safeEnvironmentSha256: freshPrepared.safeEnvironmentSha256,
         registrySha256: target.registrySha256,
         currentQueueSha256: target.currentQueueSha256,
         invitationCount: freshPrepared.invitationCount,
