@@ -189,6 +189,72 @@ void main() {
     });
   }
 
+  for (final width in [390.0, 1000.0]) {
+    testWidgets(
+        'price and discount editor has no responsive overflow at ${width.toInt()}px',
+        (tester) async {
+      tester.view.physicalSize = Size(width, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final service = _CategoryStore();
+      final existing = Item.fromJson({
+        ...buildTestItem(
+          id: 'responsive-price-editor',
+          ownerId: service.context.user.id,
+          title: 'Synthetischer Preis-Test',
+          pricePerDay: 20,
+        ).toJson(),
+        'categoryId': 'cat3',
+        'subcategory': 'Sonstiges',
+        'description': 'Ein synthetischer Beschreibungstext.',
+        'locationText': 'Berlin',
+        'city': 'Berlin',
+        'autoApplyDiscounts': true,
+        'longRentalDiscounts': [
+          {'days': 3, 'discountPercent': 10},
+          {'days': 5, 'discountPercent': 20},
+          {'days': 8, 'discountPercent': 30},
+        ],
+        'status': 'draft',
+        'isActive': false,
+      });
+
+      await tester.pumpWidget(MaterialApp(
+        home: CreateListingScreen(
+          existing: existing,
+          listingMutationService: service,
+        ),
+      ));
+      await tester.pumpAndSettle();
+      final next = find.widgetWithText(FilledButton, 'Weiter');
+      await tester.ensureVisible(next);
+      await tester.tap(next);
+      await tester.pumpAndSettle();
+
+      final dayFields = find.byWidgetPredicate((widget) =>
+          widget is TextField &&
+          widget.decoration?.isCollapsed == true &&
+          widget.decoration?.hintText == '0');
+      final percentFields = find.byWidgetPredicate((widget) =>
+          widget is TextField && widget.decoration?.suffixText == '%');
+      expect(dayFields, findsNWidgets(3));
+      expect(percentFields, findsNWidgets(3));
+      for (final field in <Finder>[dayFields, percentFields]) {
+        for (var i = 0; i < 3; i++) {
+          expect(tester.getSize(field.at(i)).shortestSide,
+              greaterThanOrEqualTo(48));
+        }
+      }
+      await tester.enterText(dayFields.first, '4');
+      await tester.enterText(percentFields.first, '12');
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+    });
+  }
+
   testWidgets(
       'every coarse group exposes every allowed fine category and fallback',
       (tester) async {

@@ -3700,31 +3700,13 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                                             CrossAxisAlignment.center,
                                         children: [
                                           Expanded(
-                                              child: Align(
-                                            alignment: Alignment.centerLeft,
-                                            child: Text('Mietdauer',
-                                                maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                style: TextStyle(
-                                                    color: isDark
-                                                        ? Colors.white60
-                                                        : AppTheme
-                                                            .textSecondary(
-                                                                context),
-                                                    fontSize: 13,
-                                                    fontWeight:
-                                                        FontWeight.w600)),
-                                          )),
-                                          Expanded(
+                                            flex: 12,
                                             child: Align(
-                                              alignment: Alignment.center,
-                                              child: Text('Rabatt',
+                                              alignment: Alignment.centerLeft,
+                                              child: Text('Mietdauer',
                                                   maxLines: 1,
                                                   overflow:
                                                       TextOverflow.ellipsis,
-                                                      textAlign:
-                                                          TextAlign.center,
                                                   style: TextStyle(
                                                       color: isDark
                                                           ? Colors.white60
@@ -3737,15 +3719,34 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                                             ),
                                           ),
                                           Expanded(
+                                            flex: 8,
                                             child: Align(
-                                                  alignment:
-                                                      Alignment.centerRight,
+                                              alignment: Alignment.center,
+                                              child: Text('Rabatt',
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  textAlign: TextAlign.center,
+                                                  style: TextStyle(
+                                                      color: isDark
+                                                          ? Colors.white60
+                                                          : AppTheme
+                                                              .textSecondary(
+                                                                  context),
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w600)),
+                                            ),
+                                          ),
+                                          Expanded(
+                                            flex: 10,
+                                            child: Align(
+                                              alignment: Alignment.centerRight,
                                               child: Text('Preis pro Tag',
                                                   maxLines: 1,
                                                   overflow:
                                                       TextOverflow.ellipsis,
-                                                      textAlign:
-                                                          TextAlign.right,
+                                                  textAlign: TextAlign.right,
                                                   style: TextStyle(
                                                       color: isDark
                                                           ? Colors.white60
@@ -5106,22 +5107,35 @@ class _AIPriceCalculatorCard extends StatelessWidget {
                         : AppTheme.textSecondary(context),
                     size: 14),
                 const SizedBox(width: 4),
-                Text('Orientierungsrahmen (€/Tag):',
-                    style: TextStyle(
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? Colors.white70
-                            : AppTheme.textSecondary(context),
-                        fontWeight: FontWeight.w500,
-                        fontSize: 13.5)),
-                const Spacer(),
-                Text(
-                    '${suggestion!.dailyPriceMin.toStringAsFixed(0)}–${suggestion!.dailyPriceMax.toStringAsFixed(0)} €',
-                    style: TextStyle(
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? Colors.white
-                            : AppTheme.textPrimary(context),
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14.5)),
+                Expanded(
+                  child: Text('Orientierungsrahmen (€/Tag):',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          color:
+                              Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.white70
+                                  : AppTheme.textSecondary(context),
+                          fontWeight: FontWeight.w500,
+                          fontSize: 13.5)),
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                        '${suggestion!.dailyPriceMin.toStringAsFixed(0)}–${suggestion!.dailyPriceMax.toStringAsFixed(0)} €',
+                        maxLines: 1,
+                        style: TextStyle(
+                            color:
+                                Theme.of(context).brightness == Brightness.dark
+                                    ? Colors.white
+                                    : AppTheme.textPrimary(context),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14.5)),
+                  ),
+                ),
               ]),
             ]),
           ),
@@ -5234,6 +5248,7 @@ class _StrategyChip extends StatelessWidget {
                       ? Colors.white.withValues(alpha: 0.16)
                       : AppTheme.glassStroke(context))),
         ),
+        constraints: const BoxConstraints(minHeight: 48),
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           Icon(icon,
@@ -5322,6 +5337,7 @@ class _ThresholdDiscountRowState extends State<_ThresholdDiscountRow> {
       padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
       child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
         Expanded(
+          flex: 12,
           child: Row(children: [
             Text('Ab',
                 style: TextStyle(
@@ -5331,10 +5347,10 @@ class _ThresholdDiscountRowState extends State<_ThresholdDiscountRow> {
                     fontWeight: FontWeight.w600,
                     fontSize: 14)),
             const SizedBox(width: 4),
-            IntrinsicWidth(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 13, maxWidth: 42),
-                child: TextField(
+            SizedBox(
+              width: 48,
+              height: 48,
+              child: TextField(
                   controller: _daysCtrl,
                   focusNode: _daysFocus,
                   cursorColor: primary,
@@ -5349,6 +5365,7 @@ class _ThresholdDiscountRowState extends State<_ThresholdDiscountRow> {
                       fontWeight: FontWeight.w700,
                       fontSize: 14),
                   textAlign: TextAlign.left,
+                  textAlignVertical: TextAlignVertical.center,
                   decoration: InputDecoration(
                       isDense: true,
                       isCollapsed: true,
@@ -5365,23 +5382,28 @@ class _ThresholdDiscountRowState extends State<_ThresholdDiscountRow> {
                     final n = int.tryParse(v.replaceAll(',', '.'));
                     if (n != null) widget.onDaysChanged(n.clamp(1, 365));
                   },
-                ),
               ),
             ),
             const SizedBox(width: 2),
-            Text('Tagen',
-                style: TextStyle(
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? Colors.white70
-                        : AppTheme.textSecondary(context),
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14)),
+            Expanded(
+              child: Text('Tagen',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.white70
+                          : AppTheme.textSecondary(context),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14)),
+            ),
           ]),
         ),
         Expanded(
+          flex: 8,
           child: Center(
             child: SizedBox(
               width: 73,
+              height: 48,
               child: TextField(
                 controller: _pctCtrl,
                 focusNode: _pctFocus,
@@ -5398,6 +5420,7 @@ class _ThresholdDiscountRowState extends State<_ThresholdDiscountRow> {
                     fontWeight: FontWeight.w700,
                     fontSize: 14),
                 textAlign: TextAlign.center,
+                textAlignVertical: TextAlignVertical.center,
                 decoration: InputDecoration(
                   isDense: true,
                   contentPadding:
@@ -5441,6 +5464,7 @@ class _ThresholdDiscountRowState extends State<_ThresholdDiscountRow> {
           ),
         ),
         Expanded(
+          flex: 10,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
