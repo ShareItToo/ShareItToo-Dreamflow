@@ -10,6 +10,7 @@ import {
   STAGING_GOOGLE_IAM_ACCOUNT_SHA256,
   STAGING_GOOGLE_IAM_PROJECT,
   STAGING_GOOGLE_IAM_ROLES,
+  STAGING_GOOGLE_IAM_MAX_GRANT_MS,
   createStagingGoogleTempIamTransport,
   planTemporaryIamGrant,
   runStagingGoogleTempIam,
@@ -33,10 +34,11 @@ function temp(t) {
 }
 
 function binding(overrides = {}) {
-  const base = { schemaVersion: 1, projectId: STAGING_GOOGLE_IAM_PROJECT,
+  const base = { schemaVersion: 2, projectId: STAGING_GOOGLE_IAM_PROJECT,
     firebaseAccountEmailSha256: STAGING_GOOGLE_IAM_ACCOUNT_SHA256, serviceAccountEmailSha256: sha(serviceEmail),
     roles: [...STAGING_GOOGLE_IAM_ROLES], runId: 'synthetic-run-0001', sourceCommit,
-    runnerDigest, gate: { id: 'SIT-GOOGLE-IAM-TEMP-READ-01', decision: 'A PASS',
+    runnerDigest, grantExpiresAt: '2026-10-04T12:30:00.000Z',
+    gate: { id: 'SIT-GOOGLE-IAM-TEMP-READ-01', decision: 'A PASS',
       sourceCommit, runnerDigest, evidenceDigest: 'c'.repeat(64),
       expiresAt: '2026-10-04T13:00:00.000Z' } };
   return { ...base, ...overrides };
@@ -53,25 +55,33 @@ function policy(extraBindings = []) {
 }
 
 function fakeTransport(initial, behavior = 'success') {
-  let current = clone(initial); const calls = [];
+  let current = clone(initial); let readbackFailed = false; const calls = [];
   return {
     calls,
     get current() { return clone(current); },
     mutate(fn) { current = fn(clone(current)); },
-    async getPolicy() { calls.push({ kind: 'get' }); return clone(current); },
+    async getPolicy() {
+      calls.push({ kind: 'get' });
+      if (behavior === 'readback-unavailable' && !readbackFailed && calls.some((call) => call.kind === 'set')) {
+        readbackFailed = true; throw new Error('private_secret_token');
+      }
+      return clone(current);
+    },
     async setPolicy(target) {
       calls.push({ kind: 'set', policy: clone(target) });
       if (behavior === 'reject') return { accepted: false };
       if (behavior === 'unknown') throw new Error('private_secret_token');
-      if (behavior === 'partial') {
+      if (behavior === 'partial' && calls.filter((call) => call.kind === 'set').length === 1) {
         current = clone(target); current.etag = 'partial-etag';
         const item = current.bindings.find((entry) => entry.role === STAGING_GOOGLE_IAM_ROLES[1]
-          && !Object.hasOwn(entry, 'condition'));
+          && entry.condition?.title.startsWith('sit-google-temp-'));
         item.members = item.members.filter((member) => member !== principal);
         if (item.members.length === 0) current.bindings.splice(current.bindings.indexOf(item), 1);
         return { accepted: true };
       }
       current = { ...clone(target), etag: `readback-${calls.length}` };
+      if (behavior === 'lost-response' && calls.filter((call) => call.kind === 'set').length === 1)
+        throw new Error('private_secret_token');
       return { accepted: true };
     },
   };
@@ -83,7 +93,7 @@ const execute = (values) => runStagingGoogleTempIam({ binding: binding(), ...cre
   operation: 'grant', execute: true, now: () => nowValue, ...values });
 const records = (journalFile) => fs.readFileSync(journalFile, 'utf8').trim().split('\n').map(JSON.parse);
 
-test('grant preserves unrelated memberships, conditions, audit config and adds only exact two roles', async (t) => {
+test('grant preserves unrelated policy and adds only exact two roles with run-bound provider expiry', async (t) => {
   const { journalFile } = temp(t); const baseline = policy([{ role: 'projects/shareittoo-staging/roles/customReader',
     members: ['principalSet://iam.googleapis.com/example'] }]); const transport = fakeTransport(baseline);
   const result = await execute({ journalFile, transport });
@@ -94,9 +104,13 @@ test('grant preserves unrelated memberships, conditions, audit config and adds o
   assert.equal(written.etag, baseline.etag);
   assert.deepEqual(written.bindings.slice(0, baseline.bindings.length), baseline.bindings);
   assert.deepEqual(written.auditConfigs, baseline.auditConfigs);
-  for (const role of STAGING_GOOGLE_IAM_ROLES) assert.deepEqual(
-    written.bindings.filter((item) => item.role === role && !Object.hasOwn(item, 'condition')),
-    [{ role, members: [principal] }]);
+  for (const role of STAGING_GOOGLE_IAM_ROLES) {
+    const added = written.bindings.filter((item) => item.role === role
+      && item.condition?.title.startsWith('sit-google-temp-'));
+    assert.equal(added.length, 1); assert.deepEqual(added[0].members, [principal]);
+    assert.equal(added[0].condition.expression, 'request.time < timestamp("2026-10-04T12:30:00.000Z")');
+    assert.match(added[0].condition.title, /^sit-google-temp-[a-f0-9]{64}$/u);
+  }
   assert.deepEqual(records(journalFile).map((record) => record.phase), ['intent', 'applied']);
   const journal = fs.readFileSync(journalFile, 'utf8');
   assert.doesNotMatch(journal, /firebase-read|private-admin-token|unrelated@example/u);
@@ -126,7 +140,7 @@ test('precise revoke removes only the membership added by this run and preserves
   transport.mutate((current) => {
     current.etag = 'concurrent-safe-etag';
     current.bindings.find((item) => item.role === STAGING_GOOGLE_IAM_ROLES[1]
-      && !Object.hasOwn(item, 'condition')).members.push('user:later@example.invalid');
+      && item.condition?.title.startsWith('sit-google-temp-')).members.push('user:later@example.invalid');
     current.bindings.push({ role: 'roles/logging.viewer', members: ['group:later@example.invalid'] });
     return current;
   });
@@ -143,23 +157,23 @@ test('precise revoke removes only the membership added by this run and preserves
   assert.equal(transport.calls.filter((call) => call.kind === 'set').length, 2);
 });
 
-test('conditional membership does not masquerade as the required temporary unconditional grant', () => {
-  const plan = planTemporaryIamGrant(policy(), principal);
+test('foreign conditional membership is preserved beside the dedicated temporary grant', () => {
+  const plan = planTemporaryIamGrant(policy(), principal, binding());
   assert.deepEqual(plan.addedRoles, STAGING_GOOGLE_IAM_ROLES);
   assert.ok(plan.target.bindings.some((item) => item.role === STAGING_GOOGLE_IAM_ROLES[0]
     && Object.hasOwn(item, 'condition')));
   assert.ok(plan.target.bindings.some((item) => item.role === STAGING_GOOGLE_IAM_ROLES[0]
-    && !Object.hasOwn(item, 'condition') && item.members.includes(principal)));
+    && item.condition?.title.startsWith('sit-google-temp-') && item.members.includes(principal)));
 });
 
-test('unconditional policies preserve an omitted, zero, or version-one policy version exactly', () => {
+test('adding conditions upgrades only the policy version to three', () => {
   for (const version of [undefined, 0, 1]) {
     const value = policy().bindings.filter((item) => !Object.hasOwn(item, 'condition'));
     const candidate = { bindings: value, auditConfigs: [], etag: 'version-etag',
       ...(version === undefined ? {} : { version }) };
-    const target = planTemporaryIamGrant(candidate, principal).target;
-    assert.equal(Object.hasOwn(target, 'version'), version !== undefined);
-    if (version !== undefined) assert.equal(target.version, version);
+    const target = planTemporaryIamGrant(candidate, principal, binding()).target;
+    assert.equal(target.version, 3);
+    assert.deepEqual(target.bindings.slice(0, candidate.bindings.length), candidate.bindings);
   }
 });
 
@@ -207,17 +221,18 @@ test('source commit and runner drift both fail before any provider request', asy
   }
 });
 
-test('revoke fails before mutation if an added membership is missing or duplicated', async (t) => {
+test('revoke of a partial current grant removes only the remaining owned condition', async (t) => {
   const { journalFile } = temp(t); const transport = fakeTransport(policy());
   await execute({ journalFile, transport });
   transport.mutate((current) => {
     const item = current.bindings.find((entry) => entry.role === STAGING_GOOGLE_IAM_ROLES[0]
-      && !Object.hasOwn(entry, 'condition'));
+      && entry.condition?.title.startsWith('sit-google-temp-'));
     current.bindings.splice(current.bindings.indexOf(item), 1); current.etag = 'foreign-drift'; return current;
   });
-  await assert.rejects(runStagingGoogleTempIam({ binding: binding(), ...credentials(), journalFile,
-    operation: 'revoke', execute: true, transport, now: () => nowValue }), { message: 'iam_revoke_membership_drift' });
-  assert.equal(transport.calls.filter((call) => call.kind === 'set').length, 1);
+  const revoked = await runStagingGoogleTempIam({ binding: binding(), ...credentials(), journalFile,
+    operation: 'revoke', execute: true, transport, now: () => nowValue });
+  assert.deepEqual(revoked.addedRoles, [STAGING_GOOGLE_IAM_ROLES[1]]);
+  assert.equal(transport.calls.filter((call) => call.kind === 'set').length, 2);
 });
 
 test('HTTP transport uses exact IAM methods/version, carries etag policy, and sends one non-retried set', async () => {
@@ -274,4 +289,201 @@ test('CLI binds service principal and intended admin account through protected f
 test('untrusted error strings always collapse to a fixed non-secret CLI code', () => {
   assert.equal(stagingGoogleTempIamErrorCode(new Error('private_secret_token')), 'google_temp_iam_failed');
   assert.doesNotMatch(stagingGoogleTempIamErrorCode(new Error('private_secret_token')), /private_secret_token/u);
+});
+
+const recover = (values) => runStagingGoogleTempIam({ binding: binding(), ...credentials(),
+  operation: 'reconcile', execute: false, now: () => nowValue, ...values });
+const revoke = (values) => runStagingGoogleTempIam({ binding: binding(), ...credentials(),
+  operation: 'revoke', execute: true, now: () => nowValue, ...values });
+const own = (item) => item.condition?.title.startsWith('sit-google-temp-');
+
+test('expired, overlong, non-canonical or gate-exceeding expiry never reaches a provider', async (t) => {
+  for (const expiry of [new Date(nowValue).toISOString(),
+    new Date(nowValue + STAGING_GOOGLE_IAM_MAX_GRANT_MS + 1).toISOString(),
+    '2026-10-04T12:30:00Z', 'not-a-date']) {
+    const { journalFile } = temp(t); const transport = fakeTransport(policy());
+    await assert.rejects(execute({ journalFile, transport, binding: binding({ grantExpiresAt: expiry }) }),
+      { message: 'iam_expiry_invalid' });
+    assert.equal(transport.calls.length, 0); assert.equal(fs.existsSync(journalFile), false);
+  }
+  const { journalFile } = temp(t); const transport = fakeTransport(policy());
+  await assert.rejects(execute({ journalFile, transport, binding: binding({
+    gate: { ...binding().gate, expiresAt: new Date(nowValue + 1000).toISOString() } }) }),
+  { message: 'iam_expiry_invalid' });
+  assert.equal(transport.calls.length, 0);
+});
+
+test('expiry reached during policy read cannot start a grant', async (t) => {
+  const { journalFile } = temp(t); const transport = fakeTransport(policy());
+  await assert.rejects(execute({ journalFile, transport,
+    now: () => transport.calls.length ? nowValue + 30 * 60_000 : nowValue }), { message: 'iam_expiry_invalid' });
+  assert.equal(transport.calls.filter((call) => call.kind === 'set').length, 0);
+  assert.equal(fs.existsSync(journalFile), false);
+});
+
+test('condition namespace collision never adopts or edits an existing grant', () => {
+  const previous = planTemporaryIamGrant(policy(), principal, binding()).target;
+  assert.throws(() => planTemporaryIamGrant(previous, principal, binding()), { message: 'iam_condition_collision' });
+});
+
+test('legacy binding cannot create an unbounded grant', async (t) => {
+  const { journalFile } = temp(t); const transport = fakeTransport(policy());
+  const legacy = binding({ schemaVersion: 1 }); delete legacy.grantExpiresAt;
+  await assert.rejects(execute({ journalFile, transport, binding: legacy }), { message: 'iam_binding_invalid' });
+  assert.equal(transport.calls.length, 0);
+});
+
+for (const behavior of ['lost-response', 'readback-unavailable', 'partial']) {
+  test(`${behavior}: read-only reconciliation permits exactly one precise revoke`, async (t) => {
+    const { journalFile } = temp(t); const transport = fakeTransport(policy(), behavior);
+    await assert.rejects(execute({ journalFile, transport }));
+    const bytes = fs.readFileSync(journalFile); const sets = transport.calls.filter((call) => call.kind === 'set').length;
+    const observed = await recover({ journalFile, transport });
+    assert.equal(observed.status, 'reconciled-read-only');
+    assert.deepEqual(observed.ownedRoles, behavior === 'partial' ? [STAGING_GOOGLE_IAM_ROLES[0]] : STAGING_GOOGLE_IAM_ROLES);
+    assert.deepEqual(fs.readFileSync(journalFile), bytes);
+    assert.equal(transport.calls.filter((call) => call.kind === 'set').length, sets);
+    const result = await revoke({ journalFile, transport });
+    assert.equal(result.status, 'applied-and-read-back');
+    assert.ok(!transport.current.bindings.some((item) => own(item) && item.members.includes(principal)));
+    await assert.rejects(revoke({ journalFile, transport }), { message: 'iam_operation_already_started' });
+    assert.equal(transport.calls.filter((call) => call.kind === 'set').length, sets + 1);
+  });
+}
+
+test('unknown grant with absent memberships remains unresolved and is never blindly replayed', async (t) => {
+  const { journalFile } = temp(t); const transport = fakeTransport(policy(), 'unknown');
+  await assert.rejects(execute({ journalFile, transport }));
+  const observation = await recover({ journalFile, transport });
+  assert.deepEqual(observation.ownedRoles, []);
+  assert.equal(observation.absenceDoesNotResolvePendingGrant, true);
+  await assert.rejects(revoke({ journalFile, transport }), { message: 'iam_grant_outcome_unresolved' });
+  await assert.rejects(execute({ journalFile, transport }), { message: 'iam_operation_already_started' });
+  assert.equal(transport.calls.filter((call) => call.kind === 'set').length, 1);
+});
+
+test('durable intent alone supports crash reconciliation and expired owned-grant cleanup', async (t) => {
+  const { journalFile } = temp(t); const transport = fakeTransport(policy());
+  await execute({ journalFile, transport });
+  const intent = fs.readFileSync(journalFile, 'utf8').split('\n')[0] + '\n';
+  fs.writeFileSync(journalFile, intent, { mode: 0o600 }); // Crash after provider commit, before terminal journal write.
+  const late = () => nowValue + 2 * 60 * 60_000;
+  const observed = await recover({ journalFile, transport, now: late });
+  assert.equal(observed.grantPhase, 'intent'); assert.equal(observed.grantExpired, true);
+  assert.deepEqual(observed.ownedRoles, STAGING_GOOGLE_IAM_ROLES);
+  await revoke({ journalFile, transport, now: late });
+  assert.ok(!transport.current.bindings.some(own));
+});
+
+test('crashed or concurrent lock never blocks read-only observation or gets deleted by it', async (t) => {
+  const { journalFile } = temp(t); const transport = fakeTransport(policy()); await execute({ journalFile, transport });
+  fs.writeFileSync(`${journalFile}.lock`, 'retained-crash-or-live-lock\n', { mode: 0o600 });
+  const result = await recover({ journalFile, transport });
+  assert.equal(result.executionLockPresent, true); assert.equal(fs.existsSync(`${journalFile}.lock`), true);
+  await assert.rejects(revoke({ journalFile, transport }), { message: 'iam_execution_locked' });
+  assert.equal(transport.calls.filter((call) => call.kind === 'set').length, 1);
+});
+
+for (const change of ['expiry', 'duplicate', 'foreign-role']) {
+  test(`reconciliation rejects ${change} ownership drift without removing any grant`, async (t) => {
+    const { journalFile } = temp(t); const transport = fakeTransport(policy()); await execute({ journalFile, transport });
+    transport.mutate((value) => {
+      const item = value.bindings.find(own);
+      if (change === 'expiry') item.condition.expression = 'true';
+      if (change === 'duplicate') value.bindings.push(clone(item));
+      if (change === 'foreign-role') item.role = 'roles/logging.viewer';
+      value.etag = 'foreign-etag'; return value;
+    });
+    await assert.rejects(recover({ journalFile, transport }), { message: 'iam_reconciliation_ownership_drift' });
+    await assert.rejects(revoke({ journalFile, transport }), { message: 'iam_reconciliation_ownership_drift' });
+    assert.equal(transport.calls.filter((call) => call.kind === 'set').length, 1);
+  });
+}
+
+test('policy or etag drift between reconciliation reads fails before revoke', async (t) => {
+  for (const etagOnly of [false, true]) {
+    const { journalFile } = temp(t); const transport = fakeTransport(policy()); await execute({ journalFile, transport });
+    const get = transport.getPolicy; let reads = 0;
+    transport.getPolicy = async () => {
+      if (++reads === 2) transport.mutate((value) => {
+        value.etag = 'concurrent-etag';
+        if (!etagOnly) value.bindings.push({ role: 'roles/logging.viewer', members: ['group:new@example.invalid'] });
+        return value;
+      });
+      return get();
+    };
+    await assert.rejects(revoke({ journalFile, transport }), { message: 'iam_reconciliation_concurrent_drift' });
+    assert.equal(transport.calls.filter((call) => call.kind === 'set').length, 1);
+  }
+});
+
+test('lost revoke response is observable but never authorizes a second revoke write', async (t) => {
+  const { journalFile } = temp(t); const transport = fakeTransport(policy()); await execute({ journalFile, transport });
+  const set = transport.setPolicy;
+  transport.setPolicy = async (value) => { await set(value); throw new Error('private_secret_token'); };
+  await assert.rejects(revoke({ journalFile, transport }), { message: 'iam_policy_write_outcome_unknown' });
+  const observed = await recover({ journalFile, transport });
+  assert.equal(observed.revokeAlreadyStarted, true); assert.deepEqual(observed.ownedRoles, []);
+  await assert.rejects(revoke({ journalFile, transport }), { message: 'iam_operation_already_started' });
+  assert.equal(transport.calls.filter((call) => call.kind === 'set').length, 2);
+});
+
+test('retained crash bindings use a strict expiry boundary independent of local lock or cleanup', async (t) => {
+  const { journalFile } = temp(t); const transport = fakeTransport(policy()); await execute({ journalFile, transport });
+  fs.writeFileSync(`${journalFile}.lock`, 'retained-lock\n', { mode: 0o600 });
+  const expiry = Date.parse('2026-10-04T12:30:00.000Z');
+  const conditions = transport.current.bindings.filter(own).map((item) => item.condition.expression);
+  assert.equal(conditions.length, 2);
+  // Model only Google's documented request.time < timestamp() semantics.
+  // This is not a live IAM enforcement/propagation test.
+  for (const expression of conditions) {
+    const match = /^request\.time < timestamp\("([0-9TZ:.\-]+)"\)$/u.exec(expression);
+    assert.ok(match); assert.equal(Date.parse(match[1]), expiry);
+    const grantsAt = (requestTime) => requestTime < Date.parse(match[1]);
+    assert.equal(grantsAt(expiry - 1), true);
+    assert.equal(grantsAt(expiry), false);
+    assert.equal(grantsAt(expiry + 86_400_000), false);
+  }
+  const observation = await recover({ journalFile, transport, now: () => expiry });
+  assert.equal(observation.grantExpired, true); assert.equal(observation.executionLockPresent, true);
+  assert.equal(transport.current.bindings.filter(own).length, 2); // Inert cleanup debt is retained.
+  assert.equal(transport.calls.filter((call) => call.kind === 'set').length, 1);
+});
+
+test('an unknown added grant never makes a pre-existing unconditional membership revocable', async (t) => {
+  const { journalFile } = temp(t);
+  const transport = fakeTransport(policy([{ role: STAGING_GOOGLE_IAM_ROLES[0], members: [principal] }]), 'lost-response');
+  await assert.rejects(execute({ journalFile, transport }));
+  const observed = await recover({ journalFile, transport });
+  assert.deepEqual(observed.ownedRoles, [STAGING_GOOGLE_IAM_ROLES[1]]);
+  await revoke({ journalFile, transport });
+  assert.ok(transport.current.bindings.some((item) => item.role === STAGING_GOOGLE_IAM_ROLES[0]
+    && !Object.hasOwn(item, 'condition') && item.members.includes(principal)));
+});
+
+test('foreign unconditional additions during unknown outcome are preserved by recovery', async (t) => {
+  const { journalFile } = temp(t); const transport = fakeTransport(policy(), 'lost-response');
+  await assert.rejects(execute({ journalFile, transport }));
+  transport.mutate((value) => {
+    value.etag = 'foreign-unconditional-addition';
+    value.bindings.push({ role: STAGING_GOOGLE_IAM_ROLES[0], members: [principal] }); return value;
+  });
+  await revoke({ journalFile, transport });
+  assert.ok(transport.current.bindings.some((item) => item.role === STAGING_GOOGLE_IAM_ROLES[0]
+    && !Object.hasOwn(item, 'condition') && item.members.includes(principal)));
+});
+
+test('a rejected grant cannot claim memberships later created by another writer', async (t) => {
+  const { journalFile } = temp(t); const initial = policy(); const transport = fakeTransport(initial, 'reject');
+  await assert.rejects(execute({ journalFile, transport }), { message: 'iam_policy_write_rejected' });
+  transport.mutate(() => ({ ...planTemporaryIamGrant(initial, principal, binding()).target, etag: 'foreign-etag' }));
+  await assert.rejects(revoke({ journalFile, transport }), { message: 'iam_reconciliation_ownership_drift' });
+  assert.equal(transport.calls.filter((call) => call.kind === 'set').length, 1);
+});
+
+test('preflight also rejects an expired grant instead of advertising executable readiness', async (t) => {
+  const { journalFile } = temp(t); const transport = fakeTransport(policy());
+  await assert.rejects(execute({ journalFile, transport, execute: false, now: () => nowValue + 30 * 60_000 }),
+    { message: 'iam_expiry_invalid' });
+  assert.equal(transport.calls.length, 0);
 });

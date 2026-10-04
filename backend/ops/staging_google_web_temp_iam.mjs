@@ -1,8 +1,15 @@
 #!/usr/bin/env node
 
 // Temporary, journaled IAM transport for the staging Google Web prerequisite.
-// It grants only the two read roles needed by the already-bound staging service
-// account and can later remove only memberships that the same run added.
+// V2 uses dedicated expiring bindings, never new unconditional memberships.
+// Official source checked 2026-10-04 (attribute reference updated 2026-09-30):
+// https://docs.cloud.google.com/iam/docs/conditions-attribute-reference
+// Date/time attributes apply to all services, including inherited project grants.
+// https://docs.cloud.google.com/iam/docs/conditions-overview
+// Conditions support predefined roles (not legacy basic roles).
+// https://docs.cloud.google.com/api-keys/docs/access-control
+// https://docs.cloud.google.com/iam/docs/roles-permissions/serviceusage
+// This is a documented provider capability, not live expiry/permission proof.
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -17,6 +24,7 @@ export const STAGING_GOOGLE_IAM_ROLES = Object.freeze([
   'roles/serviceusage.apiKeysViewer',
   'roles/serviceusage.serviceUsageViewer',
 ]);
+export const STAGING_GOOGLE_IAM_MAX_GRANT_MS = 60 * 60 * 1000;
 
 const ownFile = fileURLToPath(import.meta.url);
 const root = path.resolve(fileURLToPath(new URL('../../', import.meta.url)));
@@ -64,16 +72,25 @@ function currentSourceBinding() {
   } catch { fail('iam_source_binding_unavailable'); }
 }
 
+function validateGrantWindow(binding, now) {
+  const current = now();
+  check(Number.isFinite(current) && Date.parse(binding.grantExpiresAt) > current
+    && Date.parse(binding.grantExpiresAt) <= current + STAGING_GOOGLE_IAM_MAX_GRANT_MS
+    && Date.parse(binding.grantExpiresAt) <= Date.parse(binding.gate.expiresAt), 'iam_expiry_invalid');
+}
+
 function validateBinding(binding, now, requireAcceptedGate) {
   check(exact(binding, ['schemaVersion', 'projectId', 'firebaseAccountEmailSha256', 'serviceAccountEmailSha256', 'roles',
-    'runId', 'sourceCommit', 'runnerDigest', 'gate'])
-    && binding.schemaVersion === 1 && binding.projectId === STAGING_GOOGLE_IAM_PROJECT
+    'runId', 'sourceCommit', 'runnerDigest', 'grantExpiresAt', 'gate'])
+    && binding.schemaVersion === 2 && binding.projectId === STAGING_GOOGLE_IAM_PROJECT
     && binding.firebaseAccountEmailSha256 === STAGING_GOOGLE_IAM_ACCOUNT_SHA256
     && hashPattern.test(binding.serviceAccountEmailSha256 ?? '')
     && Array.isArray(binding.roles) && JSON.stringify(binding.roles) === JSON.stringify(STAGING_GOOGLE_IAM_ROLES)
     && /^[A-Za-z0-9_-]{12,120}$/u.test(binding.runId ?? '')
     && /^[a-f0-9]{40}$/u.test(binding.sourceCommit ?? '') && hashPattern.test(binding.runnerDigest ?? ''),
   'iam_binding_invalid');
+  check(typeof binding.grantExpiresAt === 'string' && Number.isFinite(Date.parse(binding.grantExpiresAt))
+    && new Date(binding.grantExpiresAt).toISOString() === binding.grantExpiresAt, 'iam_expiry_invalid');
   const gate = binding.gate;
   check(exact(gate, ['id', 'decision', 'sourceCommit', 'runnerDigest', 'evidenceDigest', 'expiresAt'])
     && gate.id === 'SIT-GOOGLE-IAM-TEMP-READ-01' && ['pending', 'A PASS'].includes(gate.decision)
@@ -83,8 +100,11 @@ function validateBinding(binding, now, requireAcceptedGate) {
   const current = currentSourceBinding();
   check(binding.sourceCommit === current.sourceCommit && binding.runnerDigest === current.runnerDigest,
     'iam_source_binding_invalid');
-  if (requireAcceptedGate) check(gate.decision === 'A PASS' && Date.parse(gate.expiresAt) > now()
-    && Date.parse(gate.expiresAt) <= now() + 86_400_000, 'iam_accepted_gate_required');
+  if (requireAcceptedGate) {
+    check(gate.decision === 'A PASS' && Date.parse(gate.expiresAt) > now()
+      && Date.parse(gate.expiresAt) <= now() + 86_400_000, 'iam_accepted_gate_required');
+    validateGrantWindow(binding, now);
+  }
 }
 
 function validatePolicy(value) {
@@ -132,9 +152,20 @@ function unconditionalBindings(policy, role) {
     .filter(({ binding }) => binding.role === role && !Object.hasOwn(binding, 'condition'));
 }
 
-export function planTemporaryIamGrant(policyValue, principal) {
+function grantCondition(binding) {
+  check(binding?.schemaVersion === 2 && /^[A-Za-z0-9_-]{12,120}$/u.test(binding.runId ?? '')
+    && typeof binding.grantExpiresAt === 'string' && Number.isFinite(Date.parse(binding.grantExpiresAt))
+    && new Date(binding.grantExpiresAt).toISOString() === binding.grantExpiresAt, 'iam_expiry_invalid');
+  return { title: `sit-google-temp-${sha256(binding.runId)}`,
+    description: `SIT read grant ${digest(binding)}`,
+    expression: `request.time < timestamp("${binding.grantExpiresAt}")` };
+}
+
+export function planTemporaryIamGrant(policyValue, principal, binding) {
   check(boundedText(principal, 1024) && principal.startsWith('serviceAccount:'), 'iam_principal_invalid');
   const baseline = validatePolicy(policyValue); const target = cloneJson(baseline, 'iam_policy_invalid');
+  const condition = grantCondition(binding);
+  check(!baseline.bindings.some((item) => item.condition?.title === condition.title), 'iam_condition_collision');
   const addedRoles = []; const preexistingRoles = [];
   for (const role of STAGING_GOOGLE_IAM_ROLES) {
     const matches = unconditionalBindings(target, role);
@@ -142,8 +173,8 @@ export function planTemporaryIamGrant(policyValue, principal) {
     if (matches.length === 1 && matches[0].binding.members.includes(principal)) {
       preexistingRoles.push(role); continue;
     }
-    if (matches.length === 1) matches[0].binding.members.push(principal);
-    else target.bindings.push({ role, members: [principal] });
+    target.version = 3;
+    target.bindings.push({ role, members: [principal], condition: { ...condition } });
     addedRoles.push(role);
   }
   return Object.freeze({ baseline, target, addedRoles: Object.freeze(addedRoles),
@@ -151,13 +182,15 @@ export function planTemporaryIamGrant(policyValue, principal) {
     targetPolicySha256: semanticPolicyDigest(target), baselineEtagSha256: sha256(baseline.etag) });
 }
 
-export function planTemporaryIamRevoke(policyValue, principal, addedRoles) {
+export function planTemporaryIamRevoke(policyValue, principal, addedRoles, binding) {
   check(boundedText(principal, 1024) && principal.startsWith('serviceAccount:')
     && Array.isArray(addedRoles) && addedRoles.every((role) => STAGING_GOOGLE_IAM_ROLES.includes(role))
     && new Set(addedRoles).size === addedRoles.length, 'iam_revoke_binding_invalid');
   const baseline = validatePolicy(policyValue); const target = cloneJson(baseline, 'iam_policy_invalid');
+  const condition = grantCondition(binding);
   for (const role of addedRoles) {
-    const matches = unconditionalBindings(target, role)
+    const matches = target.bindings.map((item, index) => ({ binding: item, index }))
+      .filter(({ binding: item }) => item.role === role && digest(item.condition ?? null) === digest(condition))
       .filter(({ binding }) => binding.members.includes(principal));
     check(matches.length === 1, 'iam_revoke_membership_drift');
     const { binding, index } = matches[0]; binding.members = binding.members.filter((member) => member !== principal);
@@ -188,14 +221,17 @@ function journalRecord(base, previousRecordSha256) {
   return { ...unsigned, recordSha256: digest(unsigned) };
 }
 function validateRecord(record, previous) {
-  check(exact(record, journalFields) && record.schemaVersion === 1
+  check(exact(record, journalFields) && [1, 2].includes(record.schemaVersion)
     && /^[A-Za-z0-9_-]{12,120}$/u.test(record.runId ?? '') && record.projectId === STAGING_GOOGLE_IAM_PROJECT
     && ['grant', 'revoke'].includes(record.operation) && hashPattern.test(record.bindingSha256 ?? '')
     && ['intent', 'applied', 'no_mutation', 'rejected', 'outcome_unknown'].includes(record.phase)
     && hashPattern.test(record.principalSha256 ?? '')
     && JSON.stringify(record.roles) === JSON.stringify(STAGING_GOOGLE_IAM_ROLES)
     && Array.isArray(record.addedRoles) && record.addedRoles.every((role) => STAGING_GOOGLE_IAM_ROLES.includes(role))
+    && new Set(record.addedRoles).size === record.addedRoles.length
     && Array.isArray(record.preexistingRoles) && record.preexistingRoles.every((role) => STAGING_GOOGLE_IAM_ROLES.includes(role))
+    && new Set(record.preexistingRoles).size === record.preexistingRoles.length
+    && record.preexistingRoles.every((role) => !record.addedRoles.includes(role))
     && hashPattern.test(record.baselinePolicySha256 ?? '') && hashPattern.test(record.targetPolicySha256 ?? '')
     && hashPattern.test(record.baselineEtagSha256 ?? '')
     && (record.readbackPolicySha256 === null || hashPattern.test(record.readbackPolicySha256))
@@ -229,6 +265,9 @@ function appendJournal(file, recordBase) {
     check(metadata.isFile() && metadata.nlink === 1 && metadata.uid === process.getuid()
       && (metadata.mode & 0o777) === 0o600, 'iam_journal_invalid');
     fs.writeSync(descriptor, `${JSON.stringify(record)}\n`); fs.fsyncSync(descriptor);
+    // A first intent must survive loss of the newly created directory entry too.
+    const directory = fs.openSync(path.dirname(file), fs.constants.O_RDONLY | fs.constants.O_DIRECTORY);
+    try { fs.fsyncSync(directory); } finally { fs.closeSync(directory); }
   } catch (error) { if (trusted.has(error)) throw error; fail('iam_journal_write_failed'); }
   finally { if (descriptor !== undefined) fs.closeSync(descriptor); }
   return record;
@@ -256,7 +295,7 @@ function acquireExecutionLock(journalFile) {
 }
 
 function recordBase({ binding, operation, phase, plan, principalSha256, readback }) {
-  return { schemaVersion: 1, runId: binding.runId, projectId: binding.projectId, operation, phase,
+  return { schemaVersion: 2, runId: binding.runId, projectId: binding.projectId, operation, phase,
     bindingSha256: digest(binding), principalSha256, roles: [...STAGING_GOOGLE_IAM_ROLES], addedRoles: [...plan.addedRoles],
     preexistingRoles: [...plan.preexistingRoles], baselinePolicySha256: plan.baselinePolicySha256,
     targetPolicySha256: plan.targetPolicySha256, baselineEtagSha256: plan.baselineEtagSha256,
@@ -266,16 +305,41 @@ function recordBase({ binding, operation, phase, plan, principalSha256, readback
 
 function grantEvidence(records, binding, principalSha256) {
   const matching = records.filter((record) => record.runId === binding.runId && record.operation === 'grant');
-  check(matching.length > 0 && matching.every((record) => record.principalSha256 === principalSha256
+  check(matching.length > 0 && matching.every((record) => record.schemaVersion === 2
+    && record.principalSha256 === principalSha256
     && record.bindingSha256 === digest(binding)),
     'iam_grant_journal_missing');
+  check(matching.length <= 2 && (matching[0].phase === 'intent'
+    || (matching.length === 1 && matching[0].phase === 'no_mutation'))
+    && matching.every((record) => digest(record.addedRoles) === digest(matching[0].addedRoles)
+      && digest(record.preexistingRoles) === digest(matching[0].preexistingRoles)
+      && record.targetPolicySha256 === matching[0].targetPolicySha256
+      && record.baselinePolicySha256 === matching[0].baselinePolicySha256
+      && record.baselineEtagSha256 === matching[0].baselineEtagSha256), 'iam_grant_journal_invalid');
   const terminal = matching.at(-1);
-  check(['applied', 'no_mutation'].includes(terminal.phase), 'iam_grant_outcome_unresolved');
+  check(['intent', 'applied', 'no_mutation', 'outcome_unknown', 'rejected'].includes(terminal.phase),
+    'iam_grant_outcome_unresolved');
   return terminal;
 }
 
+// Read-only observation of uniquely named bindings whose absence was checked
+// before the durable grant intent. Never reinterpret legacy unconditional grants.
+function ownedRoles(policy, binding, principal, grant) {
+  const condition = grantCondition(binding); const observed = []; const seen = new Set();
+  for (const item of policy.bindings.filter((entry) => entry.condition?.title === condition.title)) {
+    check(digest(item.condition) === digest(condition) && grant.addedRoles.includes(item.role)
+      && !seen.has(item.role), 'iam_reconciliation_ownership_drift');
+    seen.add(item.role);
+    if (item.members.includes(principal)) observed.push(item.role);
+  }
+  check(!observed.length || sha256(policy.etag) !== grant.baselineEtagSha256,
+    'iam_reconciliation_etag_invalid');
+  check(!observed.length || grant.phase !== 'rejected', 'iam_reconciliation_ownership_drift');
+  return STAGING_GOOGLE_IAM_ROLES.filter((role) => observed.includes(role));
+}
+
 function result(operation, status, binding, principalSha256, plan, readback = null) {
-  return Object.freeze({ status, operation, projectId: binding.projectId, runId: binding.runId,
+  return Object.freeze({ status, operation, projectIdSha256: sha256(binding.projectId), runId: binding.runId,
     principalSha256, roles: [...STAGING_GOOGLE_IAM_ROLES], addedRoles: [...plan.addedRoles],
     preexistingRoles: [...plan.preexistingRoles], baselinePolicySha256: plan.baselinePolicySha256,
     targetPolicySha256: plan.targetPolicySha256,
@@ -284,33 +348,51 @@ function result(operation, status, binding, principalSha256, plan, readback = nu
 
 async function runStagingGoogleTempIamLocked({ binding, serviceCredential, adminCredential, journalFile,
   operation, execute = false, transport, now = Date.now } = {}) {
-  check(['grant', 'revoke'].includes(operation) && typeof execute === 'boolean' && typeof now === 'function'
+  check(['grant', 'revoke', 'reconcile'].includes(operation) && !(operation === 'reconcile' && execute)
+    && typeof execute === 'boolean' && typeof now === 'function'
     && plain(serviceCredential) && serviceCredential.projectId === STAGING_GOOGLE_IAM_PROJECT
     && plain(adminCredential) && boundedText(adminCredential.authorization, 20000)
     && plain(transport) && typeof transport.getPolicy === 'function' && typeof transport.setPolicy === 'function',
   'iam_execution_binding_invalid');
   validateBinding(binding, now, execute && operation === 'grant'); outputPath(journalFile);
+  if (operation === 'grant') validateGrantWindow(binding, now);
   check(sha256(serviceCredential.clientEmail) === binding.serviceAccountEmailSha256,
     'iam_service_account_binding_invalid');
   const principal = `serviceAccount:${serviceCredential.clientEmail}`;
   const principalSha256 = sha256(principal);
   const records = loadJournal(journalFile, true);
-  check(!records.some((record) => record.runId === binding.runId && record.operation === operation),
+  check(operation === 'reconcile' || !records.some((record) => record.runId === binding.runId && record.operation === operation),
     'iam_operation_already_started');
   let policy;
   try { policy = validatePolicy(await transport.getPolicy()); }
   catch (error) { if (trusted.has(error)) throw error; fail('iam_policy_read_failed'); }
   let plan;
-  if (operation === 'grant') plan = planTemporaryIamGrant(policy, principal);
+  if (operation === 'grant') plan = planTemporaryIamGrant(policy, principal, binding);
   else {
     const grant = grantEvidence(records, binding, principalSha256);
-    plan = planTemporaryIamRevoke(policy, principal, grant.addedRoles);
+    let second;
+    try { second = validatePolicy(await transport.getPolicy()); }
+    catch (error) { if (trusted.has(error)) throw error; fail('iam_policy_read_failed'); }
+    check(semanticPolicyDigest(policy) === semanticPolicyDigest(second) && policy.etag === second.etag,
+      'iam_reconciliation_concurrent_drift');
+    const observed = ownedRoles(second, binding, principal, grant);
+    if (operation === 'reconcile') return Object.freeze({ status: 'reconciled-read-only', operation,
+      grantPhase: grant.phase, ownedRoles: observed, grantExpired: Date.parse(binding.grantExpiresAt) <= now(),
+      grantRecordSha256: grant.recordSha256, policySha256: semanticPolicyDigest(second),
+      policyEtagSha256: sha256(second.etag), revokeAlreadyStarted: records.some((record) =>
+        record.runId === binding.runId && record.operation === 'revoke'),
+      executionLockPresent: fs.existsSync(`${journalFile}.lock`),
+      absenceDoesNotResolvePendingGrant: !observed.length && ['intent', 'outcome_unknown'].includes(grant.phase) });
+    check(observed.length > 0 || grant.phase === 'no_mutation', 'iam_grant_outcome_unresolved');
+    plan = planTemporaryIamRevoke(second, principal, observed, binding);
   }
   if (!execute) return result(operation, 'preflight-passed-no-mutation', binding, principalSha256, plan);
   if (plan.addedRoles.length === 0) {
     appendJournal(journalFile, recordBase({ binding, operation, phase: 'no_mutation', plan, principalSha256 }));
     return result(operation, 'no-mutation-required', binding, principalSha256, plan);
   }
+  // Recheck the exact clock window after reads and immediately before the intent.
+  if (operation === 'grant') validateBinding(binding, now, true);
   appendJournal(journalFile, recordBase({ binding, operation, phase: 'intent', plan, principalSha256 }));
   let setResult;
   try { setResult = await transport.setPolicy(plan.target); }
@@ -393,7 +475,7 @@ function parseArguments(argv) {
     result[name.slice(2)] = name.endsWith('-fd') ? Number(value) : value;
   }
   for (const required of ['binding', 'journal', 'operation']) check(boundedText(result[required]), 'iam_argument_invalid');
-  check(['grant', 'revoke'].includes(result.operation), 'iam_argument_invalid'); return result;
+  check(['grant', 'revoke', 'reconcile'].includes(result.operation), 'iam_argument_invalid'); return result;
 }
 const source = (args, prefix) => ({ ...(args[`${prefix}-file`] ? { file: args[`${prefix}-file`] } : {}),
   ...(args[`${prefix}-fd`] !== undefined ? { fd: args[`${prefix}-fd`] } : {}) });
