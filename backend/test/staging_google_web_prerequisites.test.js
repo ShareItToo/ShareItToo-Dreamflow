@@ -168,7 +168,7 @@ test('complete journal produces a non-activating canonical readiness candidate',
 test('stale COMPLETE refreshes from read-only provider evidence without replaying mutation', async (t) => {
   const f = fixture(t);
   let clock = Date.now();
-  f.binding.gate.expiresAt = new Date(clock + 12 * 60 * 60 * 1000).toISOString();
+  f.binding.gate.expiresAt = new Date(clock + 60 * 60 * 1000).toISOString();
   await f.invoke({ execute: true, now: () => clock });
   const original = readStagingGoogleWebPrerequisiteJournal(f.journalFile);
   const originalRecords = fs.readFileSync(f.journalFile, 'utf8').trimEnd().split('\n').length;
@@ -206,6 +206,48 @@ test('stale COMPLETE refreshes from read-only provider evidence without replayin
     recordsBeforeDrift);
   assert.equal(f.calls.create, before.create);
   assert.equal(f.calls.patch, before.patch);
+});
+
+test('bounded COMPLETE journal rotates to a predecessor-bound successor without provider mutation', async (t) => {
+  const f = fixture(t);
+  let clock = Date.now();
+  f.binding.gate.expiresAt = new Date(clock + 60 * 60 * 1000).toISOString();
+  await f.invoke({ execute: true, now: () => clock });
+  const records = fs.readFileSync(f.journalFile, 'utf8').trimEnd().split('\n').map(JSON.parse);
+  let collected = Date.parse(records.at(-1).state.completion.collectedAtUtc);
+  while (records.length < 128) {
+    const state = structuredClone(records.at(-1).state);
+    collected += 2 * 60 * 60 * 1000 + 1;
+    state.completion.collectedAtUtc = new Date(collected).toISOString();
+    const record = { sequence: records.length, previous: records.at(-1).digest,
+      state, digest: prerequisiteSnapshotDigest(state) };
+    records.push(record);
+  }
+  fs.writeFileSync(f.journalFile,
+    `${records.map((record) => JSON.stringify(record)).join('\n')}\n`);
+  clock = collected + 2 * 60 * 60 * 1000 + 1;
+  const successorJournalFile = path.join(f.directory, 'journal-successor.jsonl');
+  const before = { ...f.calls };
+  await assert.rejects(f.invoke({ execute: true, now: () => clock }),
+    /journal_refresh_successor_required/u);
+  const refreshed = await f.invoke({
+    execute: true,
+    now: () => clock,
+    successorJournalFile,
+  });
+  assert.equal(refreshed.status, 'prerequisites-verified-config-awaiting-review');
+  assert.equal(f.calls.create, before.create);
+  assert.equal(f.calls.patch, before.patch);
+  assert.equal(fs.readFileSync(successorJournalFile, 'utf8').trimEnd().split('\n').length, 1);
+  const successor = readStagingGoogleWebPrerequisiteJournal(successorJournalFile);
+  assert.equal(successor.phase, 'complete');
+  assert.equal(successor.state.completion.collectedAtUtc, new Date(clock).toISOString());
+  assert.doesNotThrow(() => collectStagingGoogleWebPrerequisiteReadiness({
+    journalFile: successorJournalFile,
+    configFile: f.configFile,
+    expectedJournalSha256: successor.journalSha256,
+    now: () => clock + 1,
+  }));
 });
 
 test('collector rejects stale, replayed, mismatched and self-declared completion hashes', async (t) => {

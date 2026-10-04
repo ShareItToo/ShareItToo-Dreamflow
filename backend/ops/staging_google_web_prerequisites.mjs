@@ -85,7 +85,7 @@ function snapshot(value, binding) {
   return structuredClone(value);
 }
 
-function validateBinding(binding, now) {
+function validateBinding(binding) {
   requireThat(keys(binding, ['schemaVersion', 'projectId', 'projectNumber', 'origin', 'displayName',
     'firebaseAccountEmailSha256', 'sourceCommit', 'runnerDigest', 'baselineDigest', 'apiKey', 'domainLeaseVerifier', 'gate']), 'binding_shape_invalid');
   requireThat(binding.schemaVersion === schemaVersion && /^[a-z][a-z0-9-]{4,28}[a-z0-9]$/u.test(binding.projectId)
@@ -105,8 +105,12 @@ function validateBinding(binding, now) {
     && gate.sourceCommit === binding.sourceCommit && gate.runnerDigest === binding.runnerDigest
     && gate.firebaseAccountEmailSha256 === binding.firebaseAccountEmailSha256
     && gate.baselineDigest === binding.baselineDigest && hashPattern.test(gate.evidenceDigest)
-    && typeof gate.expiresAt === 'string' && Number.isFinite(Date.parse(gate.expiresAt))
-    && Date.parse(gate.expiresAt) > now(), 'gate_binding_invalid');
+    && typeof gate.expiresAt === 'string' && Number.isFinite(Date.parse(gate.expiresAt)),
+  'gate_binding_invalid');
+}
+function validateFreshMutationAuthorization(binding, now) {
+  requireThat(binding.gate.decision === 'A PASS'
+    && Date.parse(binding.gate.expiresAt) > now(), 'gate_binding_invalid');
 }
 
 export function assertPrerequisiteOutputPath(file) {
@@ -322,13 +326,30 @@ function readJournal(file) {
     const records = lines.map((line) => JSON.parse(line));
     requireThat(records.length > 0 && records.length <= maximumJournalRecords,
       'journal_invalid');
+    const successor = keys(records[0],
+      ['sequence', 'previous', 'predecessor', 'state', 'digest']);
+    if (successor) {
+      requireThat(keys(records[0].predecessor,
+        ['journalSha256', 'finalRecordSha256'])
+        && hashPattern.test(records[0].predecessor.journalSha256)
+        && hashPattern.test(records[0].predecessor.finalRecordSha256),
+      'journal_successor_invalid');
+    }
     let previous = null;
     for (const [index, record] of records.entries()) {
-      requireThat(JSON.stringify({ sequence: record.sequence, previous: record.previous,
-        state: record.state, digest: record.digest }) === lines[index]
-        && keys(record, ['sequence', 'previous', 'state', 'digest']) && record.sequence === index
+      const recordKeys = successor && index === 0
+        ? ['sequence', 'previous', 'predecessor', 'state', 'digest']
+        : ['sequence', 'previous', 'state', 'digest'];
+      const canonicalRecord = successor && index === 0
+        ? { sequence: record.sequence, previous: record.previous,
+          predecessor: record.predecessor, state: record.state, digest: record.digest }
+        : { sequence: record.sequence, previous: record.previous,
+          state: record.state, digest: record.digest };
+      requireThat(JSON.stringify(canonicalRecord) === lines[index]
+        && keys(record, recordKeys) && record.sequence === index
         && record.previous === previous && record.digest === prerequisiteSnapshotDigest(record.state)
-        && record.state.phase === phases[Math.min(index, phases.length - 1)],
+        && record.state.phase === (successor
+          ? 'complete' : phases[Math.min(index, phases.length - 1)]),
       'journal_invalid');
       validateState(record.state, record.state.binding, record.state.configFile);
       if (index > 0) {
@@ -350,11 +371,22 @@ function readJournal(file) {
       }
       previous = record.digest;
     }
-    return { records, state: records.at(-1).state, bytes, identity };
+    return { records, state: records.at(-1).state, bytes, identity,
+      predecessor: successor ? records[0].predecessor : null };
   } catch (error) {
     if (errors.has(error)) throw error;
     fail('journal_invalid');
   }
+}
+function createSuccessor(file, predecessor, state) {
+  const record = { sequence: 0, previous: null,
+    predecessor: {
+      journalSha256: sha256(predecessor.bytes),
+      finalRecordSha256: predecessor.records.at(-1).digest,
+    },
+    state, digest: prerequisiteSnapshotDigest(state) };
+  exclusive(file, `${JSON.stringify(record)}\n`);
+  return readJournal(file);
 }
 function append(file, previous, state) {
   const record = { sequence: previous?.records.length ?? 0, previous: previous?.records.at(-1).digest ?? null,
@@ -435,15 +467,19 @@ export function readStagingGoogleWebPrerequisiteJournal(file) {
  * mutation or interprets an arbitrary exception's message/code as trusted output.
  */
 export async function runStagingGoogleWebPrerequisites({ binding, adapter, journalFile, configFile,
-  execute = false, now = Date.now } = {}) {
+  successorJournalFile = null, execute = false, now = Date.now } = {}) {
   let lockFd;
   let lockIdentity;
   const lockFile = typeof journalFile === 'string' ? `${journalFile}.lock` : null;
   try {
     requireThat(typeof execute === 'boolean', 'execute_flag_invalid');
-    validateBinding(binding, now);
+    validateBinding(binding);
     assertPrerequisiteOutputPath(journalFile); assertPrerequisiteOutputPath(configFile);
+    if (successorJournalFile !== null) assertPrerequisiteOutputPath(successorJournalFile);
     requireThat(journalFile !== configFile && configFile !== lockFile, 'output_path_collision');
+    requireThat(successorJournalFile === null || (successorJournalFile !== journalFile
+      && successorJournalFile !== configFile && successorJournalFile !== lockFile),
+    'output_path_collision');
     let journal = readJournal(journalFile);
     if (journal) validateState(journal.state, binding, configFile);
     let observed = snapshot(await adapter.readSnapshot(), binding);
@@ -456,6 +492,7 @@ export async function runStagingGoogleWebPrerequisites({ binding, adapter, journ
     if (!execute) return journal ? { status: 'resume-readback-only', phase: journal.state.phase }
       : { status: 'preflight-passed-no-mutation', resumable: false };
     requireThat(binding.gate.decision === 'A PASS', 'accepted_gate_required');
+    if (!journal) validateFreshMutationAuthorization(binding, now);
     lockFd = fs.openSync(lockFile, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW, 0o600);
     lockIdentity = metadata(lockFd, 0);
     // Re-open after taking the lock: another executor may have advanced it.
@@ -472,7 +509,8 @@ export async function runStagingGoogleWebPrerequisites({ binding, adapter, journ
     if (state.phase === 'ready') {
       observed = await read();
       requireThat(sameSnapshot(observed, baseline, { compareRevision: true }), 'baseline_stale');
-      validateBinding(binding, now);
+      validateBinding(binding);
+      validateFreshMutationAuthorization(binding, now);
       save({ phase: 'create_intent' });
       const operation = await adapter.createWebApp({ projectId: binding.projectId, apiKeyId: binding.apiKey.apiKeyId,
         displayName: binding.displayName });
@@ -504,7 +542,8 @@ export async function runStagingGoogleWebPrerequisites({ binding, adapter, journ
       const immediate = await read();
       requireThat(sameSnapshot(immediate, observed, { compareRevision: true }), 'prepatch_drift');
       if (exclusiveGuard) requireThat(Date.parse(guard.expiresAt) > now(), 'domain_guard_expired');
-      validateBinding(binding, now);
+      validateBinding(binding);
+      validateFreshMutationAuthorization(binding, now);
       save({ phase: 'domain_intent' });
       await adapter.patchAuthorizedDomains({ projectId: binding.projectId, updateMask: 'authorizedDomains',
         authorizedDomains: expectedSnapshot(baseline, state.appId, true).authorizedDomains, guard });
@@ -552,9 +591,13 @@ export async function runStagingGoogleWebPrerequisites({ binding, adapter, journ
     if (state.phase === 'complete') {
       requireThat(observedAt >= previousCollectedAt, 'completion_clock_invalid');
       if (refreshRequired) {
-        requireThat(journal.records.length < maximumJournalRecords,
-          'journal_refresh_limit_reached');
-        save({ completion });
+        if (journal.records.length === maximumJournalRecords) {
+          requireThat(successorJournalFile !== null && !exists(successorJournalFile),
+            'journal_refresh_successor_required');
+          const successorState = { ...state, completion };
+          journal = createSuccessor(successorJournalFile, journal, successorState);
+          state = journal.state;
+        } else save({ completion });
       } else requireThat(equal(completion, state.completion), 'completed_readback_drift');
     } else save({ phase: 'complete', completion });
     return { status: 'prerequisites-verified-config-awaiting-review', configDigest: digest,
