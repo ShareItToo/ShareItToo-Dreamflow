@@ -9,7 +9,6 @@ import { fileURLToPath } from 'node:url';
 
 import {
   TARGET,
-  bindGoogleWebConfig,
   profile,
   sealArtifact,
   sha256,
@@ -28,6 +27,9 @@ import {
   readPasswordEnrollmentWebReadiness,
   validatePasswordEnrollmentWebBinding,
 } from '../../tool/staging_password_enrollment_web_readiness.mjs';
+import { GOOGLE_WEB_PROFILE_V2 } from '../../tool/staging_google_web_readiness.mjs';
+import { syntheticGoogleBinding,
+  syntheticGoogleEvidence } from './staging_google_web_readiness_fixture.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const source = 'a'.repeat(40);
@@ -184,10 +186,7 @@ function socialConfig(overrides = {}) {
 }
 
 function googleBinding(publicConfig = socialConfig()) {
-  return bindGoogleWebConfig(
-    publicConfig,
-    digest(JSON.stringify(publicConfig)),
-  );
+  return syntheticGoogleBinding(source, { configuration: publicConfig, now: runClock });
 }
 
 function facebookHandoff(publicConfig = socialConfig()) {
@@ -731,8 +730,9 @@ test('schema v5 composes with Google, Facebook and both providers', (t) => {
       facebookWeb: facebook,
     });
     const manifest = validateArtifact(artifact.directory, artifact.hash, source);
-    assert.equal(manifest.schemaVersion, 5);
-    assert.equal(manifest.profileContractVersion, STAGING_ENROLLMENT_WEB_PROFILE_V2);
+    assert.equal(manifest.schemaVersion, google ? 6 : 5);
+    assert.equal(manifest.profileContractVersion,
+      google ? GOOGLE_WEB_PROFILE_V2 : STAGING_ENROLLMENT_WEB_PROFILE_V2);
     assert.equal(Object.hasOwn(manifest, 'googleWebConfigDigest'), google !== null);
     assert.equal(Object.hasOwn(manifest, 'facebookWebConfigDigest'), facebook !== null);
     assert.equal(manifest.profile.SIT_SOCIAL_GOOGLE_ENABLED, google ? 'true' : 'false');
@@ -774,7 +774,7 @@ test('schema v4 conditionally binds Google, Facebook and all-provider composites
       facebookWeb: facebook,
     });
     const manifest = validateArtifact(artifact.directory, artifact.hash, source);
-    assert.equal(manifest.schemaVersion, 4);
+    assert.equal(manifest.schemaVersion, google ? 6 : 4);
     assert.equal(Object.hasOwn(manifest, 'googleWebConfigDigest'), google !== null);
     assert.equal(Object.hasOwn(manifest, 'facebookWebConfigDigest'), facebook !== null);
     assert.equal(manifest.profile.SIT_SOCIAL_GOOGLE_ENABLED, google ? 'true' : 'false');
@@ -783,14 +783,14 @@ test('schema v4 conditionally binds Google, Facebook and all-provider composites
   }
 });
 
-test('baseline schema versions 1-3 remain unchanged when password enrollment is absent', (t) => {
+test('default-off and non-Google schemas remain unchanged when password enrollment is absent', (t) => {
   const googleWeb = googleBinding();
   const facebookWeb = facebookBinding();
   const cases = [
     { expected: 1, options: { passwordEnrollment: null } },
-    { expected: 2, options: { passwordEnrollment: null, googleWeb } },
+    { expected: 6, options: { passwordEnrollment: null, googleWeb } },
     { expected: 3, options: { passwordEnrollment: null, facebookWeb } },
-    { expected: 3, options: { passwordEnrollment: null, googleWeb, facebookWeb } },
+    { expected: 6, options: { passwordEnrollment: null, googleWeb, facebookWeb } },
   ];
   for (const { expected, options } of cases) {
     const artifact = makeArtifact(t, options);
@@ -926,8 +926,12 @@ test('actual builder composes protected Google, Facebook and password inputs', (
   const evidenceFile = path.join(root, 'password-enrollment-readiness.json');
   fs.writeFileSync(evidenceFile, evidence.bytes, { mode: 0o600 });
   const publicConfig = socialConfig();
-  const googleFile = path.join(root, 'google-web-config.json');
-  fs.writeFileSync(googleFile, JSON.stringify(publicConfig), { mode: 0o600 });
+  const googleEvidence = syntheticGoogleEvidence(exactSource, {
+    configuration: publicConfig,
+    now: runClock,
+  });
+  const googleFile = path.join(root, 'google-web-readiness.json');
+  fs.writeFileSync(googleFile, googleEvidence.bytes, { mode: 0o600 });
   const facebookEvidence = facebookHandoff(publicConfig);
   const facebookFile = path.join(root, 'facebook-web-readiness.json');
   fs.writeFileSync(facebookFile, facebookEvidence.bytes, { mode: 0o600 });
@@ -951,9 +955,9 @@ for(const [entry,text] of Object.entries({'index.html':'<script src="flutter_boo
     checkout,
     exactSource,
     output,
-    '--google-web-config',
+    '--google-web-readiness',
     googleFile,
-    googleBinding(publicConfig).digest,
+    googleEvidence.evidenceDigest,
     '--facebook-web-readiness',
     facebookFile,
     facebookEvidence.evidenceDigest,
@@ -972,8 +976,8 @@ for(const [entry,text] of Object.entries({'index.html':'<script src="flutter_boo
   assert.equal(result.status, 0, result.stderr);
   const summary = JSON.parse(result.stdout.trim());
   const manifest = validateArtifact(output, summary.manifestHash, exactSource);
-  assert.equal(manifest.schemaVersion, 5);
-  assert.equal(manifest.profileContractVersion, STAGING_ENROLLMENT_WEB_PROFILE_V2);
+  assert.equal(manifest.schemaVersion, 6);
+  assert.equal(manifest.profileContractVersion, GOOGLE_WEB_PROFILE_V2);
   assert.equal(manifest.profile.SIT_WEB_PASSWORD_ENROLLMENT_ENABLED, 'true');
   assert.equal(manifest.profile.SIT_SOCIAL_GOOGLE_ENABLED, 'true');
   assert.equal(manifest.profile.SIT_SOCIAL_FACEBOOK_ENABLED, 'true');

@@ -8,6 +8,7 @@ import { runStagingGoogleWebPrerequisites as run, prerequisiteSnapshotDigest, as
   STAGING_GOOGLE_WEB_DISPLAY_NAME,
   readStagingGoogleWebPrerequisiteJournal } from '../ops/staging_google_web_prerequisites.mjs';
 import {
+  collectStagingGoogleWebActivationReadiness,
   collectStagingGoogleWebPrerequisiteReadiness,
 } from '../ops/staging_google_web_prerequisite_readiness.mjs';
 import { sha256, readGoogleWebConfig, profile } from '../../tool/staging_web_contract.mjs';
@@ -78,6 +79,31 @@ function fixture(t) {
   };
   const invoke = (extra = {}) => run({ binding, adapter, journalFile, configFile, ...extra });
   return { directory, snapshot, binding, app, sdk, calls, adapter, journalFile, configFile, latest, invoke };
+}
+
+function activationDecision(candidate, overrides = {}) {
+  const decided = Date.parse(candidate.readiness.collectedAtUtc) + 1000;
+  return {
+    schemaVersion: 1,
+    kind: 'sit-google-web-prerequisite-activation-decision',
+    evidenceClass: 'independent-release-review',
+    syntheticFixture: false,
+    decision: 'approved',
+    sourceCommit: candidate.readiness.sourceCommit,
+    prerequisiteJournalSha256: candidate.readiness.prerequisiteJournalSha256,
+    prerequisiteFinalRecordSha256: candidate.readiness.prerequisiteFinalRecordSha256,
+    configurationSha256: candidate.configurationSha256,
+    readinessSha256: candidate.readinessSha256,
+    projectId: candidate.readiness.projectId,
+    projectNumber: candidate.readiness.projectNumber,
+    webAppId: candidate.readiness.webAppId,
+    authorizedDomain: candidate.readiness.authorizedDomain,
+    firebaseProviderId: candidate.readiness.firebaseProviderId,
+    decidedAtUtc: new Date(decided).toISOString(),
+    validUntilUtc: new Date(Math.min(decided + 60 * 60 * 1000,
+      Date.parse(candidate.readiness.validUntilUtc))).toISOString(),
+    ...overrides,
+  };
 }
 
 test('default preflight creates no files or provider effects, even before gate acceptance', async (t) => {
@@ -163,6 +189,60 @@ test('complete journal produces a non-activating canonical readiness candidate',
     'activationEligible', 'configuration', 'configurationSha256', 'readiness',
     'readinessSha256',
   ]);
+});
+
+test('separate exact journal-bound decision is the only activation-eligible collector path', async (t) => {
+  const f = fixture(t);
+  await f.invoke({ execute: true });
+  const journal = readStagingGoogleWebPrerequisiteJournal(f.journalFile);
+  const collected = Date.parse(f.latest().completion.collectedAtUtc);
+  const pending = collectStagingGoogleWebPrerequisiteReadiness({
+    journalFile: f.journalFile,
+    configFile: f.configFile,
+    expectedJournalSha256: journal.journalSha256,
+    now: () => collected + 1000,
+  });
+  const decisionFile = path.join(f.directory, 'independent-decision.json');
+  const writeDecision = (value) => {
+    fs.writeFileSync(decisionFile, JSON.stringify(value), { mode: 0o600 });
+    return sha256(fs.readFileSync(decisionFile));
+  };
+  const approvedDecision = activationDecision(pending);
+  let decisionSha256 = writeDecision(approvedDecision);
+  const approved = collectStagingGoogleWebActivationReadiness({
+    journalFile: f.journalFile,
+    configFile: f.configFile,
+    expectedJournalSha256: journal.journalSha256,
+    decisionFile,
+    expectedDecisionSha256: decisionSha256,
+    now: () => collected + 2000,
+  });
+  assert.equal(approved.schemaVersion, 2);
+  assert.equal(approved.activationEligible, true);
+  assert.equal(approved.activationDecision, 'approved-independent-review');
+  assert.equal(approved.decisionSha256, decisionSha256);
+  assert.equal(approved.readiness.prerequisiteJournalSha256, journal.journalSha256);
+
+  for (const [field, value] of [
+    ['decision', 'pending'],
+    ['prerequisiteJournalSha256', 'f'.repeat(64)],
+    ['configurationSha256', 'f'.repeat(64)],
+    ['readinessSha256', 'f'.repeat(64)],
+    ['sourceCommit', 'f'.repeat(40)],
+    ['webAppId', `1:${f.binding.projectNumber}:web:${'f'.repeat(32)}`],
+    ['authorizedDomain', 'shareittoo.com'],
+    ['firebaseProviderId', 'facebook.com'],
+  ]) {
+    decisionSha256 = writeDecision(activationDecision(pending, { [field]: value }));
+    assert.throws(() => collectStagingGoogleWebActivationReadiness({
+      journalFile: f.journalFile,
+      configFile: f.configFile,
+      expectedJournalSha256: journal.journalSha256,
+      decisionFile,
+      expectedDecisionSha256: decisionSha256,
+      now: () => collected + 2000,
+    }), /google_web_prerequisite_readiness_denied/u, field);
+  }
 });
 
 test('stale COMPLETE refreshes from read-only provider evidence without replaying mutation', async (t) => {

@@ -5,19 +5,22 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { TARGET, GOOGLE_WEB_PROFILE, bindGoogleWebConfig, readGoogleWebConfig, profile,
+import { TARGET, bindGoogleWebConfig, inventory, readGoogleWebConfig, profile,
   sealArtifact, sha256, validateArtifact, stagingBootstrapFor } from '../../tool/staging_web_contract.mjs';
+import { GOOGLE_WEB_PROFILE_V2, bindGoogleWebReadiness,
+  readGoogleWebReadiness } from '../../tool/staging_google_web_readiness.mjs';
+import { syntheticGoogleBinding, syntheticGoogleConfig,
+  syntheticGoogleEvidence } from './staging_google_web_readiness_fixture.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const source = 'a'.repeat(40);
 const version = '1.0.0+2026092905';
 // Explicitly synthetic public SDK options; no provider call or real credential.
 function config() {
-  return { projectId: 'synthetic-sit-fixture', messagingSenderId: '123456789012',
-    appId: `1:123456789012:web:${'a'.repeat(32)}`, apiKey: ['AI', 'za', 'x'.repeat(35)].join(''),
-    authDomain: 'synthetic-sit-fixture.firebaseapp.com', backendProjectId: 'synthetic-sit-fixture', authorizedOrigin: TARGET };
+  return syntheticGoogleConfig();
 }
-function bound() { const value = config(); return bindGoogleWebConfig(value, sha256(JSON.stringify(value))); }
+function legacyBound() { const value = config(); return bindGoogleWebConfig(value, sha256(JSON.stringify(value))); }
+function bound() { return syntheticGoogleBinding(source); }
 function temp(t) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sit-google-profile-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -37,15 +40,54 @@ function rewriteManifest(directory, mutate) {
   const value = JSON.parse(fs.readFileSync(file)); mutate(value);
   fs.writeFileSync(file, JSON.stringify(value)); return sha256(fs.readFileSync(file));
 }
+function rewriteAsHistoricalV2(directory) {
+  const file = path.join(directory, 'staging-web-manifest.json');
+  const current = JSON.parse(fs.readFileSync(file));
+  const googleWeb = legacyBound();
+  const historicalProfile = profile(source, version, googleWeb);
+  fs.writeFileSync(path.join(directory, 'web/staging_bootstrap.js'),
+    stagingBootstrapFor(source, version, googleWeb));
+  fs.writeFileSync(path.join(directory, 'web/staging-release.json'), `${JSON.stringify({
+    target: TARGET, source, version,
+    profileDigest: sha256(JSON.stringify(historicalProfile)),
+  })}\n`);
+  const manifest = {
+    schemaVersion: 2,
+    bootstrapContractVersion: 2,
+    profileContractVersion: 'staging-google-web-v1',
+    googleWebConfigDigest: googleWeb.digest,
+    target: current.target,
+    api: current.api,
+    source: current.source,
+    version: current.version,
+    sourceClean: current.sourceClean,
+    mode: current.mode,
+    pwaStrategy: current.pwaStrategy,
+    resourcesCdn: current.resourcesCdn,
+    flutterVersion: current.flutterVersion,
+    builderDigest: current.builderDigest,
+    profile: historicalProfile,
+    files: inventory(path.join(directory, 'web')),
+  };
+  fs.writeFileSync(file, `${JSON.stringify(manifest, null, 2)}\n`);
+  const hash = sha256(fs.readFileSync(file));
+  fs.writeFileSync(path.join(directory, 'SHA256SUMS'),
+    `${hash}  staging-web-manifest.json\n${Object.entries(manifest.files)
+      .map(([name, digest]) => `${digest}  web/${name}\n`).join('')}`);
+  return hash;
+}
 
 test('Google successor binds the same canonical digest and compile-time fields as the Dart runtime', () => {
   const googleWeb = bound(); const p = profile(source, version, googleWeb);
   assert.equal(p.SIT_SOCIAL_GOOGLE_ENABLED, 'true');
   assert.equal(p.SIT_SOCIAL_PROVIDER_ACTIVATION_VALIDATED, 'true');
   assert.equal(p.SIT_SOCIAL_APPLE_ENABLED, 'false'); assert.equal(p.SIT_SOCIAL_FACEBOOK_ENABLED, 'false');
-  assert.equal(p.SIT_FIREBASE_WEB_CONFIG_SHA256, googleWeb.digest);
+  assert.equal(p.SIT_FIREBASE_WEB_CONFIG_SHA256, googleWeb.configDigest);
   // Frozen synthetic public-config vector protects the cross-runtime format.
-  assert.equal(googleWeb.digest, '2d45d33c8cf81d7fe51c7daea8ddb4bb749dc868e08b3d61a94ae3e93ab814fd');
+  assert.equal(googleWeb.configDigest, '2d45d33c8cf81d7fe51c7daea8ddb4bb749dc868e08b3d61a94ae3e93ab814fd');
+  assert.equal(p.SIT_GOOGLE_WEB_READINESS_SHA256, googleWeb.readinessDigest);
+  assert.equal(p.SIT_GOOGLE_WEB_DECISION_SHA256, googleWeb.decisionDigest);
+  assert.equal(p.SIT_GOOGLE_WEB_EVIDENCE_SHA256, googleWeb.evidenceDigest);
   assert.equal(p.SIT_FIREBASE_PROJECT_ID, googleWeb.config.projectId);
   assert.equal(p.SIT_FIREBASE_MESSAGING_SENDER_ID, googleWeb.config.messagingSenderId);
   assert.equal(p.SIT_FIREBASE_WEB_APP_ID, googleWeb.config.appId);
@@ -83,13 +125,16 @@ test('config rejects extras, mismatched identities/origin, malformed values and 
   for (const value of [null, [], 'text']) assert.throws(() => bindGoogleWebConfig(value, 'b'.repeat(64)), /shape/);
   assert.throws(() => profile(source, version, {}), /binding_shape/);
   const reordered = Object.fromEntries(Object.entries(config()).reverse());
-  assert.deepEqual(bindGoogleWebConfig(reordered, bound().digest), bound());
+  assert.deepEqual(bindGoogleWebConfig(reordered, legacyBound().digest), legacyBound());
 });
 
-test('generated v2 artifact binds Google config in manifest, release identity and bootstrap; v1 remains valid', (t) => {
+test('generated v6 artifact binds journal, decision and config; default-off v1 remains valid', (t) => {
   const f = makeArtifact(t); const m = validateArtifact(f.directory, f.hash, source);
-  assert.equal(m.schemaVersion, 2); assert.equal(m.profileContractVersion, GOOGLE_WEB_PROFILE);
-  assert.equal(m.googleWebConfigDigest, bound().digest);
+  assert.equal(m.schemaVersion, 6); assert.equal(m.profileContractVersion, GOOGLE_WEB_PROFILE_V2);
+  assert.equal(m.googleWebConfigDigest, bound().configDigest);
+  assert.equal(m.googleWebReadinessDigest, bound().readinessDigest);
+  assert.equal(m.googleWebDecisionDigest, bound().decisionDigest);
+  assert.equal(m.googleWebEvidenceDigest, bound().evidenceDigest);
   const release = JSON.parse(fs.readFileSync(path.join(f.directory, 'web/staging-release.json')));
   assert.equal(release.profileDigest, sha256(JSON.stringify(m.profile)));
   assert.notEqual(release.profileDigest, sha256(JSON.stringify(profile(source, version))));
@@ -98,7 +143,19 @@ test('generated v2 artifact binds Google config in manifest, release identity an
   assert.equal(legacy.schemaVersion, 1); assert.equal(legacy.profile.SIT_SOCIAL_GOOGLE_ENABLED, 'false');
   assert.equal(Object.hasOwn(legacy, 'googleWebConfigDigest'), false);
 });
-for (const variant of ['googleOff', 'appleOn', 'facebookOn', 'extraDefine', 'digest', 'config', 'version', 'downgrade', 'bootstrap']) {
+
+test('historical Google schema v2 remains current/rollback readable but is never a candidate', (t) => {
+  const artifact = makeArtifact(t);
+  const hash = rewriteAsHistoricalV2(artifact.directory);
+  assert.equal(validateArtifact(artifact.directory, hash, source, { mode: 'current' }).schemaVersion, 2);
+  assert.equal(validateArtifact(artifact.directory, hash, source, { mode: 'rollback' }).schemaVersion, 2);
+  assert.throws(() => validateArtifact(artifact.directory, hash, source),
+    /artifact_google_web_legacy_candidate/);
+});
+for (const variant of ['googleOff', 'appleOn', 'facebookOn', 'extraDefine',
+  'digest', 'readinessDigest', 'decisionDigest', 'evidenceDigest',
+  'journalDigest', 'finalRecordDigest', 'readinessJson', 'decisionJson',
+  'config', 'version', 'downgrade', 'bootstrap']) {
   test(`rehashed successor refuses profile/config drift: ${variant}`, (t) => {
     const f = makeArtifact(t);
     const hash = rewriteManifest(f.directory, (m) => {
@@ -107,6 +164,13 @@ for (const variant of ['googleOff', 'appleOn', 'facebookOn', 'extraDefine', 'dig
       if (variant === 'facebookOn') m.profile.SIT_SOCIAL_FACEBOOK_ENABLED = 'true';
       if (variant === 'extraDefine') m.profile.SIT_FIREBASE_WEB_OTHER = 'extra';
       if (variant === 'digest') m.googleWebConfigDigest = 'b'.repeat(64);
+      if (variant === 'readinessDigest') m.googleWebReadinessDigest = 'b'.repeat(64);
+      if (variant === 'decisionDigest') m.googleWebDecisionDigest = 'b'.repeat(64);
+      if (variant === 'evidenceDigest') m.googleWebEvidenceDigest = 'b'.repeat(64);
+      if (variant === 'journalDigest') m.googleWebPrerequisiteJournalSha256 = 'b'.repeat(64);
+      if (variant === 'finalRecordDigest') m.googleWebPrerequisiteFinalRecordSha256 = 'b'.repeat(64);
+      if (variant === 'readinessJson') m.profile.SIT_GOOGLE_WEB_READINESS_JSON = '{}';
+      if (variant === 'decisionJson') m.profile.SIT_GOOGLE_WEB_DECISION_JSON = '{}';
       if (variant === 'config') m.profile.SIT_FIREBASE_WEB_APP_ID = '';
       if (variant === 'version') m.profileContractVersion = 'future';
       if (variant === 'downgrade') m.schemaVersion = 1;
@@ -118,16 +182,16 @@ for (const variant of ['googleOff', 'appleOn', 'facebookOn', 'extraDefine', 'dig
 test('config input uses stable owner-only regular descriptor and sanitized parser errors', (t) => {
   const root = temp(t); const file = path.join(root, 'public-config.json');
   fs.writeFileSync(file, JSON.stringify(config()), { mode: 0o600 });
-  assert.deepEqual(readGoogleWebConfig(file, bound().digest), bound());
-  fs.chmodSync(file, 0o644); assert.throws(() => readGoogleWebConfig(file, bound().digest), /config_file/);
+  assert.deepEqual(readGoogleWebConfig(file, legacyBound().digest), legacyBound());
+  fs.chmodSync(file, 0o644); assert.throws(() => readGoogleWebConfig(file, legacyBound().digest), /config_file/);
   fs.chmodSync(file, 0o600);
   const alias = path.join(root, 'alias'); fs.symlinkSync(file, alias);
-  assert.throws(() => readGoogleWebConfig(alias, bound().digest));
+  assert.throws(() => readGoogleWebConfig(alias, legacyBound().digest));
   fs.writeFileSync(file, '{private malformed');
-  assert.throws(() => readGoogleWebConfig(file, bound().digest), { message: 'google_web_config_json' });
+  assert.throws(() => readGoogleWebConfig(file, legacyBound().digest), { message: 'google_web_config_json' });
 });
 
-test('actual builder CLI generates a validator-accepted v2 manifest from bounded input without logging config', (t) => {
+test('actual builder CLI accepts only activation-eligible protected Google evidence', (t) => {
   const root = temp(t); const checkout = path.join(root, 'source'); const bin = path.join(root, 'bin');
   fs.mkdirSync(checkout); fs.mkdirSync(bin);
   fs.writeFileSync(path.join(checkout, 'pubspec.yaml'), `version: ${version}\n`);
@@ -152,19 +216,82 @@ for(const [file,text] of Object.entries({'index.html':'<script src="flutter_boot
 }\n`;
   for (const name of ['flutter', 'bash', 'python3']) fs.writeFileSync(path.join(bin, name), program, { mode: 0o755 });
   fs.writeFileSync(path.join(bin, 'package.json'), '{"type":"module"}');
-  const file = path.join(root, 'public.json'); fs.writeFileSync(file, JSON.stringify(config()), { mode: 0o600 });
+  const evidence = syntheticGoogleEvidence(exactSource);
+  const file = path.join(root, 'google-readiness.json');
+  fs.writeFileSync(file, evidence.bytes, { mode: 0o600 });
   const output = path.join(root, 'artifact');
-  const args = [path.join(repo, 'tool/build_staging_web.mjs'), checkout, exactSource, output, '--google-web-config', file, bound().digest];
+  const args = [path.join(repo, 'tool/build_staging_web.mjs'), checkout, exactSource, output, '--google-web-readiness', file, evidence.evidenceDigest];
   const result = spawnSync(process.execPath, args, { encoding: 'utf8', env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, SIT_SYNTHETIC_DEFINES_LOG: definitionsLog } });
   assert.equal(result.status, 0, result.stderr);
   const summary = JSON.parse(result.stdout.trim());
   const manifest = validateArtifact(output, summary.manifestHash, exactSource);
-  assert.equal(manifest.schemaVersion, 2); assert.deepEqual(manifest.profile, profile(exactSource, version, bound()));
+  const expected = bindGoogleWebReadiness(evidence.envelope, evidence.evidenceDigest,
+    { now: evidence.now, expectedSource: exactSource });
+  assert.equal(manifest.schemaVersion, 6); assert.deepEqual(manifest.profile, profile(exactSource, version, expected));
   assert.equal(fs.existsSync(fs.readFileSync(definitionsLog, 'utf8')), false);
   assert.ok(!`${result.stdout}${result.stderr}`.includes(config().apiKey));
   assert.ok(!`${result.stdout}${result.stderr}`.includes(config().projectId));
   const badArgs = [...args]; badArgs[3] = path.join(root, 'rejected'); badArgs[6] = 'b'.repeat(64);
   const bad = spawnSync(process.execPath, badArgs, { encoding: 'utf8' });
-  assert.equal(bad.status, 1); assert.match(bad.stderr, /google_web_config_digest_mismatch/);
+  assert.equal(bad.status, 1); assert.match(bad.stderr, /google_web_evidence_digest_mismatch/);
   assert.equal(fs.existsSync(badArgs[3]), false);
+});
+
+test('activation evidence rejects pending, stale, replayed and independently mismatched claims', (t) => {
+  const root = temp(t);
+  const valid = syntheticGoogleEvidence(source);
+  const file = path.join(root, 'readiness.json');
+  fs.writeFileSync(file, valid.bytes, { mode: 0o600 });
+  assert.deepEqual(readGoogleWebReadiness(file, valid.evidenceDigest,
+    { now: valid.now, expectedSource: source }), bound());
+  const pending = {
+    schemaVersion: 1,
+    kind: valid.envelope.kind,
+    evidenceClass: 'verified-prerequisite-journal',
+    syntheticFixture: false,
+    activationDecision: 'pending-independent-review',
+    activationEligible: false,
+    configuration: valid.envelope.configuration,
+    configurationSha256: valid.envelope.configurationSha256,
+    readiness: valid.envelope.readiness,
+    readinessSha256: valid.envelope.readinessSha256,
+  };
+  const selfDeclared = { ...pending, activationDecision: 'approved-independent-review',
+    activationEligible: true };
+  assert.throws(() => bindGoogleWebReadiness(selfDeclared,
+    sha256(JSON.stringify(selfDeclared)), { now: valid.now, expectedSource: source }),
+  /google_web_readiness_shape/);
+  const changes = [
+    (value) => { value.activationEligible = false; },
+    (value) => { value.activationDecision = 'pending-independent-review'; },
+    (value) => { value.readiness.webAppId = `1:123456789012:web:${'b'.repeat(32)}`; },
+    (value) => { value.readiness.authorizedDomain = 'foreign.invalid'; },
+    (value) => { value.readiness.firebaseProviderId = 'facebook.com'; },
+    (value) => { value.readiness.prerequisiteJournalSha256 = 'b'.repeat(64); },
+    (value) => { value.configuration.apiKey = ['AI', 'za', 'y'.repeat(35)].join(''); },
+  ];
+  for (const mutate of changes) {
+    const value = structuredClone(valid.envelope);
+    mutate(value);
+    value.configurationSha256 = sha256(JSON.stringify(value.configuration));
+    value.readinessSha256 = sha256(JSON.stringify(value.readiness));
+    assert.throws(() => bindGoogleWebReadiness(value, sha256(JSON.stringify(value)),
+      { now: valid.now, expectedSource: source }));
+  }
+  assert.throws(() => bindGoogleWebReadiness(valid.envelope, valid.evidenceDigest,
+    { now: new Date(valid.now.getTime() + 3 * 60 * 60_000), expectedSource: source }),
+  /google_web_readiness_invalid|google_web_decision_invalid/);
+  assert.throws(() => bindGoogleWebReadiness(valid.envelope, valid.evidenceDigest,
+    { now: valid.now, expectedSource: 'b'.repeat(40) }), /google_web_readiness_invalid/);
+
+  const reordered = JSON.stringify(Object.fromEntries(
+    Object.entries(valid.envelope).reverse(),
+  ));
+  fs.writeFileSync(file, reordered, { mode: 0o600 });
+  assert.throws(() => readGoogleWebReadiness(file, sha256(reordered),
+    { now: valid.now, expectedSource: source }), /google_web_readiness_canonical/);
+  fs.writeFileSync(file, valid.bytes);
+  fs.chmodSync(file, 0o644);
+  assert.throws(() => readGoogleWebReadiness(file, valid.evidenceDigest,
+    { now: valid.now, expectedSource: source }), /google_web_readiness_file/);
 });

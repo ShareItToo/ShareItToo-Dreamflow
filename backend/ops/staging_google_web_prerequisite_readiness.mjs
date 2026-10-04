@@ -18,6 +18,13 @@ import {
 const repositoryRoot = path.resolve(fileURLToPath(new URL('../../', import.meta.url)));
 const runnerFile = fileURLToPath(new URL('./staging_google_web_prerequisites.mjs', import.meta.url));
 const hashPattern = /^[a-f0-9]{64}$/u;
+const decisionKeys = Object.freeze([
+  'schemaVersion', 'kind', 'evidenceClass', 'syntheticFixture', 'decision',
+  'sourceCommit', 'prerequisiteJournalSha256', 'prerequisiteFinalRecordSha256',
+  'configurationSha256', 'readinessSha256', 'projectId', 'projectNumber',
+  'webAppId', 'authorizedDomain', 'firebaseProviderId', 'decidedAtUtc',
+  'validUntilUtc',
+]);
 
 export class StagingGoogleWebPrerequisiteReadinessError extends Error {
   constructor() {
@@ -36,6 +43,7 @@ const canonical = (value) => {
   return value;
 };
 const digest = (value) => sha256(JSON.stringify(canonical(value)));
+const ordered = (value, keys) => Object.fromEntries(keys.map((key) => [key, value[key]]));
 
 function protectedConfig(file, expectedDigest) {
   let opened;
@@ -140,5 +148,81 @@ export function collectStagingGoogleWebPrerequisiteReadiness({
   } catch (error) {
     if (error instanceof StagingGoogleWebPrerequisiteReadinessError) throw error;
     deny();
+  }
+}
+
+export function collectStagingGoogleWebActivationReadiness({
+  journalFile,
+  configFile,
+  expectedJournalSha256,
+  decisionFile,
+  expectedDecisionSha256,
+  now = Date.now,
+} = {}) {
+  let opened;
+  try {
+    if (typeof now !== 'function') deny();
+    const observedNow = now();
+    const candidate = collectStagingGoogleWebPrerequisiteReadiness({
+      journalFile,
+      configFile,
+      expectedJournalSha256,
+      now: () => observedNow,
+    });
+    if (typeof decisionFile !== 'string' || !path.isAbsolute(decisionFile)
+        || path.normalize(decisionFile) !== decisionFile
+        || !hashPattern.test(expectedDecisionSha256 ?? '')) deny();
+    opened = readProtectedActivationFile(decisionFile, { maximumBytes: 8192 });
+    if (sha256(opened.bytes) !== expectedDecisionSha256) deny();
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(opened.bytes);
+    const decision = JSON.parse(text);
+    if (!exact(decision, decisionKeys)
+        || JSON.stringify(ordered(decision, decisionKeys)) !== text) deny();
+    const decided = Date.parse(decision.decidedAtUtc);
+    const validUntil = Date.parse(decision.validUntilUtc);
+    const collected = Date.parse(candidate.readiness.collectedAtUtc);
+    const readinessValidUntil = Date.parse(candidate.readiness.validUntilUtc);
+    if (decision.schemaVersion !== 1
+        || decision.kind !== 'sit-google-web-prerequisite-activation-decision'
+        || decision.evidenceClass !== 'independent-release-review'
+        || decision.syntheticFixture !== false
+        || decision.decision !== 'approved'
+        || decision.sourceCommit !== candidate.readiness.sourceCommit
+        || decision.prerequisiteJournalSha256
+          !== candidate.readiness.prerequisiteJournalSha256
+        || decision.prerequisiteFinalRecordSha256
+          !== candidate.readiness.prerequisiteFinalRecordSha256
+        || decision.configurationSha256 !== candidate.configurationSha256
+        || decision.readinessSha256 !== candidate.readinessSha256
+        || decision.projectId !== candidate.readiness.projectId
+        || decision.projectNumber !== candidate.readiness.projectNumber
+        || decision.webAppId !== candidate.readiness.webAppId
+        || decision.authorizedDomain !== candidate.readiness.authorizedDomain
+        || decision.firebaseProviderId !== candidate.readiness.firebaseProviderId
+        || !Number.isFinite(observedNow) || !Number.isFinite(decided)
+        || !Number.isFinite(validUntil) || decided < collected
+        || validUntil <= decided
+        || validUntil - decided > STAGING_GOOGLE_WEB_PREREQUISITE_MAXIMUM_AGE_MS
+        || observedNow < decided || observedNow >= validUntil
+        || validUntil > readinessValidUntil) deny();
+    return Object.freeze({
+      schemaVersion: 2,
+      kind: candidate.kind,
+      evidenceClass: 'verified-prerequisite-journal-and-independent-decision',
+      syntheticFixture: false,
+      activationDecision: 'approved-independent-review',
+      activationEligible: true,
+      configuration: candidate.configuration,
+      configurationSha256: candidate.configurationSha256,
+      readiness: candidate.readiness,
+      readinessSha256: candidate.readinessSha256,
+      decision: Object.freeze(ordered(decision, decisionKeys)),
+      decisionSha256: expectedDecisionSha256,
+    });
+  } catch (error) {
+    if (error instanceof StagingGoogleWebPrerequisiteReadinessError) throw error;
+    deny();
+  } finally {
+    opened?.bytes.fill(0);
   }
 }

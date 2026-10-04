@@ -6,7 +6,9 @@ import path from 'node:path';
 import vm from 'node:vm';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { TARGET, GOOGLE_WEB_PROFILE, bindGoogleWebConfig, profile, cleanSource, sealArtifact, validateArtifact, deploy, sha256, stagingBootstrap, stagingBootstrapFor, retirementWorker } from '../../tool/staging_web_contract.mjs';
+import { TARGET, profile, cleanSource, sealArtifact, validateArtifact, deploy, sha256, stagingBootstrap, stagingBootstrapFor, retirementWorker } from '../../tool/staging_web_contract.mjs';
+import { GOOGLE_WEB_PROFILE_V2 } from '../../tool/staging_google_web_readiness.mjs';
+import { syntheticGoogleBinding } from './staging_google_web_readiness_fixture.mjs';
 import { buildArchive, verifyArchive } from '../../tool/staging_web_archive.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -18,27 +20,25 @@ function fixture(t, googleWeb = null) {
   git('init'); fs.writeFileSync(path.join(sourceRoot, 'fixture'), 'tracked'); git('add', '.');
   git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-m', 'fixture');
   const source = git('rev-parse', 'HEAD');
+  const googleBinding = typeof googleWeb === 'function' ? googleWeb(source) : googleWeb;
   function artifact(name, version = '1.0.0+2026092905', binding = null) {
     const directory = path.join(temp, name); fs.mkdirSync(path.join(directory, 'web'), { recursive: true });
     for (const [file, text] of Object.entries({ 'index.html': '<script src="flutter_bootstrap.js" async></script>', 'main.dart.js': 'compiled fixture', 'manifest.json': '{"name":"ShareItToo"}', 'flutter_bootstrap.js': '_flutter.loader.load();' })) fs.writeFileSync(path.join(directory, 'web', file), text);
     const hash = sealArtifact({ directory, source, version, flutterVersion: { frameworkVersion: 'fixture' }, builderDigest: 'a'.repeat(64), googleWeb: binding });
     return { directory, hash };
   }
-  const old = artifact('old', '1.0.0+2026092904'); const candidate = artifact('candidate', undefined, googleWeb);
+  const old = artifact('old', '1.0.0+2026092904'); const candidate = artifact('candidate', undefined, googleBinding);
   const root = path.join(temp, 'staging-web'); fs.mkdirSync(path.join(root, 'releases'), { recursive: true, mode: 0o755 });
   fs.cpSync(old.directory, path.join(root, 'releases', old.hash), { recursive: true });
   fs.symlinkSync(`releases/${old.hash}/web`, path.join(root, 'current'));
   const args = { root, target: TARGET, artifact: candidate.directory, manifestHash: candidate.hash, sourceRoot, source, currentHash: old.hash, verify: () => {} };
-  return { temp, root, old, candidate, args, sourceRoot, source };
+  return { temp, root, old, candidate, args, sourceRoot, source, googleBinding };
 }
 
 function googleHandoff(t) {
   // Synthetic public options only; no Firebase, Flutter build or live route.
-  const config = { projectId: 'synthetic-sit-fixture', messagingSenderId: '123456789012',
-    appId: `1:123456789012:web:${'a'.repeat(32)}`, apiKey: ['AI', 'za', 'x'.repeat(35)].join(''),
-    authDomain: 'synthetic-sit-fixture.firebaseapp.com', backendProjectId: 'synthetic-sit-fixture', authorizedOrigin: TARGET };
-  const binding = bindGoogleWebConfig(config, sha256(JSON.stringify(config)));
-  const f = fixture(t, binding);
+  const f = fixture(t, (exactSource) => syntheticGoogleBinding(exactSource));
+  const binding = f.googleBinding;
   const archive = path.join(f.temp, 'transfer.tar');
   const proof = buildArchive(f.candidate.directory, f.candidate.hash, archive);
   assert.equal(proof.archiveHash, sha256(fs.readFileSync(archive)));
@@ -47,9 +47,9 @@ function googleHandoff(t) {
   execFileSync('tar', ['-xf', archive, '-C', extracted], { stdio: ['ignore', 'pipe', 'pipe'] });
   assert.equal(verifyArchive(extracted, f.candidate.hash, archive).archiveHash, proof.archiveHash);
   const manifest = validateArtifact(extracted, f.candidate.hash, f.source);
-  assert.equal(manifest.schemaVersion, 2);
-  assert.equal(manifest.profileContractVersion, GOOGLE_WEB_PROFILE);
-  assert.equal(manifest.googleWebConfigDigest, binding.digest);
+  assert.equal(manifest.schemaVersion, 6);
+  assert.equal(manifest.profileContractVersion, GOOGLE_WEB_PROFILE_V2);
+  assert.equal(manifest.googleWebConfigDigest, binding.configDigest);
   assert.equal(validateArtifact(f.old.directory, f.old.hash).schemaVersion, 1);
   for (const name of ['staging-web-manifest.json', 'SHA256SUMS', ...Object.keys(manifest.files).map((name) => `web/${name}`)]) {
     assert.deepEqual(fs.readFileSync(path.join(extracted, name)), fs.readFileSync(path.join(f.candidate.directory, name)), name);
@@ -84,7 +84,7 @@ function routeVerifier(f, expected, drift = null) {
   return { verify, calls: () => calls };
 }
 
-test('Google v2 archive handoff preflights without mutation and publishes exact identity over existing v1 route', (t) => {
+test('Google v6 archive handoff preflights without mutation and publishes exact identity over existing v1 route', (t) => {
   const f = googleHandoff(t); const reader = routeVerifier(f, f.candidate);
   const before = fs.readdirSync(f.root); const releases = fs.readdirSync(path.join(f.root, 'releases'));
   assert.equal(deploy({ ...f.args, verify: reader.verify }).status, 'preflight-passed-no-mutation');
@@ -112,7 +112,7 @@ test('Google v2 archive handoff preflights without mutation and publishes exact 
 });
 
 for (const drift of ['source', 'version', 'profileDigest', 'bootstrap']) {
-  test(`Google v2 served ${drift} mismatch restores v1 pointer without claiming recovery readback`, (t) => {
+  test(`Google v6 served ${drift} mismatch restores v1 pointer without claiming recovery readback`, (t) => {
     const f = googleHandoff(t); const reader = routeVerifier(f, f.candidate, drift);
     assert.throws(() => deploy({ ...f.args, execute: true, verify: reader.verify }), { message: 'staging_static_readback_mismatch' });
     assert.equal(reader.calls(), 1, 'automatic restoration validates disk only; no second served readback');

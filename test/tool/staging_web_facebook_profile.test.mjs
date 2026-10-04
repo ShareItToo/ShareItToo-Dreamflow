@@ -9,7 +9,6 @@ import { fileURLToPath } from 'node:url';
 
 import {
   TARGET,
-  bindGoogleWebConfig,
   profile,
   sealArtifact,
   sha256,
@@ -22,6 +21,7 @@ import {
   readFacebookWebReadiness,
   validateFacebookWebBinding,
 } from '../../tool/staging_facebook_web_readiness.mjs';
+import { syntheticGoogleBinding } from './staging_google_web_readiness_fixture.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const source = 'a'.repeat(40);
@@ -96,7 +96,7 @@ function binding(options = {}, now = runClock) {
 }
 
 function googleBinding(publicConfig = config()) {
-  return bindGoogleWebConfig(publicConfig, digest(JSON.stringify(publicConfig)));
+  return syntheticGoogleBinding(source, { configuration: publicConfig, now: runClock });
 }
 
 function temp(t) {
@@ -426,8 +426,8 @@ test('schema v3 artifact binds profile, readiness and evidence through release i
 
   const both = makeArtifact(t, { googleWeb: googleBinding(), facebookWeb });
   const bothManifest = validateArtifact(both.directory, both.hash, source);
-  assert.equal(bothManifest.schemaVersion, 3);
-  assert.equal(bothManifest.googleWebConfigDigest, googleBinding().digest);
+  assert.equal(bothManifest.schemaVersion, 6);
+  assert.equal(bothManifest.googleWebConfigDigest, googleBinding().configDigest);
   assert.equal(bothManifest.profile.SIT_SOCIAL_GOOGLE_ENABLED, 'true');
   assert.equal(bothManifest.profile.SIT_SOCIAL_FACEBOOK_ENABLED, 'true');
 });
