@@ -12,6 +12,7 @@ import {
   collectStagingGoogleWebPrerequisiteReadiness,
 } from '../ops/staging_google_web_prerequisite_readiness.mjs';
 import { sha256, readGoogleWebConfig, profile } from '../../tool/staging_web_contract.mjs';
+import { readGoogleWebReadiness } from '../../tool/staging_google_web_readiness.mjs';
 
 function fixture(t) {
   const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sit-google-prerequisite-')));
@@ -182,7 +183,7 @@ test('complete journal produces a non-activating canonical readiness candidate',
     f.snapshot.providerConfigDigest);
   assert.equal(candidate.readiness.authorizedDomain, 'staging.shareittoo.com');
   assert.equal(candidate.readinessSha256,
-    prerequisiteSnapshotDigest(candidate.readiness));
+    sha256(JSON.stringify(candidate.readiness)));
   assert.doesNotMatch(JSON.stringify(candidate), /private-(?:service|user|client)/u);
   assert.deepEqual(Object.keys(candidate), [
     'schemaVersion', 'kind', 'evidenceClass', 'syntheticFixture', 'activationDecision',
@@ -191,7 +192,7 @@ test('complete journal produces a non-activating canonical readiness candidate',
   ]);
 });
 
-test('separate exact journal-bound decision is the only activation-eligible collector path', async (t) => {
+test('real journal collector and independent decision produce builder-readable readiness', async (t) => {
   const f = fixture(t);
   await f.invoke({ execute: true });
   const journal = readStagingGoogleWebPrerequisiteJournal(f.journalFile);
@@ -222,6 +223,29 @@ test('separate exact journal-bound decision is the only activation-eligible coll
   assert.equal(approved.activationDecision, 'approved-independent-review');
   assert.equal(approved.decisionSha256, decisionSha256);
   assert.equal(approved.readiness.prerequisiteJournalSha256, journal.journalSha256);
+
+  // Exercise the real collector-to-builder boundary, without substituting
+  // hand-authored readiness hashes or invoking a compiler/provider.
+  const readinessFile = path.join(f.directory, 'eligible-readiness.json');
+  const readinessBytes = JSON.stringify(approved);
+  fs.writeFileSync(readinessFile, readinessBytes, { mode: 0o600 });
+  const builderBinding = readGoogleWebReadiness(readinessFile, sha256(readinessBytes), {
+    expectedSource: f.binding.sourceCommit,
+    now: new Date(collected + 2000),
+  });
+  assert.equal(builderBinding.readinessDigest, pending.readinessSha256);
+  assert.equal(builderBinding.decisionDigest, decisionSha256);
+  const buildProfile = profile(f.binding.sourceCommit, '1.0.0+1', builderBinding);
+  assert.equal(buildProfile.SIT_SOCIAL_GOOGLE_ENABLED, 'true');
+  assert.equal(buildProfile.SIT_SOCIAL_APPLE_ENABLED, 'false');
+  assert.equal(buildProfile.SIT_SOCIAL_FACEBOOK_ENABLED, 'false');
+  assert.throws(() => readGoogleWebReadiness(readinessFile, sha256(readinessBytes), {
+    expectedSource: 'f'.repeat(40), now: new Date(collected + 2000),
+  }), /google_web_readiness_invalid/u);
+  assert.throws(() => readGoogleWebReadiness(readinessFile, sha256(readinessBytes), {
+    expectedSource: f.binding.sourceCommit,
+    now: new Date(approved.decision.validUntilUtc),
+  }), /google_web_decision_invalid/u);
 
   for (const [field, value] of [
     ['decision', 'pending'],

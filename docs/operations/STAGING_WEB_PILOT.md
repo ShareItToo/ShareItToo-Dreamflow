@@ -44,44 +44,69 @@ approved out of band; the deployer never trusts an artifact's self-declared hash
 This is a repeatable input contract, not a claim of byte-identical Flutter output
 across different toolchains. No timestamps or local/private paths enter it.
 
-### Explicit Google Web successor (schema 2)
+### Explicit Google Web successor (readiness schema 2, artifact schema 6)
 
-The versioned `staging-google-web-v1` profile is a separate build input:
+The `staging-google-web-v2` profile requires verified prerequisite readiness
+and a separate independent activation decision. The current CLI rejects the
+legacy `--google-web-config` option and config-only candidates.
+
+1. Close `SIT-GOOGLE-WEB-PREREQ-01` against the exact intended build source.
+   Preserve the protected schema-4 prerequisite journal in phase `complete`
+   and its exported public configuration. The completion must contain the
+   registered Web app, exact authorized Staging domain, enabled Google provider,
+   matching backend Firebase project, runtime and full inventory readback.
+2. Import `collectStagingGoogleWebPrerequisiteReadiness` from
+   `backend/ops/staging_google_web_prerequisite_readiness.mjs` in that source
+   checkout. Supply `journalFile`, `configFile`, and independently verified
+   `expectedJournalSha256`. The returned candidate is pending independent
+   review and cannot enable the builder. This module exports functions; it
+   does not provide a CLI.
+3. Obtain an independent approved decision binding the exact source, journal
+   and final record, configuration/readiness hashes, project/app/domain and
+   provider. Preserve its canonical compact JSON as a protected decision file.
+   Call `collectStagingGoogleWebActivationReadiness` with the same three inputs
+   plus `decisionFile` and independently verified `expectedDecisionSha256`.
+   Write its unchanged `JSON.stringify` result, without a trailing newline,
+   into a new protected readiness file and independently verify its byte SHA-256.
+   Never manufacture approval or substitute synthetic evidence.
+4. Build from a clean exact-source checkout, including no untracked files:
 
 ```sh
-node tool/build_staging_web.mjs /absolute/clean/source EXACT_40_CHAR_HEAD /absolute/new/artifact --google-web-config /absolute/private/public-web-config.json REVIEWED_CONFIG_SHA256
+node /absolute/clean/source/tool/build_staging_web.mjs /absolute/clean/source EXACT_40_CHAR_HEAD /absolute/new/artifact --google-web-readiness /absolute/private/eligible-readiness.json VERIFIED_EVIDENCE_SHA256
 ```
 
-Before supplying this input, close `SIT-GOOGLE-WEB-PREREQ-01`, independently
-read back the registered Web app and exact authorized Staging domain, and bind
-the public configuration to the Staging backend Firebase project. The builder
-checks configuration integrity, not provider approval or live functionality.
-Do not manufacture the reviewed digest from guessed values.
+The input is a schema-2 envelope with `activationEligible: true`,
+`activationDecision: "approved-independent-review"`, `syntheticFixture: false`,
+and `evidenceClass: "verified-prerequisite-journal-and-independent-decision"`.
+It carries `configuration`, `readiness`, `decision` and their SHA-256 bindings.
+The collector and builder use the same schema-ordered readiness digest; this
+is distinct from the prerequisite journal's sorted snapshot digest. Existing
+decisions made against a different readiness digest must be reviewed again.
 
-The external JSON file must be a current-user-owned regular single-link file
-with mode `0600`, outside the source checkout, at an absolute non-symlink path.
-It contains exactly seven string fields: `projectId`, `messagingSenderId`,
-`appId`, `apiKey`, `authDomain`, `backendProjectId`, `authorizedOrigin`. The
-SHA-256 input binds UTF-8 compact JSON with those keys in that exact order;
-file formatting and input key order do not change this canonical digest.
-Provider-issued public values remain external and must not be pasted into
-Git, chat, or logs. Service-account credentials, OAuth client secrets,
-additional keys, partial options, mismatched project/sender/app identities,
-custom auth domains and origins other than `https://staging.shareittoo.com`
-are rejected before compilation. The auth domain must equal
-`projectId + '.firebaseapp.com'` and the backend project must match.
+The builder verifies exact source and matching identities, provider/runtime
+state, journal bindings, and both evidence and decision freshness (at most two
+hours from completion, with decision validity no later than readiness expiry).
+Sealing and candidate deployment validate freshness again. Expired evidence
+requires fresh prerequisite readback and a renewed independent decision.
 
-The successor enables exactly Google plus its activation-validation flag;
-Apple and Facebook remain off and every other shell setting retains its
-schema-1 value. Its manifest has `schemaVersion: 2`,
-`profileContractVersion: "staging-google-web-v1"`, and
-`googleWebConfigDigest`, with the exact public defines bound in `profile`.
-These SDK options are necessarily present in the compiled browser app and
-the external artifact manifest; they are not secrets. The release identity
-and freshness bootstrap bind the complete profile including the public config.
-The same shared contract generates and validates both versions. Historical
-schema-1 artifacts retain their original profiles and remain readable for
-current/rollback validation under the existing bootstrap-version rules.
+The readiness file must be current-user-owned, regular, single-link, mode
+`0600`, 2–32768 bytes, outside the source checkout, with an absolute canonical
+path and no symlink components; its parent must be current-user-owned `0700`.
+Canonical compact JSON key order and exact bytes matter, including the outer
+evidence digest. The configuration contains exactly seven strings:
+`projectId`, `messagingSenderId`, `appId`, `apiKey`, `authDomain`,
+`backendProjectId`, `authorizedOrigin`. Auth domain must equal
+`projectId + '.firebaseapp.com'`, backend project must match, and origin must
+be `https://staging.shareittoo.com`. Keep provider values in protected inputs;
+never include service-account credentials or OAuth secrets.
+
+With only this option, Google plus activation validation are enabled; Apple
+and Facebook remain off. The artifact has `schemaVersion: 6`,
+`profileContractVersion: "staging-google-web-v2"`, config/readiness/decision/
+evidence digests, validation time, and prerequisite journal/final-record
+hashes. SDK options necessarily appear in the compiled app and external
+manifest. Historical artifacts remain subject to current/rollback validation
+rules and are not eligible new Google candidates merely because they exist.
 
 The builder passes defines via an ephemeral owner-only file and removes it on
 exit. It does not print config values in its summary or parser/subprocess
@@ -90,11 +115,13 @@ is performed by this source package. A successful artifact still requires the
 existing archive/deploy checks and real Google popup/login, cancellation,
 SIT session/MFA and logout acceptance before Web login is called functional.
 
-Focused proof: `node --test test/tool/staging_web_google_profile.test.mjs`
-includes the real builder CLI, input reader, sealing and artifact validator,
-with explicitly synthetic options and substituted compiler/smoke processes.
-It is generated-manifest contract evidence, not an actual Flutter build or
-Firebase authentication result.
+Focused proof:
+`node --test backend/test/staging_google_web_prerequisites.test.js test/tool/staging_web_google_profile.test.mjs`.
+The prerequisite suite exercises the real journal collector and independent
+decision through the builder's protected input reader and profile, including
+source and expiry rejection. The profile suite includes the real builder CLI,
+sealing and artifact validator with synthetic inputs and substituted compiler/
+smoke processes. These prove contracts, not live Firebase authentication.
 
 ## Required checked transfer archive
 

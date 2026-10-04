@@ -14,6 +14,7 @@ import {
   bindGoogleWebConfig,
   sha256,
 } from '../../tool/staging_web_contract.mjs';
+import { googleWebReadinessDigest } from '../../tool/staging_google_web_readiness.mjs';
 
 const repositoryRoot = path.resolve(fileURLToPath(new URL('../../', import.meta.url)));
 const runnerFile = fileURLToPath(new URL('./staging_google_web_prerequisites.mjs', import.meta.url));
@@ -36,13 +37,6 @@ const exact = (value, keys) => value !== null && typeof value === 'object'
   && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype
   && Object.keys(value).length === keys.length
   && keys.every((key) => Object.hasOwn(value, key));
-const canonical = (value) => {
-  if (Array.isArray(value)) return value.map(canonical);
-  if (value && typeof value === 'object') return Object.fromEntries(Object.keys(value).sort()
-    .map((key) => [key, canonical(value[key])]));
-  return value;
-};
-const digest = (value) => sha256(JSON.stringify(canonical(value)));
 const ordered = (value, keys) => Object.fromEntries(keys.map((key) => [key, value[key]]));
 
 function protectedConfig(file, expectedDigest) {
@@ -143,7 +137,7 @@ export function collectStagingGoogleWebPrerequisiteReadiness({
       configuration: Object.freeze({ ...configuration.config }),
       configurationSha256: configuration.digest,
       readiness,
-      readinessSha256: digest(readiness),
+      readinessSha256: googleWebReadinessDigest(readiness),
     });
   } catch (error) {
     if (error instanceof StagingGoogleWebPrerequisiteReadinessError) throw error;

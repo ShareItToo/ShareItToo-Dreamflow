@@ -51,6 +51,12 @@ function exact(value, keys, code) {
     && Object.keys(value).length === keys.length
     && keys.every((key) => Object.hasOwn(value, key)), code);
 }
+// The collector and builder share this schema-defined serialization. Keep it
+// distinct from the prerequisite journal's recursively sorted snapshot digest.
+export function googleWebReadinessDigest(readiness) {
+  exact(readiness, readinessKeys, 'google_web_readiness_shape');
+  return sha256(JSON.stringify(ordered(readiness, readinessKeys)));
+}
 function iso(value, code) {
   const date = value instanceof Date ? new Date(value.getTime()) : new Date(value);
   check(!Number.isNaN(date.getTime()), code);
@@ -184,7 +190,7 @@ export function bindGoogleWebReadiness(evidence, evidenceDigest,
   const readiness = canonical.readiness;
   const readinessJson = JSON.stringify(readiness);
   check(hashPattern.test(canonical.readinessSha256)
-    && sha256(readinessJson) === canonical.readinessSha256,
+    && googleWebReadinessDigest(readiness) === canonical.readinessSha256,
   'google_web_readiness_digest_mismatch');
   const collected = Date.parse(iso(readiness.collectedAtUtc, 'google_web_readiness_time'));
   const readinessUntil = Date.parse(iso(readiness.validUntilUtc,
