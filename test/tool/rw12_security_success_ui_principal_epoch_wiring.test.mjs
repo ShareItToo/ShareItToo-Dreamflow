@@ -75,7 +75,8 @@ test('rejection, confirmed-local-failure and unknown outcome stay distinct', () 
 });
 
 test('web security-state notifications participate in the same epoch boundary', () => {
-  assert.match(webSync, /'account_security_state_v1'/u);
+  assert.match(webSync, /SharedPersistenceKeys.sharedKeys/u);
+  assert.match(read('lib/services/shared_persistence_keys.dart'), /'account_security_state_v1'/u);
 });
 
 test('supported regression permanently executes RW12 behavior and wiring tests', () => {

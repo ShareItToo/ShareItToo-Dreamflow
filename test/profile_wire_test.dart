@@ -104,7 +104,7 @@ void main() {
                 return http.Response(jsonEncode({'user': user.toJson()}), 200);
               }));
       expect(calls, 2);
-    });
+    }, skip: !BackendConfig.enabled);
   }
 
   testWidgets(

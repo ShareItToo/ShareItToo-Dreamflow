@@ -2,30 +2,16 @@ import 'dart:async';
 // This file is loaded only by the web conditional import above it.
 // ignore: deprecated_member_use, avoid_web_libraries_in_flutter
 import 'dart:html' as html;
+import 'shared_persistence_keys.dart';
 
 final StreamController<String> _controller =
     StreamController<String>.broadcast(sync: true);
 bool _initialized = false;
 html.BroadcastChannel? _channel;
 
-const Set<String> _watchedKeys = {
-  'rental_requests',
-  'message_threads_v1',
-  'handover_return_state_v1',
-  'saved_items',
-  'wishlist_state_v2',
-  'wishlist_state_v3',
-  'rental_cart_v1',
-  'rental_cart_v2',
-  'account_security_state_v1',
-  'local_safety_privacy_state_v1',
-};
+const Set<String> _watchedKeys = SharedPersistenceKeys.sharedKeys;
 
-String _canonicalKey(String key) => switch (key) {
-      'wishlist_state_v2' => 'wishlist_state_v3',
-      'rental_cart_v1' => 'rental_cart_v2',
-      _ => key,
-    };
+String _canonicalKey(String key) => SharedPersistenceKeys.canonicalKey(key);
 
 Stream<String> get sharedPersistenceChanges {
   _ensureInitialized();

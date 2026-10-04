@@ -47,8 +47,9 @@ test('committed saved state propagates to every retained open surface', () => {
   for (const key of ['savedItemsKey', 'wishlistStateKey', 'rentalCartKey']) {
     assert.match(sync, new RegExp(`static const String ${key}`, 'u'));
   }
-  assert.match(read('lib/services/shared_persistence_sync_web.dart'), /wishlist_state_v3/u);
-  assert.match(read('lib/services/shared_persistence_sync_web.dart'), /wishlist_state_v2/u);
+  assert.match(read('lib/services/shared_persistence_sync_web.dart'), /SharedPersistenceKeys.sharedKeys/u);
+  assert.match(read('lib/services/shared_persistence_keys.dart'), /wishlist_state_v3/u);
+  assert.match(read('lib/services/shared_persistence_keys.dart'), /wishlist_state_v2/u);
 
   for (const path of [
     'lib/screens/explore_screen.dart',

@@ -1079,6 +1079,21 @@ flutter test --reporter expanded \
   --dart-define=SIT_API_BASE_URL=http://127.0.0.1:1/api/v1 \
   test/managed_avatar_refresh_test.dart
 
+# Profile wire tests include the real repository authorization boundary and
+# therefore need the backend-enabled compile profile. Every HTTP request stays
+# intercepted by the test; the loopback origin must never be contacted.
+flutter test --reporter expanded \
+  --dart-define=SIT_BACKEND_ENABLED=true \
+  --dart-define=SIT_API_BASE_URL=http://127.0.0.1:1/api/v1 \
+  test/profile_wire_test.dart
+
+# Web persistence has a different event transport from the VM. This browser
+# regression uses real localStorage but intercepts all backend and image HTTP.
+flutter test --reporter expanded --platform chrome \
+  --dart-define=SIT_BACKEND_ENABLED=true \
+  --dart-define=SIT_API_BASE_URL=http://127.0.0.1:1/api/v1 \
+  test/web_avatar_persistence_test.dart
+
 # Offline SDK mocks exercise enabled providers without a release artifact,
 # real credentials, SMS, provider login or network access. Cold Google init
 # owns a fresh process because the production SDK initialization is cached.

@@ -625,7 +625,7 @@ packages:
     source: hosted
     version: "0.2.2"
   image_picker_platform_interface:
-    dependency: transitive
+    dependency: "direct dev"
     description:
       name: image_picker_platform_interface
       sha256: "9f143b0dba3e459553209e20cc425c9801af48e6dfa4f01a0fcf927be3f41665"
@@ -929,7 +929,7 @@ packages:
     source: hosted
     version: "2.4.1"
   shared_preferences_web:
-    dependency: transitive
+    dependency: "direct dev"
     description:
       name: shared_preferences_web
       sha256: c49bd060261c9a3f0ff445892695d6212ff603ef3115edbb448509d407600019

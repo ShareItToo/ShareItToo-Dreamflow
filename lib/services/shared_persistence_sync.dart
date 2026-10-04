@@ -2,24 +2,34 @@ import 'dart:async';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'shared_persistence_keys.dart';
+
 import 'shared_persistence_sync_stub.dart'
     if (dart.library.html) 'shared_persistence_sync_web.dart';
 
 class SharedPersistenceSync {
-  static const String rentalRequestsKey = 'rental_requests';
-  static const String messageThreadsKey = 'message_threads_v1';
-  static const String handoverReturnStateKey = 'handover_return_state_v1';
-  static const String savedItemsKey = 'saved_items';
-  static const String wishlistStateKey = 'wishlist_state_v3';
-  static const String rentalCartKey = 'rental_cart_v2';
+  static const String rentalRequestsKey =
+      SharedPersistenceKeys.rentalRequestsKey;
+  static const String messageThreadsKey =
+      SharedPersistenceKeys.messageThreadsKey;
+  static const String handoverReturnStateKey =
+      SharedPersistenceKeys.handoverReturnStateKey;
+  static const String savedItemsKey = SharedPersistenceKeys.savedItemsKey;
+  static const String wishlistStateKey = SharedPersistenceKeys.wishlistStateKey;
+  static const String rentalCartKey = SharedPersistenceKeys.rentalCartKey;
   static const String localSafetyPrivacyStateKey =
-      'local_safety_privacy_state_v1';
-  static const String listingCatalogKey = 'items';
-  static const String reviewReputationKey = 'multi_reviews_v1';
-  static const String accountSecurityStateKey = 'account_security_state_v1';
-  static const String profileStateKey = 'profile_state_v1';
-  static const String legacyWishlistStateKey = 'wishlist_state_v2';
-  static const String legacyRentalCartKey = 'rental_cart_v1';
+      SharedPersistenceKeys.localSafetyPrivacyStateKey;
+  static const String listingCatalogKey =
+      SharedPersistenceKeys.listingCatalogKey;
+  static const String reviewReputationKey =
+      SharedPersistenceKeys.reviewReputationKey;
+  static const String accountSecurityStateKey =
+      SharedPersistenceKeys.accountSecurityStateKey;
+  static const String profileStateKey = SharedPersistenceKeys.profileStateKey;
+  static const String legacyWishlistStateKey =
+      SharedPersistenceKeys.legacyWishlistStateKey;
+  static const String legacyRentalCartKey =
+      SharedPersistenceKeys.legacyRentalCartKey;
 
   static const Set<String> _bookingKeys = {
     rentalRequestsKey,
@@ -27,19 +37,7 @@ class SharedPersistenceSync {
     handoverReturnStateKey,
   };
 
-  static const Set<String> _sharedKeys = {
-    ..._bookingKeys,
-    savedItemsKey,
-    wishlistStateKey,
-    rentalCartKey,
-    localSafetyPrivacyStateKey,
-    listingCatalogKey,
-    reviewReputationKey,
-    accountSecurityStateKey,
-    profileStateKey,
-    legacyWishlistStateKey,
-    legacyRentalCartKey,
-  };
+  static const Set<String> _sharedKeys = SharedPersistenceKeys.sharedKeys;
 
   static final Map<String, Timer> _catchUpRetryTimers = <String, Timer>{};
 
@@ -104,11 +102,8 @@ class SharedPersistenceSync {
         : null;
   }
 
-  static String _canonicalLogicalKey(String key) => switch (key) {
-        legacyWishlistStateKey => wishlistStateKey,
-        legacyRentalCartKey => rentalCartKey,
-        _ => key,
-      };
+  static String _canonicalLogicalKey(String key) =>
+      SharedPersistenceKeys.canonicalKey(key);
 
   /// SharedPreferences keeps an in-memory cache. A storage event from another
   /// browser tab must refresh that cache before screens read the new values.

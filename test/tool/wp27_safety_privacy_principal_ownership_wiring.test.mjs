@@ -204,5 +204,6 @@ test('communication refresh includes account-security transitions', () => {
 
 test('web cross-tab refresh includes principal-bound safety state', () => {
   const source = read('lib/services/shared_persistence_sync_web.dart');
-  assert.match(source, /'local_safety_privacy_state_v1'/u);
+  assert.match(source, /SharedPersistenceKeys.sharedKeys/u);
+  assert.match(read('lib/services/shared_persistence_keys.dart'), /'local_safety_privacy_state_v1'/u);
 });
