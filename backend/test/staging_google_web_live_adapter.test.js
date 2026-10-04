@@ -279,7 +279,7 @@ test('CLI defaults to provider-read-only preflight and does not require user cre
   const root = path.resolve(new URL('../../', import.meta.url).pathname);
   const sourceCommit = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
   const runnerDigest = sha(fs.readFileSync(new URL('../ops/staging_google_web_prerequisites.mjs', import.meta.url)));
-  const binding = { ...f.binding, schemaVersion: 3, sourceCommit, runnerDigest,
+  const binding = { ...f.binding, schemaVersion: 4, sourceCommit, runnerDigest,
     baselineDigest: prerequisiteSnapshotDigest(snapshot) };
   binding.gate = { id: 'SIT-GOOGLE-WEB-PREREQ-01', decision: 'pending', sourceCommit, runnerDigest,
     firebaseAccountEmailSha256: binding.firebaseAccountEmailSha256,

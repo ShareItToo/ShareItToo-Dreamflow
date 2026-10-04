@@ -5,7 +5,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { runStagingGoogleWebPrerequisites as run, prerequisiteSnapshotDigest, assertPrerequisiteOutputPath,
-  STAGING_GOOGLE_WEB_DISPLAY_NAME } from '../ops/staging_google_web_prerequisites.mjs';
+  STAGING_GOOGLE_WEB_DISPLAY_NAME,
+  readStagingGoogleWebPrerequisiteJournal } from '../ops/staging_google_web_prerequisites.mjs';
+import {
+  collectStagingGoogleWebPrerequisiteReadiness,
+} from '../ops/staging_google_web_prerequisite_readiness.mjs';
 import { sha256, readGoogleWebConfig, profile } from '../../tool/staging_web_contract.mjs';
 
 function fixture(t) {
@@ -24,7 +28,7 @@ function fixture(t) {
     authConfigDigest: 'a'.repeat(64), providerConfigDigest: 'b'.repeat(64),
     otherAppsDigest: 'c'.repeat(64), runtimeDigest: 'd'.repeat(64), revision: 'revision-before',
   };
-  const binding = { schemaVersion: 3, apiKey, projectId: snapshot.projectId, projectNumber: snapshot.projectNumber,
+  const binding = { schemaVersion: 4, apiKey, projectId: snapshot.projectId, projectNumber: snapshot.projectNumber,
     origin: 'https://staging.shareittoo.com', displayName: STAGING_GOOGLE_WEB_DISPLAY_NAME,
     firebaseAccountEmailSha256: sha256('contact@shareittoo.com'),
     sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
@@ -98,13 +102,243 @@ test('one create and one guarded patch preserve all domains/config and export co
   assert.equal(profile(f.binding.sourceCommit, '1.0.0+123', bound).SIT_SOCIAL_GOOGLE_ENABLED, 'true');
   assert.equal(profile(f.binding.sourceCommit, '1.0.0+123').SIT_SOCIAL_GOOGLE_ENABLED, 'false');
   assert.equal(f.latest().phase, 'complete');
-  assert.equal(f.latest().schemaVersion, 3); assert.equal(f.calls.app, 2);
+  assert.equal(f.latest().schemaVersion, 4); assert.equal(f.calls.app, 2);
+  assert.equal(f.latest().completion.sourceCommit, f.binding.sourceCommit);
+  assert.equal(f.latest().completion.runnerSha256, f.binding.runnerDigest);
+  assert.equal(f.latest().completion.firebaseAccountEmailSha256,
+    f.binding.firebaseAccountEmailSha256);
+  assert.equal(f.latest().completion.projectId, f.binding.projectId);
+  assert.equal(f.latest().completion.projectNumber, f.binding.projectNumber);
+  assert.equal(f.latest().completion.webAppId, f.app.appId);
+  assert.equal(f.latest().completion.authorizedDomain, 'staging.shareittoo.com');
+  assert.equal(f.latest().completion.providerConfigReadbackSha256,
+    f.snapshot.providerConfigDigest);
+  assert.equal(f.latest().completion.finalSnapshotSha256,
+    prerequisiteSnapshotDigest({ ...f.snapshot, revision: null }));
+  assert.match(f.latest().completion.finalRevisionSha256, /^[a-f0-9]{64}$/u);
+  assert.equal(f.latest().completion.authConfigReadbackSha256,
+    f.snapshot.authConfigDigest);
+  assert.equal(f.latest().completion.keyInventoryReadbackSha256,
+    f.snapshot.keyInventoryDigest);
+  assert.equal(f.latest().completion.otherAppsReadbackSha256,
+    f.snapshot.otherAppsDigest);
+  assert.equal(f.latest().completion.runtimeReadbackSha256, f.snapshot.runtimeDigest);
+  assert.equal(f.latest().completion.publicConfigSha256, result.configDigest);
   assert.equal(fs.statSync(f.configFile).mode & 0o777, 0o600);
   assert.ok(!fs.readFileSync(f.journalFile, 'utf8').includes(f.sdk.apiKey));
   assert.ok(!JSON.stringify(result).includes(f.sdk.apiKey));
   await f.invoke({ execute: true });
   assert.equal(f.calls.create, 1); assert.equal(f.calls.patch, 1);
   assert.equal(fs.existsSync(`${f.journalFile}.lock`), false);
+});
+
+test('complete journal produces a non-activating canonical readiness candidate', async (t) => {
+  const f = fixture(t);
+  await f.invoke({ execute: true });
+  const journal = readStagingGoogleWebPrerequisiteJournal(f.journalFile);
+  const collected = Date.parse(f.latest().completion.collectedAtUtc);
+  const candidate = collectStagingGoogleWebPrerequisiteReadiness({
+    journalFile: f.journalFile,
+    configFile: f.configFile,
+    expectedJournalSha256: journal.journalSha256,
+    now: () => collected + 1000,
+  });
+  assert.equal(candidate.kind, 'sit-google-web-prerequisite-readiness-candidate');
+  assert.equal(candidate.evidenceClass, 'verified-prerequisite-journal');
+  assert.equal(candidate.activationDecision, 'pending-independent-review');
+  assert.equal(candidate.activationEligible, false);
+  assert.equal(candidate.configuration.projectId, f.binding.projectId);
+  assert.equal(candidate.configuration.appId, f.app.appId);
+  assert.equal(candidate.readiness.prerequisiteJournalSha256, journal.journalSha256);
+  assert.equal(candidate.readiness.prerequisiteFinalRecordSha256,
+    journal.finalRecordSha256);
+  assert.equal(candidate.readiness.providerConfigReadbackSha256,
+    f.snapshot.providerConfigDigest);
+  assert.equal(candidate.readiness.authorizedDomain, 'staging.shareittoo.com');
+  assert.equal(candidate.readinessSha256,
+    prerequisiteSnapshotDigest(candidate.readiness));
+  assert.doesNotMatch(JSON.stringify(candidate), /private-(?:service|user|client)/u);
+  assert.deepEqual(Object.keys(candidate), [
+    'schemaVersion', 'kind', 'evidenceClass', 'syntheticFixture', 'activationDecision',
+    'activationEligible', 'configuration', 'configurationSha256', 'readiness',
+    'readinessSha256',
+  ]);
+});
+
+test('collector rejects stale, replayed, mismatched and self-declared completion hashes', async (t) => {
+  const f = fixture(t);
+  await f.invoke({ execute: true });
+  const original = fs.readFileSync(f.journalFile, 'utf8');
+  const journal = readStagingGoogleWebPrerequisiteJournal(f.journalFile);
+  const collected = Date.parse(f.latest().completion.collectedAtUtc);
+  const collect = (overrides = {}) => collectStagingGoogleWebPrerequisiteReadiness({
+    journalFile: f.journalFile,
+    configFile: f.configFile,
+    expectedJournalSha256: journal.journalSha256,
+    now: () => collected + 1000,
+    ...overrides,
+  });
+  assert.throws(() => collect({ now: () => collected + 2 * 60 * 60 * 1000 + 1 }),
+    /google_web_prerequisite_readiness_denied/u);
+  assert.throws(() => collect({ expectedJournalSha256: 'f'.repeat(64) }),
+    /google_web_prerequisite_readiness_denied/u);
+
+  for (const field of ['providerConfigReadbackSha256', 'finalSnapshotSha256',
+    'webAppReadbackSha256', 'authorizedDomainsReadbackSha256']) {
+    const records = original.trimEnd().split('\n').map(JSON.parse);
+    records.at(-1).state.completion[field] = 'f'.repeat(64);
+    records.at(-1).digest = prerequisiteSnapshotDigest(records.at(-1).state);
+    fs.writeFileSync(f.journalFile,
+      `${records.map((record) => JSON.stringify(record)).join('\n')}\n`);
+    const forgedSha256 = sha256(fs.readFileSync(f.journalFile));
+    assert.throws(() => collect({ expectedJournalSha256: forgedSha256 }),
+      /google_web_prerequisite_readiness_denied/u, field);
+    fs.writeFileSync(f.journalFile, original);
+  }
+  for (const [field, value] of [
+    ['webAppId', `1:${f.binding.projectNumber}:web:${'b'.repeat(32)}`],
+    ['authorizedDomain', 'foreign.example.invalid'],
+    ['firebaseProviderEnabled', false],
+    ['sourceCommit', 'b'.repeat(40)],
+  ]) {
+    const records = original.trimEnd().split('\n').map(JSON.parse);
+    records.at(-1).state.completion[field] = value;
+    records.at(-1).digest = prerequisiteSnapshotDigest(records.at(-1).state);
+    fs.writeFileSync(f.journalFile,
+      `${records.map((record) => JSON.stringify(record)).join('\n')}\n`);
+    assert.throws(() => collect({
+      expectedJournalSha256: sha256(fs.readFileSync(f.journalFile)),
+    }), /google_web_prerequisite_readiness_denied/u, field);
+    fs.writeFileSync(f.journalFile, original);
+  }
+
+  const config = JSON.parse(fs.readFileSync(f.configFile));
+  config.appId = config.appId.replace(/a$/u, 'b');
+  fs.writeFileSync(f.configFile, JSON.stringify(config));
+  assert.throws(collect, /google_web_prerequisite_readiness_denied/u);
+});
+
+test('collector rejects same-value byte swaps for journal and public config', async (t) => {
+  const f = fixture(t);
+  await f.invoke({ execute: true });
+  const journal = readStagingGoogleWebPrerequisiteJournal(f.journalFile);
+  const collected = Date.parse(f.latest().completion.collectedAtUtc);
+  const collect = () => collectStagingGoogleWebPrerequisiteReadiness({
+    journalFile: f.journalFile,
+    configFile: f.configFile,
+    expectedJournalSha256: journal.journalSha256,
+    now: () => collected + 1000,
+  });
+  const configBytes = fs.readFileSync(f.configFile, 'utf8');
+  const configValue = JSON.parse(configBytes);
+  const reorderedConfig = JSON.stringify(Object.fromEntries(Object.entries(configValue).reverse()));
+  assert.deepEqual(JSON.parse(reorderedConfig), configValue);
+  fs.writeFileSync(f.configFile, reorderedConfig);
+  assert.throws(collect, /google_web_prerequisite_readiness_denied/u);
+  fs.writeFileSync(f.configFile, configBytes);
+
+  const lines = fs.readFileSync(f.journalFile, 'utf8').trimEnd().split('\n');
+  const last = JSON.parse(lines.at(-1));
+  lines[lines.length - 1] = JSON.stringify(Object.fromEntries(Object.entries(last).reverse()));
+  fs.writeFileSync(f.journalFile, `${lines.join('\n')}\n`);
+  const swappedSha256 = sha256(fs.readFileSync(f.journalFile));
+  assert.throws(() => collectStagingGoogleWebPrerequisiteReadiness({
+    journalFile: f.journalFile,
+    configFile: f.configFile,
+    expectedJournalSha256: swappedSha256,
+    now: () => collected + 1000,
+  }), /google_web_prerequisite_readiness_denied/u);
+});
+
+test('descriptor-bound journal read rejects leaf substitution after open', async (t) => {
+  const f = fixture(t);
+  await f.invoke({ execute: true });
+  const originalRead = fs.readSync;
+  const originalWrite = fs.writeSync;
+  let substituted = false;
+  t.mock.method(fs, 'readSync', (...args) => {
+    if (!substituted) {
+      substituted = true;
+      const bytes = fs.readFileSync(f.journalFile);
+      fs.renameSync(f.journalFile, `${f.journalFile}.opened`);
+      const replacement = fs.openSync(f.journalFile, 'wx', 0o600);
+      try {
+        assert.equal(originalWrite(replacement, bytes, 0, bytes.length, 0), bytes.length);
+      } finally {
+        fs.closeSync(replacement);
+      }
+    }
+    return originalRead(...args);
+  });
+  assert.throws(() => readStagingGoogleWebPrerequisiteJournal(f.journalFile),
+    /journal_changed/u);
+  assert.equal(substituted, true);
+});
+
+test('descriptor-bound journal read tolerates unrelated ancestor sibling churn', async (t) => {
+  const f = fixture(t);
+  await f.invoke({ execute: true });
+  const sibling = `${f.directory}-concurrent-sibling`;
+  const originalRead = fs.readSync;
+  let created = false;
+  t.after(() => fs.rmSync(sibling, { recursive: true, force: true }));
+  t.mock.method(fs, 'readSync', (...args) => {
+    if (!created) {
+      created = true;
+      fs.mkdirSync(sibling, { mode: 0o700 });
+    }
+    return originalRead(...args);
+  });
+  assert.equal(readStagingGoogleWebPrerequisiteJournal(f.journalFile).phase, 'complete');
+  assert.equal(created, true);
+});
+
+test('complete append never confirms a substituted journal path', async (t) => {
+  const f = fixture(t);
+  const originalWrite = fs.writeSync;
+  let substituted = false;
+  t.mock.method(fs, 'writeSync', (fd, buffer, ...args) => {
+    if (!substituted && Buffer.isBuffer(buffer)
+        && buffer.toString('utf8').includes('"phase":"complete"')) {
+      substituted = true;
+      const previous = fs.readFileSync(f.journalFile);
+      fs.renameSync(f.journalFile, `${f.journalFile}.pre-complete`);
+      const replacement = fs.openSync(f.journalFile, 'wx', 0o600);
+      try {
+        assert.equal(originalWrite(replacement, previous, 0, previous.length, 0),
+          previous.length);
+      } finally {
+        fs.closeSync(replacement);
+      }
+    }
+    return originalWrite(fd, buffer, ...args);
+  });
+  await assert.rejects(f.invoke({ execute: true }), /journal_changed/u);
+  assert.equal(substituted, true);
+  const replacement = readStagingGoogleWebPrerequisiteJournal(f.journalFile);
+  assert.equal(replacement.phase, 'export_intent');
+});
+
+test('legacy v3 complete journal remains readable but is not readiness-eligible', async (t) => {
+  const f = fixture(t);
+  await f.invoke({ execute: true });
+  const records = fs.readFileSync(f.journalFile, 'utf8').trimEnd().split('\n').map(JSON.parse);
+  for (const [index, record] of records.entries()) {
+    record.state.schemaVersion = 3;
+    record.state.binding.schemaVersion = 3;
+    delete record.state.completion;
+    record.previous = index === 0 ? null : records[index - 1].digest;
+    record.digest = prerequisiteSnapshotDigest(record.state);
+  }
+  fs.writeFileSync(f.journalFile, `${records.map((record) => JSON.stringify(record)).join('\n')}\n`);
+  const historical = readStagingGoogleWebPrerequisiteJournal(f.journalFile);
+  assert.equal(historical.schemaVersion, 3);
+  assert.equal(historical.phase, 'complete');
+  assert.throws(() => collectStagingGoogleWebPrerequisiteReadiness({
+    journalFile: f.journalFile,
+    configFile: f.configFile,
+    expectedJournalSha256: historical.journalSha256,
+  }), /google_web_prerequisite_readiness_denied/u);
 });
 test('preflight compares whole validated domain entries, never host substrings or a string inventory', async (t) => {
   const f = fixture(t);
@@ -253,7 +487,8 @@ for (const variant of ['configExists', 'symlink', 'hardlink', 'mode', 'truncated
       const stat = originalStat(...args); stat.uid = process.getuid() + 1; return stat;
     };
     try {
-      await assert.rejects(f.invoke({ execute: true }), variant === 'wrongOwner' ? /private_file_unsafe/u : undefined);
+      await assert.rejects(f.invoke({ execute: true }), variant === 'wrongOwner'
+        ? /(?:private_file_unsafe|journal_changed)/u : undefined);
       assert.equal(f.calls.create, 0);
     } finally { fs.fstatSync = originalStat; }
   });
@@ -338,7 +573,7 @@ test('rehashed extra fields in an earlier journal record are rejected too', asyn
 
 for (const variant of ['version', 'missingKey', 'foreignKey', 'rawKey', 'displayName', 'accountHash',
   'gateAccountHash', 'leaseAlgorithm', 'leaseKey']) {
-  test(`version-3 binding rejects ${variant} before provider reads`, async (t) => {
+  test(`version-4 binding rejects ${variant} before provider reads`, async (t) => {
     const f = fixture(t); let reads = 0;
     f.adapter.readSnapshot = async () => { reads++; return f.snapshot; };
     if (variant === 'version') f.binding.schemaVersion = 2;
