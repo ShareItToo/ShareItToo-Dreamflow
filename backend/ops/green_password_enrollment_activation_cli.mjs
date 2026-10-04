@@ -194,14 +194,14 @@ process.stdout.write(JSON.stringify({
 }) + '\n');
 `;
 
-export const GREEN_PASSWORD_ENROLLMENT_QUEUE_AGGREGATE_SQL =
+export const GREEN_ENROLLMENT_QUEUE_AGGREGATE_SQL =
   'SELECT status, channel, count(*)::int AS count FROM notification_outbox GROUP BY status, channel';
 
 const queueProbeSource = String.raw`
 import { pool } from './src/db.js';
 try {
   const result = await pool.query(
-    ${JSON.stringify(GREEN_PASSWORD_ENROLLMENT_QUEUE_AGGREGATE_SQL)},
+    ${JSON.stringify(GREEN_ENROLLMENT_QUEUE_AGGREGATE_SQL)},
   );
   const output = { dead: 0, pending: 0, processing: 0, retry: 0,
     sentInApp: 0, sentPush: 0, suppressedEmail: 0, suppressedPush: 0 };

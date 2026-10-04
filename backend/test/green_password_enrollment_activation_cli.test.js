@@ -16,7 +16,7 @@ import {
 } from '../ops/green_password_enrollment_activation.mjs';
 import {
   GREEN_PASSWORD_ENROLLMENT_REPOSITORY_ROOT,
-  GREEN_PASSWORD_ENROLLMENT_QUEUE_AGGREGATE_SQL,
+  GREEN_ENROLLMENT_QUEUE_AGGREGATE_SQL,
   executeGreenPasswordEnrollmentArgv,
   greenPasswordEnrollmentActivationCliErrorCode,
   greenEnrollmentCandidateRuntimeReadbackSha256,
@@ -603,7 +603,7 @@ test('default dry-run performs exact read-only preflight and no service transiti
     === 'ls-files --others --exclude-standard -- .'));
   const queueProbe = harness.calls.find((call) => call.args[0] === 'exec'
     && call.args.at(-1).includes('notification_outbox'));
-  assert.ok(queueProbe.args.at(-1).includes(GREEN_PASSWORD_ENROLLMENT_QUEUE_AGGREGATE_SQL));
+  assert.ok(queueProbe.args.at(-1).includes(GREEN_ENROLLMENT_QUEUE_AGGREGATE_SQL));
   assert.match(queueProbe.args.at(-1), /row\.channel/u);
   assert.doesNotMatch(queueProbe.args.at(-1), /row\.transport/u);
   assert.doesNotMatch(JSON.stringify(result), /pilot@example|smtp\.relay|contact@/u);
@@ -616,13 +616,13 @@ test('queue aggregate SQL is bound to the authoritative notification_outbox sche
   ), 'utf8');
   assert.equal(
     assertQueueAggregateSqlMatchesMigration(
-      GREEN_PASSWORD_ENROLLMENT_QUEUE_AGGREGATE_SQL, migration,
+      GREEN_ENROLLMENT_QUEUE_AGGREGATE_SQL, migration,
     ),
     'channel',
   );
   assert.throws(
     () => assertQueueAggregateSqlMatchesMigration(
-      GREEN_PASSWORD_ENROLLMENT_QUEUE_AGGREGATE_SQL.replaceAll('channel', 'transport'),
+      GREEN_ENROLLMENT_QUEUE_AGGREGATE_SQL.replaceAll('channel', 'transport'),
       migration,
     ),
     /unknown notification_outbox column: transport/u,
