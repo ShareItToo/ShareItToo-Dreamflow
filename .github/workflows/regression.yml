@@ -335,6 +335,7 @@ jobs:
           APP_SOURCE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
           IMAGE_REF="$REGISTRY_IMAGE:$GITHUB_SHA"
           BUILD_METADATA_FILE="$RUNNER_TEMP/shareittoo-api-build-metadata.json"
+          REGISTRY_TAG_MANIFEST_FILE="$RUNNER_TEMP/shareittoo-api-registry-tag-manifest.json"
           REGISTRY_MANIFEST_FILE="$RUNNER_TEMP/shareittoo-api-registry-manifest.json"
           PUBLICATION_MANIFEST_FILE="$RUNNER_TEMP/shareittoo-api-publication-manifest.json"
 
@@ -359,6 +360,18 @@ jobs:
           )"
           IMAGE_DIGEST_REF="$REGISTRY_IMAGE@$IMAGE_DIGEST"
 
+          docker buildx imagetools inspect --raw "$IMAGE_REF" > "$REGISTRY_TAG_MANIFEST_FILE"
+          test -s "$REGISTRY_TAG_MANIFEST_FILE"
+          OBSERVED_TAG_DIGEST="$(node --input-type=module - "$REGISTRY_TAG_MANIFEST_FILE" <<'NODE'
+          import { createHash } from 'node:crypto';
+          import { readFileSync } from 'node:fs';
+
+          const rawManifest = readFileSync(process.argv[2]);
+          process.stdout.write(`sha256:${createHash('sha256').update(rawManifest).digest('hex')}`);
+          NODE
+          )"
+          test "$OBSERVED_TAG_DIGEST" = "$IMAGE_DIGEST"
+
           docker buildx imagetools inspect --raw "$IMAGE_DIGEST_REF" > "$REGISTRY_MANIFEST_FILE"
           test -s "$REGISTRY_MANIFEST_FILE"
           OCI_REVISION="$(docker pull "$IMAGE_DIGEST_REF" >/dev/null && docker image inspect "$IMAGE_DIGEST_REF" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')"
@@ -381,12 +394,13 @@ jobs:
           });
           NODE
 
-          node --input-type=module - "$PUBLICATION_MANIFEST_FILE" "$GITHUB_SHA" "$IMAGE_REF" "$IMAGE_DIGEST" "$GITHUB_WORKFLOW" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$GITHUB_REPOSITORY" "$GITHUB_EVENT_NAME" <<'NODE'
+          node --input-type=module - "$PUBLICATION_MANIFEST_FILE" "$GITHUB_SHA" "$IMAGE_REF" "$IMAGE_DIGEST" "$GITHUB_WORKFLOW" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$GITHUB_REPOSITORY" "$GITHUB_EVENT_NAME" "$OBSERVED_TAG_DIGEST" "$OCI_REVISION" <<'NODE'
           import { writeFileSync } from 'node:fs';
           import { createPublicationManifest } from '../tool/validate_ghcr_publication.mjs';
 
-          const [output, commit, tag, digest, workflow, runId, runAttempt, repository, eventName] = process.argv.slice(2);
-          const publication = createPublicationManifest({
+          const [output, commit, tag, digest, workflow, runId, runAttempt, repository, eventName,
+            observedTagDigest, observedOciRevision] = process.argv.slice(2);
+          const publicationV1 = createPublicationManifest({
             commit,
             tag,
             digest,
@@ -396,6 +410,15 @@ jobs:
             repository,
             eventName,
           });
+          if (observedTagDigest !== publicationV1.digest || observedOciRevision !== publicationV1.commit) {
+            throw new Error('GHCR publication: observed registry identity does not match publication');
+          }
+          const publication = {
+            ...publicationV1,
+            schemaVersion: 2,
+            observedTagDigest,
+            observedOciRevision,
+          };
           writeFileSync(output, `${JSON.stringify(publication, null, 2)}\n`, { mode: 0o600 });
           NODE
 

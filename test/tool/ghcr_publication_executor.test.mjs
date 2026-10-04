@@ -3,6 +3,7 @@ import { chmod, mkdtemp, mkdir, readFile, rm, stat, unlink, writeFile } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import test from 'node:test';
 
 const repositoryRoot = join(new URL('../..', import.meta.url).pathname);
@@ -11,7 +12,8 @@ const workflow = await readFile(join(repositoryRoot, '.github/workflows/regressi
 const publishJob = workflow.slice(workflow.indexOf('  publish-api-image:\n'));
 const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repositoryRoot, encoding: 'utf8' }).trim();
 const wrongCommit = 'fedcba9876543210fedcba9876543210fedcba98';
-const digest = `sha256:${'b'.repeat(64)}`;
+const rawManifest = '{"mediaType":"application/vnd.oci.image.manifest.v1+json","config":{"digest":"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}}';
+const digest = `sha256:${createHash('sha256').update(rawManifest).digest('hex')}`;
 const image = 'ghcr.io/shareittoo/shareittoo-api';
 
 function extractRunBlocks(job) {
@@ -122,10 +124,21 @@ if [[ "$1" == buildx && "$2" == build ]]; then
 fi
 
 if [[ "$1" == buildx && "$2" == imagetools ]]; then
-  [[ $# == 5 && "$3" == inspect && "$4" == --raw && "$5" == "$FAKE_EXPECTED_IMAGE_DIGEST_REF" ]] || fail 'manifest readback arguments'
+  [[ $# == 5 && "$3" == inspect && "$4" == --raw ]] || fail 'manifest readback arguments'
+  if [[ "$5" == "$FAKE_EXPECTED_IMAGE_REF" ]]; then
+    [[ "$FAKE_DOCKER_MODE" != tag-manifest-fail ]] || exit 23
+    [[ "$FAKE_DOCKER_MODE" != tag-manifest-missing ]] || exit 0
+    if [[ "$FAKE_DOCKER_MODE" == tag-digest-mismatch ]]; then
+      printf '%s' '{"mediaType":"application/vnd.oci.image.manifest.v1+json","drift":true}'
+    else
+      printf '%s' "$FAKE_RAW_MANIFEST"
+    fi
+    exit 0
+  fi
+  [[ "$5" == "$FAKE_EXPECTED_IMAGE_DIGEST_REF" ]] || fail 'digest manifest readback arguments'
   [[ "$FAKE_DOCKER_MODE" != manifest-fail ]] || exit 23
   [[ "$FAKE_DOCKER_MODE" != manifest-missing ]] || exit 0
-  printf '%s\n' '{"mediaType":"application/vnd.oci.image.manifest.v1+json","config":{"digest":"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}}'
+  printf '%s' "$FAKE_RAW_MANIFEST"
   exit 0
 fi
 
@@ -171,6 +184,7 @@ async function createFixture(mode = 'success') {
     FAKE_DOCKER_LOG: logPath,
     FAKE_DOCKER_MODE: mode,
     FAKE_DIGEST: digest,
+    FAKE_RAW_MANIFEST: rawManifest,
     FAKE_WRONG_COMMIT: wrongCommit,
     FAKE_EXPECTED_IMAGE_REF: `${image}:${commit}`,
     FAKE_EXPECTED_IMAGE_DIGEST_REF: `${image}@${digest}`,
@@ -239,7 +253,7 @@ test('executor runs the production blocks and the fake docker rejects unknown co
     assert.equal(result.publication.status, 0, result.publication.stderr);
     const manifest = JSON.parse(await readFile(join(fixture.root, artifactRelativePath), 'utf8'));
     assert.deepEqual(manifest, {
-      schemaVersion: 1,
+      schemaVersion: 2,
       commit,
       tag: `${image}:${commit}`,
       digest,
@@ -248,12 +262,15 @@ test('executor runs the production blocks and the fake docker rejects unknown co
       runAttempt: '2',
       repository: 'owner/repo',
       eventName: 'workflow_dispatch',
+      observedTagDigest: digest,
+      observedOciRevision: commit,
     });
     assert.equal(JSON.stringify(manifest).includes('fixture-token'), false);
     assert.equal(JSON.stringify(manifest).includes('secret'), false);
     const dockerLog = await readDockerLog(fixture);
     assert.equal(dockerLog.includes(`--tag ${image}:${commit} `), true);
-    assert.match(dockerLog, /ghcr\.io\/shareittoo\/shareittoo-api@sha256:b{64}/u);
+    assert.equal(dockerLog.includes(`imagetools inspect --raw ${image}:${commit} `), true);
+    assert.equal(dockerLog.includes(`imagetools inspect --raw ${image}@${digest} `), true);
     assert.equal(await artifactUploadAttempt(fixture), true);
   } finally {
     await rm(fixture.root, { recursive: true, force: true });
@@ -275,7 +292,11 @@ test('invalid, missing, and wrong expected commits stop before docker login/buil
   }
 });
 
-for (const mode of ['build-fail', 'metadata-missing', 'metadata-malformed', 'manifest-fail', 'manifest-missing', 'pull-fail', 'oci-wrong', 'oci-missing']) {
+for (const mode of [
+  'build-fail', 'metadata-missing', 'metadata-malformed',
+  'tag-manifest-fail', 'tag-manifest-missing', 'tag-digest-mismatch',
+  'manifest-fail', 'manifest-missing', 'pull-fail', 'oci-wrong', 'oci-missing',
+]) {
   test(`${mode} prevents a success manifest and artifact upload`, async () => {
     const fixture = await createFixture(mode);
     try {
@@ -307,6 +328,10 @@ test('static workflow contract keeps publication manual-only and excludes mutabl
   assert.match(publishJob, /github\.event_name == 'workflow_dispatch' && inputs\.publish_api_image/u);
   assert.doesNotMatch(publishJob, /github\.event_name == 'push'|github\.event_name == 'pull_request'/u);
   assert.doesNotMatch(publishJob, /:latest/u);
+  assert.match(publishJob, /imagetools inspect --raw "\$IMAGE_REF"/u);
+  assert.match(publishJob, /test "\$OBSERVED_TAG_DIGEST" = "\$IMAGE_DIGEST"/u);
+  assert.match(publishJob, /observedTagDigest/u);
+  assert.match(publishJob, /observedOciRevision/u);
 });
 
 test('artifact upload wiring is exact, fail-closed, immutable, and commit-named', () => {
