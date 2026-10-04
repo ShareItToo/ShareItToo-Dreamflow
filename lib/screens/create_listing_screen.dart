@@ -2231,6 +2231,29 @@ class _CreateListingScreenState extends State<CreateListingScreen>
         .toList(growable: false);
   }
 
+  List<Category> _availableProductCategories() =>
+      _catsByCoarse[_currentCoarseLabel()] ?? const <Category>[];
+
+  void _selectProductCategory(String categoryId) {
+    final category = resolveCreateListingCategory(_categories, categoryId);
+    if (category == null) return;
+    final subcategories = category.subcategories
+        .where((subcategory) =>
+            PrivatePilotConfig.subcategoryAllowed(categoryId, subcategory))
+        .toList(growable: false);
+    setState(() {
+      _categoryId = categoryId;
+      if (!subcategories.contains(_subcategory)) {
+        _subcategory = subcategories.isEmpty ? null : subcategories.first;
+      }
+      _invalidateBlueOceanReviewState(
+        confirmations: const <String>['allowed_category'],
+        clearClarifications: true,
+      );
+    });
+    _schedulePriceRecalc();
+  }
+
   Future<void> _pickCategory() async {
     if (_coarseCats.isEmpty || _categories.isEmpty) return;
     final tiles = _coarseCats.map((label) {
@@ -2241,29 +2264,16 @@ class _CreateListingScreenState extends State<CreateListingScreen>
     }).toList();
 
     final selected = await AllCategoriesOverlay.show(context, tiles);
-    if (selected != null) {
-      // Map back from coarse label to a representative fine category id (first in group)
+    if (selected != null && mounted) {
+      // Keep the exact product category when reopening its coarse group.
       final list = _catsByCoarse.entries
           .firstWhere((e) => (e.value).any((c) => c.id == selected),
               orElse: () => MapEntry('', const <Category>[]))
           .value;
-      final target = list.isNotEmpty ? list.first.id : selected;
-      final selectedCategory =
-          resolveCreateListingCategory(_categories, target);
-      if (selectedCategory == null) return;
-      final subcategories = selectedCategory.subcategories
-          .where((subcategory) =>
-              PrivatePilotConfig.subcategoryAllowed(target, subcategory))
-          .toList(growable: false);
-      setState(() {
-        _categoryId = target;
-        _subcategory = subcategories.isEmpty ? null : subcategories.first;
-        _invalidateBlueOceanReviewState(
-          confirmations: const <String>['allowed_category'],
-          clearClarifications: true,
-        );
-      });
-      _schedulePriceRecalc();
+      final target = list.any((category) => category.id == _categoryId)
+          ? _categoryId!
+          : (list.isNotEmpty ? list.first.id : selected);
+      _selectProductCategory(target);
     }
   }
 
@@ -3092,8 +3102,38 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                             ),
                           ),
                           const SizedBox(height: 12),
+                          if (_availableProductCategories().length > 1) ...[
+                            DropdownButtonFormField<String>(
+                              key: ValueKey('product-category-$_categoryId'),
+                              initialValue: _categoryId,
+                              isExpanded: true,
+                              itemHeight: kMinInteractiveDimension,
+                              decoration: const InputDecoration(
+                                labelText: 'Produktbereich',
+                              ),
+                              items: _availableProductCategories()
+                                  .map((category) => DropdownMenuItem(
+                                        value: category.id,
+                                        child: SizedBox(
+                                          height: kMinInteractiveDimension,
+                                          child: Align(
+                                            alignment: Alignment.centerLeft,
+                                            child: Text(category.name,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(fontSize: 15)),
+                                          ),
+                                        ),
+                                      ))
+                                  .toList(growable: false),
+                              onChanged: (value) {
+                                if (value != null) _selectProductCategory(value);
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                          ],
                           DropdownButtonFormField<String>(
-                            key: ValueKey(_categoryId),
+                            key: ValueKey((_categoryId, _subcategory)),
                             isExpanded: true,
                                 initialValue: _availableSubcategories()
                                         .contains(_subcategory)
