@@ -8,6 +8,11 @@ import {
   facebookWebFields,
   validateFacebookWebBinding,
 } from './staging_facebook_web_readiness.mjs';
+import {
+  STAGING_ENROLLMENT_WEB_PROFILE,
+  STAGING_ENROLLMENT_WEB_TARGET,
+  validatePasswordEnrollmentWebBinding,
+} from './staging_password_enrollment_web_readiness.mjs';
 
 export const TARGET = 'https://staging.shareittoo.com';
 export const DEPLOY_ROOT = '/docker/shareittoo/staging-web';
@@ -64,8 +69,9 @@ function sameFirebaseWebApp(googleWeb, facebookWeb) {
     googleWeb.config.authDomain === facebookWeb.config.authDomain;
 }
 
-export function profile(source, version, googleWeb = null, facebookWeb = null) {
+export function profile(source, version, googleWeb = null, facebookWeb = null, passwordEnrollment = null) {
   requireThat(TARGET === FACEBOOK_WEB_TARGET, 'facebook_web_target_mismatch');
+  requireThat(TARGET === STAGING_ENROLLMENT_WEB_TARGET, 'password_enrollment_web_target_mismatch');
   const result = {
     SIT_BACKEND_ENABLED: 'true', SIT_API_BASE_URL: `${TARGET}/api/v1`,
     SIT_APP_COMMIT: source, SIT_BUILD_NUMBER: version.split('+')[1],
@@ -101,6 +107,15 @@ export function profile(source, version, googleWeb = null, facebookWeb = null) {
     result.SIT_FACEBOOK_WEB_CONFIG_SHA256 = bound.configDigest;
     result.SIT_FACEBOOK_WEB_READINESS_JSON = bound.readinessJson;
     result.SIT_FACEBOOK_WEB_READINESS_SHA256 = bound.readinessDigest;
+  }
+  if (passwordEnrollment !== null) {
+    const bound = validatePasswordEnrollmentWebBinding(passwordEnrollment, {
+      expectedSource: source,
+      expectedVersion: version,
+    });
+    result.SIT_WEB_PASSWORD_ENROLLMENT_ENABLED = 'true';
+    result.SIT_WEB_PASSWORD_ENROLLMENT_READINESS_JSON = bound.readinessJson;
+    result.SIT_WEB_PASSWORD_ENROLLMENT_READINESS_SHA256 = bound.readinessDigest;
   }
   return result;
 }
@@ -299,31 +314,50 @@ function monitorStagingRelease(expected) {
   void check();
 }
 
-export function stagingBootstrapFor(source, version, googleWeb = null, facebookWeb = null) {
+export function stagingBootstrapFor(source, version, googleWeb = null, facebookWeb = null, passwordEnrollment = null) {
   requireThat(sourcePattern.test(source), 'source_sha_invalid');
   requireThat(/^\d+\.\d+\.\d+\+\d+$/.test(version), 'build_identity_invalid');
-  const identity = { source, version, profileDigest: sha256(JSON.stringify(profile(source, version, googleWeb, facebookWeb))) };
+  const identity = { source, version, profileDigest: sha256(JSON.stringify(profile(source, version, googleWeb, facebookWeb, passwordEnrollment))) };
   return stagingBootstrap.replace('document.body.appendChild(script);',
     `document.body.appendChild(script);\n(${monitorStagingRelease.toString()})(${JSON.stringify(identity)});`);
 }
 
-export function sealArtifact({ directory, source, version, flutterVersion, builderDigest, googleWeb = null, facebookWeb = null }) {
+export function sealArtifact({ directory, source, version, flutterVersion, builderDigest, googleWeb = null, facebookWeb = null, passwordEnrollment = null }) {
   requireThat(sourcePattern.test(source) && /^\d+\.\d+\.\d+\+\d+$/.test(version), 'build_identity_invalid');
   if (facebookWeb !== null) {
     validateFacebookWebBinding(facebookWeb, { freshAt: new Date() });
   }
-  const buildProfile = profile(source, version, googleWeb, facebookWeb);
+  if (passwordEnrollment !== null) {
+    validatePasswordEnrollmentWebBinding(passwordEnrollment, {
+      expectedSource: source,
+      expectedVersion: version,
+      freshAt: new Date(),
+    });
+  }
+  const buildProfile = profile(source, version, googleWeb, facebookWeb, passwordEnrollment);
   const web = path.join(directory, 'web');
   const index = path.join(web, 'index.html');
   const html = fs.readFileSync(index, 'utf8');
   const tag = '<script src="flutter_bootstrap.js" async></script>';
   requireThat(html.split(tag).length === 2, 'bootstrap_template_drift');
   fs.writeFileSync(index, html.replace(tag, '<script src="staging_bootstrap.js"></script>'));
-  fs.writeFileSync(path.join(web, 'staging_bootstrap.js'), stagingBootstrapFor(source, version, googleWeb, facebookWeb));
+  fs.writeFileSync(path.join(web, 'staging_bootstrap.js'), stagingBootstrapFor(source, version, googleWeb, facebookWeb, passwordEnrollment));
   fs.writeFileSync(path.join(web, 'flutter_service_worker.js'), retirementWorker);
   fs.writeFileSync(path.join(web, 'staging-release.json'), `${JSON.stringify({ target: TARGET, source, version, profileDigest: sha256(JSON.stringify(buildProfile)) })}\n`);
-  const manifest = { schemaVersion: facebookWeb ? 3 : googleWeb ? 2 : 1, bootstrapContractVersion: 2,
-    ...(facebookWeb ? {
+  const manifest = { schemaVersion: passwordEnrollment ? 4 : facebookWeb ? 3 : googleWeb ? 2 : 1, bootstrapContractVersion: 2,
+    ...(passwordEnrollment ? {
+      profileContractVersion: STAGING_ENROLLMENT_WEB_PROFILE,
+      ...(googleWeb ? { googleWebConfigDigest: googleWeb.digest } : {}),
+      ...(facebookWeb ? {
+        facebookWebConfigDigest: facebookWeb.configDigest,
+        facebookWebReadinessDigest: facebookWeb.readinessDigest,
+        facebookWebEvidenceDigest: facebookWeb.evidenceDigest,
+        facebookWebValidatedAtUtc: facebookWeb.validatedAtUtc,
+      } : {}),
+      passwordEnrollmentReadinessDigest: passwordEnrollment.readinessDigest,
+      passwordEnrollmentEvidenceDigest: passwordEnrollment.evidenceDigest,
+      passwordEnrollmentValidatedAtUtc: passwordEnrollment.validatedAtUtc,
+    } : facebookWeb ? {
       profileContractVersion: FACEBOOK_WEB_PROFILE,
       ...(googleWeb ? { googleWebConfigDigest: googleWeb.digest } : {}),
       facebookWebConfigDigest: facebookWeb.configDigest,
@@ -357,6 +391,7 @@ export function validateArtifact(directory, expectedHash, expectedSource, { mode
   const m = JSON.parse(bytes);
   let googleWeb = null;
   let facebookWeb = null;
+  let passwordEnrollment = null;
   const providerMetadata = Object.keys(m).filter((key) => [
     'profileContractVersion',
     'googleWebConfigDigest',
@@ -364,8 +399,88 @@ export function validateArtifact(directory, expectedHash, expectedSource, { mode
     'facebookWebReadinessDigest',
     'facebookWebEvidenceDigest',
     'facebookWebValidatedAtUtc',
+    'passwordEnrollmentReadinessDigest',
+    'passwordEnrollmentEvidenceDigest',
+    'passwordEnrollmentValidatedAtUtc',
   ].includes(key)).sort();
-  if (m.schemaVersion === 3) {
+  if (m.schemaVersion === 4) {
+    const googleEnabled = m.profile?.SIT_SOCIAL_GOOGLE_ENABLED === 'true';
+    const facebookEnabled = m.profile?.SIT_SOCIAL_FACEBOOK_ENABLED === 'true';
+    const expectedKeys = [
+      'schemaVersion',
+      'bootstrapContractVersion',
+      'profileContractVersion',
+      ...(googleEnabled ? ['googleWebConfigDigest'] : []),
+      ...(facebookEnabled ? [
+        'facebookWebConfigDigest',
+        'facebookWebReadinessDigest',
+        'facebookWebEvidenceDigest',
+        'facebookWebValidatedAtUtc',
+      ] : []),
+      'passwordEnrollmentReadinessDigest',
+      'passwordEnrollmentEvidenceDigest',
+      'passwordEnrollmentValidatedAtUtc',
+      'target',
+      'api',
+      'source',
+      'version',
+      'sourceClean',
+      'mode',
+      'pwaStrategy',
+      'resourcesCdn',
+      'flutterVersion',
+      'builderDigest',
+      'profile',
+      'files',
+    ].sort();
+    requireThat(m.profileContractVersion === STAGING_ENROLLMENT_WEB_PROFILE
+      && m.bootstrapContractVersion === 2
+      && JSON.stringify(Object.keys(m).sort()) === JSON.stringify(expectedKeys)
+      && m.profile?.SIT_SOCIAL_PROVIDER_ACTIVATION_VALIDATED ===
+        (googleEnabled || facebookEnabled ? 'true' : 'false'),
+    'artifact_password_enrollment_web_contract');
+    requireThat(JSON.stringify(providerMetadata) === JSON.stringify([
+      ...(facebookEnabled ? [
+        'facebookWebConfigDigest',
+        'facebookWebEvidenceDigest',
+        'facebookWebReadinessDigest',
+        'facebookWebValidatedAtUtc',
+      ] : []),
+      ...(googleEnabled ? ['googleWebConfigDigest'] : []),
+      'passwordEnrollmentEvidenceDigest',
+      'passwordEnrollmentReadinessDigest',
+      'passwordEnrollmentValidatedAtUtc',
+      'profileContractVersion',
+    ].sort()), 'artifact_password_enrollment_web_contract');
+    if (facebookEnabled) {
+      facebookWeb = validateFacebookWebBinding({
+        config: Object.fromEntries(Object.entries(facebookWebFields)
+          .map(([key, define]) => [key, m.profile?.[define]])),
+        configDigest: m.facebookWebConfigDigest,
+        readinessJson: m.profile?.SIT_FACEBOOK_WEB_READINESS_JSON,
+        readinessDigest: m.facebookWebReadinessDigest,
+        evidenceDigest: m.facebookWebEvidenceDigest,
+        validatedAtUtc: m.facebookWebValidatedAtUtc,
+      }, { freshAt: mode === 'candidate' ? new Date() : null });
+    }
+    if (googleEnabled) {
+      googleWeb = bindGoogleWebConfig(Object.fromEntries(Object.entries(googleFields)
+        .map(([key, define]) => [key, m.profile?.[define]])), m.googleWebConfigDigest);
+    }
+    if (googleEnabled && facebookEnabled) {
+      requireThat(sameFirebaseWebApp(googleWeb, facebookWeb), 'facebook_google_web_app_mismatch');
+    }
+    passwordEnrollment = validatePasswordEnrollmentWebBinding({
+      readinessJson: m.profile?.SIT_WEB_PASSWORD_ENROLLMENT_READINESS_JSON,
+      readinessDigest: m.passwordEnrollmentReadinessDigest,
+      evidenceDigest: m.passwordEnrollmentEvidenceDigest,
+      validatedAtUtc: m.passwordEnrollmentValidatedAtUtc,
+    }, {
+      expectedSource: m.source,
+      expectedVersion: m.version,
+      freshAt: mode === 'candidate' ? new Date() : null,
+    });
+  } else if (m.schemaVersion === 3) {
     const expectedKeys = [
       'schemaVersion',
       'bootstrapContractVersion',
@@ -426,15 +541,15 @@ export function validateArtifact(directory, expectedHash, expectedSource, { mode
   } else requireThat(providerMetadata.length === 0, 'artifact_provider_web_contract');
   const legacy = !Object.hasOwn(m, 'bootstrapContractVersion');
   requireThat(legacy ? mode !== 'candidate' : m.bootstrapContractVersion === 2, 'artifact_bootstrap_contract');
-  requireThat([1, 2, 3].includes(m.schemaVersion) && m.target === TARGET && m.api === `${TARGET}/api/v1` && m.sourceClean === true &&
+  requireThat([1, 2, 3, 4].includes(m.schemaVersion) && m.target === TARGET && m.api === `${TARGET}/api/v1` && m.sourceClean === true &&
     m.mode === 'release' && m.pwaStrategy === 'none' && m.resourcesCdn === false &&
     sourcePattern.test(m.source) && (!expectedSource || m.source === expectedSource) &&
     /^\d+\.\d+\.\d+\+\d+$/.test(m.version) && hashPattern.test(m.builderDigest), 'artifact_identity_mismatch');
-  requireThat(JSON.stringify(m.profile) === JSON.stringify(profile(m.source, m.version, googleWeb, facebookWeb)), 'artifact_profile_mismatch');
+  requireThat(JSON.stringify(m.profile) === JSON.stringify(profile(m.source, m.version, googleWeb, facebookWeb, passwordEnrollment)), 'artifact_profile_mismatch');
   const actual = inventory(path.join(directory, 'web'));
   requireThat(JSON.stringify(actual) === JSON.stringify(m.files), 'artifact_integrity_mismatch');
   for (const required of ['index.html', 'main.dart.js', 'manifest.json', 'flutter_bootstrap.js']) requireThat(actual[required], 'artifact_required_file_missing');
-  requireThat(fs.readFileSync(path.join(directory, 'web/staging_bootstrap.js'), 'utf8') === (legacy ? stagingBootstrap : stagingBootstrapFor(m.source, m.version, googleWeb, facebookWeb)) &&
+  requireThat(fs.readFileSync(path.join(directory, 'web/staging_bootstrap.js'), 'utf8') === (legacy ? stagingBootstrap : stagingBootstrapFor(m.source, m.version, googleWeb, facebookWeb, passwordEnrollment)) &&
     fs.readFileSync(path.join(directory, 'web/flutter_service_worker.js'), 'utf8') === retirementWorker &&
     fs.readFileSync(path.join(directory, 'web/index.html'), 'utf8').includes('<script src="staging_bootstrap.js"></script>'), 'artifact_cache_contract');
   requireThat(fs.readFileSync(path.join(directory, 'web/staging-release.json'), 'utf8') === `${JSON.stringify({ target: TARGET, source: m.source, version: m.version, profileDigest: sha256(JSON.stringify(m.profile)) })}\n`, 'artifact_served_identity');
