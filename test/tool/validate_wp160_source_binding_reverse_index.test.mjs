@@ -34,6 +34,7 @@ test('accepts the machine-derived WP160 reverse source-binding index', () => {
   assert.deepEqual(derived.currentMutableBindings.map(({ binding }) => binding), [
     'docs/evidence/external-gates/support-evidence-scanner-readiness.json',
     'docs/operations/p0b-ops-role-delegate-absence-gate-wp170.json',
+    'store/green-staging-98-106-runtime.json',
     'store/privacy-disclosures.json',
     'store/retention-deletion-readiness.json',
   ]);
