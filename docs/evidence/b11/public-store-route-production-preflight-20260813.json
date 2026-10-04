@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "kind": "public-store-route-production-preflight",
+  "capturedAt": "2026-08-13",
+  "status": "rolled-back-production-backend-incompatible",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081202"
+  },
+  "validatedCanonicalCaddySha256": "521f3beed1e29a2af866a7e2ffe847efda55f2d1d0f43153045dbb5d74c0493e",
+  "restoredDeployedCaddySha256": "4aea918ebb07f3bd52c17342172b24bb3a7df3c17dc4be0afe749de940f5d44d",
+  "preflight": {
+    "candidateConfigurationValidatedInContainer": true,
+    "ownerOnlyBackupCreated": true,
+    "routeReloadAttempted": true,
+    "stagingRouteContract": {
+      "support": "503-draft",
+      "privacy": "503-draft",
+      "accountDeletion": "200-operational"
+    },
+    "productionRouteContract": {
+      "support": "404-upstream-route-missing",
+      "privacy": "404-upstream-route-missing",
+      "accountDeletion": "404-upstream-route-missing"
+    },
+    "finding": "The unchanged production backend image does not contain the public-page endpoints required by the validated canonical Caddy routes."
+  },
+  "rollback": {
+    "performedImmediately": true,
+    "deployedCaddyRestoredExactly": true,
+    "productionAppShellRestored": true,
+    "productionApiHealthy": true,
+    "stagingApiHealthy": true,
+    "webContainerHealthy": true
+  },
+  "gates": {
+    "publicSupportUrlReady": false,
+    "publicPrivacyUrlReady": false,
+    "publicAccountDeletionUrlReady": false,
+    "legalContentApproved": false,
+    "productionBackendDeploymentApproved": false,
+    "productionRouteActivationApproved": false,
+    "storeSubmissionAllowed": false
+  },
+  "nextRequired": [
+    "prepare a production backend candidate that contains the three tested public-page endpoints",
+    "obtain the separate production-backend and public-route approvals",
+    "deploy the compatible backend before activating the canonical Caddy routes",
+    "repeat the three-route verifier and restore the backup on any mismatch",
+    "keep support and privacy blocked until their business and legal content is approved"
+  ],
+  "boundaries": {
+    "currentProductionChanged": false,
+    "currentStagingChanged": false,
+    "paymentsChanged": false,
+    "dnsChanged": false,
+    "mailChanged": false,
+    "cronChanged": false,
+    "containsSecrets": false,
+    "containsPersonalAccountData": false,
+    "containsRawDeviceIdentifiers": false
+  }
+}

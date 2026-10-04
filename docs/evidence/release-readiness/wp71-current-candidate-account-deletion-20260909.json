@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp71-current-candidate-account-deletion",
+  "status": "complete-local-github",
+  "capturedOn": "2026-09-09",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "packageBaseHead": "8b0126980bf1a9825c281d206ee80484ad163ee8",
+    "diagnosticHead": "83a39428884dcd09f4b8c6bbc4cb85d85577f2c7",
+    "candidateSourceHead": "12b88cf97f91973d6dfd59fe3f4dcb9c915dc7d0",
+    "stagingRuntimeHead": "78c663248aec089b08d19fd0fb40a9a63f19408b",
+    "pullRequest7": "draft-open-mergeable-unmerged"
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026090904",
+    "environment": "staging",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "apkSha256": "8c5e02d309f39d808d900c5d8d59a862efbf9d1928a6baacf7fc2d7e2b62b8e4",
+    "aabSha256": "fcc6c36055a978ffb3c70761f2630d942c8e65ac30c9600f3963be48b7d56696",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "pixelInstalledAndMatched": true,
+    "mobileOrBackendRuntimePathsChangedAfterCandidate": []
+  },
+  "sourceInventory": [
+    {
+      "path": "docs/evidence/release-readiness/wp70-current-candidate-auth-safety-hold-20260909.json",
+      "sha256": "22e26a33912c768d28617b64003b0778aad9ec22e49cdbe6eff65401752ef086"
+    },
+    {
+      "path": "tool/diagnose_android_account_deletion.mjs",
+      "sha256": "a46083108ca937df39a4e37f034283e3f54fae6f34e7c200fedab5b78826332e"
+    }
+  ],
+  "pixelProof": {
+    "device": {
+      "manufacturer": "Google",
+      "model": "Pixel 7 Pro",
+      "osVersion": "17",
+      "apiLevel": 37,
+      "securityPatch": "2026-07-05",
+      "containsRawDeviceIdentifier": false
+    },
+    "preflight": {
+      "targetCredentialActive": true,
+      "protectedRecoveryCredentialActive": true,
+      "deletionPreflightClear": true,
+      "targetDistinctFromProtectedAccounts": true,
+      "durableJournalPreparedBeforeDeletion": true,
+      "journalOwnerOnly": true
+    },
+    "definiteRejection": {
+      "wrongPasswordStructuredRejection": "401:invalid_credentials",
+      "accountRemainedActiveAfterRejection": true,
+      "timeoutOrUnstructuredErrorAcceptedAsRejection": false
+    },
+    "confirmedDeletion": {
+      "uiConfirmed": true,
+      "deletedCredentialStructuredRejection": "401:invalid_credentials",
+      "timeoutOrUnstructuredErrorAcceptedAsDeletion": false,
+      "terminatedProcessGuestStatePassed": true,
+      "accountAToBIsolationPassed": true,
+      "protectedOwnerSessionRestored": true,
+      "privateTargetCredentialsScrubbed": true,
+      "recoveryRequired": false,
+      "targetCredentialState": "deleted"
+    },
+    "privateJournal": {
+      "status": "completed-account-deletion",
+      "sha256": "3edaba9b32a5e2d2844dd27323ff854940adfbb23851b7bd128be70a03182952",
+      "containsPrivatePath": false,
+      "containsCredential": false,
+      "containsAccountIdentifier": false
+    }
+  },
+  "requirementClosure": [
+    {
+      "id": "privacy-export-and-account-deletion",
+      "state": "PASS",
+      "basis": "WP70 proved current-candidate private no-store export; WP71 now proves the complete disposable-account deletion lifecycle on the same exact candidate with recovery and isolation."
+    },
+    {
+      "id": "support-report-block",
+      "state": "PARTIAL",
+      "remaining": "Authenticated Staging report, readback, block and unblock pass, while the exact-candidate Pixel UI submission path remains physically unproven."
+    },
+    {
+      "id": "stripe-sandbox-payment-refund-simulated-payout",
+      "state": "OPEN",
+      "remaining": "Official Stripe test-platform owner setup remains required before any provider traffic, test payment, refund or simulated payout."
+    }
+  ],
+  "packageVerification": {
+    "implementationHead": "2d31208adf150f85f5d1b9fd828780212dcde56a",
+    "focusedTests": "passed-38",
+    "fullLocalRegression": "passed",
+    "localToolTestsPassed": 2517,
+    "githubRegressionRun": 34351116545,
+    "githubCodeqlRun": 34351116530,
+    "openPrMergeAlerts": 0,
+    "pullRequest7": "draft-open-mergeable-unmerged"
+  },
+  "technicalDebt": [
+    "One read-only archive check initially selected the current-HEAD CLI instead of the immutable private-candidate API and stopped before any device or server mutation; the immutable archive validator then passed exactly.",
+    "The disposable account deletion is intentionally irreversible, but its target credentials were independently rejected before the private vault was scrubbed and the protected account source remained byte-identical.",
+    "The first full local regression stopped because the candidate-rollover guard classified the root AGENTS.md guidance as runtime drift; the exact non-binary path is now covered while similarly named and actual runtime paths remain blocked.",
+    "One standalone handoff-validator invocation omitted the normal rollover context and stopped on its unavailable default private AAB; it is not acceptance evidence and the complete standard profile is rerun without weakening artifact checks."
+  ],
+  "boundaries": {
+    "stagingDisposableAccountDeleted": true,
+    "protectedOwnerDeleted": false,
+    "productionChanged": false,
+    "mobileRuntimeChanged": false,
+    "backendRuntimeChanged": false,
+    "backendDeployed": false,
+    "googlePlayChanged": false,
+    "testerListChanged": false,
+    "firebaseConfigurationChanged": false,
+    "externalIdentityProviderCalled": false,
+    "paymentProviderCalled": false,
+    "realMoneyUsed": false,
+    "cloudOrVpsChanged": false,
+    "dnsChanged": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false,
+    "credentialPrintedOrCommitted": false,
+    "personalAccountIdentifierCommitted": false,
+    "privateFilesystemPathCommitted": false
+  }
+}

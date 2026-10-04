@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp88-pixel-permission-lifecycle-recovery",
+  "status": "partial-pixel-permission-lifecycle-restored-ui-navigation-unproven",
+  "capturedOn": "2026-09-10",
+  "workPackage": "WP88",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026090905",
+    "sourceHead": "e1c182ea496f013989863155c13bfda649255a7e",
+    "releaseChannel": "internal",
+    "delivery": "direct-apk",
+    "apkSha256": "1864b9c17e7813df887fb1e9961a1746665b4b57b6dbd831526e1c3a2f58eaa6",
+    "physicalPixelPackageMatched": true
+  },
+  "preflight": {
+    "candidateArchiveValidated": true,
+    "cleanCandidateSourceMatched": true,
+    "manifestPermissionsExact": true,
+    "physicalDeviceReachable": true,
+    "deviceAlreadyUnlocked": true,
+    "authenticatedNavigationDeterministicallyVisible": false,
+    "stopReason": "current-head-main-navigation-did-not-appear"
+  },
+  "safetyRecovery": {
+    "runtimePermissionsChecked": 4,
+    "permissionStateRestoredExactly": true,
+    "ownerOnlyJournalMode": "0600",
+    "journalStatus": "restored-after-failed-run",
+    "recoveryRequired": false,
+    "lifecycleResult": "unproven",
+    "credentialsRead": false,
+    "accountIdentityRead": false,
+    "rawDeviceIdentifierRecorded": false
+  },
+  "scope": {
+    "fullPermissionDenyAllowRestartMatrixAccepted": false,
+    "appUiNavigationReliability": "open",
+    "toolchainDebt": "aapt2 was resolved from the current Gradle cache for this local diagnostic only; release readiness still requires a reproducible Android SDK toolchain path.",
+    "nextSafeAction": "Repeat the exact lifecycle only after the authenticated Pixel main navigation is stable and directly observable."
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "testerListChanged": false,
+    "firebaseConsoleChanged": false,
+    "paymentProviderChanged": false,
+    "realMoneyUsed": false,
+    "externalListingAiEnabled": false,
+    "publicRegistrationChanged": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false,
+    "credentialsRecorded": false,
+    "containsAccountIdentity": false,
+    "containsTokens": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false
+  }
+}

@@ -1,0 +1,293 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp85-current-candidate-gate-reconciliation",
+  "status": "complete-evidence-reconciled-owner-gates-open",
+  "capturedOn": "2026-09-10",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "matrixHead": "9d58d7ec7a72ff2da44093a23e978a391a07b64b",
+    "githubRegressionRun": 34439905295,
+    "githubCodeqlRun": 34439905287,
+    "openCodeScanningAlerts": 0,
+    "pullRequest7": "draft-open-clean-unmerged"
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026090905",
+    "candidateSourceHead": "e1c182ea496f013989863155c13bfda649255a7e",
+    "stagingRuntimeHead": "baf9267c8bff7533230f3234c1f543649df6e4aa",
+    "environment": "staging",
+    "releaseChannel": "internal",
+    "pixelInstalledAndMatched": true,
+    "onePlusTouched": false
+  },
+  "sourceInventory": [
+    {
+      "path": "docs/evidence/release-readiness/wp73-stripe-sandbox-compatibility-inventory-20260909.json",
+      "sha256": "7435fcb7ca662778950d5d29e907f54fe9a4da3b6520736a2ef65e023b0493d4"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp74-dispute-transfer-recovery-20260909.json",
+      "sha256": "d510a73f737b0ba6afd9133434067cd3ac4faf90eb739389dd5e6c2745c52fd3"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp75-current-candidate-pixel-staging-20260909.json",
+      "sha256": "ef57fb3d7d0a050adbd8c88037404af54c1b0d9e3895673353433e6758a89571"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp79-current-candidate-acceptance-matrix-20260909.json",
+      "sha256": "f62401b466a8c06451a712862e04fc9e32db12bcff62da578d884e4db2fee1b4"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp83-current-candidate-pixel-auth-session-replay-20260910.json",
+      "sha256": "d9f57844bd1c2169a57607e1af131cdea56351259305cb6a827f1938f738fd2d"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp84-staging-compose-override-persistence-20260910.json",
+      "sha256": "6e84f4251586652608700e38d36e97bd9e57bb55b7a3e42a4d080de65eb391ed"
+    }
+  ],
+  "reconciliation": {
+    "wp83AuthSession": "partial-owner-email-link-confirmation-pending",
+    "wp84RemoteReproducibility": "local-correction-complete-rollout-and-readback-held",
+    "stripeReadOnlyAccess": "reauthentication-required",
+    "providerScope": "google-previously-accepted-facebook-and-apple-disabled",
+    "liveMoney": false,
+    "production": false
+  },
+  "requirements": [
+    {
+      "id": "candidate-provenance-signature-pixel-install",
+      "state": "PASS",
+      "evidence": "WP75 and the current Android package readback bind the signed Internal Staging 2026090905 candidate to the attached Pixel.",
+      "remaining": null
+    },
+    {
+      "id": "exact-staging-backend-health-and-fcm",
+      "state": "PASS",
+      "evidence": "WP75 binds the exact Staging runtime, healthy data and mail services, Staging-only FCM, and all three controlled delivery states.",
+      "remaining": null
+    },
+    {
+      "id": "exact-source-local-github-security-baseline",
+      "state": "PASS",
+      "evidence": "The exact matrix source head passes GitHub Regression, CodeQL and zero open merge-reference Code Scanning alerts.",
+      "remaining": null
+    },
+    {
+      "id": "two-role-publish-discover-request-accept-chat",
+      "state": "PASS",
+      "evidence": "WP75 physically proves isolated verified synthetic roles across publication, discovery, non-binding acceptance, chat, cleanup and restoration.",
+      "remaining": null
+    },
+    {
+      "id": "transactional-push-foreground-background-terminated",
+      "state": "PASS",
+      "evidence": "WP75 proves controlled FCM delivery in foreground, background and terminated process after explicit device-level Push opt-in.",
+      "remaining": null
+    },
+    {
+      "id": "listing-create-edit-publish-pause-activate-end",
+      "state": "PASS",
+      "evidence": "The current-candidate listing lifecycle is physically bound by WP75 and no later runtime claim is substituted for it.",
+      "remaining": null
+    },
+    {
+      "id": "themes-backgrounds-large-text-and-restart",
+      "state": "PASS",
+      "evidence": "The physical theme, background, large-text and restart matrix retains route-safe proof for the installed candidate.",
+      "remaining": null
+    },
+    {
+      "id": "offline-online-process-recovery",
+      "state": "PASS",
+      "evidence": "WP75 retains route-safe offline recovery proof and adds current-candidate terminated-process persistence evidence.",
+      "remaining": null
+    },
+    {
+      "id": "listing-ai-safe-mock-review-contract",
+      "state": "PASS",
+      "evidence": "WP75 confirms mock-only Staging listing analysis with zero external budget and no automatic publication.",
+      "remaining": null
+    },
+    {
+      "id": "staging-support-simulation-lifecycle",
+      "state": "PASS",
+      "evidence": "The Support Packet and WP75 retain controlled simulation semantics without describing test money or decisions as real outcomes.",
+      "remaining": null
+    },
+    {
+      "id": "payment-idempotency-and-uncertain-reconciliation",
+      "state": "PASS",
+      "evidence": "WP74 closes local durable idempotent dispute-transfer recovery and uncertain-outcome semantics without provider traffic.",
+      "remaining": null
+    },
+    {
+      "id": "support-report-block",
+      "state": "PASS",
+      "evidence": "WP72 physically proves report, audit readback, block, unblock, isolation, cleanup and protected owner restoration.",
+      "remaining": null
+    },
+    {
+      "id": "email-registration-verification-login-recovery",
+      "state": "PARTIAL",
+      "evidence": "WP83 reaches genuine fresh registration and the e-mail-pending state on the exact Pixel candidate without retaining link or identity data.",
+      "remaining": "The owner must complete the normal Staging verification link; exact Pixel login, cold start and recovery-link evidence can then resume."
+    },
+    {
+      "id": "logout-password-session-account-switch-isolation",
+      "state": "PARTIAL",
+      "evidence": "WP83 exactly proves password replacement, logout-all, server-confirmed empty sessions, cold start and A-to-B isolation on the Pixel.",
+      "remaining": "The independent deliberately delayed-result proof and the linked fresh-registration recovery lifecycle are not yet exercised on this candidate."
+    },
+    {
+      "id": "google-signin",
+      "state": "PARTIAL",
+      "evidence": "Google has authenticated physical acceptance on a signed predecessor, while WP83 correctly retains the missing private account selector for an exact replay.",
+      "remaining": "A dedicated owner-selected Google account is required for exact current-candidate first, repeat, cancellation and cold-start evidence."
+    },
+    {
+      "id": "search-filter-favorites-wishlists",
+      "state": "PARTIAL",
+      "evidence": "Physical predecessor evidence covers search, filters and saved-item isolation, but a fresh exact 2026090905 role vault is intentionally absent.",
+      "remaining": "After fresh owner-confirmed test roles exist, replay search, filter, favorite and all available wishlist variants on the exact Pixel candidate."
+    },
+    {
+      "id": "offer-request-accept-decline",
+      "state": "PARTIAL",
+      "evidence": "WP75 proves current non-binding request and acceptance, but not decline or competing-request resolution on this exact candidate.",
+      "remaining": "Prove decline and competing-request outcomes with isolated fresh roles and cleanup on the current Pixel candidate."
+    },
+    {
+      "id": "messages-attachments-location-appointments",
+      "state": "PARTIAL",
+      "evidence": "Current evidence proves chat while attachment, appointment and authorized/denied location windows remain only partly covered.",
+      "remaining": "Use fresh verified roles to prove attachment, appointment, authorized location reveal and denied reveal after the allowed window."
+    },
+    {
+      "id": "handover-return-cancel-withdrawal-damage",
+      "state": "PARTIAL",
+      "evidence": "Non-binding coordination is covered, while the app correctly fails closed before binding V5.2 contract, reservation or money creation.",
+      "remaining": "Approved immutable legal snapshots and a lawful sandbox booking are required for binding handover, return, withdrawal and damage evidence."
+    },
+    {
+      "id": "reviews-and-invoices",
+      "state": "PARTIAL",
+      "evidence": "Technical review and invoice contracts exist, but no lawful completed binding sandbox lifecycle creates role-correct physical evidence.",
+      "remaining": "A lawful sandbox booking must produce role-correct reviews and invoices without real money or a false financial statement."
+    },
+    {
+      "id": "privacy-export-and-account-deletion",
+      "state": "PARTIAL",
+      "evidence": "Predecessor physical proof exists, but successor privacy and retention source paths changed and must not be promoted silently.",
+      "remaining": "Replay minimized export, principal isolation and reversible synthetic deletion on the exact 2026090905 Pixel candidate."
+    },
+    {
+      "id": "cart-projects-and-booking-groups",
+      "state": "PARTIAL",
+      "evidence": "Cart and project persistence have predecessor proof, while multi-item booking groups require the held binding booking path.",
+      "remaining": "Prove multi-item booking groups only after binding legal and sandbox payment prerequisites are lawfully available."
+    },
+    {
+      "id": "android-permission-lifecycle",
+      "state": "PARTIAL",
+      "evidence": "WP83 proves the runner stops before permission mutation when the current Pixel is guest or e-mail-pending and preserves the prior snapshot.",
+      "remaining": "After owner-confirmed login, run the consolidated current-candidate permission lifecycle and restore the original grants in one transaction."
+    },
+    {
+      "id": "facebook-signin",
+      "state": "OPEN",
+      "evidence": "Facebook remains disabled in the Android and Firebase configuration; no unsupported fallback is claimed.",
+      "remaining": "An official Meta developer application, consent, Firebase configuration and exact-candidate acceptance are required."
+    },
+    {
+      "id": "apple-signin",
+      "state": "OPEN",
+      "evidence": "Apple remains disabled and has no verified owner developer account or membership prerequisite.",
+      "remaining": "An official Apple Services ID, account and membership prerequisites, consent, Firebase configuration and supported acceptance are required."
+    },
+    {
+      "id": "real-image-analysis-listing-proposal",
+      "state": "OPEN",
+      "evidence": "The verified current Staging route is mock-only; codex_local_dev is developer-only and cannot become runtime authorization.",
+      "remaining": "Approve a runtime provider, privacy and retention configuration and bounded budget, then test an owner-reviewed proposal without automatic publication."
+    },
+    {
+      "id": "stripe-sandbox-payment-refund-simulated-payout",
+      "state": "OPEN",
+      "evidence": "Staging remains memory-only and the official Stripe connector currently requires owner reauthentication before read-only sandbox inventory.",
+      "remaining": "Complete official Stripe sandbox reauthentication and truthful profile prerequisites before test-money payment, refund and simulated payout tests."
+    },
+    {
+      "id": "binding-v52-contract-return-damage",
+      "state": "OPEN",
+      "evidence": "The current Staging path correctly stops before binding contract, reservation or payment when V5.2 documents are unavailable.",
+      "remaining": "Professionally approved immutable legal snapshots plus operator and provider facts are required before binding lifecycle work."
+    },
+    {
+      "id": "manual-talkback-traversal",
+      "state": "OPEN",
+      "evidence": "Automated semantics and large-text coverage do not substitute for a human auditory TalkBack traversal.",
+      "remaining": "A human must traverse critical flows with TalkBack touch exploration on a physical device."
+    },
+    {
+      "id": "oneplus-cross-device-two-role",
+      "state": "OPEN",
+      "evidence": "The OnePlus remains intentionally untouched until the Pixel closure completes and has no exact-candidate device proof.",
+      "remaining": "After Pixel closure, reconnect and authorize OnePlus, install only the verified exact APK and run the two-device matrix."
+    },
+    {
+      "id": "durable-private-registry-pull",
+      "state": "OPEN",
+      "evidence": "WP84 corrects persistent release overrides locally, while no post-rollout readback yet proves durable remote image-pull reproducibility.",
+      "remaining": "Establish least-privilege package read access and prove an exact Staging rollout/readback without a local-build release prerequisite."
+    },
+    {
+      "id": "historical-support-deadline-recovery",
+      "state": "OPEN",
+      "evidence": "Two noncritical Support deadlines remain intentionally unmodified and continue to degrade readiness without affecting runtime truth.",
+      "remaining": "An authorized staff action must update retained cases and restore compliant deadlines without deleting audit history."
+    }
+  ],
+  "aggregate": {
+    "passCount": 12,
+    "partialCount": 11,
+    "openCount": 9,
+    "totalCount": 32,
+    "pixelStagingAssessment": "current-core-proven-owner-email-and-external-gates-open",
+    "releaseDecision": "hold-not-production-ready"
+  },
+  "nextActions": [
+    {
+      "id": "OWNER_EMAIL_LINK_CONFIRMATION",
+      "scope": "Owner opens the normal ShareItToo Staging verification link without sharing it; Codex then resumes the exact Pixel login, cold-start and recovery replay.",
+      "delegatedToCodex": false
+    },
+    {
+      "id": "WP73_STRIPE_READONLY_REAUTH_REQUIRED",
+      "scope": "Owner reauthenticates the official Stripe connector before any read-only sandbox inventory or test-money workflow.",
+      "delegatedToCodex": false
+    },
+    {
+      "id": "STAGING_PERSISTENT_COMPOSE_OVERRIDE_ROLLOUT_AND_READBACK",
+      "scope": "An exact-commit Staging rollout followed by read-only proof is required before remote reproducibility can be called closed.",
+      "delegatedToCodex": false
+    }
+  ],
+  "boundaries": {
+    "productionChanged": false,
+    "storeChanged": false,
+    "testerListChanged": false,
+    "firebaseChanged": false,
+    "providerChanged": false,
+    "paymentProviderCalled": false,
+    "realMoneyUsed": false,
+    "externalListingAiEnabled": false,
+    "onePlusContacted": false,
+    "cloudVpsDnsChanged": false,
+    "pullRequestMerged": false,
+    "credentialsRecorded": false,
+    "privateIdentityRecorded": false
+  }
+}

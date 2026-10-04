@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-crash-release-mapping",
+  "status": "mapping-uploaded-native-symbols-packaged-controlled-event-pending",
+  "capturedAt": "2026-08-14T01:00:01Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081401",
+    "commit": "5518040d63b72c08d8cd2f72d76d802023b7b055",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "artifacts": {
+    "aabSha256": "d98c87426f1452c0af67fd56ee72210eb8142f900298c512f7455962d1cca35e",
+    "apkSha256": "788f15e1f160ec1e27f2529b34f90061fdef46c82197af93a8cabd9bd085b299",
+    "embeddedProguardMappingSha256": "fd86807e0533eedbae78052979920bcd8f40124e8e6a1db1a3f76eee92286651",
+    "embeddedMappingIdSha256": "207b704b7cd9776316183e3261031dc5776360165d312933fd748771e03a171d",
+    "nativeDebugSymbolsZipSha256": "b5964d753ff1193a77f3c9de4bf56c832c72cc5807d25e25478b411cb90f5c51",
+    "nativeSymbolMembers": [
+      {"abi": "armeabi-v7a", "sha256": "27bf0edea5454c1a63e8c2caa9cda43ad335ed4e663626dfbb32bcd602e6f29f"},
+      {"abi": "arm64-v8a", "sha256": "1dad644b879e1ddd6e8134d7892a2dc8127e08bee3490d565a89ea39cc4508c2"},
+      {"abi": "x86_64", "sha256": "ef827b186c04aacd96893ce551de8f6f17a6fc37e126099f5433c1a3d55c02f2"}
+    ]
+  },
+  "verifications": {
+    "aabIdentity": "passed",
+    "embeddedMappingPresent": "passed",
+    "mappingIdPresentAndHashed": "passed",
+    "nativeSymbolsPresentForAllBundledAbis": "passed",
+    "nativeSymbolsMatchStandaloneArchive": "passed",
+    "nativeSymbolsPackagedForAllBundledAbis": "passed",
+    "nativeSymbolGeneration": "passed",
+    "nativeSymbolUploadToCrashlytics": "pending",
+    "nativeSymbolUploadBuildResult": "pending",
+    "nativeSymbolCacheDrainedAfterUpload": "pending",
+    "originalAabMappingUploadedToCrashlytics": "passed",
+    "uploadBuildResult": "successful",
+    "controlledSanitizedCrashEvent": "pending",
+    "consoleReleaseAssignment": "pending"
+  },
+  "diagnosticGate": {
+    "exactCandidateEnabled": false,
+    "source": "exact-candidate-aot-inspection",
+    "reason": "The bounded staging crash diagnostic was not compiled into this exact release candidate, so no event was generated from a different binary under the same build identity."
+  },
+  "boundaries": {
+    "uploadedToStore": false,
+    "productionCrashGenerated": false,
+    "controlledStagingEventGenerated": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "kind": "google-play-feed-screenshot-readiness",
+  "status": "superseded-product-truth-failed-recapture-required",
+  "capturedAt": "2026-08-13T05:57:06.605Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081202",
+    "commit": "72dd8f13b5d3be0e82392a8b28c31292bdc23b53",
+    "apkSha256": "4445ff773ae728ef0959b4063e9f687ab86777ca9847d2a3605766de55afafec",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1"
+  },
+  "replacementBuildNumber": "2026081302",
+  "supersessionEvidenceRef": "docs/evidence/b11/android-candidate-2026081202-product-truth-supersession-20260813.json",
+  "device": {
+    "platform": "android",
+    "modelClass": "Pixel 7 Pro",
+    "physicalResolution": "1440x3120",
+    "installedCandidateVerified": true,
+    "syntheticScreenshotSessionReady": true
+  },
+  "fixture": {
+    "status": "ready-reused",
+    "curatedListingCount": 4,
+    "createdDuringObservation": 0,
+    "containsPersonalData": false
+  },
+  "feedObservation": {
+    "curatedListingVisible": true,
+    "legacyTechnicalListingsVisible": false,
+    "placeholderImagesVisible": false,
+    "technicalFixtureCopyVisible": false,
+    "protectedActiveBookings": 6,
+    "protectedPublicListingsObserved": 6,
+    "storeScreenshotAccepted": false,
+    "validatedLocalCandidates": 0
+  },
+  "completedRemediation": {
+    "method": "pause-unreferenced-and-neutralize-protected-staging-listings",
+    "deletionPerformed": false,
+    "protectedBookingsPreserved": true,
+    "deletionAuthorized": false,
+    "productionChangeAuthorized": false
+  },
+  "candidateEvidenceRefs": [
+    "docs/evidence/b11/google-play-screenshot-candidate-feed-20260812.json",
+    "docs/evidence/b11/google-play-screenshot-candidate-listing-detail-20260812.json",
+    "docs/evidence/b11/google-play-screenshot-candidate-search-20260812.json",
+    "docs/evidence/b11/google-play-screenshot-candidate-create-listing-20260812.json"
+  ],
+  "boundaries": {
+    "screenshotUploaded": false,
+    "listingDeleted": false,
+    "listingPaused": true,
+    "productionChanged": false,
+    "paymentEndpointCalled": false,
+    "containsSecrets": false,
+    "containsEmailAddresses": false,
+    "containsAccountIdentifiers": false,
+    "containsRawDeviceIdentifiers": false
+  }
+}

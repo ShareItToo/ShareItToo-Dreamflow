@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "workPackage": "WP112_PIXEL_ON_DEVICE_LISTING_AI_ACCEPTANCE",
+  "status": "passed-physical-pixel-on-device-listing-ai",
+  "capturedAt": "2026-09-11T15:24:49.452Z",
+  "runnerSourceCommit": "d25b34d743c04ee5a060c1d31c3c5127416ccd03",
+  "stagingBackend": {
+    "commit": "cbe62931b79964465f2d3956afd3f698dd4c6dea",
+    "imageDigest": "sha256:ac550be1b11d50323e75bd7d0967e2003ed92d5e0f30a05491a7c2123d783fb9",
+    "restartCount": 0
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091109",
+    "sourceCommit": "5d8b89c82926a9f0a28627a7f36d26a88a9574fe",
+    "apkSha256": "381cbb6766772c2fba4f093913bf366e6bfe1deb0af7b7ae5efe2ae694cd21cf",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1"
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "apiLevel": 37,
+    "securityPatch": "2026-07-05",
+    "containsRawDeviceIdentifier": false
+  },
+  "fixture": {
+    "kind": "repository-controlled-synthetic-cordless-drill-image",
+    "sha256": "85458cb5bc4777c587bfb8994ff0f960c8549f5423df9cc33b4c90fc65ffd420",
+    "personalMediaRead": false,
+    "retainedOnDevice": false
+  },
+  "tests": {
+    "exactSignedCandidateInstalled": true,
+    "exactProtectedOwnerPrincipal": true,
+    "explicitDisclosureConsent": true,
+    "physicalAndroidMlKitExecuted": true,
+    "draftReady": true,
+    "editableDraftVisible": true,
+    "titleSuggested": true,
+    "categorySuggested": true,
+    "subcategorySuggested": true,
+    "descriptionSuggested": true,
+    "projectTagsSuggested": true,
+    "useCasesSuggested": true,
+    "safeFallbackAbsent": true,
+    "recentDraftFound": true,
+    "exactlyOneRecentDraft": true,
+    "ageBounded": true,
+    "statusEditing": true,
+    "revisionOne": true,
+    "disclosureExact": true,
+    "preflightConsumed": true,
+    "oneVersion": true,
+    "suggestionsNonempty": true,
+    "allOwnerConfirmationsFalse": true,
+    "providerOnDevice": true,
+    "modelExact": true,
+    "zeroUnitsAndCost": true,
+    "outcomeSucceeded": true,
+    "notPublished": true,
+    "generationAuditExact": true,
+    "localRecoveryCleared": true,
+    "controlledMediaRemoved": true,
+    "protectedOwnerSessionRestored": true
+  },
+  "runtime": {
+    "provider": "on_device",
+    "model": "mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1",
+    "externalProviderExecutionAllowed": false,
+    "estimatedCostCents": 0,
+    "billedCostCents": 0,
+    "automaticPublicationAllowed": false,
+    "paymentTransport": "memory",
+    "stripeLivemode": false
+  },
+  "sourceInventory": {
+    "tool/diagnose_android_on_device_listing_ai.mjs": "3fd37c44b71ae57d32c1b754567bc0720629f4b6cba5f0707f05d0c2f110dd05",
+    "test/tool/diagnose_android_on_device_listing_ai.test.mjs": "a8946cc4783b1ecbeea0b7a3cc2865d78a7a30d1a86f536c35c51704c3cc495d",
+    "test/fixtures/listing-ai/generic-cordless-drill.png": "85458cb5bc4777c587bfb8994ff0f960c8549f5423df9cc33b4c90fc65ffd420"
+  },
+  "boundaries": {
+    "listingPublished": false,
+    "paymentEndpointCalled": false,
+    "realMoneyUsed": false,
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "firebaseChanged": false,
+    "onePlusContacted": false,
+    "containsAccountIdentity": false,
+    "containsSecrets": false,
+    "containsTokens": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsPrivateFilesystemPaths": false
+  }
+}

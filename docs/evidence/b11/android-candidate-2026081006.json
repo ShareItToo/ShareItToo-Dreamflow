@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-release-candidate",
+  "status": "installed-pending-manual-matrix",
+  "generatedAt": "2026-08-10T00:39:37Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081006",
+    "commit": "e40ef0e8cbaa5237e5aadbfae746319e696b1904",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "android": {
+    "delivery": "pending",
+    "aabSha256": "cd1292a544972d0ce92e394cd3f7bba262c25d4c72259a83f9854c48019aa7e8",
+    "apkSha256": "e2da8736936f3cdd366989551fb1f93a6f701b9b3bc2afeaa454c277d394778b",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "packageIdentityVerified": true
+  },
+  "privacyAndNetwork": {
+    "binaryScan": "passed",
+    "targetSdkVersion": 35,
+    "backupDisabled": true,
+    "cleartextTrafficDisabled": true,
+    "analyticsSdkPresent": false,
+    "advertisingSdkPresent": false,
+    "disclosedSdks": [
+      "Firebase Cloud Messaging",
+      "Firebase Crashlytics"
+    ],
+    "findings": []
+  },
+  "staging": {
+    "serverCommit": "9a1371e02d8e7d63d3dee30ca169c6c7f37fa966",
+    "liveHttpStatus": 200,
+    "readyHttpStatus": 200,
+    "fcmEnabled": true,
+    "googleCredentialValidation": "passed",
+    "productionInvariant": "passed"
+  },
+  "boundaries": {
+    "uploadedToStore": false,
+    "installedOnPhysicalDevice": true,
+    "realPushSent": false,
+    "iosValidated": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

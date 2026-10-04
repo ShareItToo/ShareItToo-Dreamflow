@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "packageVersion": "P0B-L3-ASTRA-AI-CROSSCHECK-2026-09-14.1",
+  "status": "AI_CROSSCHECK_PARTIAL_NORMALIZED_OUTCOME_CAPTURE",
+  "jurisdiction": "DE",
+  "reviewedAt": "2026-09-14",
+  "reviewedSourceCommit": "2db2b90aab385aeba527fd559a33c269c8dc00cf",
+  "outcome": "CORRECTIONS_REQUIRED",
+  "resultCapture": "partial-normalized-outcome-only-raw-response-not-persisted",
+  "decisionDetailComplete": false,
+  "crosscheckScopeComplete": false,
+  "rawResponsePersisted": false,
+  "professionalLegalApproval": false,
+  "ownerAdoptionRecorded": false,
+  "publicActivationAllowed": false,
+  "productionProvisioningAllowed": false,
+  "storeSubmissionAllowed": false,
+  "realMoneyAllowed": false,
+  "verdictCounts": {
+    "CONFIRM": 3,
+    "CORRECT": 12,
+    "INSUFFICIENT_EVIDENCE": 3
+  },
+  "priorityCounts": {
+    "P0": 14,
+    "P1": 4
+  },
+  "decisions": [
+    {"key":"operatorIdentityAndImprint","verdict":"INSUFFICIENT_EVIDENCE","priority":"P0","professionalStatus":"open"},
+    {"key":"groupPrivateRentalContractModel","verdict":"CONFIRM","priority":"P1","professionalStatus":"open"},
+    {"key":"groupPlatformContractScope","verdict":"CORRECT","priority":"P0","professionalStatus":"open"},
+    {"key":"completeOfferAndCounterOfferSemantics","verdict":"CORRECT","priority":"P0","professionalStatus":"open"},
+    {"key":"checkoutAndDurableConfirmation","verdict":"CORRECT","priority":"P0","professionalStatus":"open"},
+    {"key":"withdrawalAndFixedPeriodRental","verdict":"CORRECT","priority":"P0","professionalStatus":"open"},
+    {"key":"partialPerformanceAndDivisibilityConsequences","verdict":"CORRECT","priority":"P0","professionalStatus":"open"},
+    {"key":"groupAndPositionCancellationRefundRules","verdict":"CORRECT","priority":"P0","professionalStatus":"open"},
+    {"key":"sharedAppointmentAndPositionEvidenceEffect","verdict":"CONFIRM","priority":"P1","professionalStatus":"open"},
+    {"key":"positionNeedsReviewAndUnrelatedRelease","verdict":"CORRECT","priority":"P0","professionalStatus":"open"},
+    {"key":"groupPaymentAuthorizationAndProviderContract","verdict":"INSUFFICIENT_EVIDENCE","priority":"P0","professionalStatus":"open"},
+    {"key":"positionLedgerRefundAndChargebackAllocation","verdict":"CONFIRM","priority":"P1","professionalStatus":"open"},
+    {"key":"groupConfirmationAndReceiptIssuerContent","verdict":"CORRECT","priority":"P0","professionalStatus":"open"},
+    {"key":"privacyPurposesLegalBasesAndRecipients","verdict":"CORRECT","priority":"P0","professionalStatus":"open"},
+    {"key":"accountExportCompletenessAndCounterpartyProtection","verdict":"CORRECT","priority":"P0","professionalStatus":"open"},
+    {"key":"retentionDeletionLegalHoldPeriodsAndTriggers","verdict":"CORRECT","priority":"P0","professionalStatus":"open"},
+    {"key":"marketplaceTransparencyDsaAndModeration","verdict":"CORRECT","priority":"P0","professionalStatus":"open"},
+    {"key":"businessGlobalConsumerAndTraderVariants","verdict":"INSUFFICIENT_EVIDENCE","priority":"P1","professionalStatus":"open"}
+  ],
+  "insufficientEvidenceKeys": [
+    "operatorIdentityAndImprint",
+    "groupPaymentAuthorizationAndProviderContract",
+    "businessGlobalConsumerAndTraderVariants"
+  ]
+}

@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "kind": "flutter-analysis-fixed-default-parameters",
+  "capturedAt": "2026-08-16T11:20:57Z",
+  "status": "passed-fixed-default-parameter-cleanup",
+  "baseline": {
+    "totalDiagnostics": 304,
+    "errors": 0,
+    "unusedElementParameter": 44
+  },
+  "result": {
+    "totalDiagnostics": 297,
+    "errors": 0,
+    "diagnosticsRemovedThisBatch": 7,
+    "diagnosticsRemovedFromOriginal611": 314,
+    "unusedElementParameter": 37,
+    "runtimeSourceFilesChanged": 4,
+    "sourceLinesRemoved": 20,
+    "sourceLinesAdded": 9,
+    "ciAnalyzerBaseline": 297
+  },
+  "cleanupScope": {
+    "tinyButtonColorParameterRemoved": 1,
+    "blinkDurationParameterRemoved": 1,
+    "ownerInfoTrailingParameterRemoved": 1,
+    "dateClearParametersRemoved": 2,
+    "nearbyTapParameterRemoved": 1,
+    "suggestionIconParameterRemoved": 1,
+    "newAnalyzerDiagnosticsIntroduced": 0,
+    "privacyBoundSourceFilesChanged": 0,
+    "visibleColorChanged": false,
+    "pulseDurationChanged": false,
+    "dateActionsChanged": false,
+    "searchInteractionChanged": false,
+    "collectedDataChanged": false
+  },
+  "fixedDefaults": {
+    "tinyButtonColor": "theme-primary",
+    "blinkDurationMilliseconds": 6500,
+    "ownerInfoTrailing": "absent",
+    "dateClearControls": "absent",
+    "nearbyCardTap": "disabled",
+    "suggestionIcon": "search"
+  },
+  "remainingDiagnostics": {
+    "unused_element": 101,
+    "use_build_context_synchronously": 107,
+    "deprecated_member_use": 36,
+    "unused_element_parameter": 37,
+    "unused_field": 16,
+    "avoid_web_libraries_in_flutter": 0
+  },
+  "verification": {
+    "flutterAnalyze": "passed-with-zero-errors-and-297-non-error-diagnostics",
+    "fixedDefaultWiringTests": "passed-4",
+    "analyzerBaselineWiringTests": "passed-2",
+    "targetedUiTests": "passed-38",
+    "flutterTests": "passed-268-one-skipped",
+    "technicalRegression": "passed-with-bounded-internal-candidate-rollover",
+    "webBuild": "passed",
+    "androidDebugBuild": "passed",
+    "diffCheck": "passed"
+  },
+  "boundaries": {
+    "newAppCandidateBuilt": false,
+    "existingAppCandidateChanged": false,
+    "productionChanged": false,
+    "storeTrackChanged": false,
+    "reviewSubmitted": false,
+    "testAccountsMutated": false,
+    "realMoneyUsed": false
+  }
+}

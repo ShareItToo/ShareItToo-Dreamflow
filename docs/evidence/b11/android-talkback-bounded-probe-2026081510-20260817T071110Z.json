@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-talkback-bounded-physical-probe",
+  "status": "service-and-semantics-observed-manual-traversal-open-device-restored",
+  "capturedAt": "2026-08-17T07:11:10Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081510",
+    "commit": "4cb004641391efe40fa2bf89f62da11bc1f71291",
+    "installMethod": "direct-apk"
+  },
+  "device": {
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "Android 16",
+    "screenReader": "Google TalkBack"
+  },
+  "checks": {
+    "talkBackInstalled": "passed",
+    "talkBackServiceBoundWithSpokenFeedback": "passed",
+    "sitWindowFocusedWhileTalkBackBound": "passed",
+    "exploreSemanticLabelsPresent": "passed",
+    "categorySemanticLabelsPresent": "passed",
+    "listingSemanticLabelsPresent": "passed",
+    "fiveMainNavigationLabelsPresent": "passed",
+    "manualSequentialSpokenTraversal": "open",
+    "manualDoubleTapActivation": "open"
+  },
+  "boundedAttempt": {
+    "simulatedTraversalResult": "not-accepted-as-proof",
+    "reason": "The simulated horizontal gesture opened the Android system power menu instead of proving TalkBack focus traversal.",
+    "systemMenuClosedImmediately": true,
+    "talkBackPassClaimed": false
+  },
+  "restoration": {
+    "enabledAccessibilityServices": null,
+    "accessibilityEnabled": 0,
+    "touchExplorationEnabled": 0,
+    "fontScale": 0.85,
+    "autoRotation": 1,
+    "boundAccessibilityServices": 0,
+    "status": "passed"
+  },
+  "boundaries": {
+    "storeChanged": false,
+    "productionChanged": false,
+    "accountChanged": false,
+    "messageSent": false,
+    "paymentPerformed": false,
+    "containsSecrets": false,
+    "containsAccountIdentifiers": false,
+    "containsRawDeviceIdentifiers": false,
+    "privateScreenshotStoredInRepository": false
+  }
+}

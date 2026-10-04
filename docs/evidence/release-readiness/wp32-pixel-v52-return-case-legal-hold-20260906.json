@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "kind": "wp32-pixel-v52-return-case-legal-hold",
+  "status": "implementation-ready-physical-blocked-legal-snapshots",
+  "capturedAt": "2026-09-06T17:34:19.000Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": 2026090608,
+    "sourceCommit": "15f7766ef15c0be30cf96a743edc4d62d1a588e3",
+    "installedOnPixel": true,
+    "candidateChanged": false
+  },
+  "implementation": {
+    "commit": "dd0123094188799d433e885448337f5175cbd49d",
+    "isolatedProtectedVault": true,
+    "ownerAndRenterEntryPointsRequired": true,
+    "privateEvidenceUploadRequired": true,
+    "equalParticipantServerTruthRequired": true,
+    "needsReviewRequiredForBothRoles": true,
+    "duplicateEntryPointMustDisappear": true,
+    "generalSupportMustRemain": true,
+    "protectedOwnerMustBeRestored": true
+  },
+  "physicalAttempt": {
+    "result": "blocked-before-booking",
+    "httpStatus": 409,
+    "structuredError": "v52_contract_documents_unavailable",
+    "bookingCreated": false,
+    "contractCreated": false,
+    "reservationCreated": false,
+    "paymentEndpointCalled": false,
+    "stripeLivemode": false,
+    "temporaryListingPaused": true,
+    "deviceEvidenceFileRemoved": true,
+    "protectedOwnerRestored": true,
+    "protectedVaultUnchanged": true,
+    "returnCaseCreated": false,
+    "physicalSuccessClaimed": false
+  },
+  "legalReadOnlyCheck": {
+    "driveChecked": true,
+    "repositoryChecked": true,
+    "latestMatchingSourceTitle": "02_V5.2_RECHTSMAPPE_PRIVATLAUNCH.pdf",
+    "latestMatchingSourceModifiedAt": "2026-08-18T17:51:36.056Z",
+    "newerApprovedSourceFound": false,
+    "repositoryManifestStatus": "draft-blocked",
+    "professionalReviewStatus": "not-professionally-reviewed",
+    "activationAllowed": false,
+    "effectiveDatePresent": false
+  },
+  "verification": {
+    "focusedToolTestsPassed": 32,
+    "repositoryToolTestsPassed": 2353,
+    "repositoryToolTestsFailed": 0,
+    "flutterTestsPassed": 900,
+    "flutterTestsSkippedDeclared": 33,
+    "analyzer": "passed-zero-issues",
+    "webWasm": "passed",
+    "loopbackSmoke": "passed",
+    "androidDebugMinSdk24": "passed",
+    "githubRegressionRun": 34048891874,
+    "githubRegressionStatus": "passed-four-required-jobs",
+    "githubCodeqlRun": 34048891840,
+    "githubCodeqlStatus": "passed",
+    "openCodeScanningAlerts": 0
+  },
+  "sourceInventory": [
+    {
+      "path": "tool/diagnose_android_return_case_lifecycle.mjs",
+      "sha256": "5288b4fab53bbc42685d294ec4232e9e1fa2bfc5d61d7a7d87db3a2608cfc8a7"
+    },
+    {
+      "path": "tool/run_isolated_android_role_booking_diagnostic.mjs",
+      "sha256": "59c75f358114f9271bba0cb96732a83c2ba62d836095eb4ad52716ef15b09e64"
+    },
+    {
+      "path": "tool/run_staging_synthetic_booking.mjs",
+      "sha256": "f69be991d19039ff8dc68c9f688c6157f50930bc58d0ab9219cba0eba91f6b99"
+    },
+    {
+      "path": "test/tool/diagnose_android_return_case_lifecycle.test.mjs",
+      "sha256": "3025c71c1c5987b857340e72ae866fdb1fc37311b713a91078232d9a4268df64"
+    }
+  ],
+  "boundaries": {
+    "legalGateBypassed": false,
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "realMoneyChanged": false,
+    "providerChanged": false,
+    "firebaseConsoleChanged": false,
+    "cloudVpsDnsChanged": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false,
+    "containsAccountIdentity": false,
+    "containsCredentials": false,
+    "containsTokens": false,
+    "containsFixtureIdentifiers": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsPrivateFilesystemPaths": false
+  }
+}

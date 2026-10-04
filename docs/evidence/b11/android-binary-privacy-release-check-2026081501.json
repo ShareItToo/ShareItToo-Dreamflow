@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "kind": "release-check",
+  "status": "passed",
+  "capturedAt": "2026-08-15T00:46:18.233Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081501",
+    "commit": "804670b781e7dc489bb5133a4a84d7f32e52be2a",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "releaseCheck": {
+    "id": "binaryPrivacyAndNetwork",
+    "status": "passed",
+    "verifications": [
+      {
+        "id": "signed-apk-and-aab-scan",
+        "status": "passed",
+        "checkedAt": "2026-08-15T00:46:18.233Z",
+        "summary": "The exact signed 2026081501 APK and AAB passed the binary privacy, permission, SDK and runtime-origin scan with no findings; the merged APK permission inventory matched the declared bounded set."
+      }
+    ]
+  },
+  "boundaries": {
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

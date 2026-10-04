@@ -1,0 +1,366 @@
+// Versioned test-support artifact/matrix contract. Never imported by production.
+import fs from 'node:fs';
+import path from 'node:path';
+import { createHash } from 'node:crypto';
+import { execFileSync, spawn } from 'node:child_process';
+
+export const contract = Object.freeze({ flutter: '3.41.7', dart: '3.11.5',
+  framework: 'cc0734ac716fbb8b90f3f9db8020958b1553afa7', engine: '59aa584fdf100e6c78c785d8a5b565d1de4b48ab',
+  packageGraphSha256: '61e04e4e6db25721b7c7671c9d90ba6d693fec4f195c91dfcd463f34b7ac28dd',
+  pluginDiscoverySha256: '6383dd6e69c220884c126b72f78c57781bd311a9b9b70229d4c15d0cd1ef1242',
+  webTargetSha256: '21cb8705af8d7dc59185b178afca1b58e40907479deddf51ec000e89f205ed48' });
+export const isolationScope = 'test-only-google-web-registration-isolation-v1';
+const check = (ok, code) => { if (!ok) throw Error(code); };
+const digest = value => createHash('sha256').update(value).digest('hex');
+const exact = (v, keys) => v && typeof v === 'object' && !Array.isArray(v)
+  && Object.keys(v).sort().join('|') === [...keys].sort().join('|');
+const integer = value => Number.isSafeInteger(value) && value >= 0;
+export const buildArguments = Object.freeze(['build', 'web', '--release', '--no-pub', '--no-web-resources-cdn',
+  '--pwa-strategy=none', '--target=test/support/mission_web_history_harness.dart',
+  ...['SIT_BACKEND_ENABLED', 'SIT_MISSION_WEB_PREVIEW_ENABLED', 'SIT_STAGE_A_NON_BINDING_PILOT',
+    'SIT_SOCIAL_GOOGLE_ENABLED', 'SIT_SOCIAL_APPLE_ENABLED', 'SIT_SOCIAL_FACEBOOK_ENABLED',
+    'SIT_BOOKING_GROUPS_TECHNICAL_UI_ENABLED', 'SIT_BOOKING_GROUPS_PUBLIC_RELEASE_ALLOWED',
+    'SIT_PLANNER_TECHNICAL_UI_ENABLED', 'SIT_PLANNER_DEMAND_UI_ENABLED',
+    'SIT_SUPPLY_ENRICHMENT_TECHNICAL_UI_ENABLED', 'SIT_LISTING_SETS_TECHNICAL_UI_ENABLED']
+    .map(name => `--dart-define=${name}=false`)]);
+
+export function validateSdkState(value) {
+  check(exact(value, ['serialCount', 'state']) && integer(value.serialCount)
+    && exact(value.state, ['version', 'instance', 'entry']) && value.state.version === 1
+    && /^[a-f0-9]{32}$/u.test(value.state.instance) && integer(value.state.entry), 'history_state');
+  return value;
+}
+export function validateHistoryMatrix(rows) {
+  check(Array.isArray(rows) && rows.length === 8, 'history_matrix');
+  const paths = ['mission', 'root', 'mission', 'root', 'mission', 'mission', 'mission', 'root'];
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i]; check(exact(r, ['path', 'sdkState', 'visible']) && r.path === paths[i]
+      && r.visible === (paths[i] === 'mission' ? 'unavailable' : 'harness-root'), 'history_matrix');
+    validateSdkState(r.sdkState);
+  }
+  const s = rows.map(r => r.sdkState); const a = s.map(v => v.state);
+  check(JSON.stringify(s.map(v => v.serialCount)) === '[0,0,1,0,1,1,1,2]', 'history_serial');
+  check(JSON.stringify(a.map(v => v.entry)) === '[1,0,1,0,1,1,1,0]', 'history_matrix');
+  check(a[0].instance !== a[1].instance && a[1].instance !== a[5].instance
+    && [2,3,4].every(i => a[i].instance === a[1].instance)
+    && [6,7].every(i => a[i].instance === a[5].instance), 'history_matrix');
+}
+export const artifactDigest = files => digest(JSON.stringify(files));
+export function validateArtifact(a) {
+  check(exact(a, ['schemaVersion', 'sourceHead', 'sourceDigest', 'sourceHashes', 'lockSha256',
+    'toolchain', 'files', 'artifactDigest', 'isolation', 'isolationHashes']) && a.schemaVersion === 2 && /^[a-f0-9]{40}$/u.test(a.sourceHead)
+    && a.isolation === isolationScope && exact(a.isolationHashes, ['graphBeforeSha256', 'graphAfterSha256', 'packageConfigSha256', 'registrantSha256'])
+    && Object.values(a.isolationHashes).every(v => /^[a-f0-9]{64}$/u.test(v))
+    && a.isolationHashes.graphBeforeSha256 !== a.isolationHashes.graphAfterSha256
+    && [a.sourceDigest, a.lockSha256, a.artifactDigest].every(v => /^[a-f0-9]{64}$/u.test(v))
+    && exact(a.sourceHashes, ['harness', 'router', 'controller', 'host'])
+    && Object.values(a.sourceHashes).every(v => /^[a-f0-9]{64}$/u.test(v))
+    && JSON.stringify(a.toolchain) === JSON.stringify(contract)
+    && Array.isArray(a.files) && a.files.length > 2 && a.files.length < 10000, 'history_artifact');
+  let previous = '';
+  for (const file of a.files) {
+    check(exact(file, ['path', 'sha256', 'bytes']) && typeof file.path === 'string'
+      && /^[a-zA-Z0-9_.\-/]+$/u.test(file.path) && !file.path.split('/').some(p => !p || p === '.' || p === '..')
+      && file.path > previous && /^[a-f0-9]{64}$/u.test(file.sha256) && integer(file.bytes), 'history_artifact');
+    previous = file.path;
+  }
+  check(['index.html', 'main.dart.js', 'flutter_bootstrap.js'].every(name => a.files.some(f => f.path === name))
+    && artifactDigest(a.files) === a.artifactDigest, 'history_artifact');
+  return a;
+}
+export function classifyAsset(url, type, files) {
+  if (type === 'Document' && ['https://shareittoo.com/', 'https://shareittoo.com/mission'].includes(url)) return files.has('index.html') ? 'index.html' : null;
+  if (!['Script', 'Stylesheet', 'Font', 'Image', 'Fetch', 'XHR', 'Other'].includes(type)) return null;
+  if (!url.startsWith('https://shareittoo.com/')) return null;
+  const name = url.slice('https://shareittoo.com/'.length);
+  return /^[a-zA-Z0-9_.\-/]+$/u.test(name) && !name.split('/').some(p => !p || p === '.' || p === '..')
+    && files.has(name) ? name : null;
+}
+// Diagnostic precedence only; this never grants request admission.
+export const networkReasonKeys = Object.freeze(['non_get', 'response_stage', 'unsupported_type',
+  'non_https_scheme', 'flutter_canvaskit_cdn', 'flutter_font_fallback_cdn', 'google_identity_script',
+  'firebase_js_cdn', 'other_foreign_origin', 'query_or_fragment', 'unsafe_path', 'untracked_asset', 'websocket']);
+export function classifyBlockedRequest({ method, url, type, responseStatusCode }, files) {
+  if (method !== 'GET') return 'non_get';
+  if (responseStatusCode) return 'response_stage';
+  if (type === 'WebSocket') return 'websocket';
+  if (!['Document', 'Script', 'Stylesheet', 'Font', 'Image', 'Fetch', 'XHR', 'Other'].includes(type)) return 'unsupported_type';
+  if (typeof url !== 'string' || !url.startsWith('https://')) return 'non_https_scheme';
+  if (!url.startsWith('https://shareittoo.com/')) {
+    // Fixed public resource-purpose diagnostics, never an admission allowlist.
+    // Flutter 3.41.7 flutter_js/src/utils.js + engine/configuration.dart;
+    // google_identity_services_web 0.3.3+1 js_loader.dart;
+    // firebase_core_web 3.10.0 firebase_core_web.dart. Query/tail bytes stay local.
+    if (url.startsWith('https://www.gstatic.com/flutter-canvaskit/')) return 'flutter_canvaskit_cdn';
+    if (url.startsWith('https://fonts.gstatic.com/s/')) return 'flutter_font_fallback_cdn';
+    const identityScript = 'https://accounts.google.com/gsi/client';
+    if (url === identityScript || url.startsWith(`${identityScript}?`) || url.startsWith(`${identityScript}#`)) return 'google_identity_script';
+    if (url.startsWith('https://www.gstatic.com/firebasejs/')) return 'firebase_js_cdn';
+    return 'other_foreign_origin';
+  }
+  if (/[?#]/u.test(url)) return 'query_or_fragment';
+  const name = url.slice('https://shareittoo.com/'.length);
+  if (type === 'Document' && name !== '' && name !== 'mission') return 'unsafe_path';
+  if (!(type === 'Document' && name === '') && (!/^[a-zA-Z0-9_.\-/]+$/u.test(name)
+    || name.split('/').some(p => !p || p === '.' || p === '..'))) return 'unsafe_path';
+  return classifyAsset(url, type, files) ? null : 'untracked_asset';
+}
+export function validateNetworkDiagnostic(value, previous) {
+  check(value && Object.getPrototypeOf(value) === Object.prototype
+    && Reflect.ownKeys(value).length === networkReasonKeys.length, 'probe_failure');
+  const detached = {};
+  for (const key of networkReasonKeys) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    check(descriptor && Object.hasOwn(descriptor, 'value') && descriptor.enumerable
+      && Number.isSafeInteger(descriptor.value) && descriptor.value >= 0 && descriptor.value <= 4096, 'probe_failure');
+    detached[key] = descriptor.value;
+  }
+  const total = v => Object.values(v).reduce((sum, count) => sum + count, 0);
+  check(total(detached) <= 4096, 'probe_failure');
+  if (previous !== undefined) {
+    const before = validateNetworkDiagnostic(previous);
+    check(networkReasonKeys.every(key => detached[key] >= before[key])
+      && total(detached) === total(before) + 1, 'probe_failure');
+  }
+  return detached;
+}
+// Test-support reads only: hold parent identities until every consumed byte is
+// validated. Never authorize a later path read using an earlier lstat result.
+function withHistoryReadTree(root, code, consume) {
+  const directories = new Map(); const descriptors = [];
+  const same = (a, b) => ['dev', 'ino', 'mode', 'uid', 'gid', 'nlink', 'size', 'mtimeNs', 'ctimeNs'].every(key => a[key] === b[key]);
+  const lstat = file => fs.lstatSync(file, { bigint: true });
+  const fstat = fd => fs.fstatSync(fd, { bigint: true });
+  const parts = name => {
+    check(typeof name === 'string' && name.length > 0 && name.length <= 4096 && !path.isAbsolute(name)
+      && !name.includes('\\') && !name.includes('\0')
+      && !name.split('/').some(part => !part || part === '.' || part === '..')
+      && name.split('/').length <= 128, code);
+    return name.split('/');
+  };
+  const stable = () => {
+    for (const [file, entry] of directories) check(same(entry.before, fstat(entry.fd)) && same(entry.before, lstat(file)), code);
+    check(fs.realpathSync(root) === root, code);
+  };
+  const directory = name => {
+    let file = root;
+    for (const part of ['', ...(name ? parts(name) : [])]) {
+      if (part) file = path.join(file, part);
+      if (directories.has(file)) continue;
+      check(directories.size < 10000, code);
+      const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+      descriptors.push(fd); const before = fstat(fd);
+      check(before.isDirectory() && before.uid === BigInt(process.getuid())
+        && (before.mode & 0o0022n) === 0n && same(before, lstat(file)), code);
+      directories.set(file, { fd, before });
+    }
+    stable(); return file;
+  };
+  const read = name => {
+    const components = parts(name); directory(components.slice(0, -1).join('/'));
+    const file = path.join(root, name);
+    const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+    try {
+      const before = fstat(fd);
+      check(before.isFile() && before.uid === BigInt(process.getuid())
+        && before.nlink === 1n && (before.mode & 0o7022n) === 0n
+        && before.size >= 0n && before.size <= 64n * 1024n * 1024n && same(before, lstat(file)), code);
+      stable();
+      const bytes = Buffer.alloc(Number(before.size)); let offset = 0;
+      while (offset < bytes.length) {
+        const count = fs.readSync(fd, bytes, offset, bytes.length - offset, offset);
+        check(count > 0, code); offset += count;
+      }
+      check(fs.readSync(fd, Buffer.alloc(1), 0, 1, bytes.length) === 0
+        && same(before, fstat(fd)) && same(before, lstat(file)), code);
+      stable(); return bytes;
+    } finally { fs.closeSync(fd); }
+  };
+  try {
+    check(typeof root === 'string' && path.isAbsolute(root) && root !== '/'
+      && path.normalize(root) === root && fs.realpathSync(root) === root, code);
+    directory('');
+    const result = consume({ read, list: name => {
+      const file = directory(name); const entries = fs.readdirSync(file, { withFileTypes: true });
+      check(entries.length < 10000, code); stable(); return entries.sort((a, b) => a.name < b.name ? -1 : 1);
+    } });
+    stable(); return result;
+  } catch { throw Error(code); }
+  finally {
+    let failed = false;
+    for (const fd of descriptors.reverse()) { try { fs.closeSync(fd); } catch { failed = true; } }
+    check(!failed, code);
+  }
+}
+
+export function readHistoryFile(root, name, code = 'history_source') {
+  check(['history_source', 'history_isolation'].includes(code), 'history_source');
+  return withHistoryReadTree(root, code, tree => tree.read(name));
+}
+
+export function inventoryTree(root) {
+  return withHistoryReadTree(root, 'history_artifact', tree => {
+    const files = []; let total = 0; let entries = 0;
+    const walk = prefix => {
+      for (const entry of tree.list(prefix)) {
+        check(++entries < 10000, 'history_artifact');
+        const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+        if (entry.isDirectory()) walk(relative);
+        else {
+          check(entry.isFile(), 'history_artifact'); const bytes = tree.read(relative);
+          total += bytes.length; check(total <= 256 * 1024 * 1024, 'history_artifact');
+          files.push({ path: relative, sha256: digest(bytes), bytes: bytes.length });
+        }
+      }
+    };
+    walk(''); return files.sort((a,b) => a.path < b.path ? -1 : 1);
+  });
+}
+
+// Flutter 3.41.7 findPlugins follows PackageGraph's reachable dependency graph.
+// Only registration discovery is isolated; package configuration and all source
+// packages remain intact for compilation. This is never a product workaround.
+export function isolateGoogleRegistrationGraph(text) {
+  let graph; try { graph = JSON.parse(text); } catch { throw Error('history_isolation'); }
+  check(typeof text === 'string' && text.length < 16 * 1024 * 1024
+    && text === JSON.stringify(graph, null, 2) && exact(graph, ['roots', 'packages', 'configVersion'])
+    && graph.configVersion === 1 && JSON.stringify(graph.roots) === '["lendify"]'
+    && Array.isArray(graph.packages) && graph.packages.length > 3 && graph.packages.length < 2000, 'history_isolation');
+  const names = new Map(); const validNames = values => Array.isArray(values) && values.length < 1000
+    && values.every(v => typeof v === 'string' && /^[a-z_][a-z0-9_]*$/u.test(v)) && new Set(values).size === values.length;
+  for (const p of graph.packages) {
+    check(p && typeof p === 'object' && !Array.isArray(p), 'history_isolation');
+    check(exact(p, Object.hasOwn(p, 'devDependencies') ? ['name', 'version', 'dependencies', 'devDependencies'] : ['name', 'version', 'dependencies'])
+      && typeof p.name === 'string' && /^[a-z_][a-z0-9_]*$/u.test(p.name) && !names.has(p.name)
+      && typeof p.version === 'string' && /^[A-Za-z0-9.+-]+$/u.test(p.version)
+      && validNames(p.dependencies) && (!Object.hasOwn(p, 'devDependencies') || validNames(p.devDependencies)), 'history_isolation');
+    names.set(p.name, p);
+  }
+  for (const p of graph.packages) for (const name of [...p.dependencies, ...(p.devDependencies ?? [])])
+    check(names.has(name), 'history_isolation');
+  const parent = names.get('google_sign_in'); const root = names.get('lendify');
+  check(parent?.version === '7.2.0' && names.get('google_sign_in_web')?.version === '1.1.3'
+    && names.get('google_identity_services_web')?.version === '0.3.3+1'
+    && root?.dependencies.includes('google_sign_in') && Array.isArray(root.devDependencies)
+    && JSON.stringify(parent.dependencies) === '["flutter","google_sign_in_android","google_sign_in_ios","google_sign_in_platform_interface","google_sign_in_web"]', 'history_isolation');
+  const incoming = graph.packages.flatMap(p => [
+    ...p.dependencies.filter(n => n === 'google_sign_in_web').map(() => `${p.name}:dependencies`),
+    ...(p.devDependencies ?? []).filter(n => n === 'google_sign_in_web').map(() => `${p.name}:devDependencies`)]);
+  check(JSON.stringify(incoming) === '["google_sign_in:dependencies"]', 'history_isolation');
+  const index = parent.dependencies.indexOf('google_sign_in_web'); parent.dependencies.splice(index, 1);
+  const queue = [...root.dependencies, ...root.devDependencies]; const reachable = new Set();
+  while (queue.length) { const name = queue.pop(); if (reachable.has(name)) continue;
+    reachable.add(name); queue.push(...names.get(name).dependencies); }
+  check(!reachable.has('google_sign_in_web'), 'history_isolation');
+  const isolated = JSON.stringify(graph, null, 2);
+  parent.dependencies.splice(index, 0, 'google_sign_in_web');
+  check(JSON.stringify(graph, null, 2) === text, 'history_isolation');
+  return isolated;
+}
+
+export function validateIsolatedRegistrant(before, after, executableTexts) {
+  const lines = ["import 'package:google_sign_in_web/google_sign_in_web.dart';\n", '  GoogleSignInPlugin.registerWith(registrar);\n'];
+  check(typeof before === 'string' && typeof after === 'string' && before.startsWith('// Flutter web plugin registrant file.')
+    && lines.every(line => before.split(line).length === 2), 'history_isolation');
+  check(after === lines.reduce((text, line) => text.replace(line, ''), before)
+    && !/google_sign_in_web|GoogleSignInPlugin/u.test(after)
+    && Array.isArray(executableTexts) && executableTexts.length > 0
+    && executableTexts.every(text => typeof text === 'string'
+      && !text.replaceAll('\\/', '/').includes('accounts.google.com/gsi/client')), 'history_isolation');
+}
+
+// Provision/build precedes network namespace entry. Source and lock are exact;
+// there is no download fallback after entering the namespace.
+export async function buildArtifact(directory, sourceHead, emit, signal, ownGroup = () => {}) {
+  const root = path.resolve(import.meta.dirname, '../..');
+  const git = (...args) => execFileSync('/usr/bin/git', args, { cwd: root, timeout: 15000, maxBuffer: 16 * 1024 * 1024, stdio: ['ignore','pipe','pipe'] });
+  const flutterRoot = process.env.FLUTTER_ROOT;
+  check(typeof flutterRoot === 'string' && path.isAbsolute(flutterRoot), 'history_toolchain');
+  const version = JSON.parse(fs.readFileSync(path.join(flutterRoot, 'bin/cache/flutter.version.json'), 'utf8'));
+  check(version.frameworkVersion === contract.flutter && version.dartSdkVersion === contract.dart
+    && version.frameworkRevision === contract.framework && version.engineRevision === contract.engine, 'history_toolchain');
+  const verifyToolSources = () => {
+    for (const [name, expected] of [['package_graph.dart', contract.packageGraphSha256],
+      ['flutter_plugins.dart', contract.pluginDiscoverySha256], ['build_system/targets/web.dart', contract.webTargetSha256]])
+      check(digest(fs.readFileSync(path.join(flutterRoot, 'packages/flutter_tools/lib/src', name))) === expected, 'history_toolchain');
+  };
+  verifyToolSources();
+  const project = path.join(directory, 'checkout'); fs.mkdirSync(project, { mode: 0o700 });
+  const names = git('ls-files', '-z', '--', 'lib', 'assets', 'pubspec.yaml', 'pubspec.lock',
+    'test/support/mission_web_history_harness.dart', 'test/support/mission_web_history_build.mjs',
+    'test/support/mission_web_history_probe.mjs').toString().split('\0').filter(Boolean).sort();
+  check(names.length > 10 && git('rev-parse', 'HEAD').toString().trim() === sourceHead
+    && git('status', '--porcelain', '--untracked-files=all').length === 0, 'history_source');
+  const sources = [];
+  for (const name of names) {
+    check(!path.isAbsolute(name) && !name.split('/').includes('..'), 'history_source');
+    const bytes = readHistoryFile(root, name); const destination = path.join(project, name);
+    fs.mkdirSync(path.dirname(destination), { recursive: true }); fs.writeFileSync(destination, bytes, { flag: 'wx', mode: 0o600 });
+    sources.push({ path: name, sha256: digest(bytes) });
+  }
+  const find = name => { const v = sources.find(v => v.path === name)?.sha256; check(v, 'history_source'); return v; };
+  const sourceHashes = { harness: find('test/support/mission_web_history_harness.dart'),
+    router: find('lib/navigation/web_app_router.dart'), controller: find('lib/services/app_link_service.dart'),
+    host: find('lib/screens/app_link_destination_screen.dart') };
+  fs.mkdirSync(path.join(project, 'web'));
+  fs.writeFileSync(path.join(project, 'web/index.html'), '<!doctype html><html lang="de"><head><base href="/"><meta charset="UTF-8"><link rel="icon" href="data:,"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><script src="flutter_bootstrap.js" defer></script></body></html>');
+  fs.writeFileSync(path.join(project, 'web/flutter_bootstrap.js'), '{{flutter_js}}\n{{flutter_build_config}}\n_flutter.loader.load({config:{canvasKitBaseUrl:"canvaskit/"}});\n');
+  const env = { PATH: `${flutterRoot}/bin:/usr/bin:/bin`, HOME: directory, PUB_CACHE: path.join(directory, 'pub-cache'),
+    LANG: 'C.UTF-8', CI: 'true', FLUTTER_SUPPRESS_ANALYTICS: 'true' };
+  const run = (args, phase) => new Promise((resolve, reject) => {
+    emit(phase, 'begin');
+    const child = spawn(path.join(flutterRoot, 'bin/flutter'), ['--suppress-analytics', '--no-version-check', ...args],
+      { cwd: project, env, detached: true, stdio: 'ignore' });
+    let stopOwned;
+    try { if (child.pid) { stopOwned = ownGroup(child.pid); check(typeof stopOwned === 'function', 'history_build'); } }
+    catch { child.kill('SIGKILL'); emit(phase, 'failed'); reject(Error('history_build')); return; }
+    let timedOut = false;
+    const stop = () => { timedOut = true; try { stopOwned?.(); } catch { reject(Error('probe_cleanup')); } };
+    const timer = setTimeout(stop, 180000); signal?.addEventListener('abort', stop, { once: true });
+    child.once('error', () => { clearTimeout(timer); signal?.removeEventListener('abort', stop); emit(phase, 'failed'); reject(Error('history_build')); });
+    child.once('exit', (code, killed) => { clearTimeout(timer); signal?.removeEventListener('abort', stop);
+      const ok = code === 0 && killed === null && !timedOut; emit(phase, ok ? 'confirmed' : 'failed'); ok ? resolve() : reject(Error('history_build')); });
+  });
+  await run(['pub', 'get', '--enforce-lockfile'], 'locked-dependencies');
+  const readRegular = name => readHistoryFile(project, name, 'history_isolation').toString('utf8');
+  emit('registration-isolation', 'begin');
+  let graphBefore; let graphAfter; let configBefore; let registrantBefore;
+  try {
+    graphBefore = readRegular('.dart_tool/package_graph.json');
+    graphAfter = isolateGoogleRegistrationGraph(graphBefore);
+    configBefore = readRegular('.dart_tool/package_config.json');
+    const config = JSON.parse(configBefore);
+    check(config.configVersion === 2 && ['google_sign_in', 'google_sign_in_web', 'google_identity_services_web'].every(name =>
+      config.packages.filter(p => p.name === name && typeof p.rootUri === 'string' && p.packageUri === 'lib/').length === 1), 'history_isolation');
+    registrantBefore = readRegular('.dart_tool/dartpad/web_plugin_registrant.dart');
+    fs.writeFileSync(path.join(project, '.dart_tool/package_graph.json'), graphAfter);
+    emit('registration-isolation', 'confirmed');
+  } catch { emit('registration-isolation', 'failed'); throw Error('history_isolation'); }
+  await run(buildArguments, 'flutter-build');
+  emit('registration-verify', 'begin');
+  let isolationHashes;
+  try {
+    check(readRegular('.dart_tool/package_graph.json') === graphAfter
+      && readRegular('.dart_tool/package_config.json') === configBefore, 'history_isolation');
+    verifyToolSources();
+    const candidates = fs.readdirSync(path.join(project, '.dart_tool/flutter_build'), { recursive: true })
+      .filter(name => /^[a-f0-9]{32}\/web_plugin_registrant\.dart$/u.test(name));
+    check(candidates.length === 1, 'history_isolation');
+    const registrantAfter = readRegular(`.dart_tool/flutter_build/${candidates[0]}`);
+    const executableTexts = inventoryTree(path.join(project, 'build/web')).filter(file => /\.(?:js|html)$/u.test(file.path))
+      .map(file => readRegular(`build/web/${file.path}`));
+    validateIsolatedRegistrant(registrantBefore, registrantAfter, executableTexts);
+    isolationHashes = { graphBeforeSha256: digest(graphBefore), graphAfterSha256: digest(graphAfter),
+      packageConfigSha256: digest(configBefore), registrantSha256: digest(registrantAfter) };
+    emit('registration-verify', 'confirmed');
+  } catch { emit('registration-verify', 'failed'); throw Error('history_isolation'); }
+  for (const source of sources) check(digest(readHistoryFile(project, source.path)) === source.sha256
+    && digest(readHistoryFile(root, source.path)) === source.sha256, 'history_source');
+  check(git('status', '--porcelain', '--untracked-files=all').length === 0, 'history_source');
+  const files = inventoryTree(path.join(project, 'build/web'));
+  const artifact = validateArtifact({ schemaVersion: 2, sourceHead, sourceDigest: digest(JSON.stringify(sources)),
+    isolation: isolationScope, isolationHashes,
+    sourceHashes, lockSha256: find('pubspec.lock'), toolchain: { ...contract }, files, artifactDigest: artifactDigest(files) });
+  fs.writeFileSync(path.join(directory, 'artifact.json'), JSON.stringify(artifact), { flag: 'wx', mode: 0o600 });
+  return artifact;
+}

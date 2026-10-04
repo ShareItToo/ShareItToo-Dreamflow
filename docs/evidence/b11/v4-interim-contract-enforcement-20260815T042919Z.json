@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "kind": "v4-interim-contract-enforcement",
+  "status": "passed-open-and-active-for-testing-live-blocked",
+  "generatedAt": "2026-08-15T04:29:19Z",
+  "repository": {
+    "commit": "39e5b0d443621c257db68189b018d969ddbeeb4c",
+    "branch": "codex/master-workflow-20260808"
+  },
+  "policy": {
+    "version": "V4-INTERIM-2026-08-15",
+    "scope": "internal-and-closed-testing-only",
+    "openDecisionCount": 6,
+    "allOpen": true,
+    "allActiveForInternalTesting": true,
+    "replaceOnUserInstruction": true,
+    "realPaymentsEnabled": false
+  },
+  "enforcement": {
+    "machineReadableManifest": "passed",
+    "flutterPolicyMirror": "passed",
+    "backendPolicyMirror": "passed",
+    "silentDecisionClosureRejected": true,
+    "policyPauseRejected": true,
+    "flutterPaymentActivationRejected": true,
+    "backendDecisionRemovalRejected": true
+  },
+  "functionalCoverage": {
+    "versionedSeparateCheckoutDeclarations": "passed",
+    "neutralPlatformWithdrawalReceipt": "passed",
+    "cancellation50PercentUnder24HoursAnd100PercentAfterStart": "passed",
+    "testAndMockPaymentBoundary": "passed",
+    "neutralMissingReturnConfirmationUntilT0Plus5Days": "passed",
+    "fourPhotoCounterConfirmationAndQrWorkflow": "passed"
+  },
+  "tests": {
+    "legalReadinessValidator": {
+      "passed": 11,
+      "failed": 0
+    },
+    "backendPrivatePilotAndCounterpartyConfirmation": {
+      "passed": 12,
+      "failed": 0
+    },
+    "flutterPrivatePilotFlows": {
+      "passed": 60,
+      "failed": 0
+    }
+  },
+  "storeCandidateContext": {
+    "androidInternalBuildNumber": "2026081505",
+    "runtimeV4RoleLifecycleAlreadyVerifiedOnPhysicalPlayInstall": true,
+    "newStoreUploadRequiredForValidatorOnlyChange": false
+  },
+  "boundaries": {
+    "legalApprovalClaimed": false,
+    "productionChanged": false,
+    "publicStoreTrackChanged": false,
+    "realMoneyMoved": false,
+    "manualTalkBackMatrixClaimed": false,
+    "twoDeviceMatrixClaimed": false,
+    "containsSecrets": false,
+    "containsAccountData": false,
+    "containsRawDeviceIdentifiers": false
+  }
+}

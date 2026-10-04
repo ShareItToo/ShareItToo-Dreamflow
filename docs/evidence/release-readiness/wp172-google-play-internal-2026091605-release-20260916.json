@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "kind": "google-play-internal-release-readback",
+  "status": "complete",
+  "recordedAt": "2026-09-16T22:47:00+02:00",
+  "source": {
+    "classification": "direct-authenticated-google-play-console-readback",
+    "account": "authenticated-owner-console-session",
+    "applicationId": "com.shareittoo.app",
+    "developerAccountLabel": "ShareItToo"
+  },
+  "candidate": {
+    "versionName": "1.0.0",
+    "versionCode": "2026091605",
+    "artifactSourceHead": "261f05e262fa5aad2238527505cf09319146d583",
+    "aabBytes": 138844509,
+    "aabSha256": "d33a37c501d2cb08c5c56a30629b8f031dd2ccccbb87bc8a97c5250ed34392d8",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a",
+    "packageName": "com.shareittoo.app",
+    "minSdkVersion": 24,
+    "targetSdkVersion": 36
+  },
+  "preActionReadback": {
+    "track": "internal-testing",
+    "previousActiveVersionCode": "2026090711",
+    "draftVersionCodeBeforeCandidate": null,
+    "managedPublishing": "off",
+    "pendingChangesNotSubmittedForReview": 14,
+    "testerListName": "SIT interner Test",
+    "testerCount": 2,
+    "otherTracksObserved": {
+      "closedTestingAlphaVersionCode": "2026081506",
+      "openTestingChanged": false,
+      "productionChanged": false
+    }
+  },
+  "release": {
+    "track": "internal-testing",
+    "releaseName": "1.0.0-internal-2026091605",
+    "releaseNotesLanguage": "de-DE",
+    "releaseNotes": "Interner Staging-Testbuild 2026091605",
+    "versionCode": "2026091605",
+    "statusObserved": "available-to-internal-testers",
+    "rollout": "full-rollout",
+    "reviewed": false,
+    "sentForReview": false,
+    "releasedAtConsoleLocal": "2026-09-16 22:47"
+  },
+  "postReleaseReadback": {
+    "internalTrackActive": true,
+    "latestInternalReleaseVersionCode": "2026091605",
+    "latestInternalReleaseName": "1.0.0-internal-2026091605",
+    "latestInternalReleaseStatus": "available-to-internal-testers",
+    "testerListName": "SIT interner Test",
+    "testerCount": 2,
+    "testerListUnchanged": true,
+    "pendingChangesNotSubmittedForReview": 14,
+    "managedPublishing": "off",
+    "otherTracksUnchanged": true,
+    "closedTestingAlphaVersionCode": "2026081506",
+    "productionReleaseChanged": false,
+    "openTestingReleaseChanged": false,
+    "competingNewerReleaseObserved": false,
+    "reviewSubmissionPerformed": false
+  },
+  "boundaries": {
+    "onlyInternalTestingReleaseActivated": true,
+    "newAabUploaded": true,
+    "testerListChanged": false,
+    "storeMetadataChanged": false,
+    "dataSafetyChanged": false,
+    "otherTracksChanged": false,
+    "productionChanged": false,
+    "openTestingChanged": false,
+    "closedTestingChanged": false,
+    "reviewSubmissionPerformed": false,
+    "firebaseChanged": false,
+    "paymentChanged": false,
+    "providerChanged": false,
+    "cloudVpsDnsChanged": false,
+    "deviceInstalledOrContacted": false,
+    "pullRequestMerged": false
+  },
+  "evidence": {
+    "candidateManifest": "store/google-play/rollover-candidate-2026091605.json",
+    "playTrackUrl": "https://play.google.com/console/u/0/developers/4653202812150286845/app/4973917320514947988/tracks/4701593427959921264?tab=releases",
+    "latestReleasesOverviewUrl": "https://play.google.com/console/u/0/developers/4653202812150286845/app/4973917320514947988/releases/overview"
+  },
+  "containsSecrets": false,
+  "containsTesterIdentity": false,
+  "containsPrivateFilesystemPath": false
+}

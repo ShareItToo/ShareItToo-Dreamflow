@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp147-current-external-pilot-gate-refresh",
+  "status": "verified-external-gates-still-fail-closed",
+  "capturedAt": "2026-09-14T02:08:21Z",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "baselineHead": "6132c363c6ef98afd1a81dad1d37ae43b6727c10",
+    "clean": true,
+    "remoteAhead": 0,
+    "remoteBehind": 0
+  },
+  "driveReadback": {
+    "authenticatedReadOnly": true,
+    "driveChanged": false,
+    "currentFolder": {
+      "title": "00_CODEX_AKTUELL_AB_2026-08-20",
+      "directItemCount": 17,
+      "newerProfessionalLegalApprovalFound": false,
+      "newerP0bDecisionArtifactFound": false
+    },
+    "v52": {
+      "coreTitle": "01_V5.2_CORE_SPECIFICATION.md",
+      "coreModifiedTime": "2026-08-18T17:51:27.257Z",
+      "legalTitle": "02_V5.2_RECHTSMAPPE_PRIVATLAUNCH.pdf",
+      "legalModifiedTime": "2026-08-18T17:51:36.056Z",
+      "sourceDrift": false,
+      "professionalApprovalPresent": false,
+      "sourceDisclosure": "Entschiedene Launchfassung - keine anwaltliche Freigabe"
+    },
+    "support": {
+      "folderTitle": "10_SIT_SUPPORT_PACKET_V1_2026-08-20",
+      "directItemCount": 17,
+      "newerPacketFound": false,
+      "sourceDrift": false,
+      "requiresProfessionalReviewBeforeRealMoney": true
+    }
+  },
+  "stripeReadback": {
+    "officialConnectorAuthenticated": true,
+    "accountCount": 1,
+    "selectedAccountName": "ShareItToo Sandbox",
+    "accountMode": "sandbox",
+    "livemode": false,
+    "connectedAccountCount": 0,
+    "webhookDestinationCount": 0,
+    "providerMutationPerformed": false,
+    "testMoneyPerformed": false,
+    "realMoneyPerformed": false
+  },
+  "gateResults": {
+    "professionalV52Approval": "OPEN",
+    "approvedImmutableLegalSnapshots": "OPEN",
+    "marketplaceProviderContractAndConfiguration": "OPEN",
+    "stripeSandboxPaymentRefundPayout": "PARTIAL",
+    "invitedSyntheticPilot": "HOLD",
+    "invitedSyntheticPilotPrerequisitesPassed": 0,
+    "invitedSyntheticPilotPrerequisiteCount": 4,
+    "stagingPaymentTransport": "memory"
+  },
+  "portfolio": {
+    "pass": 22,
+    "partial": 5,
+    "open": 5
+  },
+  "nextIndependentLane": "social-provider-readiness-audit",
+  "boundaries": {
+    "legalApprovalInvented": false,
+    "approvedSnapshotInvented": false,
+    "driveChanged": false,
+    "stripeAccountChanged": false,
+    "stripeObjectCreated": false,
+    "paymentPerformed": false,
+    "deploymentChanged": false,
+    "productionChanged": false,
+    "storeChanged": false,
+    "firebaseConsoleChanged": false,
+    "deviceChanged": false,
+    "pullRequestMerged": false,
+    "secretReadOrRecorded": false
+  },
+  "sourceInventory": {
+    "docs/evidence/release-readiness/wp146-stripe-payout-and-activation-guard-20260914.json": "044cd8633eb33440dca97197e4548c3ee64bfe99c1ef1308e54630f35f51a438",
+    "assets/legal/de/legal_manifest_v52.json": "757289c45dfe50c9f3f3ec9c96953f06b62f15b282bb1d6cdedc6e8e07d2e69b",
+    "assets/legal/de/legal_review_intake_p0b_20260821.json": "2ce69106a3ea06ad6fa08a365a22716bf1342c44b107fa03cdda5a399e165696",
+    "docs/evidence/release-readiness/wp52-drive-source-reconciliation-20260907.json": "1369e326d2553f5e455b8aaf95fb129df11da49ebdaa6f91b9187bb619efe11e",
+    "docs/evidence/p0b-next/psp-sandbox-e2e-evidence.json": "769650b9d4fb633c053ecfa7df9aaf05a324a239d59e4ca8bc729feb658c4097",
+    "docs/evidence/p0b-next/invited-synthetic-pilot-spiegelberg-cat8-readiness.json": "89de016bb9b75d0c4f61511befa2a68193bafb6158705c2351a7cc8706794259",
+    "docs/evidence/support/support-test-matrix-v1-traceability.json": "b1def1e060c620c54001e00b6e53d25fe0146a543ca114d53a3d1dab9d7ddb81"
+  }
+}

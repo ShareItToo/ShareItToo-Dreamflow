@@ -1,0 +1,12 @@
+services:
+  api:
+    environment:
+      MAIL_TRANSPORT: smtp
+      SMTP_HOST: ${SMTP_HOST:?SMTP_HOST must be set for the staging SMTP override}
+      SMTP_PORT: ${SMTP_PORT:?SMTP_PORT must be set for the staging SMTP override}
+      SMTP_SECURE: ${SMTP_SECURE:?SMTP_SECURE must be set for the staging SMTP override}
+      SMTP_REQUIRE_TLS: ${SMTP_REQUIRE_TLS:?SMTP_REQUIRE_TLS must be set for the staging SMTP override}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:?MAIL_FROM must be set for the staging SMTP override}
+      MAIL_REPLY_TO: ${MAIL_REPLY_TO:?MAIL_REPLY_TO must be set for the staging SMTP override}

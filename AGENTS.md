@@ -1,0 +1,864 @@
+# ShareItToo Repository Guidance
+
+## Scope and authority
+
+This file applies to the entire repository. Follow the newest explicit Walid
+decision for the specific subject, then `docs/current_work_package.md`,
+`docs/current_state.md`, validated machine-readable manifests, and versioned
+architecture/operations evidence. Treat the root `architecture.md` as a
+historical prototype snapshot.
+
+Work on one bounded package at a time. A green package may continue only within
+the currently authorized runway. Stop on contradictory evidence involving
+money, contracts, privacy, security, release truth or user data.
+
+## Context and credit efficiency
+
+`docs/operations/SIT_CODEX_CONTEXT_CREDIT_EFFICIENCY_RULES_V1.md` is the
+binding efficiency policy. Carry only the active package capsule forward,
+search before rereading large sources, avoid unchanged duplicate gates and
+retain all audit evidence. Efficiency must never weaken deterministic tests,
+exact-HEAD CI, security, legal, privacy, data-integrity or release boundaries.
+
+Queued efficiency mentor rule: accept automatic exact-head PR checks when the
+head SHA and required job set match the source change. Never manually duplicate
+source-only Regression or CodeQL runs; use `workflow_dispatch` only for a
+capability absent from the automatic run, such as immutable GHCR publication.
+
+Before every SIT turn, read
+`docs/operations/SIT_PILOT_PHASE_CAPSULE_2026-09-23.md` as the compact entry
+point. Read larger status histories only when a concrete discrepancy requires
+them; do not reconstruct the project from historical files by default.
+
+When a package changes a source file bound by privacy, retention or another
+current source-inventory manifest, refresh every affected current manifest
+once after the final source merge and before the first push/full regression.
+Run the fail-closed consumer-closure check before CI; never spend a CI run to
+discover a mechanically stale source hash.
+
+- Frozen source-bound evidence must not be reinterpreted by later mutable
+  validator schemas. Verify its recorded exact validator/source digests or run
+  the validator from that captured snapshot; never rewrite historical evidence
+  to satisfy the current schema.
+- Later call-site drift must never be healed by rewriting historical evidence.
+  Validate the immutable historical declaration and the current repository
+  inventory as separate contracts, with focused tests for both.
+- Evidence-gated successors use two commits when the next proof digest is not
+  knowable before execution: first review and gate the proof runner, then run
+  it against the exact current runtime, and only afterward bind its immutable
+  digest and Ops commit in the consumer. Never substitute a historical runtime
+  proof, alter bootstrap provenance, invent a future hash, or relax exact
+  bindings. Repeat proofs keep per-run counts separate from cumulative retained
+  history and verify that prior rows remain unchanged.
+- Aggregate counts are not ownership proof: related records must bind to the
+  immutable parent relationship and the same principal. Require both expected
+  principals and a real-database reassignment negative test that preserves
+  aggregate counts while changing ownership.
+- Synthetic acceptance-outcome fixtures must keep planned request bindings,
+  server-supplied pre-existing context and observed effects as three separate
+  shapes. `not_started` must not preallocate booking, contract, payment or
+  provider identifiers, and unknown/readback/no-effect states must never invent
+  them. If the current workflow already has a Booking or Contract before the
+  acceptance attempt, a successor version may carry those IDs only in a
+  complete, separately typed authoritative-context record with exact lifecycle,
+  actor and parent-association proof; it must never classify them as newly
+  observed effects. Effect identifiers may appear only in a complete, exact,
+  server-supplied effect observation, with deterministic negative tests for
+  missing, partial and mismatched context and effect identities.
+- Non-root bind-source mentor invariant: keep protected host evidence parents
+  root-owned `0700`; do not weaken them merely to make host-side UID traversal
+  pass. Before starting any non-root worker, the root Docker daemon must verify
+  every exact source file's metadata, byte hash and non-symlink identity. Then,
+  inside the exact runtime container namespace, prove that the worker UID/GID
+  can traverse every mounted target parent, read every mounted target, and run
+  the required syntax check and import. Root readability alone is never proof
+  of worker readability.
+- Import gates must mount the complete transitive source tree in its expected
+  target layout. A selected entrypoint directory is insufficient when imports
+  reach sibling source, package metadata or dependencies.
+- Normalize extracted temporary source to the intended controller ownership
+  while preserving reviewed bytes and `0755`/`0644` modes; verify every tracked
+  path before Git-backed checks. Never bypass this proof with `safe.directory`.
+- Execution wrappers must derive backup, evidence and other output paths only
+  from the already hash-verified manifest. Never duplicate or invent output
+  basenames in wrapper assertions.
+
+## Sol, Luna and Gemini review loop
+
+- Blue-Ocean/Mission work is additive by default. Implement only the currently
+  authorized bounded mission slice; do not restructure, replace or silently
+  change existing search, listing, navigation, booking, payment or provider
+  flows. Each package must prove those legacy paths stay compatible unless
+  Walid explicitly authorizes a separately scoped change.
+- Luna executes one bounded package and returns useful evidence, not a claim of
+  perfect completeness. Sol performs a targeted review and records exactly one
+  decision: `PASS`, `FIX` or `GEMINI_GATE_REQUIRED:<gate-id>`.
+- Sol is also the mentor. At the first recognized avoidable error, closure
+  omission, unsafe assumption or wasteful reasoning pattern, stop it before a
+  second occurrence. Sol gives one direct corrective rule and updates the
+  nearest authoritative instruction. Add a deterministic test, validator or
+  fail-closed guard when the pattern is technically enforceable. Duplicate UI
+  output or repeated reporting of one still-open incident remains one finding.
+  Repeat-promotion pre-state contracts must derive from the last verified final
+  runtime shape, not a stale first-promotion source shape; deterministic tests
+  must assert the exact live tuple and reject extra, missing or changed mounts.
+- New committed documents, gate packets and capsules must use repository-relative
+  paths. Absolute host- or user-specific paths belong only in private local
+  evidence locators and must never be tracked. Check new documentation for such
+  paths before handoff or commit; describe artifacts without transient worktree
+  status claims.
+- An image- and manifest-bound promotion runner may raise its terminal schema
+  only when that exact published image contains the new migration. A source-only
+  product package leaves the accepted live runner unchanged; create its schema
+  successor only after exact-HEAD CI and independent image/manifest binding.
+- New integration tests sharing the local PostgreSQL suite must not use generic
+  fixed primary keys. Use run-unique IDs or package-namespaced fixtures whose
+  non-collision is proved before insertion.
+- Append-only migration and source ledgers extend ordered expectations. When
+  advancing the terminal schema, append the new terminal entry and never
+  replace or omit the previously accepted terminal entry.
+- For owner-targeted demand or matching workflows, recipient and owned-resource
+  selection must be server-authoritative and negative-tested. A fixture that
+  passes only because the client supplied the recipient or resource is an
+  invalid contract, not acceptance evidence.
+- Every runner, registry or plan-inventory change must update all structural
+  expectation fixtures and pass CI's unchanged full standard test command
+  locally before commit; focused tests alone are not closure evidence.
+- Shared validators must continue to accept explicit immutable historical
+  contract variants without rewriting their evidence. Gate newly added fields
+  by the applicable version or terminal schema, and test both the current
+  required-field path and the historical field-absent path.
+- Security hardening that changes a persisted or evidence-manifest contract
+  must introduce an explicitly versioned successor and leave historical reader
+  contracts unchanged. Never silently redefine an existing `schemaVersion`.
+- Isolated Ops tests must not import config-bound runtime modules or require
+  unrelated environment secrets merely to prove a local contract. Verify the
+  required primitive or source contract without widening test prerequisites.
+- Privacy/export modules must remain importable without application secrets.
+  Put shared redaction or shaping helpers in a pure config-free module; never
+  make export generation depend on a workflow module that loads runtime config.
+- Every new account-export namespace or field must be exercised with a
+  non-empty fixture against the repository-wide forbidden-field/privacy
+  contract. An empty exported section is not compatibility evidence, and the
+  shared privacy assertion must never be weakened to admit a new package.
+- A digest shown beside a redacted or sanitized payload must bind those exact
+  visible bytes. Recompute it, label it explicitly as an internal-snapshot
+  digest, or omit it; never imply that a hidden-field digest verifies the
+  displayed payload.
+- For database/filesystem sagas, model an active write reservation separately
+  from cleanup work that is safe to execute. User requests and cleanup workers
+  must never drain active reservations; every post-commit failure must leave a
+  later-processable state, and Down/rollback must refuse to drop a non-empty
+  cleanup outbox.
+- Every new owner-bound root/revision/command graph must preserve the complete
+  account-deletion cascade: child or revision foreign keys must not block the
+  cascade from `users`. Focused real-PostgreSQL tests must prove both the FK
+  hard-delete cascade and the application's account-erasure/tombstone path
+  with populated graphs. Count owned roots, revisions and every command family
+  before and after each path; prove owned-file cleanup when files are present.
+- Workflow integration tests create suspension fixtures through the current
+  `setUserSuspension` contract with a complete synthetic decision. Direct legacy
+  suspension-row inserts belong only in migration/storage-isolation tests.
+- Safety-mode build flags must fail startup whenever their requested
+  configuration is invalid; they must never silently downgrade to normal
+  behavior. A package report may claim an allowed or rejected configuration
+  only when the final source and a focused positive/negative test prove that
+  exact matrix.
+- Local Android QA is side-by-side only: its package is
+  `com.shareittoo.app.qa` and it must never target, replace or uninstall the
+  Play package `com.shareittoo.app`. An upload certificate must never be
+  treated as Play update compatibility. Copy a full certificate SHA-256 only
+  from authoritative `apksigner verify --print-certs` output; never infer or
+  invent it.
+- Copy every full Git commit SHA from authoritative `git rev-parse` or provider
+  output. Never expand, complete or infer a 7-character prefix manually.
+- Any Android identity or manifest-placeholder wiring change must update and
+  execute the release preflight's matching static guard before it may PASS.
+- Artifact builders and their validators must use the same exact manifest
+  contract. Every field added by a builder must be present in the positive
+  validator fixture and exercised by a real generated-manifest test before a
+  build is reported ready.
+- A transient QA-session writer and its physical runner validator are one
+  manifest contract. Before launching the app, validate a freshly generated
+  session from the actual writer; a matching stdout summary is not evidence.
+- Android route readiness must require a route-specific actionable label. A
+  shared page title, global test banner or navigation-card text is not proof
+  that the destination route opened.
+- Multi-role device runners must verify the visible current role before reusing
+  an authenticated route. Before entering the next principal they must either
+  complete and verify logout or clear only the isolated side-by-side QA app;
+  they must never clear or replace the Play app.
+- Recovery mutations must target the captured immutable provider/container ID,
+  never a mutable name; stateful test executors must model or explicitly reject
+  every accepted security/resource option.
+- Live-tool mentor invariant: after the first fail-closed live-tool defect,
+  restore the affected service first, then reproduce it in an isolated,
+  production-shaped deterministic test, review the fix and re-gate it with
+  Sol before re-execution; use Gemini only for a separately defined critical
+  gate. Never blind-retry the live tool.
+- Physical Android UI diagnostics on one device are strictly serial. Never run
+  a second UIAutomator hierarchy read or UI-driving process while the bounded
+  diagnostic owns the device; status inspection must use its own output or
+  non-UI process state only.
+- Physical Android destination readiness must assert route-specific content or
+  the exact next action, never a shared bottom-navigation label. Every fix for
+  this timing class requires deterministic delayed-content coverage before the
+  physical diagnostic is re-executed.
+- Transient UIAutomator hierarchy reads may use a fixed bounded retry budget;
+  semantic route or app-readiness failures must never be masked by retries.
+- Listing-AI create-action readiness may have one exact relaunch/reopen recovery;
+  editor failures and unrelated exceptions must never be retried.
+- Workflow or backend status such as `draft_ready` is never UI readiness by
+  itself: visible Ready/takeover text and positive acceptance require a
+  non-empty, semantically usable, sufficiently confident core suggestion;
+  empty or LOW results fall honestly into the manual editor without losing
+  photos or form data.
+- A physical UI diagnostic must give every independently fallible transition
+  in a multi-action chain its own fixed, privacy-safe substage. After a broad
+  code has hidden which transition failed, split the chain and add a bounded
+  deterministic reproducer before any further physical re-execution.
+- Shell variable hygiene: in zsh never assign `path`, `PATH`, `fpath`, `cdpath`
+  or another shell-special array or option as a task variable. Use a
+  task-specific name such as `sit_route`; after variable shadowing causes
+  `command not found`, discard that snippet and rerun only with the verified
+  task-specific name.
+- Mutating Ops-runner invariant: a runner is not ready for live execution until
+  a deterministic command-executor test drives its generated plan with
+  production-shaped readbacks through the point immediately before the first
+  irreversible phase; helper- or plan-shape-only tests are insufficient.
+- Gated acceptance-runner invariant: derive every exact synthetic principal ID
+  before the first data mutation and preflight those IDs against the configured
+  access gate and every enabled payment-pilot gate; never use wildcard or
+  post-mutation allowlisting. For memory-payment acceptance, missing or
+  incomplete `PAYMENT_PILOT_USER_IDS` is a fail-closed preflight error.
+- Gated acceptance catalog-read mentor invariant: authenticate every product
+  catalog search with an explicitly allowed still-active principal (B9 hidden,
+  restored and post-delete readbacks use `users.renter.token`). Read the empty
+  catalog immediately after deleting the listing and before deleting any
+  account; do not perform a catalog read after its principals are deleted.
+  Focused source-shape coverage must reject unauthenticated `/listings?q=` calls
+  and assert the delete-listing -> authenticated empty-search -> account-
+  deletion order.
+- Acceptance-fixture policy invariant: listing and other contract-bound
+  fixtures must import the current canonical policy constants and preflight
+  them before sending requests; never hand-copy legal/policy text or permit
+  `generated`/`materially_altered` classifications in synthetic payloads.
+- Public-media fixture invariant: bind exceptional storage names across server
+  and frontend with a contract test, then exercise the exact live-shaped URL
+  through the widget's network request. UUID-only substitutes cannot prove
+  compatibility; public opt-in must send no credentials and private guest
+  surfaces must remain blank.
+- Widget-interaction evidence must select and assert a visible, hit-testable
+  target before tapping. A green test with a missed-tap warning is not
+  acceptance evidence; make such warnings fatal in the owning test cluster.
+- Acceptance moderation-decision mentor invariant: before the first B9
+  mutation, acceptance fixtures must track every current mandatory moderation
+  decision field through one reusable human-decision helper. Every
+  consequential or reversal call must carry truthful `facts`, `basis`,
+  `reasoning`, `detectionMethod: 'human'`, and a complete
+  `statementOfReasons` with the action's exact duration; focused source-shape
+  coverage must reject missing decisions or direct bypasses.
+- Acceptance lifecycle-fixture invariant: every B8/B9 handover must use the
+  proven V5.2 helper for the exact booking thread, four distinct presenter
+  uploads in `overview`/`detail`/`accessories`/`critical` slots with the
+  segment-specific purpose, presenter condition-evidence messages,
+  counterparty confirmation, and presenter-challenge/counterparty QR-v3
+  verification before the guarded `active`/`running`/`completed` transition.
+  Synthetic messages and media must be explicitly marked test/non-authentic;
+  do not bypass mandatory state preconditions with direct database updates.
+- Acceptance mandatory-input invariant: every mandatory runner input,
+  including the exact candidate `ACCEPTANCE_CLIENT_BUILD` and explicit
+  `ACCEPTANCE_BASE_URL` endpoint, must be strictly validated through a
+  canonical helper before the first data mutation; do not defer validation
+  until a later fixture request and never provide a silent endpoint default.
+- Acceptance payout-time invariant: live acceptance must not simulate an
+  elapsed payout hold by mutating `payout_instruction_due_at`, `completed_at`
+  or contract clocks; deterministic old-time integration fixtures may advance
+  the authoritative field only within that isolated test boundary.
+- Acceptance time-boundary invariant: live acceptance must stop at the
+  authentic current-policy boundary (for B8, `payout_hold_active`) without
+  mutating contract timestamps, clocks, append-only state or trigger-guarded
+  rows; deterministic old-fixture integration covers post-window dispute,
+  payout and refund behavior separately.
+- Acceptance chargeback-sequencing invariant: when no public dispute-close
+  endpoint exists, a B8/B9 fixture must complete the terminal lifecycle and
+  prove the authentic payout-hold boundary before entering an intentional
+  synthetic chargeback state; funds reinstatement must be read back as a
+  retained `disputed` booking with no direct SQL status reset, time bypass,
+  post-window payout or refund action.
+- Merged read-only source-directory invariant: clone-only merged Ops source
+  directories use mode `0755`, consumed source files use `0644`, and the
+  exact runtime UID must pass a readability plus `node --check` preflight
+  against the same read-only mounts before execution; manifests, evidence and
+  secret files remain owner-only `0600` outside the source directory.
+- Cleanup evidence must follow the product's declared retention contract, not
+  an invented row-retention expectation. Revoked or expired credential rows
+  such as `staff_elevations` are expected to be purged; preserve and verify the
+  corresponding append-only audit event instead of recreating credential
+  material or treating its removal as evidence loss.
+- Direct lifecycle-helper use must reproduce the complete public endpoint
+  lifecycle, including every returned post-transaction file or provider-cleanup
+  action, before claiming cleanup complete. Verify both database absence and
+  exact owned-file absence; never treat `eraseAccount` alone as the whole
+  account-deletion path.
+- Deployment executor context invariant: dependency-bearing steps must execute
+  in the declared runtime image, UID, network and mounted-file context; tests
+  must not mock away host/runtime/network assumptions that the live command
+  depends on.
+- Read-only mount composition invariant: never plan child-file bind mounts
+  beneath a read-only parent-directory mount. Before execution, construct one
+  merged directory containing every consumed file (without symlinks), record
+  its exact source commit and SHA256 manifest, then mount that directory once
+  read-only; verify the merged files in the exact runtime context before the
+  first mutation.
+- A derived runtime env file must pass the exact candidate image's real config
+  import before the first service start. Preserve each setting's accepted
+  encoding from verified runtime state; never guess that `false` and `0` (or
+  `true` and `1`) are interchangeable.
+- Provider-isolated clone transport must not rely on a published host port from
+  an internal-only Docker network. Prove health inside the exact container,
+  require empty host port bindings, inspect its run-scoped internal IP, and use
+  that immutable readback only as the remote target of an SSH loopback tunnel.
+- Remote read-only invariant: read-only remote work permits zero writes,
+  including temporary, scratch or evidence files; use stdout or command
+  substitution only and never write through a remote shell.
+- Remote execution preflight: before a remote package install or runner,
+  verify host tool/runtime versions, package engine requirements and imports;
+  reuse a verified isolated runtime rather than changing the system runtime.
+- Idempotent startup/readiness polls must retry transient resets and empty
+  replies as well as refused connections, with bounded retries; never broaden
+  retry behavior onto mutating requests.
+- After a container stop/rename, prove the sealed original through a bounded
+  read-only inspect convergence by immutable ID. Require exact config, host,
+  mounts, image, environment and network-name-to-ID bindings; never retry the
+  stop, rename, create, attach or start mutation. Persist the sanitized primary
+  failure before secondary rollback checks, and validate a restarted rollback
+  with restart-stable identity plus separate running/health assertions rather
+  than a fingerprint containing volatile endpoint or IP fields.
+- Post-start public readbacks must use bounded read-only convergence and retain
+  a whitelisted fixed phase when convergence fails. Retry only the read; never
+  replay stop, rename, create, network attach, start or another mutation, and
+  never serialize the rejected response or dynamic values in the diagnosis.
+- Public projections must treat relational row identifiers as server-owned:
+  apply the authoritative row ID after persisted or client payload fields so a
+  missing or forged payload ID cannot replace database truth. Focused tests
+  must cover both absent and conflicting payload identifiers.
+- Unauthenticated operational probes must target paths explicitly allowlisted by
+  the access gate; focused tests must cover the enabled/valid gate matrix and
+  reject nearby protected paths.
+- Public-gateway operational probes must bind the complete external gateway
+  prefix and path (for example `/api/version`); tests must assert the full URL,
+  while authenticated product calls remain bound to `/api/v1/*`.
+- Restricted provider lanes must use least-privilege API reads; bind account
+  identity from trusted lane configuration and session creation, not an
+  account-wide verification read requiring broader permissions.
+- Calendar-bounded lane tests must inject a fixed clock through the production
+  function boundary; never weaken or extend the runtime authorization window to
+  keep expired fixtures passing.
+- Provider readback after authorization rotation must bind historical proof to
+  the immutable persisted run authorization/config revision; the current
+  authorization remains the access gate but must not invalidate an already
+  bound pending or paid run.
+- Parallel old/Green staging resources require an explicit evidence-bound CLI
+  target; diagnostics must never fall back to a legacy resource name.
+- Operational forbidden-name checks must use identifier boundaries/tokens, never
+  arbitrary substrings over absolute paths; preserve explicit exact legacy
+  resource checks alongside the boundary check.
+- After validating a private backup or snapshot, reuse the same stable
+  descriptor/bytes for the consuming operation; do not reopen its path. Evidence
+  files must serialize once, then use those exact bytes for exclusive write,
+  byte count and digest.
+- Full commit identifiers recorded in evidence must come directly from an exact
+  `git rev-parse` or immutable runtime readback and be passed unchanged into the
+  writer. Never manually expand or infer a 40-character SHA from a short prefix.
+- Database-row decoders must test actual `pg` runtime types before live
+  acceptance: `timestamptz` arrives as a JavaScript `Date` while `date` remains
+  a string; canonicalize trusted row values at the decoder boundary and fail
+  closed on invalid dates without weakening external request validation.
+- Security-sensitive/private-file checks must bind metadata and bytes to the same
+  `O_NOFOLLOW` descriptor/handle; never `lstat`/`stat` a path and reopen or read
+  it by path afterward, and fail closed when stable opening or metadata
+  validation fails.
+- Remote alias mentor invariant: after an alias or DNS failure, read the exact
+  saved SSH configuration and authoritative project source before concluding
+  that remote access is unavailable; test only the verified saved alias. A
+  guessed alias is not a blocker.
+- Time-bounded optional provider authorization may fail closed only for its own
+  lane; an expired authorization must not prevent API startup or restart.
+  Future, overlong or malformed authorization configuration remains a hard
+  validation error and requires deterministic restart/config coverage.
+- Missing operational config or a project secret is not an owner blocker when
+  authorized runtime state can be reconstructed server-side or a missing key
+  can be atomically generated in the approved external directory; exhaust that
+  safe path without exposing values, escalating only an unavoidable physical act.
+- Acceptance runner stdin invariant: commands without input use ignored stdin;
+  every piped-input command installs stdin error/close handling before writing,
+  and a deterministic early-close regression is required before live use.
+- A visible-function P0/P1 requires proven reachability from a current route or
+  configuration. Unreachable legacy/dead code is tracked separately and is
+  not itself a release blocker until reachability is demonstrated.
+- Never use `orElse: collection.first`, `.first`, `.single` or an equivalent
+  element fallback on an async, remote or mutable collection unless emptiness
+  was handled first. The empty/loading state must be deterministic, truthful
+  and covered beside the populated state in the focused test.
+- Any persisted media URL must be server-bound to an owned, approved upload
+  row (including purpose, visibility and content-scan status). Client-side URL
+  validation is never authorization; reject unowned, malformed, thumbnail,
+  wrong-purpose or unapproved references before persistence.
+- After every review, Sol assigns Luna the next bounded task. A `FIX` must name
+  the failed assertion and expected proof; it must not request a broad restart.
+- Responsive card comments such as "N full cards + a fraction" require tests
+  of visible card geometry in the viewport, including readable disclosures and
+  initially reachable actions. Never copy the production sizing formula as
+  the test oracle.
+- Authentication failure counters and lockouts must be proven committed even
+  when the HTTP response is an error; never rely on a rolled-back exception
+  path. Critical authentication changes require HTTP contract coverage plus
+  real PostgreSQL transaction/integration coverage; mocked query tests alone
+  are insufficient.
+- Escalate to Gemini only at a named gate involving contradictory evidence or a
+  material decision in money, contract, privacy, security, release truth or
+  user data. Use the visible ShareItToo Gemini thread in Google AI Pro mode
+  `Pro` with `Extended` thinking; never route these gates to Astra. Gemini is an
+  AI reviewer and cannot replace professional or owner approval. Technical
+  incompleteness stays with Luna under `FIX`.
+- Immediately before every Gemini send, read back the visible mode selector and
+  require exactly `Pro` plus `Extended`. If Pro is quota-blocked or the selector
+  shows Flash, Flash-Lite or another mode, do not send or accept that answer;
+  wait for Pro availability and retry the unchanged gate without substituting.
+- Before every gate answer, Gemini must freshly open every decisive source and
+  verify its currentness. For law use the current consolidated official text
+  and check amendment and effective dates; for product, account, provider,
+  repository and runtime facts check the current live state or exact commit.
+  Cite the direct source plus version or effective date and access date.
+- For German federal law, Gemini must read the live full-text header on
+  `gesetze-im-internet.de` and record its current full citation and last-
+  amendment date. A remembered date, search snippet, section-only page or
+  citation that conflicts with that header invalidates the whole gate answer
+  and requires a fresh re-gate; its prior `PASS` must not be carried forward.
+- End every Gemini gate answer with a complete source register for every source
+  actually used: title or issuing body, direct URL or exact repository/Drive
+  path, publication/version/effective date, access date and the supported
+  claim. Never invent a citation or list an unopened source as evidence.
+- A Gemini Workspace citation chip or bare attachment filename is not a source
+  locator. Every Drive source needs its exact `drive.google.com` URL or a
+  verified full Drive path in the register; otherwise the gate is incomplete
+  and cannot pass.
+- Treat undated, cached, draft, historical, prior-AI, screenshot-only and older
+  Drive claims as stale until currentness is proven. If freshness cannot be
+  verified, label the point `NOT VERIFIED` or `STALE` and never return `PASS`.
+  When sources conflict, identify which current source supersedes the older
+  one. Every Gemini `PASS` self-check must include source freshness, version or
+  effective date and a contradiction scan.
+- Team handoffs use four short fields: `RESULT`, `EVIDENCE`, `BLOCKER`, `NEXT`.
+  Add detail only when Maximus/owner action, safety or regulated risk requires
+  it. Never compress away a decisive error, version, hash, source or gate.
+- A delegated Luna turn must not end silently. If the package is unfinished and
+  no named gate blocks it, continue the same package. If execution must stop,
+  return the four-field capsule with the exact preserved paths and next command;
+  an idle/completed turn state alone is not a valid blocker or handoff.
+- Do not block the executor turn with `gh run watch` while another independent,
+  already assigned source package can proceed. Sol owns lightweight CI polling;
+  Luna returns to an exact failing assertion only if that poll reports red.
+- Before coordinate-based device UI input, reread the current hierarchy and
+  bind the action to the target's current bounds and the active scrollable
+  viewport. After one no-op or unexpected screen, reread state and correct the
+  mechanism; never repeat unchanged blind taps or out-of-bounds swipes.
+- Negative authentication-matrix checks and physical-device smoke must not run
+  in the same login-limiter window for the same client class. Let the natural
+  window expire and use the server's existing reset semantics; never clear a
+  limiter through a restart, proxy/IP/authority change, bypass, or policy
+  relaxation.
+- Runtime evidence must follow the product's actual state partition (for
+  example active listings versus drafts) and prove the expected tab, route and
+  post-restart value. Evidence from a neighboring tab or a backend-only write
+  cannot close an explicitly required app projection or edit gate.
+- Store/runtime recency invariant: before naming the active Store build,
+  provider state or deployed runtime as a cause, take a fresh authenticated
+  console/runtime readback. Historical release evidence is provenance only and
+  must never override a newer live observation.
+- Runtime ownership mentor invariant: never invent numeric UID/GID values for
+  overlays, secret files or persisted volumes; verify the exact candidate image
+  `USER` and resolved UID/GID, plus persisted-volume ownership, from readback
+  before deployment.
+- Immutable release identity invariant: Green deployment env files must not
+  carry `APP_VERSION`, `APP_COMMIT` or `APP_BUILD_TIME`; `assertGreenRuntimeConfig`
+  must reject those keys before any command or quiesce, and `/version` must bind
+  the immutable image/runtime identity.
+- Green evidence-family invariant: before any Green command or quiesce, preflight
+  the exact final evidence JSON and every derived artifact (`.pgdump`,
+  `.isolated.env`) as one reserved namespace; any existing or unsafe member is
+  a fail-closed collision. Each attempt uses a fresh immutable base and never
+  reuses a retained backup namespace; exclusive writes remain the race guard.
+- Green Docker env-file invariant: `docker --env-file` may receive only the
+  protected real `config.envFile` or the generated `.isolated.env`; a JSON
+  config/target manifest is descriptive input only and must never be passed to
+  Docker. Deterministic command tests reject JSON env-file sources before any
+  mutation.
+- Green control-runtime executable invariant: enumerate the executables in the
+  generated Ops command plan (including `bash`, `docker`, `curl`, `node` or
+  `sh` whenever the plan uses them) and preflight their availability in the
+  external control runtime before quiescing Green, creating backups, or any
+  other mutating command. A missing executable is a fail-closed preflight
+  result, never a mid-promotion spawn failure.
+- Authenticated capability handshakes are principal-bound state: bind every
+  effective provider/disclosure/policy/config field into the request hash, make
+  config revisions a digest of the effective configuration rather than a
+  static gateway label, and after every async refresh perform an authoritative
+  owner check before mutating UI state; stale responses invalidate the owned
+  route and never trigger an automatic retry.
+- Any client-source change invalidates previously built or installed APK
+  evidence. Before the next device assertion, build once from the current
+  source, assign a distinct local-QA version, verify package and SHA-256, and
+  install that artifact; never continue runtime proof with a stale binary.
+- A QA package name and version do not prove its compile-time configuration.
+  Build through the canonical lane or record every required Dart define, then
+  prove the running app reached the intended local API before using feature
+  evidence. A debug build with default backend flags is not local-QA proof.
+- Bind every package command to the repository root verified in its preflight.
+  After any missing-workdir or wrong-worktree error, discard that stale path
+  immediately and use only the verified root for the rest of the package; do
+  not retry a path inherited from an older task or chat.
+
+## Project-safe handoffs
+
+- Before every handoff, message, automation or task routing action, identify the
+  exact target project from verified context. A host, computer or device is not
+  a project and must never be used as a substitute for one.
+- Never send a task, chat follow-up or automation into another project. Create
+  a new Codex task only when Walid explicitly requests a new task.
+- If the target project is unclear, do not delegate. Ask Walid through the
+  established Maximus channel using a content-light message with no secrets or
+  project details; if that channel is unavailable, ask in the current chat.
+- If work was misrouted, stop only the wrongly routed work and perform the
+  smallest safe cleanup. Do not disturb unrelated tasks, projects or evidence.
+
+## Non-negotiable boundaries
+
+- Do not reset, rebase, squash, force-push, delete branches, rewrite history or
+  discard work. Preserve a verified rollback before any integration choice.
+- Do not change production, VPS/OpenClaw/Maximus, DNS, cloud billing, repository
+  visibility, live payment mode, stores or public rollout without a dedicated
+  gate.
+- Before any production container recreate or Hostinger deploy, read
+  `docs/operations/SIT_PRODUCTION_RECREATE_GUARD_2026-09-10.md`, prepare a
+  sanitized plan and pass
+  `node tool/validate_production_recreate_plan.mjs <plan.json>`. Never use
+  `shareittoo-api:local`, `latest` or another unverified image fallback. After
+  success or abort, reread website, API, database, mail, containers, disk,
+  backup freshness, the Health service/timer and one automatic Health run.
+- Do not invent operator, register, provider, tax, legal, privacy, retention or
+  approval facts. Existing draft/open/blocked states remain fail-closed until
+  their named authority approves them.
+- Never expose, commit or copy secrets, signing files, Firebase configuration,
+  account identifiers or raw device identifiers into reports or evidence.
+- Routine tests must not send real email, SMS, push, payment, KYC or other live
+  provider traffic.
+- Synthetic PEM or credential markers in tests must be assembled from separate runtime fragments; a baseline is never their replacement and may review an exact immutable historical finding only after its marker has landed in history.
+- Synthetic test credentials must never be tracked as static `password` property or assignment literals; immediately reuse a runtime factory or fragmented construction. If an immutable history finding remains, first clean the current tree, then allow only one exact commit+rule+file reviewed-baseline entry with a dedicated test; never loosen scanner rules or use baseline wildcards.
+- Germany/private-adult pilot boundaries remain active: no vehicles/transport,
+  paid delivery, shipping, express, deposit, SIT insurance/protection, real
+  money, ads, marketing analytics or external generative AI.
+- FCM is transactional only. Crashlytics requires its own voluntary choice.
+  General Firebase Analytics remains off.
+
+### Listing helper truthfulness (WP195)
+
+- Automatic listing paths (typing, debounce, widget initialization and rebuild)
+  use bounded local rules or cached data only; they must not call an external
+  provider or claim model/market evidence.
+- A provider-backed listing action is allowed only after an explicit user
+  action, through one authenticated server endpoint with typed fields,
+  in-flight deduplication/idempotency and server-side budget/rate limiting.
+- Local rule output is always labelled as rule-based orientation. It is not a
+  market-price estimate and never proves provider execution.
+- Synthetic acceptance fixtures must import canonical domain policy constants,
+  preserve their required field cardinality, and never duplicate legal/policy
+  strings in runner payloads.
+
+### Candidate version binding
+
+- Android `pubspec.yaml` version/build, the V5.2
+  `PrivatePilotConfig.v52ClientBuild` fallback and the backend
+  `listingAiSupportedClientVersion` capability handshake form one atomic
+  release contract: never change or release one alone; always test them
+  together and refresh exact current `sourceInventory` hashes for source
+  changes. Release preflight must fail before any binary build when those
+  values drift; never repair the mismatch by reusing or rebinding an already
+  archived candidate.
+- An Internal/Staging candidate rollover (`SIT_ALLOW_CANDIDATE_ROLLOVER=1`) must
+  explicitly bind the complete private-pilot profile before Firebase,
+  preflight or artifact work: Google=true, Apple=false, Facebook=false,
+  Blue Ocean=true, `SIT_CLOSED_PILOT_ENVELOPE=true`,
+  `SIT_STAGE_A_PILOT_ID=heilbronn_wave0`, and
+  `SIT_REQUIRE_STORE_SUBMISSION=false`,
+  `SIT_REQUIRE_CANONICAL_SIGNING=true`, and `SIT_REQUIRE_FIREBASE=true`.
+  Omitted or reduced profile values are hard failures; a reduced archive is
+  never a candidate.
+- Isolated-worker tasks must verify the worktree root, branch and HEAD before
+  the first mutation and must never commit or revert in the canonical checkout.
+- Current-candidate validators must resolve
+  `store/google-play/current-rollover-candidate.json.candidateManifestRef` to
+  the exact canonical in-repo versioned manifest, then bind its build and
+  source fields; never hardcode a historical rollover manifest path.
+- A post-artifact compatibility exception must bind every allowed changed file
+  to its exact reviewed SHA-256 and verify those bytes at use time. A path-only
+  allowlist is never sufficient, especially for broad runtime files such as
+  `backend/src/app.js`; same-path content drift remains fail-closed.
+
+- Play-delivered Android installations may contain bounded base/split APK sets;
+  device-update and runtime-diagnostic preflight must inspect every installed
+  split signer before a data-preserving update or exact-candidate claim. Exact
+  Play-installed truth requires the version, Play installer, bounded split set,
+  and the canonical Play app-signing SHA-256 (never the upload certificate).
+  Never assume a single APK, and fail closed if PackageManager cannot replace
+  a split install with the exact candidate.
+
+### Fail-closed validator complements
+
+- When a fail-closed validator gains a newly allowed exception, it must still
+  inspect the complete relevant inventory and include a deterministic negative
+  complement test that rejects an additional non-allowed path or case.
+
+## Repository map
+
+- `lib/`, `test/`: Flutter client and tests.
+- `backend/src`, `backend/sql`, `backend/test`: Node API, PostgreSQL schema and
+  backend tests.
+- `tool/`, `scripts/`, `test/tool`: fail-closed validators, release tooling and
+  their regression tests.
+- `store/`: machine-readable Store, privacy, legal, retention and device state.
+- `docs/architecture`, `docs/operations`, `docs/compliance`, `docs/evidence`:
+  versioned design, runbooks and sanitized evidence.
+
+## Change workflow
+
+1. Confirm the real checkout, branch, HEAD, remote relationship and working
+   tree before editing.
+2. Read only the active package inputs and inspect nearby code/tests before
+   changing behavior.
+3. Keep changes narrow and reversible. Add or update a focused regression for
+   behavioral fixes.
+4. If a file listed in a `sourceInventory` changes, update every exact binding
+   for that path to the file's SHA-256 and run the associated validators. Before
+   the first package commit, compute the complete reverse-binding closure and
+   update it once in dependency order; do not create serial inventory-refresh
+   commits for dependencies that were discoverable up front. A hash refresh
+   never authorizes changing legal/privacy claims or approval state. If the
+   closure is cyclic or self-referential, redesign the binding instead of
+   chasing hashes across commits.
+   Hash-bound source changes must update both manifests and every executable
+   canonical hash constant, then pass the common consumer-closure gate.
+   Mutable executable hash tables must register their source bindings with
+   that gate; a passing manifest-only hash check is insufficient. Registered
+   constants must be checked before CI, alongside their owning consumer tests.
+   Mentor/source-binding ratchet: mutable current inventories may be refreshed
+   only against the current source they intentionally bind; historical evidence
+   snapshots are immutable and must never be rewritten or rebound. Historical
+   source hashes must be verified from the exact recorded Git commit/blob, with
+   no worktree fallback, and a missing commit/blob is a hard failure.
+5. Run focused checks first. Run the complete technical regression at package
+   and release gates.
+   Archive-builder mentor invariant: before commit/push, exercise one complete
+   real generated artifact inventory, covering actual file modes and maximum
+   path/leaf lengths with independent extraction; fixtures alone are insufficient.
+   Focused regression tests must exercise their intended branch under the
+   repository's standard runner; do not rely on an unrecorded dart-define,
+   environment flag or local-only invocation. Test-only seams may inject a
+   deterministic dependency, but the default command must pass and prove the
+   behavior it names.
+6. Use `git add -- <confirmed paths>` only. Review the staged diff and never use
+   add-all. Push only fast-forward to the intended branch; do not merge PR #7
+   unless separately authorized.
+7. Record status, behavior, tests, migrations, risks, rollback and the next
+   package/gate in a concise handover.
+
+## Verified toolchain and checks
+
+- Flutter 3.41.7 / Dart 3.11.5 and Java 17.
+- Backend Node >=22 with pnpm 11.16.0 and the locked dependency graph.
+- Focused Flutter: `flutter test <test paths>` and
+  `flutter analyze <changed Dart paths>`.
+- Backend: from `backend/`, run `pnpm test` and `pnpm run check`.
+- Full gate: `SIT_ALLOW_CANDIDATE_ROLLOVER=1 bash scripts/technical_regression_check.sh`.
+  The Mac-mini local metadata-only handoff check may additionally use `CI=true`;
+  this must not be used to claim a Store upload or device pass.
+- When the current work package records a dedicated Mac-mini build-cache
+  profile, run full gates and release builds through
+  `node tool/run_with_local_build_cache.mjs --profile <private-profile.json> -- <command>`.
+  See `docs/operations/WP02_BUILD_WORKSPACE_2026-09-04.md`. Keep the private
+  profile outside Git; do not silently fall back to the global cache or repeat
+  cache purges. The normal source-capacity and release gates still apply.
+  Current Mac-mini Android gates/releases use the version-2 profile documented
+  in `docs/operations/WP05_SCOPED_ANDROID_ENTRYPOINT_2026-09-04.md`; it supplies
+  both SDK variables and isolated Flutter configuration, verifies effective SDK
+  selection, and refuses global overrides. The historical version-1 cache-only
+  profile does not provide this Android prerequisite.
+- Run `git diff --check` before staging. Preserve the analyzer baseline and do
+  not suppress forbidden analyzer codes to make a check pass.
+
+## Pilot closure truthfulness
+
+- Never hide, remove, permanently disable, downgrade to toast-only, demo-only,
+  placeholder or silent no-op any reachable control merely to close a finding.
+- Every reachable function must have a real persisted or server-authoritative
+  effect with explicit success, failure, retry and stale-owner/session proof.
+- A confirmed account-bound write is not retroactively a failed write because
+  the session or UI context drifts afterwards. After the server/local write is
+  confirmed, close or report success truthfully; session drift may suppress
+  only later UI refresh, navigation, or readback and must never invite a retry.
+- Visible payment-test success must validate every local server-contract binding
+  fail-closed: exact run/amount/currency/status, a positively validated receipt,
+  and plausible test-mode provider IDs. Never treat a missing field or
+  `value != false` as proof.
+- For profile feedback and other external support writes, idempotency keys must
+  be opaque cryptographic values: never derive them from a session ID, user ID,
+  email, token, or other principal data. Same-principal background refreshes may
+  not clear an unsent draft or rotate its key; an epoch/session/principal change
+  must invalidate that draft. Client-side length limits must include all fixed
+  prefixes so the server's bounded summary contract is never exceeded.
+- Account-bound modal/read flows must become single-flight before their first
+  async gap, and every owned route must be dismissed on principal change.
+  Authoritative collection refreshes must reconcile any open detail and private
+  media state while preserving same-principal unsent drafts and idempotency keys.
+- An account-bound nested route is owned by the exact opener: opening becomes
+  single-flight before the first await, principal change removes only that
+  captured route even when another route is above it, and the child still
+  performs its own generation checks.
+- Account-generation helpers must validate mounted/principal/generation both
+  before and after every awaited current-context check; a pre-await check alone
+  must never authorize a late result after account switch or disposal.
+- Changing a server-bound resource selection must synchronously clear every
+  dependent unconfirmed fact, confirmation and request fingerprint before the
+  replacement is loaded. Never carry measurements or other derived inputs from
+  one owned resource onto another.
+- Support/compliance intake booleans must reflect guidance actually shown and
+  acknowledged by the user; never manufacture an attestation by hardcoding a
+  `guidanceShown`, single-issue, non-urgent, or similar claim without its UI
+  basis.
+- While a review has known FIX items, run only the focused checks that exercise
+  the changed invariant. Run a package or repository full regression exactly
+  once after the implementation, review fixes and required real-infrastructure
+  tests are stable; an earlier full run is diagnostic only and is never reused
+  as closure evidence.
+
+Tests and scanners must be made precise rather than bypassed: never obfuscate
+production code or use semantically irrelevant spelling solely to evade a
+source check.
+
+Protected Android signing and Firebase files are local, Git-ignored inputs.
+Validate their presence through repository tooling without printing values.
+Release-candidate, Store, live-provider and production commands are separate
+gated actions and are never implied by a normal build or regression task.
+
+For local Android QA login, use only `tool/login_android_local_qa.mjs`. It must
+read the current synthetic session manifest, perform one status-only API sanity
+login and immediately revoke that temporary session, then use a bounds-based
+UI dump with `input keycombination` to clear and fill the current login form.
+Never use ad-hoc repeated login taps, print credentials/tokens, or retain a UI
+dump after success or failure; its fake-ADB contract test must remain green.
+Login input and submit readiness must require the exact `Session prüfen…`
+overlay to be absent; a persistent overlay fails closed without input or tap.
+
+## External-create recovery invariant
+
+When an external provider create can succeed before its response reaches SIT,
+persist a durable local placeholder claim first, use a deterministic
+provider-idempotency key and provider request body, and reconcile pending claims
+in a bounded background worker. A user retry or account-deletion path is never
+the only recovery mechanism; provider/session and cleanup state changes use
+compare-and-set transactions and sanitized operational errors.
+
+## Technical-provider test boundary
+
+A technical or synthetic provider test must never change or imply a production
+trust/verified state, eligibility, ranking, booking benefit, fraud protection,
+or completed real-world verification. Every reachable copy and action must name
+the test boundary and preserve the server-authoritative no-confirmation
+disclosure.
+
+Positive and negative synthetic fixture cases are permanently separate. A
+negative fixture intentionally made missing, future-dated, hash-invalid or
+otherwise unusable may prove fail-closed rejection only; it must never replace
+an explicitly required positive end-to-end fixture or be reported as the
+technical cause of a positive-path blocker.
+
+Release feature-scope classifications must bind current source reachability to
+current runtime evidence. A stale audit, historical candidate or source-only
+contract cannot close a live-scope finding; a missing runtime route or provider
+activation remains an explicit fail-closed blocker.
+
+After an alias or DNS error, read the exact stored SSH configuration and
+project source before declaring a remote unavailable; test only the verified
+target alias. A guessed alias is not a blocker.
+
+Before any forward schema deployment, compare the prior image's SQL contract
+with the exact migration delta and record a protected backup/restore rehearsal
+against the bound source commit. Health and readiness prove liveness only, not
+rollback compatibility. If no compatible recovery image is proven, isolate
+Staging after the forward attempt; never boot an observed old image or run an
+automatic down migration/database restore. Filesystem safety checks must finish
+before any backup-directory mutation, and the complete Staging container target
+set must be label-validated before any partial quiesce; check for foreign DB
+writers immediately before and after the protected backup. A successful
+protected rehearsal leaves all quiesced services stopped; cleanup must be
+verified and any cleanup failure overrides PASS. Runtime source and Ops
+orchestration commits are pinned separately and must be recorded at invocation.
+Every disposable rehearsal container and network must be created with an exact
+run-scoped name plus matching disposable labels, and those identities must be
+inspected and attested before the first start; rehearsal storage must use
+anonymous volumes attached to the captured container and may only be removed
+atomically with that immutable container ID using `--volumes`. No standalone
+rehearsal volume create/rm or name-based volume cleanup is allowed; a loopback
+port or container name alone is never sufficient. Before any candidate start, capture
+the complete sanitized payment-recovery-needs-review and support-next-update-
+overdue finding sets from that same restore using only stable hashed IDs,
+cause/status and coarse time classes. Re-read after candidate migrations/start
+and continue technical probes only when the canonical sets are byte-for-byte
+identical; missing, new, removed, changed or unreadable findings fail closed.
+This fingerprint never heals or suppresses a readiness=503 release blocker.
+Safety helpers are not considered implemented until the real orchestrated
+runner calls them; focused tests must exercise configured resource names and
+the baseline-versus-post-start branch, including negative drift and cleanup
+failures.
+Mutating container recovery must bind rollback to the immutable preflight
+container Id plus the expected Config and network map; never rename or start
+by container name alone, and treat same-name identity ambiguity as failure.
+For a fresh official PostgreSQL volume, an initial `pg_isready` is not a final
+startup proof: require the official init-complete log marker followed by two
+stable `SELECT 1` successes before any restore operation.
+The only acceptance target after that rehearsal is the exact candidate image on
+an immediately preflighted free dedicated loopback port (the current reserved
+port is `18082`); the public Staging proxy port and any foreign listener must
+never serve or be stopped for the candidate. The controlled Compose file must
+use an explicit minimal environment (no `env_file` secret injection), hard-pin
+provider-neutral test modes, and mount only the validated runtime-readable MFA
+key (`root:65532`, mode `0640`). Storage/preparation may remain owner-only
+(`0600`); metadata-only preparation requires exact confirmation and must never
+rotate or print key material. New root-created keys must end runtime-ready.
+The runner must prove readiness and an authenticated synthetic MFA
+enroll/pending/cancel flow, then write owner-only external evidence bound to the
+exact runtime and Ops commits. Compose `--wait` without an explicit application
+healthcheck is not readiness proof; acceptance must also use bounded
+application-level polling and stable sanitized transport/timeout phases.
+On failure, capture only sanitized container state before cleanup, remove the
+complete identity-validated acceptance inventory, and write PASS evidence only
+after cleanup is proven. `deploy_release.sh staging` remains blocked
+until that evidence and an exact public-release confirmation validate; no
+automatic promotion or observed-old-image fallback is allowed.
+Application bootstrap must also remain backward-compatible with the currently
+deployed migration boundary: `schema.sql` may add nullable forward-compatibility
+columns before planning dependent indexes, while the numbered migration owns
+validation/backfill and constraint tightening. A legacy 001-074 restore must
+have a deterministic real-PostgreSQL startup test before any new acceptance
+attempt.
+
+Before declaring a missing-artifact or toolchain blocker, verify the
+authoritative target host and exact artifact path first. A protected source
+backup and a previously written success-evidence file are different artifacts;
+never substitute one for the other or claim a run was blocked before start
+until the target-host readback is complete.
+
+An explicit apply/commit path must be executed before a work package is
+closed. A transaction ROLLBACK is not a COMMIT and must never be described as
+one; if the guarded commit path is blocked, record the exact blocker and stop.

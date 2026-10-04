@@ -1,0 +1,181 @@
+{
+  "schemaVersion": 1,
+  "package": "WP159-PROCESSOR-CONTROLLER-REGION-TRANSFER-TRUTH-20260915",
+  "status": "technical-recognized-account-gates-open",
+  "capturedAt": "2026-09-15T00:00:00Z",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "baselineHead": "9d4b252234af8ea200d73485f35f9ff0823f617e",
+    "finalHead": "9d4b252234af8ea200d73485f35f9ff0823f617e",
+    "workingTreeCleanAtCapture": true,
+    "remoteAhead": 0,
+    "remoteBehind": 0
+  },
+  "technicalControllerBoundary": {
+    "sitFirstPartyBackend": { "technicalRole": "controller-service", "enabledInCandidate": true },
+    "legalControllerDeterminationCompleted": false,
+    "technicalRoleIsNotLegalAdvice": true
+  },
+  "providerFindings": {
+    "hostingerVps": {
+      "enabledInCandidate": true,
+      "technicalRole": "processor",
+      "dataFlow": "first-party-backend-and-database-hosting",
+      "publicProcessorTermsLocated": true,
+      "publicRegionOptionsLocated": true,
+      "publicVpsLocationRule": "location-fixed-after-setup",
+      "actualActiveVpsRegionProven": false,
+      "customerDpaAcceptanceProven": false,
+      "activeSubprocessorSetProven": false,
+      "sitTransferMechanismApproved": false,
+      "sitRetentionDeletionApproval": false
+    },
+    "googleWorkspaceSmtpRelay": {
+      "enabledInCandidate": true,
+      "technicalRole": "processor",
+      "dataFlow": "transactional-email-relay",
+      "smtpRelayMechanismDocumented": true,
+      "publicWorkspaceProcessorFrameworkLocated": true,
+      "actualWorkspaceEditionProven": false,
+      "relayAdminPolicyProven": false,
+      "configuredDataRegionProven": false,
+      "customerDpaAcceptanceProven": false,
+      "activeSubprocessorSetProven": false,
+      "sitTransferMechanismApproved": false,
+      "sitRetentionDeletionApproval": false
+    },
+    "firebaseAuthentication": {
+      "enabledInCandidate": true,
+      "technicalRole": "processor-under-public-firebase-terms",
+      "serviceLocationFact": "Firebase Authentication processes data exclusively in US data centers per public Firebase privacy documentation.",
+      "accountSpecificConfigurationProven": false,
+      "customerDpaAcceptanceProven": false,
+      "transferMechanismApproved": false,
+      "retentionDeletionApproval": false,
+      "socialProvidersActivated": false
+    },
+    "firebaseCloudMessaging": {
+      "enabledInCandidate": true,
+      "technicalRole": "processor-under-public-firebase-terms",
+      "serviceLocationFact": "Firebase Cloud Messaging is listed as a global Firebase service unless a service-specific data-location selection applies.",
+      "accountSpecificDataLocationProven": false,
+      "customerDpaAcceptanceProven": false,
+      "transferMechanismApproved": false,
+      "retentionDeletionApproval": false
+    },
+    "firebaseCrashlytics": {
+      "enabledInCandidate": true,
+      "technicalRole": "processor-under-public-firebase-terms",
+      "serviceLocationFact": "Firebase Crashlytics is listed as a global Firebase service unless a service-specific data-location selection applies.",
+      "accountSpecificDataLocationProven": false,
+      "customerDpaAcceptanceProven": false,
+      "transferMechanismApproved": false,
+      "retentionDeletionApproval": false
+    },
+    "googleMapsPlatform": {
+      "enabledInCandidate": true,
+      "providerActivation": "provider-gated-default-off",
+      "technicalDataPath": "authenticated-SIT-server-proxy",
+      "directSdkTransferImplemented": false,
+      "publicControllerControllerTermsLocated": true,
+      "publicUseAndRetentionFact": "Google receives search terms, IP addresses and latitude/longitude coordinates when providing Maps services and may use or retain them under its privacy terms.",
+      "actualBillingAddressAndEeaTermsProven": false,
+      "enabledApisAndLoggingProven": false,
+      "credentialRestrictionProven": false,
+      "activationApproved": false,
+      "sitLegalRoleDetermined": false
+    },
+    "stripe": {
+      "enabledInCandidate": false,
+      "technicalRole": "inactive-future-review-only",
+      "providerTrafficPerformed": false,
+      "accountContractReviewedForThisPackage": false,
+      "regionTransferDecisionMade": false
+    }
+  },
+  "officialSources": [
+    {
+      "provider": "Hostinger",
+      "url": "https://www.hostinger.com/legal/dpa",
+      "fact": "Hostinger's public DPA identifies Hostinger as Processor and incorporates EU SCC modules; public terms do not prove SIT account acceptance or the active VPS region."
+    },
+    {
+      "provider": "Hostinger",
+      "url": "https://support.hostinger.com/en/articles/1583267-where-are-hostinger-servers-located",
+      "fact": "Hostinger publishes selectable VPS locations and states VPS location is fixed after setup; the actual SIT VPS location is not evidenced here."
+    },
+    {
+      "provider": "Google Firebase",
+      "url": "https://firebase.google.com/support/privacy",
+      "fact": "Firebase documents Firebase Authentication as US-only and lists Cloud Messaging and Crashlytics among global services unless a service-specific data-location selection applies."
+    },
+    {
+      "provider": "Google Firebase",
+      "url": "https://firebase.google.com/terms/data-processing-terms",
+      "fact": "Firebase DPA terms define controller/processor concepts and provide transfer solutions/SCCs; review does not prove SIT account acceptance or configured location."
+    },
+    {
+      "provider": "Google Workspace SMTP Relay",
+      "url": "https://support.google.com/a/answer/2956491?hl=en-to",
+      "fact": "Google documents SMTP relay through smtp-relay.gmail.com and requires Admin-console configuration; this does not prove the SIT relay policy or account data region."
+    },
+    {
+      "provider": "Google Workspace",
+      "url": "https://workspace.google.com/terms/service-terms/",
+      "fact": "Workspace service terms describe data regions for in-scope editions and otherwise permit processing where Google or subprocessors maintain facilities; SIT edition/region selection remains unproven."
+    },
+    {
+      "provider": "Google Maps Platform",
+      "url": "https://cloud.google.com/maps-platform/terms?hl=en-EN",
+      "fact": "Maps terms state Google receives search terms, IP addresses and latitude/longitude and incorporate Controller-Controller Data Protection Terms."
+    },
+    {
+      "provider": "Google Maps Platform",
+      "url": "https://business.safety.google/controllerterms/",
+      "fact": "Google publishes Controller-Controller Data Protection Terms; public terms do not prove the SIT billing address, enabled APIs, logging configuration or account acceptance."
+    }
+  ],
+  "accountGates": {
+    "ownerGate": "OWNER_GATE_REQUIRED:PROCESSOR_CONTRACT_REGION_TRANSFER_READBACK",
+    "requiredReadback": [
+      "Hostinger active contracting entity, accepted DPA, VPS region and current subprocessor/transfer schedule",
+      "Google Workspace edition, accepted DPA, SMTP relay Admin policy, sender domain and configured data-region setting",
+      "Firebase project terms/account acceptance, Authentication US-only acknowledgement, FCM/Crashlytics location controls and active project settings",
+      "Google Maps billing address/EEA terms, enabled APIs, logging/credential restrictions and current account terms"
+    ],
+    "legalRoleAndControllerFactsRemainOpen": true
+  },
+  "boundaries": {
+    "providerConsoleAccessed": false,
+    "accountSignedIn": false,
+    "credentialsReadOrRecorded": false,
+    "contractAccepted": false,
+    "dpaChanged": false,
+    "regionChanged": false,
+    "transferMechanismChanged": false,
+    "providerTrafficPerformed": false,
+    "paymentOrStripeTrafficPerformed": false,
+    "firebaseChanged": false,
+    "mapsActivated": false,
+    "productionChanged": false,
+    "storeChanged": false,
+    "deviceChanged": false,
+    "pullRequestMerged": false
+  },
+  "sourceInventory": {
+    "store/privacy-disclosures.json": "56ae74525d5d9a0833972e075f9a2b5c766668eda7f76f37d96cba164e450b3f",
+    "docs/evidence/b11/google-play-service-provider-sharing-classification-2026081505-20260815.json": "ed73b938981e4d55c42f2b3faa555c3c44990de0a2c5685de9380d67f2460909",
+    "docs/evidence/b11/firebase-cloud-messaging-retention-deletion-readiness-20260817.json": "bd7abac5e9b3add95c35b6a7a5db246bf5c5d71ea98dcf7cfc2190ff4352c98b",
+    "docs/evidence/b11/firebase-crashlytics-retention-deletion-readiness-20260817.json": "7d09b3571b2b9e12b82895a8ca4ba16563b38c5a79a1ed75e5554d7e091f2246",
+    "docs/evidence/b11/firebase-authentication-retention-deletion-readiness-20260817.json": "e75ae604331c8410bef4560d0b8d10e308c1f8aca7417e9572787130f84b4dec",
+    "docs/evidence/b11/google-maps-platform-retention-deletion-readiness-20260817.json": "49e21dae826afe4140c5284d8f9529bb2d41105491ca392ece4c4b0446557608",
+    "docs/operations/WP159_PROCESSOR_CONTROLLER_REGION_TRANSFER_TRUTH_2026-09-15.md": "90298272baa2da5bbd525d7672e2467bdb557fb1930702ab0f231a1f10ffac5d",
+    "tool/validate_wp159_processor_controller_region_transfer_truth.mjs": "7cc74afd4a2c647b3bb8b857af9eabea5a3b471f30b7803f74f7fafe35718ee1",
+    "test/tool/validate_wp159_processor_controller_region_transfer_truth.test.mjs": "69ac41408e65b0d4932a5efd83d1a1cf9cbd0d31873753b8547e1352120d14ef"
+  },
+  "captureAttestation": {
+    "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
+    "sourceInventoryDigest": "09edff9d2f70bfe160ed8e75d010b384538f8f588e9b0781a75215eca2d12f2a",
+    "publicSourceReviewIsNotAccountReadback": true
+  }
+}

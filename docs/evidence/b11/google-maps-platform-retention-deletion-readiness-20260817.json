@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "kind": "google-maps-platform-retention-deletion-readiness",
+  "serviceId": "googleMapsPlatform",
+  "provider": "Google Maps Platform",
+  "reviewedAt": "2026-08-17T00:00:00Z",
+  "status": "official-controls-structured-owner-contract-and-deletion-approval-open",
+  "productDecision": {
+    "retainedForLaunch": true,
+    "addressAutocompleteAndPlaceDetailsInLaunchScope": true,
+    "preciseDeviceLocationRequiresExplicitUserAction": true,
+    "backgroundOrLiveTrackingAllowed": false,
+    "serverProxyRequired": true
+  },
+  "officialSources": [
+    {
+      "purpose": "logged-data-and-retention",
+      "url": "https://developers.google.com/maps/security/compliance/security-compliance",
+      "finding": "Maps requests are logged with an account identifier, requester IP, request URL, time and technical information. Google publishes no single fixed retention period; user data may be retained for different lengths based on legitimate business need and is deleted when no longer necessary."
+    },
+    {
+      "purpose": "controller-role-and-terms",
+      "url": "https://cloud.google.com/maps-platform/terms?sign=1",
+      "finding": "Current Google Maps Platform terms incorporate controller-controller data protection terms and require the customer to protect end-user data and comply with privacy obligations. Public review does not prove SIT account acceptance."
+    }
+  ],
+  "currentTechnicalControls": {
+    "serverSideProxyImplemented": true,
+    "clientCredentialEmbedded": false,
+    "authenticatedActiveAccountRequired": true,
+    "requestRateLimitImplemented": true,
+    "inputAndPlaceIdBounded": true,
+    "directMapsSdkTransferImplemented": false,
+    "typedAddressOrPlaceIdTransferredOnUse": true
+  },
+  "retentionAndDeletionReality": {
+    "singleFixedProviderRetentionPeriodAvailable": false,
+    "accountScopedProviderDeletionProcedureImplemented": false,
+    "sitCanPromiseImmediateProviderErasure": false,
+    "currentAccountContractAcceptanceVerified": false,
+    "currentEnabledApisAndLoggingVerified": false,
+    "currentProcessingLocationsVerified": false,
+    "internationalTransferMechanismApprovedForSIT": false,
+    "retentionAcceptedByOwner": false,
+    "deletionProcedureVerifiedByOwner": false,
+    "ownerEvidenceRef": null
+  },
+  "activationBoundary": {
+    "serverCredentialRestrictionVerified": false,
+    "storeDisclosureApproved": false,
+    "productionChanged": false,
+    "providerConsoleChanged": false,
+    "containsSecrets": false,
+    "containsAccountData": false
+  }
+}

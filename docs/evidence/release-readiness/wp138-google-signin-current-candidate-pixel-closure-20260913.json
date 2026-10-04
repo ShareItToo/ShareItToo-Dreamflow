@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp138-google-signin-current-candidate-pixel-closure",
+  "status": "passed-google-cancel-login-cold-start-repeat-and-owner-restore",
+  "capturedAt": "2026-09-13T11:08:18.878Z",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "implementationCommit": "e3b7e62b98ad0dcd1a2ca32f342c497f919d331a",
+    "privacyRatchetCommit": "d574d8da5ce62f63cb56f8443fe14eb9bb05cc5d",
+    "candidateSourceCommit": "904c2b734160544aaeb1128cac15191a521739e7",
+    "sourceInventory": {
+      "tool/diagnose_android_google_social_auth.mjs": "e8c6489bc59a289468c35969ce1a285d33c9f829f6d27e8d7106733e70d4d3fd",
+      "test/tool/diagnose_android_google_social_auth.test.mjs": "8a402da0da37d37049eb44e3b56704cd6f5eeba4275021f92740fd8b66fa78c9",
+      "pubspec.yaml": "cfd41c4c347351fdec9ca1b4fde701857732d8a122b56fee223ffdd3cdeb424f",
+      "lib/config/private_pilot_config.dart": "c6300b590e708cc751de799c6204d37786ec22c55a3cb94cce8e5f02e8576589",
+      "store/privacy-disclosures.json": "7317a07be1d9efe8ae2791f71e145f4e8149cd4cefd65b2adb9f1424d179104e"
+    }
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091312",
+    "sourceCommit": "904c2b734160544aaeb1128cac15191a521739e7",
+    "releaseChannel": "internal",
+    "environment": "staging",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "socialAuth": {
+      "googleEnabled": true,
+      "appleEnabled": false,
+      "facebookEnabled": false
+    },
+    "blueOceanListingAssistantEnabled": true,
+    "listingAiExecutionLocation": "android_on_device",
+    "listingAiExternalImageProviderEnabled": false,
+    "closedPilotEnvelopeEnabled": true,
+    "stageAPilotId": "heilbronn_wave0",
+    "apkSha256": "e6d1df85e4e8973765c594b8fe9eb2654c876ee11cafe6d94cfe5c57ff8d7fb9",
+    "aabSha256": "c0c0f27fb14d393b97c46b55bf81f201081dce1d9756f3468bfa442c4bdf9c6e",
+    "privacyReportSha256": "77ecdd7ed447623243c2a04f4100eb284217a2a5f0005efa9487e8581bd84528",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "archiveValidation": "passed-owner-only-exact-four-files",
+    "privacyScan": "passed"
+  },
+  "pixelUpdate": {
+    "capturedAt": "2026-09-13T11:07:09.783Z",
+    "physical": true,
+    "model": "Pixel 7 Pro",
+    "androidVersion": "17",
+    "apiLevel": 37,
+    "securityPatch": "2026-07-05",
+    "installedVersionBefore": "1.0.0+2026091311",
+    "installedVersionAfter": "1.0.0+2026091312",
+    "strictlyNewerBuildInstalled": true,
+    "candidateSignatureMatchedInstalledApp": true,
+    "installedCandidateHashMatched": true,
+    "firstInstallTimePreserved": true,
+    "ceDataInodePreserved": true,
+    "uninstallUsed": false,
+    "dataResetUsed": false
+  },
+  "physicalJourney": {
+    "exactPrivateGoogleAccountSelected": true,
+    "googleChooserCancellation": "passed-no-session",
+    "cancellationColdStartRemainedGuest": true,
+    "firstGoogleLogin": "passed",
+    "coldStartSessionPersistence": "passed",
+    "repeatGoogleLogin": "passed",
+    "sameStagingProfileAcrossAllThreeObservations": true,
+    "duplicateAccountObserved": false,
+    "accountCreationVersusExistingLinkage": "not-asserted",
+    "protectedSyntheticOwnerRestored": true,
+    "privateProfileHashes": {
+      "first": "499ec3fda6a206349484543f5f5a65e59bf689f9f15b26998f5cfe4ff781d874",
+      "coldStart": "499ec3fda6a206349484543f5f5a65e59bf689f9f15b26998f5cfe4ff781d874",
+      "repeat": "499ec3fda6a206349484543f5f5a65e59bf689f9f15b26998f5cfe4ff781d874"
+    }
+  },
+  "ratchetCorrections": {
+    "pubspecPrivacyInventoryFailureObserved": true,
+    "pubspecPrivacyInventoryRebound": true,
+    "v52ClientBuildFailureObserved": true,
+    "v52ClientBuildRebound": true,
+    "privacyDisclosureMeaningChanged": false,
+    "v52LegalContentChanged": false,
+    "workaroundRetained": false
+  },
+  "verification": {
+    "focusedRunnerContractTests": "passed-5-of-5",
+    "googleOnlyFlutterProfileTests": "passed-3-of-3",
+    "fullLocalTechnicalRegression": "passed",
+    "flutterAnalyzer": "passed-zero-issues",
+    "webWasmBuild": "passed",
+    "loopbackSmoke": "passed",
+    "androidDebugBuild": "passed-min-sdk-24",
+    "signedReleaseArchive": "passed",
+    "cleanCheckoutReproducibility": "passed",
+    "githubRegressionRunId": 34753100834,
+    "githubRegressionConclusion": "success",
+    "githubCodeqlRunId": 34753100820,
+    "githubCodeqlConclusion": "success",
+    "openCodeScanningAlerts": 0
+  },
+  "portfolio": {
+    "before": { "pass": 19, "partial": 5, "open": 8 },
+    "after": { "pass": 20, "partial": 4, "open": 8 },
+    "promotedRequirement": "google-signin",
+    "promotedFrom": "PARTIAL",
+    "promotedTo": "PASS"
+  },
+  "boundaries": {
+    "onePlusContacted": false,
+    "googlePlayChanged": false,
+    "productionChanged": false,
+    "firebaseConfigurationChanged": false,
+    "backendDeployed": false,
+    "paymentEndpointCalled": false,
+    "stripeLivemode": false,
+    "realMoneyUsed": false,
+    "appleUsed": false,
+    "facebookUsed": false,
+    "publicRegistrationChanged": false,
+    "accountCreationOrLinkageClaimed": false,
+    "pullRequestMerged": false,
+    "containsAccountIdentity": false,
+    "containsCredential": false,
+    "containsToken": false,
+    "containsRawDeviceIdentifier": false,
+    "containsPrivateFilesystemPath": false
+  }
+}

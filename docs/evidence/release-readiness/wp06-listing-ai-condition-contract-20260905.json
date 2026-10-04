@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp06-listing-ai-condition-editor-contract",
+  "status": "local-dev-contract-passed-external-runtime-disabled",
+  "verifiedAt": "2026-09-05",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "toolingStateIgnoreHead": "e534375d14874d88817630b882cd1c1c0af7aa9c",
+    "implementationHead": "e2559ada5e466be7b947755dec3bb5db2ccdb941",
+    "remoteImplementationHeadMatched": true,
+    "implementationWorkingTreeClean": true
+  },
+  "contract": {
+    "conditionAuthoritySharedByDomainAndProviderSchema": true,
+    "allowedConditionValues": [
+      "new",
+      "like-new",
+      "good",
+      "acceptable",
+      "worn"
+    ],
+    "arbitraryConditionProseRejected": true,
+    "typedEmptySentinelPreserved": true,
+    "ownerConfirmationPreserved": true,
+    "publicationAuthorityGranted": false,
+    "priceAuthorityGranted": false
+  },
+  "localDeveloperEvaluation": {
+    "adapter": "codex_local_dev",
+    "authenticationClassification": "CODEX_AUTH_LOCAL_DEV_SUPPORTED",
+    "runtimeProvider": false,
+    "apiBillingUsed": false,
+    "credentialsExtracted": false,
+    "syntheticFixturesOnly": true,
+    "fixtureCount": 4,
+    "results": [
+      {
+        "fixtureClass": "home-projector",
+        "condition": "like-new",
+        "confidence": "MEDIUM",
+        "ownerConfirmationRequired": true,
+        "publicationAllowed": false
+      },
+      {
+        "fixtureClass": "cordless-drill",
+        "condition": "like-new",
+        "confidence": "MEDIUM",
+        "ownerConfirmationRequired": true,
+        "publicationAllowed": false
+      },
+      {
+        "fixtureClass": "camping-tent",
+        "condition": "good",
+        "confidence": "MEDIUM",
+        "ownerConfirmationRequired": true,
+        "publicationAllowed": false
+      },
+      {
+        "fixtureClass": "mirrorless-camera",
+        "condition": "like-new",
+        "confidence": "MEDIUM",
+        "ownerConfirmationRequired": true,
+        "publicationAllowed": false
+      }
+    ]
+  },
+  "verification": {
+    "focusedTests": "passed-47",
+    "fullTechnicalRegression": "passed",
+    "analyzer": "passed-zero",
+    "webWasm": "passed",
+    "loopbackSmoke": "passed",
+    "androidMinSdk24Build": "passed",
+    "cleanCheckoutReproducibility": "passed-exact-head-byte-identical-apks",
+    "r10PrivateReportSha256": "a79271f84868314e50bf208e4240790cf786d96690f35b98885840f64c8990f5",
+    "rootTempCapacityPreflight": "failed-closed-insufficient-capacity",
+    "verifiedExternalBuildVolumeTemp": "passed-no-product-dependency"
+  },
+  "github": {
+    "verificationHead": "e2559ada5e466be7b947755dec3bb5db2ccdb941",
+    "regressionRun": 33941394258,
+    "regressionUrl": "https://github.com/walidwalidchraibi-dot/ShareItToo-Dreamflow/actions/runs/33941394258",
+    "regression": "passed-including-clean-reproducibility",
+    "codeqlRun": 33941394251,
+    "codeqlUrl": "https://github.com/walidwalidchraibi-dot/ShareItToo-Dreamflow/actions/runs/33941394251",
+    "codeql": "passed",
+    "openCodeScanningAlerts": 0,
+    "prNumber": 7,
+    "prDraft": true,
+    "prOpen": true,
+    "prMergeable": true,
+    "prMerged": false
+  },
+  "remaining": {
+    "externalStagingListingAi": "disabled-no-dedicated-key-verified",
+    "externalProviderImageQuality": "not-proven",
+    "priceDomainCoverage": "separate-follow-up-required",
+    "stripeSandbox": "separate-package",
+    "v52Binding": "draft-blocked"
+  },
+  "boundaries": {
+    "stagingChanged": false,
+    "providerActivated": false,
+    "listingPublished": false,
+    "deviceChanged": false,
+    "googlePlayChanged": false,
+    "productionChanged": false,
+    "realMoneyUsed": false,
+    "stripeUsed": false,
+    "firebaseChanged": false,
+    "cloudVpsDnsChanged": false,
+    "prMerged": false,
+    "containsCredential": false,
+    "containsToken": false,
+    "containsEmailAddress": false,
+    "containsPrivateFilesystemPath": false
+  }
+}

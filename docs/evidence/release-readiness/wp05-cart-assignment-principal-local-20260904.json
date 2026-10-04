@@ -1,0 +1,127 @@
+{
+  "schemaVersion": 1,
+  "status": "LOCAL_FOCUSED_FULL_NORMAL_AND_EXACT_CLEAN_PASS",
+  "observedOn": "2026-09-04",
+  "executionBase": "ee6ca8e68b7d4645e922b98509cf1aeeb5a05d82",
+  "redSource": "b748e3befcef7b0af0efe93135a510a98b56ba16",
+  "previousProjectCleanProof": {
+    "source": "b748e3befcef7b0af0efe93135a510a98b56ba16",
+    "sha256": "3f0da093aafb6c6b149a988b896f2d33337031a6d4af96f8d787e5ca2259e83d",
+    "certifiesNewAssignmentCorrection": false
+  },
+  "installedCandidate": {
+    "build": "2026090404",
+    "source": "55a1aa5a11a53151ee6740785eb1e25b79f6b06e",
+    "containsAssignmentCorrection": false,
+    "updated": false
+  },
+  "reproduction": {
+    "widget": {
+      "stableControlPass": 1,
+      "failedAtoBInvariant": 1
+    },
+    "http": {
+      "stableControlPass": 1,
+      "failedAtoBInvariant": 1,
+      "observed": "A cart response followed by PUT using synthetic B authorization"
+    },
+    "realBackendAcceptanceClaimed": false,
+    "deviceMutation": false
+  },
+  "verification": {
+    "newDefaultTests": 12,
+    "newEnabledHttpTests": 7,
+    "focusedDefaultTotal": 35,
+    "focusedEnabledHttpTotal": 15,
+    "wiringGuards": 11,
+    "newWiringGuards": 5,
+    "fullToolTests": 2221,
+    "fullDefaultFlutterPasses": 747,
+    "defaultExplicitProfileSkips": 33,
+    "allMandatoryProfilesPassed": true,
+    "analyzerIssues": 0,
+    "fullNormal": "PASS",
+    "webBuildAndWasmDryRun": "PASS_NOT_STANDALONE_WASM_RUNTIME",
+    "loopbackSmoke": "PASS_NOT_FULL_OFFLINE_ACCEPTANCE",
+    "androidDebugSeconds": 43,
+    "androidDebugApkSha256": "76d50ab9cf886bf6eb8344599afd948f398269b1734332180887d26bb67eb478",
+    "androidDebugApkBytes": 231280851,
+    "minSdk": 24,
+    "permissions": 14,
+    "exportedComponents": 8,
+    "exactCleanAssignmentSource": "PASS_b28da2aa06816fd47eefe3a6657e7674e92cce03",
+    "exactCleanEvidence": "docs/evidence/release-readiness/wp05-cart-assignment-principal-clean-20260904.json",
+    "exactCleanEvidenceSha256": "c5bba254e1a63e3a4e66003f55884a87d7db0d8fc60662d9a82c50585905bc5a",
+    "exactCleanLogSha256": "c09d224f2206fe4c650413098d848277ff21707b34cf5a683447d803219877d2",
+    "exactCleanFullRegressionSeconds": 657,
+    "exactCleanSecondAndroidSeconds": 45,
+    "exactCleanDebugApkSha256": "829f512e133867c76f161ecfce55d60968f2db3fde7b7e8ed9d0afbd60244a97",
+    "exactCleanApksAndEntriesByteIdentical": true,
+    "signedSuccessor": "OPEN",
+    "physicalAcceptance": "OPEN",
+    "github": "OWNER_DEFERRED_NOT_WAIVED"
+  },
+  "retainedFailures": {
+    "expandedWidget": "34 pass / 1 fail: existing two-second toast callback not advanced in fixture",
+    "initialAnalyzer": "Two brace-style notices, corrected without suppression",
+    "redResultsPreserved": true
+  },
+  "technicalDebt": {
+    "fixtureDeadline": {
+      "status": "CLOSED_FOR_THIS_FIXTURE",
+      "resolution": "Advance the existing exact two-second toast deadline on virtual clock; assert B dialog survives callback, with matching source guard",
+      "wallClockSleepOrTimeoutChange": false,
+      "productionTimerChanged": false
+    },
+    "hashRefresh": {
+      "status": "PASS",
+      "jsonFiles": 24,
+      "validators": 5,
+      "rounds": 2,
+      "nonHashClaimsAndAssertionsUnchanged": true,
+      "independentRepeat": "NO_OP"
+    }
+  },
+  "cleanup": {
+    "generatedFlutterIntermediatesRemovedAfterSuccessfulRegression": true,
+    "signed0404ArchiveHashesUnchanged": true,
+    "freeBytesAfterCleanup": 11286818816,
+    "logSha256": "e7fd95659b412bd7eb2a8ff77410b5e942e79d3521470b967c0890a0225c2262",
+    "debugArtifactRetainedOrDistributed": false
+  },
+  "sourceHashes": {
+    "lib/screens/wishlists_screen.dart": "cb64ca5670af401b7259e3d226cdde54047891c842abcf5287522528590f4bba",
+    "lib/services/data_service.dart": "85f8d2f2b658d308e6ebec61f6eec39551daaa9c8f3c18269ed6f30862c49bbf",
+    "lib/services/backend_repository.dart": "07d0d99b361211104af647518a1204e1e8871732170d0fce9bf7b628e0794d83",
+    "lib/services/local_principal_scope.dart": "7bc2b1254651b1cca95059ef99de2fe4b9027bb7ebbd3cea88777f3db33e2218",
+    "scripts/technical_regression_check.sh": "34270a229093d27eaf9b70ea4c9a0937897a6cdf335730c7f1b390b406dbfd6d",
+    "test/rental_cart_assignment_principal_test.dart": "a530cf56d9cb580d8cc91eb147f007b789a37dcad40e9ad2c10c6b9c1c1c962a",
+    "test/tool/rental_cart_assignment_principal_wiring.test.mjs": "02a5a06e335add40ed56b317093042bbb4ab217e3d2d7e759dc76993c22e0825"
+  },
+  "proofHashes": {
+    "cart-assignment-red-widget.log": "db480252b01abfa9168243220400e09d70a519867a3356f86a328051eafe053c",
+    "cart-assignment-red-http.log": "a9f241cb23a11518c60e9e7437cec5bdd3ce436ce3826f004bdb1f40a5fe61b7",
+    "cart-assignment-focused-initial.log": "9b77316e363ebb2b6e9deb8fa2c00c67b4e20a522c729b69495a76d060b57e41",
+    "cart-assignment-http-initial.log": "acad34f9fd389497eae7f3991d5407e6b618ba343af4f2ff0bef1ff3e71d14da",
+    "cart-assignment-focused-expanded.log": "3ab410e7aa55f9d889dacaeea48f99a856460dfad6174479a1316c618050e983",
+    "cart-assignment-focused-final.log": "267c9382309075d9f4fe1b6de8cbed840763e24f60b96f1a8f51188328439e02",
+    "cart-assignment-http-final.log": "70385516bcd260e9a142fa562781b9af4625b625d0f5671e7cc23e96a4644664",
+    "cart-assignment-analyzer.log": "ca9c6e8bf898a28b3ce7cac9f2c7291a5444027c963d54e63ef6d993157666d0",
+    "cart-assignment-analyzer-final.log": "6c391d1a5d562c26e9a52ecb9c9cfe2623cd1ae4d32044c4fb6535e13b98a2d8",
+    "cart-assignment-tool-full.log": "a58118131b784e227a7b8e7e8a219c60b46f719d57297f8924a299d11fd13ad1",
+    "cart-assignment-bindings-final.json": "4535aa90f3d0d6901f24455c7aa0d6e1801057069a88d6bfbd28da6aaa3345d8",
+    "cart-assignment-full-regression.log": "ac90a9a6b688c2b68b170f7df186200552ce922b4875879516743b31b9f43afe"
+  },
+  "boundaries": {
+    "githubAction": false,
+    "onePlusTouched": false,
+    "pixelTouched": false,
+    "backendOrProviderChanged": false,
+    "storeOrProductionChanged": false,
+    "smsOrRealPayment": false,
+    "nonHashPrivacyLegalProviderFactsUnchanged": true,
+    "fullCartAcceptance": false,
+    "fullGoalComplete": false
+  },
+  "next": "Bounded classification of remaining direct cart mutations/navigation before a distinct signed Pixel successor."
+}

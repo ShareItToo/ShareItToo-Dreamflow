@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp35-pixel-message-refresh-candidate-preparation",
+  "status": "prepared-for-source-freeze",
+  "capturedAt": "2026-09-07T00:32:52Z",
+  "workPackage": "WP35",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "preparationBase": "9c6d2dd5865c1a69e538c73a45e187e8e7cdf8db",
+    "candidateSourceHead": "preparation-commit",
+    "preparationBaseRemoteDivergence": "0/0"
+  },
+  "candidate": {
+    "versionName": "1.0.0",
+    "versionCode": "2026090610",
+    "packageId": "com.shareittoo.app",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "installedPixelVersionBefore": "2026090609",
+    "archiveCreated": false,
+    "installed": false
+  },
+  "finding": {
+    "reproducedTwiceOnPreviousCandidate": true,
+    "safeLoadFailureShown": true,
+    "emptyOrSuccessTruthShown": false,
+    "primaryReadAnnouncedItsOwnCacheWrite": true,
+    "readOnlyAnnouncementNowDisabled": true,
+    "diagnosticOutputSanitized": true
+  },
+  "verification": {
+    "focusedFlutterTestsPassed": 16,
+    "toolTestsPassed": 2372,
+    "secretScanPassed": true,
+    "newSecretFindings": 0,
+    "completeRegressionPassed": false,
+    "cleanCheckoutPassed": false,
+    "exactCandidatePhysicalReplayPassed": false
+  },
+  "boundaries": {
+    "googlePlayChanged": false,
+    "testerListChanged": false,
+    "productionChanged": false,
+    "paymentChanged": false,
+    "firebaseConsoleChanged": false,
+    "providerChanged": false,
+    "cloudVpsDnsChanged": false,
+    "publicRegistrationChanged": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false,
+    "containsCredential": false,
+    "containsIdentity": false,
+    "containsRawDeviceIdentifier": false
+  }
+}

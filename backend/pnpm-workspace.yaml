@@ -1,0 +1,8 @@
+allowBuilds:
+  '@firebase/util': false
+  protobufjs: false
+ignoredOptionalDependencies:
+  - '@google-cloud/firestore'
+  - '@google-cloud/storage'
+overrides:
+  qs: 6.16.0

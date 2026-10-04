@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "google-play-feed-screenshot-compatibility",
+  "status": "verified-compatible-no-visible-product-change",
+  "capturedAt": "2026-08-14T01:45:00Z",
+  "currentCandidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081401",
+    "commit": "5518040d63b72c08d8cd2f72d76d802023b7b055",
+    "apkSha256": "788f15e1f160ec1e27f2529b34f90061fdef46c82197af93a8cabd9bd085b299"
+  },
+  "sourceScreenshotEvidenceRef": "docs/evidence/b11/google-play-feed-screenshot-readiness-20260813.json",
+  "sourceCandidateEvidenceRef": "docs/evidence/b11/android-candidate-2026081303.json",
+  "compatibilityReview": {
+    "sourceSnapshotCommit": "95f3e2e3ca7363f729c6a6d9ecf4170ddda501df",
+    "currentStoreInstallEvidenceRef": "docs/evidence/b11/google-play-internal-release-active-2026081401-20260814.json",
+    "currentRoleBookingEvidenceRef": "docs/evidence/b11/android-store-synthetic-role-booking-2026081401-20260814T013715Z.json",
+    "changedAppSourceFilesSinceSourceSnapshot": [
+      "lib/services/backend_realtime_service.dart"
+    ],
+    "visibleScreenSourceChanged": false,
+    "storeListingCoreFlowsChanged": false,
+    "screenshotsNeedRecapture": false
+  },
+  "boundaries": {
+    "screenshotUploadedDuringReview": false,
+    "storeListingChangedDuringReview": false,
+    "productionChanged": false,
+    "containsSecrets": false,
+    "containsEmailAddresses": false,
+    "containsAccountIdentifiers": false,
+    "containsRawDeviceIdentifiers": false
+  }
+}

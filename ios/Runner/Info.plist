@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Dreamflow</string>
+	<string>ShareItToo</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -13,7 +13,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>dreamflow</string>
+	<string>ShareItToo</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -45,6 +45,56 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>remote-notification</string>
+	</array>
+	<key>FlutterDeepLinkingEnabled</key>
+	<true/>
+	<!-- FCM and Crashlytics stay available but require separate in-app opt-in. -->
+	<key>FirebaseMessagingAutoInitEnabled</key>
+	<false/>
+	<key>FirebaseCrashlyticsCollectionEnabled</key>
+	<false/>
+	<!-- Real public Meta values are supplied in the release configuration. -->
+	<key>FacebookAppID</key>
+	<string>$(SIT_FACEBOOK_APP_ID)</string>
+	<key>FacebookClientToken</key>
+	<string>$(SIT_FACEBOOK_CLIENT_TOKEN)</string>
+	<key>FacebookDisplayName</key>
+	<string>ShareItToo</string>
+	<key>FacebookAutoLogAppEventsEnabled</key>
+	<false/>
+	<key>FacebookAdvertiserIDCollectionEnabled</key>
+	<false/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.shareittoo.app.links</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>shareittoo</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.shareittoo.app.facebook</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>fb$(SIT_FACEBOOK_APP_ID)</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.shareittoo.app.google</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>$(SIT_GOOGLE_REVERSED_CLIENT_ID)</string>
+			</array>
+		</dict>
+	</array>
 	<!-- Photo and camera permissions -->
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Fotos auswählen, um deine Anzeige attraktiver zu machen.</string>

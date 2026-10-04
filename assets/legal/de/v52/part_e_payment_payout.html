@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="de" data-legal-version="V5.2-2026-08-16" data-legal-part="E" data-activation-allowed="false">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="sit-source-sha256" content="aa6f631457c9b73fdae3c5d4415ba6681b86f63b51df3fd5937c50f80a27b8a8">
+  <title>Teil E - Zahlungs- und Auszahlungsbedingungen</title>
+  <style>
+    :root { color-scheme: light; font-family: Arial, Helvetica, sans-serif; }
+    body { margin: 0; color: #18324d; background: #f5f8fc; }
+    main { max-width: 900px; margin: 0 auto; padding: 32px 20px 64px; }
+    .draft { border: 2px solid #b42318; background: #fff1f0; color: #7a271a;
+      border-radius: 12px; padding: 16px; margin-bottom: 24px; font-weight: 700; }
+    h1 { color: #102a43; font-size: clamp(1.7rem, 4vw, 2.5rem); }
+    .source-page { background: white; border: 1px solid #d8e2ee; border-radius: 12px;
+      padding: 20px; margin: 18px 0; box-shadow: 0 4px 18px rgba(16, 42, 67, .06); }
+    .page-label { color: #526b84; font-size: .82rem; margin-bottom: 12px; }
+    pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit;
+      line-height: 1.55; }
+    @media (max-width: 520px) { main { padding: 20px 12px 40px; }
+      .source-page { padding: 14px; } }
+  </style>
+</head>
+<body>
+<main>
+  <div class="draft" role="status">Interne V5.2-Entscheidungsfassung. Nicht veröffentlichen und
+  nicht als produktiven Vertrag provisionieren. Pflichtdaten, URLs und Freigaben sind offen.</div>
+  <h1>Teil E - Zahlungs- und Auszahlungsbedingungen</h1>
+  <p>Version V5.2-2026-08-16. Textquelle: ShareItToo Rechtsmappe Privat-Launch V5.2,
+  SHA-256 aa6f631457c9b73fdae3c5d4415ba6681b86f63b51df3fd5937c50f80a27b8a8.</p>
+  <section class="source-page" data-source-page="29" aria-label="Quellseite 29"><div class="page-label">Quelle: Seite 29</div><pre>Teil E - Zahlungs- und
+Auszahlungsbedingungen
+Zwingende Pilotvorgabe
+Kein Mietgeld darf auf ein Privatkonto oder normales SIT-Geschäftskonto fließen. Der konkrete
+Marketplace-Zahlungsdienstleister muss vor Livegang benannt und sein tatsächlicher Geldfluss geprüft
+werden.
+1. Rolle des Zahlungsdienstleisters und Buchungszahlung
+1 Der Mieter gibt im verbindlichen Checkout die vom Zahlungsdienstleister verlangten Zahlungsdaten
+und Erklärungen für den angezeigten Gesamtbetrag ab. Die Oberfläche benennt präzise, ob damit ein
+Zahlungsauftrag, ein Mandat oder zunächst nur eine Autorisierungsanfrage verbunden ist.
+2 Der zugelassene Marketplace-Zahlungsdienstleister autorisiert, verarbeitet, sichert oder belastet die
+Zahlung nach seinem konkreten Produkt und seinen Bedingungen. Autorisierung, Capture
+beziehungsweise Belastung und Auszahlung werden im System als getrennte Ereignisse protokolliert.
+3 ShareItToo erhält nur die technisch erforderlichen Status- und Transaktionsinformationen.
+4 ShareItToo nimmt Nutzergelder weder auf einem Privatkonto noch auf einem gewöhnlichen
+Geschäftskonto entgegen, führt kein Zahlungskonto und verwahrt keine Fremdgelder. Vermieter
+werden im erforderlichen Umfang selbst beim lizenzierten Marketplace-Zahlungsdienstleister
+angebunden. Technische Anweisungen von ShareItToo dürfen nur innerhalb der vorab transparent
+vereinbarten Buchungs-, Storno- und Auszahlungsregeln und des gewählten PSP-Produkts erfolgen.
+2. Einheitliche Zeitachse nach Rückgabe
+T0 - Anknüpfungspunkt: T0 ist der Zeitpunkt der beidseitig in der Plattform bestätigten
+Rückgabe. Liegt eine beidseitige Bestätigung nicht vor, ist T0 die in der Buchungsbestätigung
+vereinbarte Rückgabezeit. Eine von beiden Parteien innerhalb der Plattform bestätigte
+Terminänderung verschiebt T0 entsprechend.
+Zusätzliches Lösungsfenster: Solange das vierzehntägige Lösungsrecht nach Teil A Nr. 13 noch
+ausgeübt werden kann, wird eine Auszahlungsanweisung erst nach dessen Ablauf erteilt.
+Maßgeblich ist deshalb jeweils der spätere Zeitpunkt aus diesem Lösungsfenster und der
+nachstehenden Rückgabezeitachse. Dies ist kein Schadens- oder Kautionseinbehalt. Eine frühere
+Auszahlung ist nur zulässig, wenn der Zahlungsdienstleister die vollständige vertragliche
+Rückabwicklung ohne Ausfallrisiko technisch und vertraglich gewährleistet.
+Meldefenster T0 bis T0 + 48 Stunden: Beide Parteien können einen substantiierten Fall nach
+Teil D Nr. 6 eröffnen. Eine unvollständige Meldung löst eine einmalige Aufforderung zur Ergänzung
+innerhalb von 48 Stunden aus, führt allein aber weder zu needsReview noch zum Einbehalt eines
+Schadensbetrags und verlängert die Auszahlungszeitachse nicht automatisch.
+Neutrales Klärungsfenster bei fehlender Rückgabebestätigung: Fehlt bei T0 + 48 Stunden
+ausschließlich eine Rückgabebestätigung und wurde kein substantiierter Fall eröffnet, wechselt der
+Vorgang in awaitingReturnConfirmation. Beide Parteien werden erinnert. Die Klärung endet
+spätestens T0 + 5 Kalendertage. Die bloße Nichtbestätigung ist kein Streitfall. Wird während dieses
+Fensters ein konkretes Rückgabeproblem substantiiert, beginnt needsReview; andernfalls wird die
+Auszahlung am Fensterende angewiesen.
+Verbindliches Klärungsfenster</pre></section>
+<section class="source-page" data-source-page="30" aria-label="Quellseite 30"><div class="page-label">Quelle: Seite 30</div><pre>T0 + 5 Kalendertage ist die einheitliche Startregel für eine fehlende Rückgabebestätigung. Andere Fristen
+dürfen weder in UI noch Backend verwendet werden.
+Zustand bei Fensterende Plattformfolge
+Rückgabe bestätigt; kein substantiierter Fall Auszahlungsanweisung zum späteren Zeitpunkt aus T0 + 48 Stunden und
+Ende des 14-Tage-Lösungsfensters
+Rückgabe nicht beidseitig bestätigt; kein awaitingReturnConfirmation bis T0 + 5 Kalendertage; Auszahlung danach
+substantiierter Fall oder nach Ende des Lösungsfensters, je nachdem was später liegt
+Substantiierter Fall im maßgeblichen Fenster needsReview nach Nr. 3; unstreitige Beträge werden freigegeben
+Eine nach dieser Zeitachse angewiesene Auszahlung wird wegen einer späteren bloßen
+Schadensbehauptung nicht automatisch zurückgeholt. Zwingendes Recht, behördliche
+Anordnungen, wirksame PSP-Regeln und berechtigte Chargebacks bleiben unberührt. Später
+bekannt werdende oder nicht abdingbare Ansprüche werden unmittelbar zwischen den Nutzern
+verfolgt.
+3. needsReview ab Falleröffnung T1
+1 T1 ist der Zeitpunkt, zu dem ein substantiierter Fall eröffnet oder ein anderer konkreter gesetzlicher,
+behördlicher oder PSP-bedingter Prüfgrund dokumentiert wird.
+2 Beide Parteien werden unverzüglich über Grund, den konkret streitigen bereits autorisierten
+Buchungsbetrag und erforderliche Nachweise informiert.
+3 Beide Parteien erhalten grundsätzlich bis T1 + 5 Kalendertage zur Stellungnahme. Eine kürzere Frist
+ist nur bei Dringlichkeit oder gesetzlicher Vorgabe und mit Begründung zulässig.
+4 Unstreitige Beträge werden unverzüglich freigegeben, soweit kein gesetzlicher, behördlicher oder
+PSP-bedingter Grund entgegensteht.
+5 Nach Eingang vollständiger Nachweise entscheidet ShareItToo ohne unangemessene Verzögerung
+über interne Plattformmaßnahmen und die vertraglich zulässige Behandlung des Buchungsbetrags.
+6 Ab T1 + 7 Kalendertage wird mindestens alle sieben Kalendertage ein Status mit Begründung einer
+Fortdauer mitgeteilt.
+Gesichert bleiben darf nur ein bereits autorisierter Betrag, dessen Auszahlung oder Erstattung
+wegen Erfüllung des Mietvertrags, Stornierung, No-Show oder gescheiterter Übergabe konkret
+streitig ist. Ein behaupteter Sachschaden begründet für sich allein keinen Einbehalt, keine
+Verrechnung und keine neue Belastung. ShareItToo setzt oder zieht keinen Schadensersatz ein.
+4. Preisbestandteile
+● Mietpreis des Vermieters nach anwendbaren Vermieterrabatten.
+● SIT-Plattformgebühr von 10 % dieses rabattierten Mietpreises; der ausgewiesene Gebührenbetrag ist
+der Bruttopreis einschließlich gegebenenfalls anfallender Umsatzsteuer.
+● Keine Kaution oder Sicherheitsautorisierung im Privat-Pilot.
+● Keine kostenpflichtige Lieferung im Privat-Pilot.
+● Keine versteckten Zahlungs-, Refund- oder Supportgebühren.
+Ohne gewählten Zeitraum wird der Endpreis pro Tag einschließlich SIT-Plattformgebühr angezeigt.
+Nach Auswahl des Zeitraums wird der tatsächlich zahlbare Gesamtbetrag gezeigt. Im finalen
+Checkout bleibt dieser Gesamtbetrag auch bei geschlossener Preisaufschlüsselung sichtbar. Die
+geöffnete Preisaufschlüsselung nennt Mietpreis, SIT-Plattformgebühr in Euro, jeden konkret
+bezeichneten Rabatt und den Gesamtbetrag.
+Beispiel ohne Rabatt: 3 Tage x 20,00 EUR Mietpreis = 60,00 EUR; SIT-Plattformgebühr (10 %) =
+6,00 EUR; Gesamtbetrag = 66,00 EUR. Beispiel mit einem Vermieterrabatt ab 3 Tagen von 10 %:</pre></section>
+<section class="source-page" data-source-page="31" aria-label="Quellseite 31"><div class="page-label">Quelle: Seite 31</div><pre>Grundmietpreis 60,00 EUR; Rabatt ab 3 Tagen (10 %) -6,00 EUR; rabattierter Mietpreis 54,00 EUR;
+SIT-Plattformgebühr 5,40 EUR; Gesamtbetrag 59,40 EUR.
+Rabatte erscheinen vor dem Checkout auf jeder bereits zeitabhängigen Preisfläche und im Checkout
+sowohl in der kompakten Zusammenfassung als auch in der geöffneten Preisaufschlüsselung.
+Zulässige Bezeichnungen sind zum Beispiel &quot;Rabatt ab 3 Tagen (10 %)&quot;, &quot;3-Tage-Rabatt (10 %)&quot;,
+&quot;Wochenrabatt (15 %)&quot;, &quot;Willkommensrabatt&quot; oder &quot;Aktionscode SOMMER&quot;. Ohne angewandten
+Rabatt wird keine Rabattzeile angezeigt.
+5. Auszahlungsvoraussetzungen und spätere Korrekturen
+Auszahlung setzt erfolgreiche Verifizierung beim Zahlungsdienstleister, vollständige
+Zahlungsabwicklung und das Ende des nach Nr. 2 oder Nr. 3 maßgeblichen Fensters ohne
+fortbestehenden konkreten Sperrgrund voraus. Gesetzliche, behördliche, Chargeback- oder
+PSP-bedingte Prüfungen können vorrangig sein.
+Eine Schadensmeldung allein rechtfertigt keinen Einbehalt der verdienten Vermietervergütung.
+Schadensersatzforderungen werden nicht über den regulären SIT-Zahlungsfluss abgewickelt;
+ShareItToo ist hierfür weder Zahlstelle noch Inkassodienstleister.
+6. Rückbuchungen und negative Salden
+Rückbuchungen folgen Gesetz, PSP-Bedingungen und Buchungsprotokoll. Nutzer wirken bei berechtigten
+Rückforderungen mit. Pauschale Chargeback-Strafen werden nicht erhoben; nachweisbare notwendige
+Kosten dürfen nur bei wirksamer Vereinbarung und unter Anrechnung eines geringeren Schadens verlangt
+werden.
+7. Rechnungen und Steuern
+ShareItToo stellt nur für die eigene SIT-Plattformgebühr einen Beleg beziehungsweise, soweit geschuldet,
+eine Rechnung aus. Der private Vermieter bleibt Schuldner des Mietpreises und für einen erforderlichen
+Mietbeleg sowie eigene steuerliche Pflichten verantwortlich. Eine Buchungsübersicht darf beide Beträge
+darstellen, muss aber Mietpreis, SIT-Plattformgebühr und jeweiligen Leistungserbringer klar trennen; der
+gesamte C2C-Betrag darf nicht als Umsatz von ShareItToo ausgewiesen werden.</pre></section>
+</main>
+</body>
+</html>

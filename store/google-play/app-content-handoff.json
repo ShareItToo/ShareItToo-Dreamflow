@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "status": "eleven-of-twelve-saved-one-open",
+  "submissionAllowed": false,
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081505",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1"
+  },
+  "tasks": {
+    "privacyPolicy": {
+      "status": "saved-approved-public-route",
+      "proposedUrl": "https://shareittoo.com/privacy",
+      "savedUrl": "https://shareittoo.com/privacy",
+      "evidenceRef": "docs/evidence/b11/google-play-privacy-policy-saved-20260815.json"
+    },
+    "appAccess": {
+      "status": "saved-protected-console-entry",
+      "loginRequired": true,
+      "credentialsInRepository": false
+    },
+    "ads": {
+      "status": "saved-current-build-no-ads",
+      "proposedAnswer": false,
+      "basis": "no-ad-sdk-no-advertising-tracking"
+    },
+    "contentRating": {
+      "status": "saved-iarc-completed-usk-12-plus",
+      "category": "all-other-app-types",
+      "userGeneratedContent": true,
+      "directUserCommunication": true,
+      "preciseDeviceLocationSharedByUser": true,
+      "protectedContactAddressEntered": true,
+      "iarcTermsAccepted": true,
+      "questionnaireSubmitted": true,
+      "germanyRating": "usk-12-plus",
+      "sentForReview": false,
+      "evidenceRef": "docs/evidence/b11/google-play-iarc-content-rating-completion-20260813.json"
+    },
+    "targetAudience": {
+      "status": "saved-eighteen-and-over",
+      "minimumAge": 18,
+      "designedForChildren": false
+    },
+    "dataSafety": {
+      "status": "all-data-type-answers-prepared-console-save-blocked",
+      "collectsOrTransmitsUserData": true,
+      "encryptedInTransit": true,
+      "accountCreationMethod": "username-and-password",
+      "oauthPreparedButUnavailable": true,
+      "deleteAccountUrlSaved": false,
+      "preparedDeleteAccountUrl": "https://shareittoo.com/account-deletion",
+      "preparedPartialDataDeletionAnswer": false,
+      "dataTypesPrepared": 17,
+      "dataTypesEvidenceRef": "docs/evidence/b11/google-play-data-safety-datatypes-20260812.json",
+      "answerMatrixEvidenceRef": "docs/evidence/b11/google-play-data-safety-answer-matrix-2026081505-20260815.json",
+      "providerClassificationEvidenceRef": "docs/evidence/b11/google-play-service-provider-sharing-classification-2026081505-20260815.json",
+      "currentCandidateBindingEvidenceRef": "docs/evidence/b11/google-play-data-safety-current-candidate-binding-2026081509-20260815.json",
+      "sellsData": false,
+      "advertisingTracking": false,
+      "stepTwoEvidenceRef": "docs/evidence/b11/google-play-data-safety-step2-20260812.json"
+    },
+    "advertisingId": {
+      "status": "saved-current-build-no-advertising-id",
+      "proposedAnswer": false,
+      "evidenceRef": "docs/evidence/b11/google-play-advertising-id-declaration-20260812.json"
+    },
+    "governmentApps": {
+      "status": "saved-not-government-app",
+      "proposedAnswer": false
+    },
+    "financialFeatures": {
+      "status": "saved-no-financial-features",
+      "proposedAnswer": "no-financial-features",
+      "physicalGoodsRental": true,
+      "digitalGoodsBilling": false
+    },
+    "health": {
+      "status": "saved-no-health-features",
+      "proposedAnswer": false
+    },
+    "categoryAndContact": {
+      "status": "saved-shopping-and-public-contact",
+      "category": "Shopping",
+      "website": "https://shareittoo.com/"
+    },
+    "storeListing": {
+      "status": "saved-in-console-exact-candidate-copy-and-assets",
+      "copyAndGraphicsPrepared": true,
+      "phoneScreenshotsValidated": true,
+      "validatedPhoneScreenshotCount": 4,
+      "recommendedPhoneScreenshotTarget": 4,
+      "uploadedToPlayConsole": true,
+      "screenshotReadinessRef": "docs/evidence/b11/google-play-feed-screenshot-readiness-2026081505-20260815.json",
+      "consoleSaveEvidenceRef": "docs/evidence/b11/google-play-store-listing-saved-2026081505-20260815.json"
+    }
+  },
+  "hardStops": {
+    "saveLegalDeclarationsWithoutOwnerApproval": true,
+    "storeCredentialsOutsideProtectedFields": true,
+    "submitDataSafetyBeforeProviderClassification": true,
+    "useUnapprovedPublicPages": true,
+    "sendForReview": true,
+    "productionRelease": true,
+    "publicRollout": true
+  },
+  "evidenceRefs": [
+    "docs/operations/B11_GOOGLE_PLAY_CONSOLE_ENTRY_WORKSHEET_2026-08-12.md",
+    "store/privacy-disclosures.json",
+    "docs/evidence/b11/android-release-permissions-2026081505.json",
+    "docs/evidence/b11/google-play-privacy-policy-saved-20260815.json",
+    "docs/evidence/b11/google-play-app-content-progress-2026081509-20260815.json",
+    "docs/evidence/b11/google-play-data-safety-step2-20260812.json",
+    "docs/evidence/b11/google-play-data-safety-datatypes-20260812.json",
+    "docs/evidence/b11/google-play-data-safety-answer-matrix-2026081505-20260815.json",
+    "docs/evidence/b11/google-play-service-provider-sharing-classification-2026081505-20260815.json",
+    "docs/evidence/b11/google-play-data-safety-current-candidate-binding-2026081509-20260815.json",
+    "docs/evidence/b11/firebase-google-signin-provider-20260815.json",
+    "docs/evidence/b11/google-play-advertising-id-declaration-20260812.json",
+    "docs/evidence/b11/google-play-iarc-content-rating-completion-20260813.json",
+    "docs/evidence/b11/google-play-store-listing-saved-2026081505-20260815.json"
+  ],
+  "containsSecrets": false,
+  "containsAccountAddresses": false,
+  "containsReviewCredentials": false
+}

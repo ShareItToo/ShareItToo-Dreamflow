@@ -1,0 +1,194 @@
+{
+  "schemaVersion": 1,
+  "workPackage": "WP114_CURRENT_CANDIDATE_COMPLETE_PIXEL_RENTER_OWNER",
+  "status": "pixel-current-candidate-complete-nonbinding-renter-owner-matrix",
+  "recordedAt": "2026-09-11T19:02:40Z",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "artifactSourceHead": "c8e2a49e14f5cae0026fa5f2bc327859fe0ff17b",
+    "backendRuntimeHead": "df39a14b7a19afe467842461a28f1e77fec8445e",
+    "diagnosticImplementationHead": "1d053ff28122aefb3e3b0dd618e356c870ebfb7f",
+    "runtimePathsChangedBetweenArtifactAndBackend": []
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091110",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "apkBytes": 199608577,
+    "apkSha256": "711f058c113bd714abb1e4bcedf05d62a382004e1bf9882f6d85d04b876dd0f7",
+    "aabBytes": 138721864,
+    "aabSha256": "20aa73271fb9ce51c33bf4025c6c235424a1f575503261c4021f8b817da0fdfb",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "firebaseAndroidConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false,
+    "listingAiExecutionLocation": "android_on_device",
+    "externalListingAiEnabled": false
+  },
+  "staging": {
+    "sourceHead": "df39a14b7a19afe467842461a28f1e77fec8445e",
+    "publicApiVersion": "0.1.0-df39a14b7a19",
+    "imageDigest": "sha256:4d440d9481369b477b9495f5cefa419783f974ff35438c3490e54b42322ddfd6",
+    "releaseEvidenceBasename": "staging-20260911T174950Z-df39a14b7a19.json",
+    "apiHealthy": true,
+    "databaseHealthy": true,
+    "containerRestartCount": 0,
+    "fcmEnabled": true,
+    "smtpEnabled": true,
+    "paymentProvider": "memory",
+    "realPaymentsEnabled": false,
+    "listingAiProvider": "on_device",
+    "externalListingAiEnabled": false
+  },
+  "pixel": {
+    "physical": true,
+    "model": "Pixel 7 Pro",
+    "osVersion": "17",
+    "apiLevel": 37,
+    "securityPatch": "2026-07-05",
+    "exactInstalledCandidateMatched": true,
+    "dataPreservingUpdate": true,
+    "primaryTwoRoleJourney": {
+      "status": "passed-pixel-email-verified-two-role-product-journey",
+      "distinctEmailVerifiedPrincipals": true,
+      "ownerDraftPublishThroughPixelUi": true,
+      "ownerDraftPublishServerConfirmed": true,
+      "renterPublicDiscovery": true,
+      "nonBindingRequestAcceptanceSimulation": true,
+      "renterVisibleChat": true,
+      "fcmForeground": true,
+      "fcmBackground": true,
+      "fcmTerminated": true,
+      "accountIsolation": true,
+      "protectedOwnerRestored": true,
+      "statusIconCaptureSha256": "80c60567dacdb5b1b188abcddfda7a06653100f73be2c1da08b365457e252e15",
+      "statusIconManualVisualReview": "passed-private-capture-brand-icon-clear"
+    },
+    "listingLifecycle": {
+      "status": "passed-pixel-listing-lifecycle",
+      "draftEdit": true,
+      "publish": true,
+      "renterVisibility": true,
+      "pauseAndStablePublicHide": true,
+      "reactivate": true,
+      "endAndStablePublicHide": true,
+      "serverRevisionStrictlyAdvanced": true
+    },
+    "searchAndSaved": {
+      "status": "passed-pixel-search-saved-lifecycle",
+      "exactSearchAndCategoryFilter": true,
+      "listingDetail": true,
+      "savedStateRestartPersistence": true,
+      "accountIsolation": true,
+      "savedStateRemovalAndStableAbsence": true
+    },
+    "rentalCartAndProjects": {
+      "status": "passed-pixel-rental-cart-project-lifecycle",
+      "duplicateIntentCollapsedExactlyOnce": true,
+      "stableClientIdempotency": true,
+      "nonReserving": true,
+      "projectCreateAndAssign": true,
+      "restartPersistence": true,
+      "accountIsolation": true,
+      "baselineRestored": true
+    },
+    "messagingMediaTimesAndLocation": {
+      "status": "pixel-attachment-and-two-party-times-passed-location-gate-closed",
+      "syntheticImageAttachmentExactlyOnce": true,
+      "counterpartyAttachmentVisible": true,
+      "handoverTimeTwoPartyConfirmed": true,
+      "returnTimeTwoPartyConfirmed": true,
+      "terminatedProcessPersistence": true,
+      "locationBeforeRevealWindowBlockedByServer": true,
+      "locationMessageCreatedBeforeRevealWindow": false
+    },
+    "privacyExport": {
+      "status": "passed-exact-current-principal-export-and-complete-cleanup",
+      "foreignIdentityOutsideSharedRecordsAbsent": true,
+      "forbiddenCredentialKeyCount": 0,
+      "rawExportRetained": false,
+      "protectedOwnerRestored": true
+    },
+    "offlineRealtime": {
+      "status": "passed-bounded-offline-realtime-diagnostic",
+      "consecutiveFreshPassingRuns": 2,
+      "offlineWindowSeconds": 15,
+      "messageAbsentDuringOfflineWindow": true,
+      "sameProcessRealtimeRecovery": true,
+      "processIdentityStable": true,
+      "fatalEntries": 0,
+      "originalNetworkRestored": true,
+      "firstPreInstrumentationAttempt": "failed-safely-cleanup-and-network-restoration-confirmed"
+    }
+  },
+  "cleanup": {
+    "allExactFixtureListingsEndedAndPubliclyAbsent": true,
+    "temporaryBookingsCancelled": true,
+    "temporaryDeviceMediaRemoved": true,
+    "temporaryPrivacyReceiverRemoved": true,
+    "protectedOwnerSessionRestored": true,
+    "activeTemporaryJourneyCount": 0,
+    "publicCatalogCountAfter": 0,
+    "publicSyntheticJourneyListingCountAfter": 0,
+    "unrelatedPublicListingInspectedOrChanged": false
+  },
+  "verification": {
+    "preDeploymentLocalTechnicalRegression": "passed",
+    "preDeploymentTechnicalHead": "df39a14b7a19afe467842461a28f1e77fec8445e",
+    "preDeploymentGithubRegression": {
+      "runId": 34627911500,
+      "head": "df39a14b7a19afe467842461a28f1e77fec8445e",
+      "conclusion": "success",
+      "cleanCheckoutJob": "success",
+      "apiImagePublishJob": "success"
+    },
+    "preDeploymentGithubCodeql": {
+      "runId": 34627908397,
+      "head": "df39a14b7a19afe467842461a28f1e77fec8445e",
+      "conclusion": "success"
+    },
+    "diagnosticImplementationLocalRegression": "passed",
+    "diagnosticImplementationGithubRegression": {
+      "runId": 34636449790,
+      "head": "1d053ff28122aefb3e3b0dd618e356c870ebfb7f",
+      "conclusion": "success",
+      "cleanCheckoutJob": "success"
+    },
+    "diagnosticImplementationGithubCodeql": {
+      "runId": 34636449862,
+      "head": "1d053ff28122aefb3e3b0dd618e356c870ebfb7f",
+      "conclusion": "success"
+    },
+    "openCodeScanningAlerts": 0,
+    "pullRequest7": "draft-open-mergeable-unmerged"
+  },
+  "boundaries": {
+    "bindingContractCreated": false,
+    "reservationCreated": false,
+    "paymentEndpointCalled": false,
+    "realMoneyUsed": false,
+    "stripeSandboxTested": false,
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "testerListChanged": false,
+    "firebaseProjectChanged": false,
+    "publicRegistrationChanged": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false,
+    "containsSecrets": false,
+    "containsAccountIdentity": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsPrivateFilesystemPath": false,
+    "containsFixtureIdentifiers": false
+  },
+  "remaining": [
+    "professional-v52-legal-snapshots-and-owner-approval",
+    "binding-booking-pickup-return-damage-needs-review-review-replay",
+    "official-stripe-sandbox-payment-refund-and-simulated-payout",
+    "exact-current-candidate-on-device-listing-ai-replay",
+    "separate-oneplus-exact-candidate-two-device-replay"
+  ]
+}

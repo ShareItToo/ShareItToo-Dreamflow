@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-pixel-public-profile-cache-resilience",
+  "status": "passed",
+  "observedAt": "2026-09-02",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026090206",
+    "artifactSourceCommit": "a64586497516bfeac2d2a9eee4b76e31b8bc9948",
+    "channel": "internal",
+    "environment": "staging",
+    "aabSha256": "e114b319c0e6167003bf1e12c047660c9accad1d45edc22b2b4ec7df64a798f5",
+    "apkSha256": "d3cf66a8935c80b79e7e4365f7a1886cad819d16deece09907f4b795a694ccb5",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4"
+  },
+  "staging": {
+    "deployedCommit": "a64586497516bfeac2d2a9eee4b76e31b8bc9948",
+    "health": "passed",
+    "bookingPilotMode": "pilot",
+    "privatePilotEnabled": true,
+    "region": "heilbronn",
+    "mailTransport": "memory",
+    "pushTransport": "memory",
+    "paymentTransport": "memory",
+    "listingAiProvider": "mock",
+    "listingAiBudgetCents": 0
+  },
+  "pixel": {
+    "model": "Pixel 7 Pro",
+    "updateInPlace": "passed",
+    "installedVersionCode": "2026090206",
+    "discoveryLoaded": "passed",
+    "listingDetailLoaded": "passed",
+    "publicOwnerProfileLoaded": "passed",
+    "processRestartRetest": "passed",
+    "uncaughtAsyncErrorObserved": false,
+    "fatalExceptionObserved": false,
+    "flutterErrorObserved": false
+  },
+  "cacheInvariant": {
+    "malformedLegacyBytesRewritten": false,
+    "directAccountProfileReadFailsClosed": true,
+    "publicProfileMayUseAuthoritativeRemoteFallback": true
+  },
+  "github": {
+    "regressionRunId": 33665318965,
+    "regressionConclusion": "success",
+    "codeqlRunId": 33665286253,
+    "codeqlConclusion": "success",
+    "openCodeScanningAlerts": 0
+  },
+  "boundaries": {
+    "onePlusContacted": false,
+    "playUploadPerformed": false,
+    "testerListChanged": false,
+    "productionChanged": false,
+    "realMoneyEnabled": false,
+    "realMailVerified": false,
+    "osPushVerified": false,
+    "containsSecrets": false,
+    "containsAccountIdentity": false,
+    "containsDeviceSerial": false,
+    "containsNetworkIdentifier": false
+  }
+}

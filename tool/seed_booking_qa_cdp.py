@@ -25,11 +25,12 @@ import datetime as dt
 import json
 import os
 import pathlib
+import secrets
 import socket
 import struct
 import sys
 import urllib.request
-from typing import Any
+from typing import Any, Callable
 
 DEBUG_PORT = 9224
 TARGET_URL_FRAGMENT = '127.0.0.1:8123/'
@@ -55,6 +56,7 @@ class CdpPage:
         self.ws_path = ws_path
         self.sock: socket.socket | None = None
         self.next_id = 1
+        self.pending_events: list[dict[str, Any]] = []
 
     def connect(self) -> None:
         key = base64.b64encode(os.urandom(16)).decode()
@@ -99,21 +101,19 @@ class CdpPage:
     def _recv_text(self) -> str | None:
         assert self.sock is not None
         while True:
-            head = self.sock.recv(2)
-            if not head:
+            head = self._recv_exact(2, allow_clean_eof=True)
+            if head is None:
                 return None
             b1, b2 = head[0], head[1]
             opcode = b1 & 0x0F
             masked = b2 >> 7
             n = b2 & 0x7F
             if n == 126:
-                n = struct.unpack('!H', self.sock.recv(2))[0]
+                n = struct.unpack('!H', self._recv_exact(2))[0]
             elif n == 127:
-                n = struct.unpack('!Q', self.sock.recv(8))[0]
-            mask = self.sock.recv(4) if masked else None
-            data = b''
-            while len(data) < n:
-                data += self.sock.recv(n - len(data))
+                n = struct.unpack('!Q', self._recv_exact(8))[0]
+            mask = self._recv_exact(4) if masked else None
+            data = self._recv_exact(n)
             if masked and mask is not None:
                 data = bytes(data[i] ^ mask[i % 4] for i in range(n))
             if opcode == 0x1:
@@ -132,6 +132,18 @@ class CdpPage:
                     pong.extend(struct.pack('!Q', n))
                 self.sock.sendall(bytes(pong) + data)
 
+    def _recv_exact(self, size: int, allow_clean_eof: bool = False) -> bytes | None:
+        assert self.sock is not None
+        data = bytearray()
+        while len(data) < size:
+            chunk = self.sock.recv(size - len(data))
+            if not chunk:
+                if allow_clean_eof and not data:
+                    return None
+                raise RuntimeError('CDP socket closed in the middle of a WebSocket frame')
+            data.extend(chunk)
+        return bytes(data)
+
     def call(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         call_id = self.next_id
         self.next_id += 1
@@ -142,10 +154,49 @@ class CdpPage:
                 raise RuntimeError('CDP socket closed while waiting for response')
             obj = json.loads(text)
             if obj.get('id') != call_id:
+                if 'method' in obj and 'id' not in obj:
+                    self.pending_events.append(obj)
                 continue
             if 'error' in obj:
                 raise RuntimeError(f'CDP {method} failed: {obj["error"]}')
             return obj.get('result', {})
+
+    def discard_events(self, method: str) -> None:
+        self.pending_events = [
+            event for event in self.pending_events if event.get('method') != method
+        ]
+
+    def wait_for_event(
+        self,
+        method: str,
+        predicate: Callable[[dict[str, Any]], bool],
+        timeout_seconds: int = 10,
+    ) -> dict[str, Any]:
+        for index, event in enumerate(self.pending_events):
+            params = event.get('params', {})
+            if event.get('method') == method and predicate(params):
+                self.pending_events.pop(index)
+                return params
+
+        assert self.sock is not None
+        previous_timeout = self.sock.gettimeout()
+        self.sock.settimeout(timeout_seconds)
+        try:
+            while True:
+                try:
+                    text = self._recv_text()
+                except TimeoutError as error:
+                    raise RuntimeError(f'Timed out waiting for CDP event {method}') from error
+                if text is None:
+                    raise RuntimeError(f'CDP socket closed while waiting for event {method}')
+                event = json.loads(text)
+                params = event.get('params', {})
+                if event.get('method') == method and predicate(params):
+                    return params
+                if 'method' in event and 'id' not in event:
+                    self.pending_events.append(event)
+        finally:
+            self.sock.settimeout(previous_timeout)
 
     def evaluate_json(self, expression: str) -> Any:
         res = self.call('Runtime.evaluate', {
@@ -185,7 +236,14 @@ def iso(days_offset: int, hour: int = 10, minute: int = 0) -> str:
     return (base + dt.timedelta(days=days_offset)).isoformat().replace('+00:00', 'Z')
 
 
-def build_payload(session_persona: str | None = None) -> dict[str, str | None]:
+def build_payload(
+    session_persona: str | None = None,
+    qa_passwords: dict[str, str] | None = None,
+) -> dict[str, str | None]:
+    qa_passwords = qa_passwords or {
+        'walid': secrets.token_urlsafe(24),
+        'laura': secrets.token_urlsafe(24),
+    }
     walid = {
         'id': 'qa-user-walid',
         'displayName': 'Walid',
@@ -724,13 +782,13 @@ def build_payload(session_persona: str | None = None) -> dict[str, str | None]:
     auth_accounts = [
         {
             'email': 'walid.qa@shareittoo.local',
-            'password': 'walid123',
+            'password': qa_passwords['walid'],
             'createdAt': iso(-1, 8, 0),
             'qaPersona': 'walid',
         },
         {
             'email': 'laura.qa@shareittoo.local',
-            'password': 'laura123',
+            'password': qa_passwords['laura'],
             'createdAt': iso(-1, 8, 5),
             'qaPersona': 'laura',
         },
@@ -783,7 +841,7 @@ def build_backup_expr(keys: list[str]) -> str:
 """ % json.dumps(keys)
 
 
-def build_write_expr(payload: dict[str, str | None], reload: bool) -> str:
+def build_write_expr(payload: dict[str, str | None]) -> str:
     return """
 (() => {
   const payload = %s;
@@ -797,13 +855,10 @@ def build_write_expr(payload: dict[str, str | None], reload: bool) -> str:
     localStorage.setItem(k, raw);
     touched.push(k);
   }
-  const result = { touched, href: location.href, title: document.title, reloaded: %s };
-  if (%s) {
-    setTimeout(() => location.reload(), 50);
-  }
+  const result = { touched, href: location.href, title: document.title };
   return JSON.stringify(result);
 })()
-""" % (json.dumps(payload), 'true' if reload else 'false', 'true' if reload else 'false')
+""" % json.dumps(payload)
 
 
 def build_check_expr(keys: list[str]) -> str:
@@ -815,6 +870,24 @@ def build_check_expr(keys: list[str]) -> str:
   return JSON.stringify(out);
 })()
 """ % json.dumps(keys)
+
+
+def validate_post_reload(check_raw: str, payload: dict[str, str | None]) -> dict[str, Any]:
+    try:
+        check = json.loads(check_raw)
+    except json.JSONDecodeError as error:
+        raise RuntimeError('Post-reload check did not return valid JSON') from error
+    if check.get('readyState') != 'complete':
+        raise RuntimeError('Post-reload document did not reach readyState complete')
+    values = check.get('values')
+    if not isinstance(values, dict):
+        raise RuntimeError('Post-reload check did not return localStorage state')
+    mismatched_keys = [key for key, expected in payload.items() if values.get(key) != expected]
+    if mismatched_keys:
+        raise RuntimeError(
+            'Post-reload localStorage mismatch for keys: ' + ', '.join(sorted(mismatched_keys))
+        )
+    return {'readyState': 'complete', 'verifiedKeys': len(payload)}
 
 
 def main() -> int:
@@ -837,6 +910,17 @@ def main() -> int:
     page = CdpPage(ws_host, int(ws_port_s), '/' + ws_path)
     page.connect()
     try:
+        should_reload = args.apply and not args.no_reload
+        if should_reload:
+            page.call('Page.enable')
+            page.call('Page.setLifecycleEventsEnabled', {'enabled': True})
+            frame_tree = page.call('Page.getFrameTree').get('frameTree', {})
+            main_frame = frame_tree.get('frame', {})
+            main_frame_id = main_frame.get('id')
+            prior_loader_id = main_frame.get('loaderId')
+            if not main_frame_id or not prior_loader_id:
+                raise RuntimeError('CDP did not return the current main-frame loader identity')
+
         backup_raw = page.evaluate_json(build_backup_expr(TARGET_KEYS + OPTIONAL_KEYS))
         backup = json.loads(backup_raw)
         if TARGET_URL_FRAGMENT not in (backup.get('url') or ''):
@@ -845,7 +929,14 @@ def main() -> int:
         path.write_text(json.dumps(backup, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
         print(f'Backup written: {path}')
 
-        payload = build_payload(session_persona=args.session)
+        qa_passwords = {
+            'walid': secrets.token_urlsafe(24),
+            'laura': secrets.token_urlsafe(24),
+        }
+        payload = build_payload(
+            session_persona=args.session,
+            qa_passwords=qa_passwords,
+        )
         summary = {k: ('REMOVE' if v is None else len(v)) for k, v in payload.items()}
         print('Planned payload bytes by key:')
         for k, size in summary.items():
@@ -855,21 +946,28 @@ def main() -> int:
             print('Dry run only. No keys were changed.')
             return 0
 
-        write_raw = page.evaluate_json(build_write_expr(payload, reload=not args.no_reload))
+        write_raw = page.evaluate_json(build_write_expr(payload))
         print('Write result:', write_raw)
+        print('Ephemeral local QA credentials for this seed run:')
+        print(f"  - Walid: walid.qa@shareittoo.local / {qa_passwords['walid']}")
+        print(f"  - Laura: laura.qa@shareittoo.local / {qa_passwords['laura']}")
+        if should_reload:
+            page.discard_events('Page.lifecycleEvent')
+            page.call('Page.reload', {'loaderId': prior_loader_id})
+            page.wait_for_event(
+                'Page.lifecycleEvent',
+                lambda params: (
+                    params.get('name') == 'load'
+                    and params.get('frameId') == main_frame_id
+                    and bool(params.get('loaderId'))
+                    and params.get('loaderId') != prior_loader_id
+                ),
+            )
+            check_raw = page.evaluate_json(build_check_expr(TARGET_KEYS))
+            check = validate_post_reload(check_raw, payload)
+            print('Post-reload check:', json.dumps(check, sort_keys=True))
     finally:
         page.close()
-
-    if args.apply and not args.no_reload:
-        import time
-        time.sleep(2)
-        page = CdpPage(ws_host, int(ws_port_s), '/' + ws_path)
-        page.connect()
-        try:
-            check_raw = page.evaluate_json(build_check_expr(TARGET_KEYS))
-            print('Post-reload check:', check_raw)
-        finally:
-            page.close()
     return 0
 
 

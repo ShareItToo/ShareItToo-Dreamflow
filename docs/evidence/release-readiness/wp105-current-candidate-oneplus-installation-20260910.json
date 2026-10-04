@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "workPackage": "WP105_CURRENT_CANDIDATE_ONEPLUS_INSTALLATION",
+  "status": "passed-exact-oneplus-installation-and-launch",
+  "recordedAt": "2026-09-10T20:21:16Z",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "evidenceBaseHead": "f193a41f3904f96cfc0bcffd6d0a710f7a307c11",
+    "candidateArtifactSourceHead": "fdcfd1dc782c9f9dd3cb766d566abf7363a76cc5",
+    "mobileRuntimeDriftAfterCandidate": false
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091002",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "apkSha256": "d0ac7a80232536a4c2f5e1d659b8b9ba4f973581f816142dc6419931742c3637",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "delivery": "private-tailnet-direct-apk",
+    "googlePlaySplitDelivery": false
+  },
+  "onePlus": {
+    "model": "CPH2581",
+    "physical": true,
+    "adbAuthorized": true,
+    "authorizedDeviceCount": 1,
+    "previousInstallation": {
+      "versionCode": "2026090711",
+      "installer": "google-play",
+      "signatureMismatchWithCandidate": true
+    },
+    "replacement": {
+      "reason": "google-play-app-signing-certificate-differs-from-upload-certificate",
+      "uninstalledApplicationIdOnly": true,
+      "localShareItTooDataReset": true,
+      "otherPackagesOrDeviceDataChanged": false,
+      "serverAccountOrContentChanged": false
+    },
+    "installed": {
+      "applicationId": "com.shareittoo.app",
+      "versionName": "1.0.0",
+      "versionCode": "2026091002",
+      "candidateHashVerifiedBeforeInstall": true,
+      "candidateSignatureVerifiedBeforeInstall": true,
+      "installedIdentityVerifiedAfterInstall": true,
+      "launchSmoke": "passed",
+      "crashObserved": false
+    }
+  },
+  "transfer": {
+    "networkScope": "private-tailnet-only",
+    "temporaryServerStopped": true,
+    "temporarySourceCopyDeleted": true,
+    "temporaryMacBookCopyDeleted": true
+  },
+  "github": {
+    "regression": {
+      "runId": 34522790529,
+      "head": "f193a41f3904f96cfc0bcffd6d0a710f7a307c11",
+      "conclusion": "success",
+      "flutterRegression": "success",
+      "backendRegression": "success",
+      "postgresRunnerProof": "success",
+      "cleanCheckoutReproducibility": "success"
+    },
+    "codeql": {
+      "pullRequestRunId": 34522790549,
+      "branchRefreshRunId": 34525457049,
+      "head": "f193a41f3904f96cfc0bcffd6d0a710f7a307c11",
+      "conclusion": "success"
+    },
+    "codeScanning": {
+      "branchOpenAlerts": 0,
+      "prMergeOpenAlerts": 0,
+      "staleDirectBranchInstancesRefreshed": true
+    },
+    "pullRequest": {
+      "number": 7,
+      "state": "OPEN",
+      "draft": true,
+      "mergeable": true,
+      "merged": false
+    }
+  },
+  "remaining": {
+    "onePlusExactCandidateInstallAndLaunch": "passed",
+    "onePlusAuthenticatedProductJourney": "not-run",
+    "twoPhysicalDeviceCrossAccountJourney": "not-run",
+    "googlePlaySplitDeliveryForThisCandidate": "not-run",
+    "bindingV52ContractJourney": "blocked-professional-legal-snapshots",
+    "stripeLivePayment": "disabled",
+    "listingAiExternalProvider": "disabled"
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "testerListChanged": false,
+    "publicRegistrationChanged": false,
+    "firebaseConsoleChanged": false,
+    "paymentProviderChanged": false,
+    "realMoneyUsed": false,
+    "listingAiExternalCallMade": false,
+    "pullRequestMerged": false,
+    "accountActionPerformed": false,
+    "containsSecrets": false,
+    "containsAccountIdentity": false,
+    "containsTokens": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsPrivateFilesystemPaths": false
+  }
+}

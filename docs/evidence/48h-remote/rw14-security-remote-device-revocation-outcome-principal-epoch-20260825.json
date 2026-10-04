@@ -1,0 +1,254 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-rw14-security-remote-device-revocation-outcome-principal-epoch",
+  "status": "verified-regression-and-codeql-passed",
+  "implementationBaseHead": "4b724c495278caf862906d69dceefb748428b463",
+  "implementationHead": "38a89e67acefcdc1f756dabc7febd5f1ab9f9813",
+  "architecture": "docs/architecture/rw14-security-remote-device-revocation-outcome-principal-epoch-2026-08-25.md",
+  "report": "docs/operations/RW14_SECURITY_REMOTE_DEVICE_REVOCATION_OUTCOME_PRINCIPAL_EPOCH_2026-08-25.md",
+  "predecessor": {
+    "package": "RW13",
+    "evidence": "docs/evidence/48h-remote/rw13-security-logout-all-outcome-principal-epoch-20260825.json",
+    "verifiedImplementationHead": "1011ef52d8c9f15b80798242cb5e0368b75af53e",
+    "closureCommit": "4b724c495278caf862906d69dceefb748428b463"
+  },
+  "scope": {
+    "allowed": [
+      "single-remote-session-three-way-result-truth",
+      "pre-dialog-account-target-epoch-binding",
+      "exact-target-and-invoking-principal-result-binding",
+      "account-a-result-suppression-and-popup-dismissal-under-b",
+      "explicit-invalidated-cache-error-and-reload-state",
+      "red-first-stale-account-a-confirmation-widget-regression",
+      "mechanical-predecessor-hash-refresh",
+      "deterministic-local-and-ci-regression-evidence"
+    ],
+    "excluded": [
+      "backend-route-schema-and-auth-provider-change",
+      "logout-all-confirmation-dialog-expansion",
+      "timing-retry-parallelism-reduction-and-test-exclusion",
+      "production-vps-dns-cloud-firebase-store-and-play",
+      "payment-provider-ai-pilot-real-money-and-live-traffic",
+      "legal-owner-gitguardian-pr-merge-and-history-rewrite"
+    ],
+    "syntheticOnly": true,
+    "localOnly": true,
+    "timingWorkaroundAllowed": false,
+    "testParallelismReductionAllowed": false,
+    "liveAuthTrafficAllowed": false
+  },
+  "findings": [
+    {
+      "id": "RW14-P0-STALE-PROMPT-TARGET-CROSS-ACCOUNT-001",
+      "state": "resolved-and-tested",
+      "resolution": "The security epoch is captured before the confirmation dialog; a stale Account A confirmation after Account B activation now performs zero revocation calls."
+    },
+    {
+      "id": "RW14-P0-REVOCATION-OUTCOME-COLLAPSE-002",
+      "state": "resolved-and-tested",
+      "resolution": "Definite structured rejection, server-confirmed local-principal finalization failure and timeout/transport/5xx/invalid-response unknown outcome now remain distinct typed results."
+    },
+    {
+      "id": "RW14-P0-POST-REMOTE-PRINCIPAL-TRUTH-003",
+      "state": "resolved-and-tested",
+      "resolution": "Every result is bound to the exact target and a fail-closed current-principal proof; Account A completion after Account B activation cannot mutate or present under B."
+    },
+    {
+      "id": "RW14-P1-AMBIGUOUS-CACHE-AND-POPUP-TRUTH-004",
+      "state": "resolved-and-tested",
+      "resolution": "Safely presentable typed failures invalidate the device cache into an explicit reload error, and an already open Account A result is dismissed when Account B activates."
+    }
+  ],
+  "stateModel": {
+    "successEligible": "server-confirmed-exact-target-and-prompt-operation-epochs-stable",
+    "rejected": "allowlisted-structured-4xx-only",
+    "confirmedLocalFinalizationFailed": "server-confirmed-but-exact-invoking-principal-not-proved",
+    "outcomeUnknown": "timeout-transport-5xx-or-invalid-response",
+    "presentationEligible": "exact-target-and-invoking-principal-definitely-current-and-operation-epoch-stable",
+    "cacheAfterTypedFailure": "explicit-invalidated-error-with-reload-never-server-confirmed-empty",
+    "successorAccount": "never-mutated-never-shown-account-a-result-and-open-a-popup-dismissed"
+  },
+  "verification": {
+    "redFirstTypedContract": "failed-missing-three-way-contract-before-fix",
+    "redFirstPromptSwitch": "failed-one-stale-account-a-target-call-under-b-before-fix",
+    "focusedRw14Flutter": "passed-11",
+    "rw10Rw12Rw13Rw14B10Flutter": "passed-69",
+    "changedFileAnalyze": "passed-zero-issues",
+    "rw14WiringTests": "passed-10",
+    "completeToolInventory": "passed-1897",
+    "completeToolInventorySkipped": 0,
+    "privacyRetentionProvider": "passed",
+    "predecessorValidators": "passed",
+    "fullTechnicalRegression": "passed",
+    "githubRegression": "passed",
+    "githubCodeql": "passed-no-new-alerts"
+  },
+  "inventoryAudit": {
+    "predecessorRepositoryOwnedFiles": 328,
+    "closureRepositoryOwnedFiles": 330,
+    "predecessorPassedTests": 1887,
+    "closurePassedTests": 1897,
+    "skippedTests": 0,
+    "executionPattern": "node --test test/tool/*.test.mjs",
+    "standardNodeParallelism": true
+  },
+  "localRegression": {
+    "head": "38a89e67acefcdc1f756dabc7febd5f1ab9f9813",
+    "standardParallelism": true,
+    "timingWorkaroundUsed": false,
+    "parallelismReductionUsed": false,
+    "completeToolInventoryPassed": 1897,
+    "completeToolInventorySkipped": 0,
+    "flutterPassed": 558,
+    "documentedProfileSkips": 3,
+    "analyzerIssues": 0,
+    "webDebugBuild": "passed-with-wasm-dry-run",
+    "loopbackSmoke": "passed",
+    "androidDebugTasks": 448,
+    "androidMinSdk": 24,
+    "privateReleaseArtifact": "unavailable-ci-metadata-validated",
+    "storeOrDeviceGateClaimed": false
+  },
+  "githubVerification": {
+    "head": "38a89e67acefcdc1f756dabc7febd5f1ab9f9813",
+    "regressionRunId": 32868503103,
+    "codeqlRunId": 32868503117,
+    "regressionConclusion": "success",
+    "codeqlConclusion": "success",
+    "openCodeScanningAlerts": 0
+  },
+  "ratchetAudit": {
+    "cause": "SecurityScreen gained pre-dialog and presentation epoch guards plus explicit cache invalidation, AccountSecurityService gained typed single-target result and principal proof, RW10 expectations follow the stronger result contract, and the supported regression gained RW14 checks.",
+    "privacyDisclosureSemanticsChanged": false,
+    "retentionSemanticsChanged": false,
+    "providerDecisionChanged": false,
+    "providerGateChanged": false,
+    "rw13SemanticsChanged": false,
+    "mechanicalRefreshes": [
+      "Privacy, retention and active-provider artifacts are revalidated without semantic or decision changes.",
+      "RW0 through RW12 source inventories are refreshed only for the supported regression script and directly changed shared RW10 sources where listed.",
+      "RW13 source inventory is refreshed only for changed shared security sources, the shared RW10 test and the supported regression script; its findings, implementation head, CI results, gates and semantics remain unchanged."
+    ]
+  },
+  "ratchets": {
+    "privacyManifestSha256": "35c3a08e20e4f55183649af934e9415ea8cfd0c2d3327483a518cf477daee449",
+    "retentionManifestSha256": "955a901bbaec6511d119558b953274c3e5059a97c657fdcf93f2a939523315c8",
+    "activeProviderEvidenceSha256": "364037cefb30cfd55da5f19a8e3394e0308dae7e15b3760e159f9f28e5d17f7d",
+    "activeProviderState": "prepared-hold",
+    "completedOwnerDecisions": 0,
+    "requiredOwnerDecisions": 10,
+    "externalReadiness": false
+  },
+  "gates": {
+    "BUILD_READY": "not-granted",
+    "PLAY_UPLOAD_APPROVED": "not-granted",
+    "HUMAN_PILOT_ACTIVATED": "not-granted",
+    "PR7_MERGE_APPROVED": "not-granted",
+    "R17_GITGUARDIAN_HISTORY_REVIEW_COMPLETE": "not-granted"
+  },
+  "boundaries": {
+    "backendRuntimeChanged": false,
+    "productionChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "cloudChanged": false,
+    "firebaseChanged": false,
+    "storeChanged": false,
+    "paymentChanged": false,
+    "realMoneyUsed": false,
+    "realAuthTrafficSent": false,
+    "realProviderTrafficSent": false,
+    "realSupportTrafficSent": false,
+    "externalAiRuntimeEnabled": false,
+    "realTesterEnrolled": false,
+    "candidateCreated": false,
+    "deviceGateClaimed": false,
+    "legalApprovalChanged": false,
+    "gitHistoryRewritten": false,
+    "prMerged": false
+  },
+  "residualRisks": [
+    "The existing backend single-session transaction was inspected but not exercised against a live environment in RW14.",
+    "A structured 404 proves no row changed for this request but cannot distinguish an already absent target from a stale or unauthorized target; a fresh list is required.",
+    "A hard process or OS termination can leave the cached UI visible until the next load; no success is claimed in that path.",
+    "The separate logout-all confirmation dialog still lacks a pre-dialog principal epoch and remains a bounded next P0 security candidate."
+  ],
+  "sourceInventory": [
+    {
+      "path": "backend/src/app.js",
+      "sha256": "3a30a389612dddf4b5d636d9da2eaa35451596e7dac3add80c5f0a192badce55"
+    },
+    {
+      "path": "lib/screens/security_screen.dart",
+      "sha256": "86107d2852d5363cec8cf5554de0ca5eef70a6b69cb21e1a042441d9dcf1c629"
+    },
+    {
+      "path": "lib/services/account_security_service.dart",
+      "sha256": "774492379049744c40ac82c9a01b46439d5f5b9bcbde80c94684822b33787b0e"
+    },
+    {
+      "path": "lib/services/auth_service.dart",
+      "sha256": "1607dfd6d0b7907aa9040d7ec10f649fcaab12b6fef872accc66b4b4602b2687"
+    },
+    {
+      "path": "lib/services/backend_repository.dart",
+      "sha256": "e9f5a102ee95f8731bb2b91c068be7bdad358febef4d4de5c51cb9c692d7b840"
+    },
+    {
+      "path": "lib/services/shared_persistence_sync.dart",
+      "sha256": "b4294550220badf563c3a2fb0ea1929e15b0026483fb3dd3633370c6b486adb2"
+    },
+    {
+      "path": "store/privacy-disclosures.json",
+      "sha256": "35c3a08e20e4f55183649af934e9415ea8cfd0c2d3327483a518cf477daee449"
+    },
+    {
+      "path": "store/retention-deletion-readiness.json",
+      "sha256": "955a901bbaec6511d119558b953274c3e5059a97c657fdcf93f2a939523315c8"
+    },
+    {
+      "path": "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
+      "sha256": "364037cefb30cfd55da5f19a8e3394e0308dae7e15b3760e159f9f28e5d17f7d"
+    },
+    {
+      "path": "docs/evidence/48h-remote/rw10-local-security-control-truthfulness-20260825.json",
+      "sha256": "70e2c8457b732473e14b38c97235b98a52b4c502faa8dbeb59e67b6d7dc3347c"
+    },
+    {
+      "path": "docs/evidence/48h-remote/rw13-security-logout-all-outcome-principal-epoch-20260825.json",
+      "sha256": "1a24b75152790949385dd8f78777ae9316f685832ad4b8ecc4c3b35a94bf1848"
+    },
+    {
+      "path": "scripts/technical_regression_check.sh",
+      "sha256": "61e7a485cf99f041394995b49355e2b283f6e36a04977589e2ba228e22137fb2"
+    },
+    {
+      "path": "test/rw10_local_security_control_truthfulness_test.dart",
+      "sha256": "19f2475e25a045502340fb399423d258a4238a72467be1606858cee2be5a2e66"
+    },
+    {
+      "path": "test/rw14_security_remote_device_revocation_outcome_principal_epoch_test.dart",
+      "sha256": "598c9ae976e080a4fd51b93b588ec516d335b8035b16f3801c18fedc8b68f2fb"
+    },
+    {
+      "path": "test/tool/rw14_security_remote_device_revocation_outcome_principal_epoch_wiring.test.mjs",
+      "sha256": "bd4ba3f3c704edf3df852838c4e568bcc092821c0cee54d4fb1b966e7f0cf0cb"
+    },
+    {
+      "path": "test/tool/validate_rw14_security_remote_device_revocation_outcome_principal_epoch.test.mjs",
+      "sha256": "406fb8ae11f5014924ae0648992b7b19e037cad664bc719f0f7dd5139e09a558"
+    },
+    {
+      "path": "tool/validate_rw14_security_remote_device_revocation_outcome_principal_epoch.mjs",
+      "sha256": "f48a77ed7f2760b9d649780bbe326ec679a4dfabbf6121526fe883b8ae549732"
+    },
+    {
+      "path": "docs/architecture/rw14-security-remote-device-revocation-outcome-principal-epoch-2026-08-25.md",
+      "sha256": "c0511b86602c775cdd6a1b447934f9971b729b9ff179725d3406cf778b69cb84"
+    },
+    {
+      "path": "docs/operations/RW14_SECURITY_REMOTE_DEVICE_REVOCATION_OUTCOME_PRINCIPAL_EPOCH_2026-08-25.md",
+      "sha256": "087041efcb59343dceb7b83d281f058a97459e99068c89fd7634bb8c3db85aa2"
+    }
+  ]
+}

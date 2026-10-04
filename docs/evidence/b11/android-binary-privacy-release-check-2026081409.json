@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "kind": "release-check",
+  "status": "passed",
+  "capturedAt": "2026-08-14T19:08:15Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081409",
+    "commit": "4950fd2d5502075336a2f63bc3af91480eeea1a4",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "releaseCheck": {
+    "id": "binaryPrivacyAndNetwork",
+    "status": "passed",
+    "verifications": [
+      {
+        "id": "signed-apk-and-aab-scan",
+        "status": "passed",
+        "checkedAt": "2026-08-14T19:08:15Z",
+        "summary": "Exact signed APK and AAB passed the extended privacy, permission, SDK and runtime-origin scan with no findings."
+      },
+      {
+        "id": "bounded-visible-chat-refresh-timeout",
+        "status": "passed",
+        "checkedAt": "2026-08-14T19:08:15Z",
+        "summary": "The exact candidate limits visible-chat background refresh attempts to three seconds so an offline request cannot block the post-recovery retry; targeted message tests passed."
+      }
+    ]
+  },
+  "boundaries": {
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

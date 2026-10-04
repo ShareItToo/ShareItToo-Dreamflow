@@ -1,0 +1,6 @@
+Geschlossener ShareItToo-Internal-Pilot auf Staging, ohne echtes Geld:
+
+- Entdecken lädt für Gäste unabhängig von beschädigten alten Kontocaches
+- Klare Fehleranzeige offline und automatische Wiederherstellung nach Netzrückkehr
+- Mehrere Artikel desselben Vermieters, SIT Planer und Inserat-Sets im geschlossenen Pilot
+- Keine öffentliche Veröffentlichung, Reservierung oder echte Zahlung

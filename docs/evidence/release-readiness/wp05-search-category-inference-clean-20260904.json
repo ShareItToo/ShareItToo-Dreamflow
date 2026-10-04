@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp05-search-category-inference-clean",
+  "observedOn": "2026-09-04",
+  "status": "VERIFIED_LOCAL_CLEAN_CHECKOUT_CI_PENDING",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "baseHead": "66e25d142e0d4292a7bd4ec61c8e2bec349014a5",
+    "implementationHead": "d48ec694d80510fbf86bc9c6454d36a116113327",
+    "trackedTreeCleanAtR10Start": true
+  },
+  "finding": {
+    "surface": "listing-search-category-inference",
+    "query": "SIT",
+    "incorrectSubstringMatch": "Sitze",
+    "incorrectCoarseCategory": "Baby & Familie",
+    "publicApiQueryReturnedTarget": true,
+    "publicApiExactTitleReturnedTarget": true,
+    "pixelSearchResultsWereEmptyBeforeFix": true,
+    "bothTestRoleBlockInventoriesEmpty": true,
+    "cartWritePerformed": false,
+    "rentalRequestCreated": false,
+    "reservationCreated": false,
+    "paymentCreated": false
+  },
+  "correction": {
+    "exactShortCategoryAndSubcategoryMatchesRetained": true,
+    "explicitShortSynonymsRetained": true,
+    "substringInferenceMinimumRunes": 4,
+    "globalSearchOrBackendBehaviorChanged": false,
+    "workaroundIntroduced": false
+  },
+  "sourceInventory": [
+    {
+      "path": "lib/services/search_category_inference.dart",
+      "sha256": "a38401e8f9ef9703c204db0aafc9f743b41c39e2e6e0cadd92d915b92558ad17"
+    },
+    {
+      "path": "lib/widgets/search_overlay.dart",
+      "sha256": "52db5c7ae14ae477c45bb1b1407d1f51c7d7761849990c8382ff59c6496f9665"
+    },
+    {
+      "path": "test/search_category_inference_test.dart",
+      "sha256": "d3258d25e2019c991caf4e27fa34856cb838ea3bfccc927c1a7c6d45ba9a28fb"
+    }
+  ],
+  "focusedVerification": {
+    "flutterTests": 5,
+    "toolTests": 6,
+    "analyzerIssues": 0,
+    "status": "PASS"
+  },
+  "normalRegression": {
+    "toolTests": 2235,
+    "defaultFlutterPasses": 856,
+    "declaredProviderProfileSkips": 33,
+    "flutterLanes": 34,
+    "analyzerIssues": 0,
+    "webBuild": "PASS",
+    "wasmDryRun": "PASS",
+    "loopbackSmoke": "PASS",
+    "androidDebugBuild": "PASS",
+    "minSdk": 24,
+    "permissions": 14,
+    "exportedComponents": 8,
+    "ownerOnlyLogSha256": "1b532a4a0e0ee9c38ebea83a257a7364978cfe8384cccc7f9fe6f385405e9585"
+  },
+  "cleanReproducibility": {
+    "proofSha256": "49505aaf8a5940bf251e0272fddd9a6b992b3c371d4f5b628df3d0e1228d8970",
+    "fullTechnicalRegressionSeconds": 689,
+    "secondAndroidBuildSeconds": 45,
+    "debugApkSha256": "9ae215813d31b998c75b67907ce5047505e93fcd227516037f073f8fe0dfdf94",
+    "debugApkBytes": 231325839,
+    "entries": 794,
+    "classification": "byte-identical",
+    "migrations": 116,
+    "assets": 84,
+    "inventoriesUnchanged": true,
+    "cleanupComplete": true
+  },
+  "gates": {
+    "exactGithubRegressionAndCodeql": "OWNER_DEFERRED_NOT_WAIVED",
+    "signedSuccessor": "OPEN",
+    "successorPixelAcceptance": "OPEN",
+    "fullGoal": "OPEN",
+    "onePlus": "UNTOUCHED"
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "storeChanged": false,
+    "backendDeployed": false,
+    "providerConfigurationChanged": false,
+    "realMoneyUsed": false,
+    "credentialsPrintedOrCopied": false,
+    "pullRequestMerged": false
+  }
+}

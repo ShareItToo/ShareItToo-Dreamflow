@@ -1,0 +1,12 @@
+services:
+  api:
+    environment:
+      MFA_ENCRYPTION_KEY: ""
+      MFA_ENCRYPTION_KEY_FILE: /run/secrets/mfa-encryption-key
+    volumes:
+      - type: bind
+        source: ${MFA_ENCRYPTION_KEY_HOST_FILE:?MFA_ENCRYPTION_KEY_HOST_FILE must be set for the Staging MFA overlay}
+        target: /run/secrets/mfa-encryption-key
+        read_only: true
+        bind:
+          create_host_path: false

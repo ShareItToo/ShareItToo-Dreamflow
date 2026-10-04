@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "kind": "v51-booking-detail-dead-return-code-cleanup",
+  "status": "implemented-full-regression-passed",
+  "capturedAt": "2026-08-17T11:46:34Z",
+  "sourceBaseCommit": "64d6cf10c9f67c1f6835d3614a904547a00b0328",
+  "runtimeChange": {
+    "path": "lib/screens/booking_detail_screen.dart",
+    "sha256": "77d32ecd187be5883bb645e2722e40429c5eae005f640276fb4dae371b3f404a",
+    "removedSymbol": "_returnRenterCode",
+    "runtimeLinesAdded": 0,
+    "runtimeLinesDeleted": 5,
+    "reachableBehaviorChanged": false
+  },
+  "preservedFailClosedPaths": [
+    "booking-bound-pickup-owner-code",
+    "server-issued-return-challenge",
+    "booking-segment-role-bound-return-stepper-verifier",
+    "booking-segment-role-bound-return-qr-verifier",
+    "booking-segment-role-bound-return-manual-code-verifier",
+    "verified-return-transition"
+  ],
+  "verification": {
+    "newWiringTests": "passed-5",
+    "combinedTargetedNodeTests": "passed-16",
+    "privacyDisclosureTests": "passed-16",
+    "privacyValidator": "passed-draft-open",
+    "targetedFlutterTests": "passed-59",
+    "fullTechnicalRegression": "passed-candidate-rollover-mode",
+    "flutterTests": "passed-282-with-1-intentional-skip",
+    "flutterAnalyzer": "226-findings-0-errors-baseline-accepted",
+    "googleOnlySocialProfile": "passed",
+    "webDebugBuild": "passed-existing-wasm-dry-run-warnings-only",
+    "androidDebugBuild": "passed",
+    "diffCheck": "passed"
+  },
+  "privacyBoundary": {
+    "sourceInventoryHashUpdated": true,
+    "dataTypesChanged": false,
+    "purposesChanged": false,
+    "processorsChanged": false,
+    "transportChanged": false,
+    "permissionsChanged": false,
+    "publicDisclosureChanged": false
+  },
+  "boundaries": {
+    "pushRemovedOrDisabled": false,
+    "crashlyticsRemovedOrDisabled": false,
+    "pushEnablesCrashlytics": false,
+    "stagingChanged": false,
+    "productionChanged": false,
+    "storeSubmissionChanged": false,
+    "candidateBuiltOrRelabeled": false,
+    "crashEventGenerated": false,
+    "containsSecrets": false,
+    "containsAccountData": false
+  }
+}

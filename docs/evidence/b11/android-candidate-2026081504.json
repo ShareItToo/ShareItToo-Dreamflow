@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-release-candidate",
+  "status": "built-scanned-direct-device-chat-stable-keyboard-regression",
+  "generatedAt": "2026-08-15T02:13:00Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081504",
+    "commit": "5f9abcf5d21c05b5ea78c17eedf0787926fdcf36",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "android": {
+    "delivery": "direct-apk-physical-device-precheck",
+    "aabSha256": "bddfccf9ba4f7b75f58d12e7f284ddc23979a543a9268d189f6a46045b8c1919",
+    "apkSha256": "b6f7960442eb8f50f82e508ea0517a7f25b82eb046ea5772517d818e1ef2e57d",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "packageIdentityVerified": true,
+    "privateArchivePermissionsVerified": true
+  },
+  "privacyAndNetwork": {
+    "binaryScan": "passed",
+    "binaryScanReportSha256": "ae7b48e74c22b29deeaea975e58ba4074969ef8597be2a4ba97e4bc06b45caee",
+    "targetSdkVersion": 35,
+    "backupDisabled": true,
+    "cleartextTrafficDisabled": true,
+    "analyticsSdkPresent": false,
+    "advertisingSdkPresent": false,
+    "permissionInventoryStatus": "passed",
+    "findings": []
+  },
+  "exactCandidateDiagnostics": {
+    "directInstallAndLaunch": "passed",
+    "authenticatedSyntheticSession": "passed-session-preserved",
+    "stagingFeedLoaded": "passed",
+    "acceptedBookingSharedChat": "passed-stable-with-bounded-refresh",
+    "messageComposerFocus": "passed",
+    "messageComposerKeyboard": "failed-input-field-replaced-during-focus-transition",
+    "replacementBuildNumber": "2026081505",
+    "twoDevicePrivatePilotAcceptance": "pending"
+  },
+  "boundaries": {
+    "uploadedToStore": false,
+    "installedOnPhysicalDevice": true,
+    "productionChanged": false,
+    "productionPushSent": false,
+    "productionCrashGenerated": false,
+    "iosValidated": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

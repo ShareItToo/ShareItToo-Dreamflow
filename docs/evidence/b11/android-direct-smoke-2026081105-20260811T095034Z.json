@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-direct-device-smoke",
+  "status": "installed-launched-pending-manual-matrix",
+  "capturedAt": "2026-08-11T09:50:34.410Z",
+  "candidate": {
+    "bundleId": "com.shareittoo.app",
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081105",
+    "commit": "de8e668e09fbd7ba2a03c0a3dd29214e5c47c9b5",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "paymentMode": "memory",
+    "firebaseConfigured": true,
+    "stripeLivemode": false,
+    "apkSha256": "c91cade0a54879930acd1b8a6f166196f1e98f6939545103ef5a2e564da30c0f",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "privacyScan": "passed"
+  },
+  "installation": {
+    "method": "direct-apk-diagnostic",
+    "installed": true,
+    "installedVersionVerified": true,
+    "installedBuildVerified": true,
+    "foregroundActivityVerified": true,
+    "firstLaunchEvent": "passed",
+    "storeInstallationGateSatisfied": false
+  },
+  "boundaries": {
+    "manualFunctionalMatrixPassed": false,
+    "playInternalInstallPassed": false,
+    "realPushPassed": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  },
+  "nextRequired": [
+    "manual Android Wi-Fi owner matrix",
+    "manual Android hotspot renter matrix",
+    "controlled FCM foreground/background/terminated delivery",
+    "Google Play Internal installation of the same unchanged build"
+  ],
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "16",
+    "apiLevel": 36,
+    "securityPatch": "2026-04-05",
+    "containsRawDeviceIdentifier": false
+  }
+}

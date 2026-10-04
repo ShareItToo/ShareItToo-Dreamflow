@@ -1,0 +1,769 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { validateSdkState, validateHistoryMatrix, artifactDigest, buildArguments,
+  validateArtifact, classifyAsset, classifyBlockedRequest, networkReasonKeys, validateNetworkDiagnostic,
+  isolateGoogleRegistrationGraph, validateIsolatedRegistrant, isolationScope,
+  contract, inventoryTree, readHistoryFile } from '../support/mission_web_history_build.mjs';
+import { runProbe, parseArgs, launchArgs, privilegeArgs, ownsBuildGroup, preloadHistoryAssetResponses } from '../support/mission_web_history_probe.mjs';
+
+function assetFixture(t) {
+  const outer = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sit-history-assets-')));
+  t.after(() => fs.rmSync(outer, { recursive: true, force: true }));
+  const root = path.join(outer, 'web'); fs.mkdirSync(root); fs.mkdirSync(path.join(root, 'assets'));
+  const bytes = Buffer.from('synthetic bound asset'); const a = artifact();
+  a.files = ['assets/icon.png', 'flutter_bootstrap.js', 'index.html', 'main.dart.js'].map(name => {
+    fs.writeFileSync(path.join(root, name), bytes);
+    return { path: name, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') };
+  });
+  a.artifactDigest = artifactDigest(a.files);
+  return { root, file: path.join(root, 'assets/icon.png'), bytes, artifact: a };
+}
+
+const historyReaders = [
+  ['source', 'history_source', f => readHistoryFile(f.root, 'assets/icon.png')],
+  ['isolation', 'history_isolation', f => readHistoryFile(f.root, 'assets/icon.png', 'history_isolation')],
+  ['inventory', 'history_artifact', f => inventoryTree(f.root)],
+];
+test('descriptor-bound history reads preserve exact bytes and the existing inventory/digest format', t => {
+  const f = assetFixture(t); const open = fs.openSync; const read = fs.readSync; const opened = []; const closed = [];
+  const close = fs.closeSync;
+  t.mock.method(fs, 'openSync', (file, flags) => {
+    assert.ok(flags & fs.constants.O_NOFOLLOW); assert.ok(flags & fs.constants.O_NONBLOCK);
+    const fd = open(file, flags); opened.push(fd); return fd;
+  });
+  t.mock.method(fs, 'closeSync', fd => { close(fd); closed.push(fd); });
+  t.mock.method(fs, 'readFileSync', () => { throw Error('path reads forbidden'); });
+  t.mock.method(fs, 'readSync', (fd, buffer, offset, length, position) => read(fd, buffer, offset, Math.min(3, length), position));
+  assert.deepEqual(readHistoryFile(f.root, 'assets/icon.png'), f.bytes);
+  assert.deepEqual(readHistoryFile(f.root, 'assets/icon.png', 'history_isolation'), f.bytes);
+  assert.deepEqual(inventoryTree(f.root), f.artifact.files);
+  const expected = f.artifact.files.map(file => ({ path: file.path, sha256: file.sha256, bytes: file.bytes }));
+  assert.equal(artifactDigest(inventoryTree(f.root)), artifactDigest(expected));
+  assert.deepEqual(closed.toSorted(), opened.toSorted());
+});
+
+for (const [label, code, consume] of historyReaders) {
+  for (const variant of ['symlink', 'parent-symlink', 'root-symlink', 'hardlink', 'permissions', 'parent-permissions', 'oversize']) {
+    test(`${label} reader rejects unsafe ${variant} with no path diagnostics`, t => {
+      const f = assetFixture(t);
+      if (variant === 'symlink') { fs.renameSync(f.file, `${f.file}.old`); fs.symlinkSync(`${f.file}.old`, f.file); }
+      if (variant === 'parent-symlink' || variant === 'root-symlink') {
+        const directory = variant === 'root-symlink' ? f.root : path.dirname(f.file);
+        fs.renameSync(directory, `${directory}.old`); fs.symlinkSync(`${directory}.old`, directory, 'dir');
+      }
+      if (variant === 'hardlink') fs.linkSync(f.file, `${f.file}.linked`);
+      if (variant === 'permissions') fs.chmodSync(f.file, 0o666);
+      if (variant === 'parent-permissions') fs.chmodSync(path.dirname(f.file), 0o777);
+      if (variant === 'oversize') fs.truncateSync(f.file, 64 * 1024 * 1024 + 1);
+      let reads = 0; t.mock.method(fs, 'readSync', () => { reads++; throw Error('unexpected read'); });
+      assert.throws(() => consume(f), { message: code }); assert.equal(reads, 0);
+    });
+  }
+  for (const variant of ['file-open', 'file-read', 'parent-open', 'parent-read', 'growth', 'truncate', 'mode', 'parent-mode']) {
+    test(`${label} reader fails closed on deterministic ${variant} race`, t => {
+      const f = assetFixture(t); const open = fs.openSync; const read = fs.readSync;
+      const opened = []; const closed = []; const close = fs.closeSync;
+      let changed = false; let total = 0;
+      const mutate = () => {
+        changed = true;
+        if (variant === 'file-open' || variant === 'file-read') { fs.renameSync(f.file, `${f.file}.old`); fs.writeFileSync(f.file, f.bytes); }
+        if (variant === 'parent-open' || variant === 'parent-read') {
+          const directory = path.dirname(f.file); fs.renameSync(directory, `${directory}.old`); fs.symlinkSync(`${directory}.old`, directory, 'dir');
+        }
+        if (variant === 'growth') fs.appendFileSync(f.file, Buffer.alloc(32768));
+        if (variant === 'truncate') fs.truncateSync(f.file, 1);
+        if (variant === 'mode' || variant === 'parent-mode') {
+          const target = variant === 'mode' ? f.file : path.dirname(f.file);
+          fs.chmodSync(target, (fs.statSync(target).mode & 0o777) === 0o700 ? 0o500 : 0o700);
+        }
+      };
+      t.mock.method(fs, 'openSync', (target, ...args) => {
+        const fd = open(target, ...args); opened.push(fd);
+        if (!changed && ((variant === 'file-open' && target === f.file)
+          || (variant === 'parent-open' && target === path.dirname(f.file)))) mutate();
+        return fd;
+      });
+      t.mock.method(fs, 'closeSync', fd => { close(fd); closed.push(fd); });
+      t.mock.method(fs, 'readSync', (fd, buffer, offset, length, position) => {
+        if (!changed) mutate(); assert.ok(buffer.length <= f.bytes.length);
+        const count = read(fd, buffer, offset, length, position); total += count; return count;
+      });
+      assert.throws(() => consume(f), { message: code }); assert.equal(changed, true);
+      assert.ok(total <= f.bytes.length + 1); assert.deepEqual(closed.toSorted(), opened.toSorted());
+    });
+  }
+  test(`${label} reader sanitizes raw read and close errors and attempts every descriptor close`, t => {
+    const f = assetFixture(t); const open = fs.openSync; const close = fs.closeSync;
+    const opened = []; const closed = [];
+    t.mock.method(fs, 'openSync', (...args) => { const fd = open(...args); opened.push(fd); return fd; });
+    t.mock.method(fs, 'readSync', () => { throw Error('https://outside.invalid /private/path'); });
+    t.mock.method(fs, 'closeSync', fd => { close(fd); closed.push(fd); throw Error('/private/close'); });
+    assert.throws(() => consume(f), { message: code });
+    assert.deepEqual(closed.toSorted(), opened.toSorted());
+  });
+}
+
+test('history reads reject traversal, absolute paths, alternate separators and uncontrolled error codes before opening a leaf', t => {
+  const f = assetFixture(t); const open = fs.openSync; const opened = [];
+  t.mock.method(fs, 'openSync', (file, ...args) => { opened.push(file); return open(file, ...args); });
+  for (const name of ['../outside', 'assets/../../outside', '/etc/passwd', 'assets//icon.png', './assets/icon.png', 'assets\\icon.png', 'assets/icon.png\0']) {
+    assert.throws(() => readHistoryFile(f.root, name), { message: 'history_source' });
+  }
+  assert.throws(() => readHistoryFile(f.root, 'assets/icon.png', '/private/error'), { message: 'history_source' });
+  // The trusted root may be opened before relative-name validation; no leaf is opened.
+  assert.deepEqual(opened, Array(7).fill(f.root));
+});
+
+test('inventory rejects directory replacement and additions during enumeration', t => {
+  const f = assetFixture(t); const list = fs.readdirSync;
+  t.mock.method(fs, 'readdirSync', (...args) => {
+    const entries = list(...args); fs.writeFileSync(path.join(f.root, 'unexpected'), 'not in the captured listing'); return entries;
+  });
+  assert.throws(() => inventoryTree(f.root), { message: 'history_artifact' });
+});
+
+test('source copy, generated isolation text and source readbacks all consume the descriptor-bound primitive', () => {
+  const source = fs.readFileSync('test/support/mission_web_history_build.mjs', 'utf8');
+  assert.match(source, /const bytes = readHistoryFile\(root, name\);/u);
+  assert.match(source, /const readRegular = name => readHistoryFile\(project, name, 'history_isolation'\)\.toString\('utf8'\)/u);
+  assert.match(source, /digest\(readHistoryFile\(project, source.path\)\)/u);
+  assert.match(source, /digest\(readHistoryFile\(root, source.path\)\)/u);
+  assert.doesNotMatch(source, /readFileSync\(original|readFileSync\(file[,)]/u);
+  assert.ok(source.includes("!text.replaceAll('\\\\/', '/').includes('accounts.google.com/gsi/client')"));
+});
+
+test('asset requests select exact preloaded bytes and MIME with no request-time fs access', t => {
+  const f = assetFixture(t); const response = preloadHistoryAssetResponses(f.root, f.artifact);
+  fs.renameSync(f.file, `${f.file}.old`); fs.writeFileSync(f.file, 'replacement must never be served');
+  for (const operation of ['readFileSync', 'readSync', 'openSync', 'lstatSync', 'realpathSync']) {
+    t.mock.method(fs, operation, () => { throw Error('request must not touch filesystem'); });
+  }
+  assert.deepEqual(response('GET', '/index.html'), { body: f.bytes, contentType: 'text/html; charset=utf-8' });
+  assert.deepEqual(response('GET', '/assets/icon.png'), { body: f.bytes, contentType: 'image/png' });
+  const modified = response('GET', '/assets/icon.png'); modified.body.fill(0); modified.contentType = 'text/html';
+  assert.deepEqual(response('GET', '/assets/icon.png'), { body: f.bytes, contentType: 'image/png' });
+  for (const url of ['/', '../index.html', '/../index.html', '/assets/../index.html', '/%69ndex.html', '/%2e%2e/private',
+    '/assets%2ficon.png', '/assets\\icon.png', '//index.html', '/index.html?x=1', '/index.html#part',
+    'https://outside.invalid/index.html', '/private/path', '/index.html\0', '/INDEX.html', '__proto__']) {
+    assert.equal(response('GET', url), null);
+  }
+  assert.equal(response('POST', '/index.html'), null); assert.equal(response('GET', { toString: () => '/index.html' }), null);
+});
+
+for (const variant of ['symlink', 'parent-symlink', 'hardlink', 'digest', 'size', 'unsafe-inventory', 'oversize-inventory']) {
+  test(`preload rejects ${variant} using a fixed error without private paths`, t => {
+    const f = assetFixture(t);
+    if (variant === 'symlink') { fs.renameSync(f.file, `${f.file}.old`); fs.symlinkSync(`${f.file}.old`, f.file); }
+    if (variant === 'parent-symlink') { const parent = path.dirname(f.file); fs.renameSync(parent, `${parent}.old`); fs.symlinkSync(`${parent}.old`, parent, 'dir'); }
+    if (variant === 'hardlink') fs.linkSync(f.file, `${f.file}.linked`);
+    if (variant === 'digest') fs.writeFileSync(f.file, Buffer.alloc(f.bytes.length));
+    if (variant === 'size') fs.appendFileSync(f.file, 'extra');
+    if (variant === 'unsafe-inventory') f.artifact.files[0].path = '../outside';
+    if (variant === 'oversize-inventory') f.artifact.files[0].bytes = 64 * 1024 * 1024 + 1;
+    f.artifact.artifactDigest = artifactDigest(f.artifact.files);
+    assert.throws(() => preloadHistoryAssetResponses(f.root, f.artifact), { message: 'history_artifact' });
+  });
+}
+
+for (const variant of ['file-open', 'file-read', 'parent-read', 'growth', 'truncate', 'mode']) {
+  test(`asset preload rejects ${variant} identity race before publishing any responder`, t => {
+    const f = assetFixture(t); const open = fs.openSync; const read = fs.readSync;
+    let changed = false; let total = 0;
+    const mutate = () => {
+      changed = true;
+      if (variant === 'file-open' || variant === 'file-read') { fs.renameSync(f.file, `${f.file}.old`); fs.writeFileSync(f.file, f.bytes); }
+      if (variant === 'parent-read') { const parent = path.dirname(f.file); fs.renameSync(parent, `${parent}.old`); fs.symlinkSync(`${parent}.old`, parent, 'dir'); }
+      if (variant === 'growth') fs.appendFileSync(f.file, Buffer.alloc(32768));
+      if (variant === 'truncate') fs.truncateSync(f.file, 1);
+      if (variant === 'mode') fs.chmodSync(f.file, (fs.statSync(f.file).mode & 0o777) === 0o600 ? 0o400 : 0o600);
+    };
+    t.mock.method(fs, 'openSync', (target, ...args) => {
+      const fd = open(target, ...args); if (!changed && variant === 'file-open' && target === f.file) mutate(); return fd;
+    });
+    t.mock.method(fs, 'readSync', (fd, buffer, offset, length, position) => {
+      if (!changed) mutate(); assert.ok(buffer.length <= f.bytes.length);
+      const count = read(fd, buffer, offset, length, position); total += count; return count;
+    });
+    assert.throws(() => preloadHistoryAssetResponses(f.root, f.artifact), { message: 'history_artifact' });
+    assert.equal(changed, true); assert.ok(total <= f.bytes.length + 1);
+  });
+}
+
+test('asset preloading handles short reads and closes all retained descriptors on failure', t => {
+  const f = assetFixture(t); const read = fs.readSync; const open = fs.openSync; const close = fs.closeSync;
+  const opened = []; const closed = [];
+  t.mock.method(fs, 'openSync', (...args) => { const fd = open(...args); opened.push(fd); return fd; });
+  t.mock.method(fs, 'readSync', (fd, buffer, offset, length, position) => read(fd, buffer, offset, Math.min(3, length), position));
+  t.mock.method(fs, 'closeSync', fd => { close(fd); closed.push(fd); });
+  assert.deepEqual(preloadHistoryAssetResponses(f.root, f.artifact)('GET', '/index.html').body, f.bytes);
+  assert.deepEqual(closed.toSorted(), opened.toSorted());
+  t.mock.method(fs, 'readSync', () => { throw Error('https://outside.invalid /private/path'); });
+  assert.throws(() => preloadHistoryAssetResponses(f.root, f.artifact), { message: 'history_artifact' });
+  assert.deepEqual(closed.toSorted(), opened.toSorted());
+});
+
+test('HTTP request callback cannot use request text as a filesystem path', () => {
+  const source = fs.readFileSync('test/support/mission_web_history_probe.mjs', 'utf8');
+  const handler = source.slice(source.indexOf('assetServer = http.createServer'), source.indexOf('assetServer.listen'));
+  assert.match(handler, /assetResponse\(request.method, request.url\)/u);
+  assert.doesNotMatch(handler, /fs\.|path\.join|request\.url\?\.slice/u);
+  assert.ok(source.indexOf('const assetResponse = preloadHistoryAssetResponses(webRoot, artifact)') < source.indexOf('assetServer = http.createServer'));
+});
+
+const instance = n => String(n).repeat(32);
+const state = (n, entry, serialCount) => ({ serialCount, state: { version: 1, instance: instance(n), entry } });
+const row = (path, value) => ({ path, sdkState: value, visible: path === 'mission' ? 'unavailable' : 'harness-root' });
+const matrix = () => [row('mission', state(1, 1, 0)), row('root', state(2, 0, 0)),
+  row('mission', state(2, 1, 1)), row('root', state(2, 0, 0)), row('mission', state(2, 1, 1)),
+  row('mission', state(3, 1, 1)), row('mission', state(3, 1, 1)), row('root', state(3, 0, 2))];
+const head = 'a'.repeat(40);
+const artifact = () => {
+  const files = ['flutter_bootstrap.js', 'index.html', 'main.dart.js'].map(path => ({ path, sha256: 'b'.repeat(64), bytes: 1 }));
+  return { schemaVersion: 2, sourceHead: head, sourceDigest: 'c'.repeat(64), isolation: isolationScope,
+    isolationHashes: { graphBeforeSha256: '6'.repeat(64), graphAfterSha256: '7'.repeat(64),
+      packageConfigSha256: '8'.repeat(64), registrantSha256: '9'.repeat(64) },
+    sourceHashes: { harness: 'd'.repeat(64), router: 'e'.repeat(64), controller: 'f'.repeat(64), host: '1'.repeat(64) },
+    lockSha256: '2'.repeat(64), toolchain: { ...contract }, files, artifactDigest: artifactDigest(files) };
+};
+const fake = overrides => ({
+  inventory: async () => ({ platform: 'linux', arch: 'x64', imageOS: 'ubuntu24', imageVersion: '20260927.320.1',
+    node: '22.23.3', chrome: '154.0.8037.57', uid: 1001, gid: 1001, head, clean: true,
+    digests: { runnerSha256: '3'.repeat(64), chromeSha256: '4'.repeat(64), nodeSha256: '5'.repeat(64) } }),
+  build: async () => artifact(),
+  prepare: async () => ({ links: ['lo'], routes4: [], routes6: [], resolverEmpty: true }),
+  observe: async () => ({ browser: 'Chrome/154.0.8037.57', protocol: '1.3', httpStatus: 200,
+    targetCounts: {pageBlank: 1, pageOther: 0, browserUi: 2, extension: 0, serviceWorker: 0, other: 0},
+    evaluated: true, workerPrivileges: true, externalTcp: 'ENETUNREACH', loopback: 200,
+    renderers: [{ uid: 1001, gid: 1001, seccomp: 2, filters: 1, noNewPrivs: 1,
+      capabilities: '0000000000000000', nestedPidNamespace: true, forbiddenFlags: false }],
+    historyMatrix: matrix(), blockedUnexpected: 0, networkCounts: networkCounts(), artifactDigest: artifact().artifactDigest,
+    sourceDigest: artifact().sourceDigest, sourceHead: head, isolation: isolationScope,
+    isolationHashes: artifact().isolationHashes }),
+  cleanup: async () => ({ processesAbsent: true, groupAbsent: true, namespaceRemoved: true, resolverRemoved: true,
+    portClosed: true, profileRemoved: true, exitCode: 0, exitSignal: null }), ...overrides,
+});
+
+const graphFixture = () => ({ roots: ['lendify'], packages: [
+  { name: 'lendify', version: '1.0.0', dependencies: ['google_sign_in'], devDependencies: [] },
+  { name: 'google_sign_in', version: '7.2.0', dependencies: ['flutter', 'google_sign_in_android',
+    'google_sign_in_ios', 'google_sign_in_platform_interface', 'google_sign_in_web'] },
+  { name: 'google_sign_in_web', version: '1.1.3', dependencies: ['google_identity_services_web'] },
+  { name: 'google_identity_services_web', version: '0.3.3+1', dependencies: [] },
+  ...['flutter', 'google_sign_in_android', 'google_sign_in_ios', 'google_sign_in_platform_interface']
+    .map(name => ({ name, version: '1.0.0', dependencies: [] })),
+], configVersion: 1 });
+test('test-only graph isolation removes exactly one reviewed edge and retains every package and other byte', () => {
+  const before = graphFixture(); const text = JSON.stringify(before, null, 2);
+  const isolated = isolateGoogleRegistrationGraph(text);
+  const expected = structuredClone(before); expected.packages[1].dependencies.pop();
+  assert.equal(isolated, JSON.stringify(expected, null, 2));
+  assert.equal(JSON.stringify(before, null, 2), text);
+  assert.equal(JSON.parse(isolated).packages[2].name, 'google_sign_in_web');
+  const sdkNative = graphFixture();
+  sdkNative.packages[0].dependencies.push('_flutterfire_internals');
+  sdkNative.packages.push({ name: '_flutterfire_internals', version: '1.3.76', dependencies: [] });
+  assert.doesNotThrow(() => isolateGoogleRegistrationGraph(JSON.stringify(sdkNative, null, 2)));
+  for (const mutate of [g => g.configVersion = 2, g => g.extra = true, g => g.roots.push('other'),
+    g => g.packages.push(g.packages[1]), g => g.packages[1].dependencies.push('google_sign_in_web'),
+    g => g.packages[1].dependencies.pop(), g => g.packages[1].version = '7.3.0',
+    g => g.packages[2].version = '1.1.4', g => g.packages[2].name = 'google_sign_in_web_lookalike',
+    g => g.packages[0].devDependencies.push('google_sign_in_web'),
+    g => g.packages[0].dependencies.push('google_sign_in_web'), g => g.packages[0].extra = 'private',
+    g => g.packages.push(null)]) {
+    const changed = graphFixture(); mutate(changed);
+    assert.throws(() => isolateGoogleRegistrationGraph(JSON.stringify(changed, null, 2)), /^Error: history_isolation$/u);
+  }
+  for (const malformed of ['{', text.replace('"configVersion": 1', '"configVersion": 1, "configVersion": 1'),
+    isolated]) assert.throws(() => isolateGoogleRegistrationGraph(malformed), /^Error: history_isolation$/u);
+});
+test('generated registration changes only exact GIS lines and executable assets retain no loader endpoint', () => {
+  const before = "// Flutter web plugin registrant file.\nimport 'package:google_sign_in_web/google_sign_in_web.dart';\nvoid registerPlugins() {\n  Other.registerWith(registrar);\n  GoogleSignInPlugin.registerWith(registrar);\n}\n";
+  const after = before.replace("import 'package:google_sign_in_web/google_sign_in_web.dart';\n", '')
+    .replace('  GoogleSignInPlugin.registerWith(registrar);\n', '');
+  assert.doesNotThrow(() => validateIsolatedRegistrant(before, after, ['compiled local app']));
+  for (const candidate of [before, after.replace('Other.registerWith', 'OtherChanged.registerWith'),
+    `${after}// GoogleSignInPlugin`, after.replace('Other.registerWith(registrar);', '')]) {
+    assert.throws(() => validateIsolatedRegistrant(before, candidate, ['compiled local app']), /^Error: history_isolation$/u);
+  }
+  for (const code of ['https://accounts.google.com/gsi/client', 'https:\\/\\/accounts.google.com\\/gsi\\/client',
+    'prefix:https://accounts.google.com/gsi/client:suffix'])
+    assert.throws(() => validateIsolatedRegistrant(before, after, [code]), /^Error: history_isolation$/u);
+  const value = artifact(); delete value.isolation;
+  assert.throws(() => validateArtifact(value), /^Error: history_artifact$/u);
+  const wrongScope = artifact(); wrongScope.isolation = 'full-auth-proof';
+  assert.throws(() => validateArtifact(wrongScope), /^Error: history_artifact$/u);
+  for (const mutate of [v => v.isolationHashes.graphAfterSha256 = v.isolationHashes.graphBeforeSha256,
+    v => v.isolationHashes.path = 'private', v => delete v.isolationHashes.registrantSha256,
+    v => v.toolchain.packageGraphSha256 = '0'.repeat(64),
+    v => v.toolchain.pluginDiscoverySha256 = '0'.repeat(64), v => v.toolchain.webTargetSha256 = '0'.repeat(64)]) {
+    const changed = artifact(); mutate(changed);
+    assert.throws(() => validateArtifact(changed), /^Error: history_artifact$/u);
+  }
+  const source = fs.readFileSync('test/support/mission_web_history_build.mjs', 'utf8');
+  assert.ok(source.indexOf("await run(['pub', 'get', '--enforce-lockfile']") < source.indexOf('graphAfter = isolateGoogleRegistrationGraph(graphBefore)'));
+  assert.ok(source.indexOf('graphAfter = isolateGoogleRegistrationGraph(graphBefore)') < source.indexOf("await run(buildArguments, 'flutter-build')"));
+  assert.match(source, /readRegular\('\.dart_tool\/package_config\.json'\) === configBefore/u);
+  assert.match(source, /readRegular\('\.dart_tool\/package_graph\.json'\) === graphAfter/u);
+  assert.equal((source.match(/verifyToolSources\(\);/gu) ?? []).length, 2);
+});
+
+test('exact SDK envelope and nested application cursor are different contracts', () => {
+  assert.doesNotThrow(() => validateSdkState(state(1, 1, 0)));
+  for (const mutate of [v => delete v.serialCount, v => v.extra = true,
+    v => delete v.state.entry, v => v.state.url = 'private', v => v.serialCount = -1,
+    v => v.serialCount = 1.5, v => v.state.instance = 'private', v => v.state.version = 2]) {
+    const v = state(1, 1, 0); mutate(v);
+    assert.throws(() => validateSdkState(v), /^Error: history_state$/u);
+  }
+});
+test('ordered matrix proves SDK serial changes, same-document replay and new reload instance', () => {
+  assert.doesNotThrow(() => validateHistoryMatrix(matrix()));
+  for (const index of [0,1,2,3,4,5,6,7]) {
+    const rows = matrix(); rows[index].sdkState.serialCount += 2;
+    assert.throws(() => validateHistoryMatrix(rows));
+  }
+  for (const mutate of [r => r.pop(), r => r[5].sdkState.state.instance = instance(2),
+    r => r[7].path = 'mission', r => r[2].sdkState.state.entry = 2,
+    r => r[4].sdkState.state.instance = instance(4), r => r[0].visible = 'activated',
+    r => r[0].private = 'never emit']) {
+    const rows = matrix(); mutate(rows); assert.throws(() => validateHistoryMatrix(rows));
+  }
+});
+test('artifact bytes, source lock and toolchain contract are bound and fail closed', () => {
+  assert.equal(contract.flutter, '3.41.7');
+  assert.equal(contract.dart, '3.11.5');
+  assert.ok(buildArguments.every(x => !x.includes('=true')));
+  assert.ok(buildArguments.includes('--no-web-resources-cdn'));
+  assert.ok(buildArguments.includes('--pwa-strategy=none'));
+  const files = [{ path: 'index.html', sha256: 'a'.repeat(64), bytes: 1 }];
+  assert.equal(artifactDigest(files), artifactDigest(structuredClone(files)));
+  assert.notEqual(artifactDigest(files), artifactDigest([{...files[0], bytes: 2}]));
+  assert.throws(() => validateArtifact({}), /^Error: history_artifact$/u);
+  for (const mutate of [v => v.private = 'rejected', v => delete v.lockSha256,
+    v => v.sourceHashes.extra = 'a'.repeat(64), v => v.toolchain.flutter = 'other',
+    v => v.files[0].path = '../outside', v => v.files[0].extra = 'rejected']) {
+    const v = artifact(); mutate(v); assert.throws(() => validateArtifact(v), /^Error: history_artifact$/u);
+  }
+});
+test('request classifier admits only exact locally bound asset requests', () => {
+  const files = new Set(['index.html', 'main.dart.js']);
+  assert.equal(classifyAsset('https://shareittoo.com/mission', 'Document', files), 'index.html');
+  assert.equal(classifyAsset('https://shareittoo.com/main.dart.js', 'Script', files), 'main.dart.js');
+  for (const [url, type] of [['https://foreign.invalid/', 'Document'],
+    ['https://shareittoo.com/api/v1', 'Fetch'], ['https://shareittoo.com/missing.js', 'Script'],
+    ['https://shareittoo.com/main.dart.js?secret', 'Script'], ['ws://shareittoo.com/', 'WebSocket'],
+    ['https://shareittoo.com/%6dission', 'Document']]) assert.equal(classifyAsset(url, type, files), null);
+});
+const networkCounts = () => Object.fromEntries(networkReasonKeys.map(key => [key, 0]));
+test('blocked requests have only deterministic coarse reasons; admission is unchanged', () => {
+  const files = new Set(['index.html', 'main.dart.js']);
+  const request = { method: 'GET', url: 'https://shareittoo.com/main.dart.js', type: 'Script' };
+  assert.equal(classifyBlockedRequest(request, files), null);
+  for (const [change, reason] of [
+    [{ method: 'PRIVATE_METHOD' }, 'non_get'], [{ responseStatusCode: 302 }, 'response_stage'],
+    [{ type: 'WebSocket' }, 'websocket'], [{ type: 'PRIVATE_TYPE' }, 'unsupported_type'],
+    [{ url: 'http://private.invalid/private-path?private-query' }, 'non_https_scheme'],
+    [{ url: 'https://private.invalid/private-path?private-query' }, 'other_foreign_origin'],
+    [{ url: 'https://shareittoo.com/main.dart.js?' }, 'query_or_fragment'],
+    [{ url: 'https://shareittoo.com/main.dart.js#' }, 'query_or_fragment'],
+    [{ url: 'https://shareittoo.com/%70rivate' }, 'unsafe_path'],
+    [{ url: 'https://shareittoo.com/a/../main.dart.js' }, 'unsafe_path'],
+    [{ url: 'https://shareittoo.com/private-path' }, 'untracked_asset'],
+    [{ type: 'Document', url: 'https://shareittoo.com/main.dart.js' }, 'unsafe_path'],
+  ]) {
+    const value = { ...request, ...change };
+    assert.equal(classifyBlockedRequest(value, files), reason);
+    assert.ok(value.method !== 'GET' || value.responseStatusCode || classifyAsset(value.url, value.type, files) === null);
+  }
+});
+test('network aggregates are exact detached bounded counts, with monotone single-block updates', () => {
+  assert.deepEqual(networkReasonKeys, ['non_get', 'response_stage', 'unsupported_type', 'non_https_scheme',
+    'flutter_canvaskit_cdn', 'flutter_font_fallback_cdn', 'google_identity_script', 'firebase_js_cdn',
+    'other_foreign_origin', 'query_or_fragment', 'unsafe_path', 'untracked_asset', 'websocket']);
+  const initial = networkCounts(); const next = { ...initial, untracked_asset: 1 };
+  assert.deepEqual(validateNetworkDiagnostic(next, initial), next);
+  const detached = validateNetworkDiagnostic(next); next.untracked_asset = 2; assert.equal(detached.untracked_asset, 1);
+  for (const mutate of [v => v.url = 'https://private.invalid/private-path', v => delete v.websocket,
+    v => v.non_get = -1, v => v.non_get = 0.5, v => v.non_get = 4097,
+    v => { v.non_get = 4096; v.websocket = 1; }, v => v.non_get = 'GET',
+    v => Object.defineProperty(v, 'non_get', { get() { throw Error('private'); } })]) {
+    const value = networkCounts(); mutate(value);
+    assert.throws(() => validateNetworkDiagnostic(value), /^Error: probe_failure$/u);
+  }
+  assert.throws(() => validateNetworkDiagnostic(initial, next), /^Error: probe_failure$/u);
+  assert.throws(() => validateNetworkDiagnostic(next, initial), /^Error: probe_failure$/u);
+});
+test('only primary history_network may expose validated aggregate, never raw request data', async () => {
+  const counts = { ...networkCounts(), other_foreign_origin: 1, untracked_asset: 1 };
+  const networkDiagnostic = () => counts;
+  const adapter = fake({ observe: async () => { throw Error('history_network'); }, networkDiagnostic });
+  const result = await runProbe({ expectedHead: head, adapter });
+  assert.equal(result.code, 'history_network'); assert.deepEqual(result.diagnostic, counts);
+  assert.doesNotMatch(JSON.stringify(result), /private|https:|"host"|"path"|query=|"requestId"|"port"|"pid"|GET|Script/u);
+  const originalCleanup = adapter.cleanup;
+  adapter.cleanup = async () => ({ ...await originalCleanup(), profileRemoved: false });
+  const cleanupFailure = await runProbe({ expectedHead: head, adapter });
+  assert.equal(cleanupFailure.code, 'probe_cleanup'); assert.equal(cleanupFailure.diagnostic?.other_foreign_origin, undefined);
+  assert.equal((await runProbe({ expectedHead: head, adapter: fake({ networkDiagnostic }) })).diagnostic, undefined);
+  const otherFailure = await runProbe({ expectedHead: head, adapter: fake({
+    observe: async () => { throw Error('history_matrix'); }, networkDiagnostic }) });
+  assert.equal(otherFailure.code, 'history_matrix'); assert.equal(otherFailure.diagnostic, undefined);
+  const invalid = await runProbe({ expectedHead: head, adapter: fake({ observe: adapter.observe,
+    networkDiagnostic: () => ({ ...counts, url: 'https://private.invalid/private-path' }) }) });
+  assert.equal(invalid.code, 'probe_failure'); assert.equal(invalid.diagnostic, undefined);
+  const source = fs.readFileSync('test/support/mission_web_history_probe.mjs', 'utf8');
+  assert.match(source, /send\(\{ event: 'network', value: validateNetworkDiagnostic\(networkCounts\) \}\)/u);
+  assert.match(source, /networkSummary = validateNetworkDiagnostic\(row\.value, networkSummary\)/u);
+  assert.match(source, /Fetch\.failRequest/u);
+});
+test('foreign diagnostics distinguish exact public source purposes without admitting or echoing private tails', async () => {
+  const files = new Set(['index.html', 'main.dart.js']);
+  const samples = [
+    ['https://www.gstatic.com/flutter-canvaskit/private-revision/private-file?private-query', 'flutter_canvaskit_cdn'],
+    ['https://fonts.gstatic.com/s/private-family/private-font?private-query', 'flutter_font_fallback_cdn'],
+    ['https://accounts.google.com/gsi/client', 'google_identity_script'],
+    ['https://accounts.google.com/gsi/client?private-query#private-fragment', 'google_identity_script'],
+    ['https://www.gstatic.com/firebasejs/private-version/private-script?private-query', 'firebase_js_cdn'],
+    ['https://www.gstatic.com/flutter-canvaskit-extra/private-tail', 'other_foreign_origin'],
+    ['https://fonts.gstatic.com/s-extra/private-tail', 'other_foreign_origin'],
+    ['https://accounts.google.com/gsi/client/private-tail', 'other_foreign_origin'],
+    ['https://accounts.google.com/gsi/client-extra?private-query', 'other_foreign_origin'],
+    ['https://www.gstatic.com/firebasejs-extra/private-tail', 'other_foreign_origin'],
+    ['https://www.gstatic.com.private.invalid/firebasejs/private-tail', 'other_foreign_origin'],
+    ['https://private-user@www.gstatic.com/firebasejs/private-tail', 'other_foreign_origin'],
+    ['http://fonts.gstatic.com/s/private-tail', 'non_https_scheme'],
+  ];
+  const counts = networkCounts();
+  for (const [url, reason] of samples) {
+    assert.equal(classifyAsset(url, 'Script', files), null);
+    assert.equal(classifyBlockedRequest({ method: 'GET', url, type: 'Script' }, files), reason);
+    assert.equal(classifyBlockedRequest({ method: 'POST', url, type: 'Script' }, files), 'non_get');
+    counts[reason]++;
+  }
+  const result = await runProbe({ expectedHead: head, adapter: fake({
+    observe: async () => { throw Error('history_network'); }, networkDiagnostic: () => counts }) });
+  assert.equal(result.code, 'history_network'); assert.deepEqual(result.diagnostic, counts);
+  const json = JSON.stringify(result);
+  for (const [url] of samples) assert.equal(json.includes(url), false);
+  assert.doesNotMatch(json, /private|https?:|gstatic\.com|accounts\.google\.com|firebasejs\/|gsi\/|\?/u);
+  assert.throws(() => validateNetworkDiagnostic({ ...counts, foreign_origin: 1 }), /^Error: probe_failure$/u);
+});
+test('harness uses production classes, not test route hooks or a replacement router', () => {
+  const source = fs.readFileSync('test/support/mission_web_history_harness.dart', 'utf8');
+  for (const name of ['AppLinkController', 'AppLinkHost', 'WebAppRouterHost', 'FirebaseRuntime.openForegroundMessage']) assert.ok(source.includes(name));
+  assert.doesNotMatch(source, /restoreForTesting|testEnabled|testWeb:|RouterDelegate|pushState|replaceState|AppRoot\(/u);
+});
+
+test('sanitized proof binds artifact/source/toolchain but never emits raw history or target data', async () => {
+  const journal = [];
+  const result = await runProbe({ expectedHead: head, adapter: fake(), journal: row => journal.push(row) });
+  assert.equal(result.status, 'pass');
+  assert.equal(result.evidenceClass, 'exact-production-navigation-code-harness'); assert.equal(result.fullAppRoot, false);
+  assert.equal(result.artifact.artifactDigest, artifact().artifactDigest);
+  assert.equal(result.isolation, isolationScope); assert.equal(result.providerBootstrap, false); assert.equal(result.googleAuth, false);
+  assert.deepEqual(Object.keys(result.artifact).sort(), ['sourceDigest', 'sourceHashes', 'lockSha256', 'toolchain', 'artifactDigest', 'fileCount', 'isolationHashes'].sort());
+  assert.doesNotMatch(JSON.stringify(result), /https:|127\.0\.0|sdkState|serialCount|"instance"|"entry"|\/tmp\/|"pid"|"port"/u);
+  assert.deepEqual(journal.map(v => v.sequence), journal.map((_,i) => i + 1));
+  assert.deepEqual(journal.filter(v => v.result === 'begin').map(v => v.phase), ['inventory', 'build', 'prepare', 'observe', 'cleanup']);
+});
+test('build/network/matrix failures are stable and always clean up; abnormal exit preserves primary error', async () => {
+  for (const stage of ['inventory', 'build', 'prepare', 'observe']) {
+    let cleaned = false;
+    const adapter = fake({ [stage]: async () => { throw Error('private arbitrary failure'); } });
+    const original = adapter.cleanup; adapter.cleanup = async () => { cleaned = true; return { ...await original(), exitCode: 1 }; };
+    const result = await runProbe({ expectedHead: head, adapter });
+    assert.equal(result.status, 'fail'); assert.equal(result.code, 'probe_failure'); assert.equal(cleaned, true);
+    assert.deepEqual(Object.keys(result), ['schemaVersion', 'mode', 'status', 'code']);
+  }
+  for (const [stage, change] of [
+    ['inventory', v => v.clean = false], ['inventory', v => v.chrome = 'wrong'],
+    ['build', v => v.sourceHead = 'b'.repeat(40)], ['build', v => v.files[0].sha256 = '0'.repeat(64)],
+    ['prepare', v => v.links.push('eth0')], ['prepare', v => v.routes4.push({})],
+    ['observe', v => v.blockedUnexpected = 1], ['observe', v => v.networkCounts.google_identity_script = 1],
+    ['observe', v => v.isolationHashes.graphAfterSha256 = '0'.repeat(64)],
+    ['observe', v => v.historyMatrix[2].sdkState.serialCount = 2],
+    ['observe', v => v.artifactDigest = '0'.repeat(64)], ['observe', v => v.sourceHead = '0'.repeat(40)],
+    ['observe', v => v.renderers[0].seccomp = 0], ['cleanup', v => v.profileRemoved = false],
+  ]) {
+    const adapter = fake(); const original = adapter[stage]; adapter[stage] = async () => { const v = await original(); change(v); return v; };
+    assert.equal((await runProbe({ expectedHead: head, adapter })).status, 'fail');
+  }
+});
+test('successor consumers are exact test support only and fake tests register automatically', () => {
+  const allowed = new Set(['test/support/mission_web_history_harness.dart',
+    'test/support/mission_web_history_build.mjs', 'test/support/mission_web_history_probe.mjs',
+    'test/support/notification_release_probe.mjs',
+    'test/tool/mission_web_history_probe.test.mjs', 'test/tool/web_app_router_boundary.test.mjs',
+    '.github/workflows/mission-web-history-proof.yml']);
+  for (const directory of ['lib', 'backend/src', 'test', 'web', 'tool', '.github/workflows']) {
+    for (const name of fs.readdirSync(directory, { recursive: true })) {
+      const file = `${directory}/${name}`;
+      if (!/\.(dart|mjs|js|html|ya?ml)$/u.test(name) || allowed.has(file)) continue;
+      assert.doesNotMatch(fs.readFileSync(file, 'utf8'), /mission_web_history_(?:harness|build|probe)/u, file);
+    }
+  }
+  assert.match(fs.readFileSync('scripts/technical_regression_check.sh', 'utf8'), /test\/tool\/\*\.test\.mjs/u);
+});
+test('strict mode, Linux isolation, deadlines and external cleanup remain source-locked', () => {
+  assert.equal(parseArgs(['--linux-history-harness', '--source-head', head]), head);
+  for (const args of [[], ['https://shareittoo.com'], ['--linux-history-harness', '--source-head', head, '--url', 'arbitrary']]) assert.throws(() => parseArgs(args));
+  assert.doesNotMatch(launchArgs('/tmp/owned').join(' '), /--no-sandbox|--disable-setuid-sandbox|--ignore-certificate-errors|--proxy|--host-resolver/u);
+  assert.ok(privilegeArgs(1001,1001).includes('--no-new-privs'));
+  const source = fs.readFileSync('test/support/mission_web_history_probe.mjs', 'utf8');
+  assert.match(source, /setTimeout\(\(\) => finish\(Error\('probe_timeout'\)\), 60000\)/u);
+  assert.match(source, /ip\(\['netns', 'delete', namespace\]\)/u);
+  assert.match(source, /'\/usr\/bin\/env', '-i'/u);
+  assert.match(source, /ss', '-ltnH'\]/u);
+  assert.match(source, /assetServer\.listen\(0, '127\.0\.0\.1'/u);
+  assert.match(source, /validateObservation\(row\.value, inventory, artifact\)/u);
+  const build = fs.readFileSync('test/support/mission_web_history_build.mjs', 'utf8');
+  assert.match(build, /'pub', 'get', '--enforce-lockfile'/u);
+  assert.match(build, /digest\(readHistoryFile\(project, source\.path\)\) === source\.sha256/u);
+  assert.match(build, /digest\(readHistoryFile\(root, source\.path\)\) === source\.sha256/u);
+});
+test('build cleanup refuses PID/PGID reuse and requires a surviving observed start identity', () => {
+  const identity = { id: 101, start: '1000', known: [{ pid: 101, start: '1000' }, { pid: 102, start: '1001' }] };
+  const leader = { pid: 101, start: '1000', group: 101 };
+  const descendant = { pid: 102, start: '1001', group: 101 };
+  assert.equal(ownsBuildGroup(identity, [leader, descendant]), true);
+  assert.equal(ownsBuildGroup(identity, [descendant, { pid: 103, start: '1002', group: 101 }]), true);
+  for (const members of [[], [{ ...leader, start: '2000' }], [{ ...descendant, start: '2001' }],
+    [{ pid: 999, start: '2002', group: 101 }], [{ ...descendant, group: 999 }],
+    [{ ...leader, start: '2000' }, descendant]]) assert.equal(ownsBuildGroup(identity, members), false);
+  const source = fs.readFileSync('test/support/mission_web_history_probe.mjs', 'utf8');
+  assert.match(source, /const leader = procStat\(id\); check\(leader\.group === id/u);
+  assert.match(source, /signalOwned\('-KILL', -identity\.id, \(\) => ownsBuildRoot\(\) && ownsBuildGroup\(identity, observe\(\)\)\)/u);
+  assert.match(source, /if \(!stillPresent\(\)\) return;/u);
+  const build = fs.readFileSync('test/support/mission_web_history_build.mjs', 'utf8');
+  assert.doesNotMatch(build, /process\.kill\(-child\.pid/u);
+  assert.match(build, /stopOwned = ownGroup\(child\.pid\)/u);
+});
+const proofPaths = ['.github/workflows/mission-web-history-proof.yml',
+  'test/support/mission_web_history_build.mjs', 'test/support/mission_web_history_harness.dart',
+  'test/support/mission_web_history_probe.mjs', 'test/tool/mission_web_history_probe.test.mjs'];
+function validateWorkflow(workflow) {
+  const triggers = workflow.match(/^on:\n([\s\S]*?)\npermissions:/mu)?.[1];
+  assert.equal(triggers, `  pull_request:\n    paths:\n${proofPaths.map(p => `      - '${p}'`).join('\n')}\n  workflow_dispatch:\n    inputs:\n      source_head:\n        description: Exact reviewed source commit (40 lowercase hexadecimal characters)\n        required: true\n        type: string\n`);
+  assert.equal(workflow.match(/^permissions:\n([\s\S]*?)\nconcurrency:/mu)?.[1], '  contents: read\n');
+  assert.equal((workflow.match(/permissions:/gu) ?? []).length, 1);
+  assert.match(workflow, /EVENT_NAME: \$\{\{ github\.event_name \}\}/u);
+  assert.match(workflow, /DISPATCH_SOURCE: \$\{\{ inputs\.source_head \}\}/u);
+  assert.match(workflow, /PR_HEAD: \$\{\{ github\.event\.pull_request\.head\.sha \}\}/u);
+  assert.equal((workflow.match(/ref:/gu) ?? []).length, 1);
+  assert.match(workflow, /ref: \$\{\{ steps\.source\.outputs\.head \}\}/u);
+  assert.match(workflow, /EXPECTED_SOURCE_HEAD: \$\{\{ steps\.source\.outputs\.head \}\}/u);
+  assert.doesNotMatch(workflow, /github\.sha|merge_commit_sha|refs\/pull|pull_request_target|secrets\.|id-token|packages:|upload-artifact|deploy|publish/u);
+  assert.ok(workflow.indexOf('id: source') < workflow.indexOf('actions/checkout@'));
+}
+test('bounded PR paths and manual dispatch bind checkout and runner to one validated exact source', () => {
+  const workflow = fs.readFileSync('.github/workflows/mission-web-history-proof.yml', 'utf8');
+  validateWorkflow(workflow);
+  for (const [from, to] of [
+    ['  pull_request:', '  pull_request_target:'], ['  workflow_dispatch:', '  push:'],
+    ["      - 'test/support/mission_web_history_probe.mjs'", "      - 'test/**'"],
+    ['  contents: read', '  contents: write'], ['  contents: read', '  contents: read\n  id-token: write'],
+    ['github.event_name', 'github.ref'], ['inputs.source_head', 'github.sha'],
+    ['github.event.pull_request.head.sha', 'github.event.pull_request.merge_commit_sha'],
+    ['ref: ${{ steps.source.outputs.head }}', 'ref: ${{ github.sha }}'],
+    ['EXPECTED_SOURCE_HEAD: ${{ steps.source.outputs.head }}', 'EXPECTED_SOURCE_HEAD: ${{ inputs.source_head }}'],
+  ]) assert.throws(() => validateWorkflow(workflow.replace(from, to)));
+  assert.match(workflow, /persist-credentials: false/u); assert.match(workflow, /contents: read/u);
+  assert.match(workflow, /flutter-version: 3\.41\.7/u); assert.match(workflow, /timeout-minutes: 10/u);
+  assert.doesNotMatch(workflow, /secrets\.|id-token|packages:|upload-artifact|deploy/u);
+  const source = fs.readFileSync('test/support/mission_web_history_probe.mjs', 'utf8');
+  const worker = source.slice(source.indexOf('async function worker(directory)'));
+  assert.doesNotMatch(worker, /pub get|npm |curl |wget |flutter build/u);
+});
+// The shell may append bytes, but may not replace the already opened output or
+// change its owner/permissions. Capture must not reopen the post-shell pathname.
+function captureHistoryOutput(directory, action) {
+  const descriptors = [];
+  const identity = ['dev', 'ino', 'mode', 'uid', 'gid', 'nlink'];
+  const metadata = [...identity, 'size', 'mtimeNs', 'ctimeNs'];
+  const same = (a, b, fields = metadata) => fields.every(key => a[key] === b[key]);
+  const fstat = fd => fs.fstatSync(fd, { bigint: true });
+  const lstat = file => fs.lstatSync(file, { bigint: true });
+  const requireThat = ok => { if (!ok) throw Error('history_output_capture'); };
+  const open = (file, flags) => {
+    const fd = fs.openSync(file, flags | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+    descriptors.push(fd); return fd;
+  };
+  try {
+    requireThat(typeof directory === 'string' && path.isAbsolute(directory) && directory !== '/'
+      && path.normalize(directory) === directory && fs.realpathSync(directory) === directory);
+    const parent = open(directory, fs.constants.O_RDONLY | fs.constants.O_DIRECTORY);
+    const parentBefore = fstat(parent);
+    requireThat(parentBefore.isDirectory() && parentBefore.uid === BigInt(process.getuid())
+      && (parentBefore.mode & 0o7777n) === 0o700n && same(parentBefore, lstat(directory)));
+    const file = path.join(directory, 'github-output'); const fd = open(file, fs.constants.O_RDONLY);
+    const before = fstat(fd);
+    requireThat(before.isFile() && before.uid === BigInt(process.getuid()) && before.nlink === 1n
+      && (before.mode & 0o7777n) === 0o600n && before.size === 0n && same(before, lstat(file)));
+    const stableParent = () => requireThat(same(parentBefore, fstat(parent))
+      && same(parentBefore, lstat(directory)) && fs.realpathSync(directory) === directory);
+    stableParent();
+    const value = action();
+    stableParent(); const ready = fstat(fd);
+    requireThat(same(before, ready, identity) && same(ready, lstat(file)) && ready.size >= 0n && ready.size <= 4096n);
+    const bytes = Buffer.alloc(Number(ready.size)); let offset = 0;
+    while (offset < bytes.length) {
+      const count = fs.readSync(fd, bytes, offset, bytes.length - offset, offset);
+      requireThat(count > 0); offset += count;
+    }
+    requireThat(fs.readSync(fd, Buffer.alloc(1), 0, 1, bytes.length) === 0
+      && same(ready, fstat(fd)) && same(ready, lstat(file)));
+    stableParent(); return { value, bytes: bytes.toString('utf8') };
+  } catch { throw Error('history_output_capture'); }
+  finally {
+    let failed = false;
+    for (const fd of descriptors.reverse()) { try { fs.closeSync(fd); } catch { failed = true; } }
+    if (failed) throw Error('history_output_capture');
+  }
+}
+
+function outputFixture(t) {
+  const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sit-history-output-')));
+  fs.chmodSync(directory, 0o700);
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const file = path.join(directory, 'github-output'); fs.writeFileSync(file, '', { flag: 'wx', mode: 0o600 });
+  return { directory, file };
+}
+
+test('output oracle captures bounded appended bytes through the original descriptor, including short reads', t => {
+  const f = outputFixture(t); const read = fs.readSync; const open = fs.openSync; const opened = []; const closed = [];
+  const close = fs.closeSync;
+  t.mock.method(fs, 'readFileSync', () => { throw Error('path read forbidden'); });
+  t.mock.method(fs, 'openSync', (file, flags, ...args) => {
+    if (typeof flags === 'number') {
+      assert.ok(flags & fs.constants.O_NOFOLLOW); assert.ok(flags & fs.constants.O_NONBLOCK);
+      const fd = open(file, flags, ...args); opened.push(fd); return fd;
+    }
+    return open(file, flags, ...args);
+  });
+  t.mock.method(fs, 'closeSync', fd => { close(fd); closed.push(fd); });
+  t.mock.method(fs, 'readSync', (fd, buffer, offset, length, position) => read(fd, buffer, offset, Math.min(3, length), position));
+  assert.deepEqual(captureHistoryOutput(f.directory, () => { fs.appendFileSync(f.file, 'head=synthetic\n'); return 'completed'; }),
+    { value: 'completed', bytes: 'head=synthetic\n' });
+  assert.ok(opened.every(fd => closed.includes(fd)));
+});
+
+for (const variant of ['replacement', 'symlink', 'hardlink', 'permissions', 'parent-permissions', 'oversize',
+  'read-replacement', 'read-growth', 'read-truncate', 'read-permissions']) {
+  test(`output oracle rejects ${variant} without exposing paths`, t => {
+    const f = outputFixture(t); const read = fs.readSync;
+    let changed = false;
+    const mutate = () => {
+      changed = true;
+      if (variant.endsWith('replacement') || variant === 'symlink') {
+        fs.renameSync(f.file, path.join(f.directory, 'old'));
+        if (variant === 'symlink') fs.symlinkSync('old', f.file); else fs.writeFileSync(f.file, 'unchanged', { mode: 0o600 });
+      }
+      if (variant === 'hardlink') fs.linkSync(f.file, path.join(f.directory, 'linked'));
+      if (variant === 'permissions' || variant === 'read-permissions') fs.chmodSync(f.file, 0o644);
+      if (variant === 'parent-permissions') fs.chmodSync(f.directory, 0o755);
+      if (variant === 'oversize' || variant === 'read-growth') fs.appendFileSync(f.file, Buffer.alloc(4097));
+      if (variant === 'read-truncate') fs.truncateSync(f.file, 1);
+    };
+    t.mock.method(fs, 'readSync', (fd, buffer, ...args) => {
+      if (!changed && variant.startsWith('read-')) mutate();
+      assert.ok(buffer.length <= 'unchanged'.length); return read(fd, buffer, ...args);
+    });
+    assert.throws(() => captureHistoryOutput(f.directory, () => {
+      fs.appendFileSync(f.file, 'unchanged'); if (!variant.startsWith('read-')) mutate();
+    }), { message: 'history_output_capture' });
+    assert.equal(changed, true);
+  });
+}
+
+function replaceOutputFixture(file, archivedFile) {
+  fs.renameSync(file, archivedFile);
+  // A replacement deliberately needs a new inode; exclusive creation must
+  // reject any file or symlink that appears after the original is moved.
+  fs.writeFileSync(file, '', { flag: 'wx', mode: 0o600 });
+}
+
+for (const collision of ['file', 'symlink']) {
+  test(`output replacement fixture refuses an intervening ${collision} without overwriting it`, t => {
+    const f = outputFixture(t); const rename = fs.renameSync;
+    const archived = path.join(f.directory, 'old');
+    const foreign = path.join(f.directory, 'foreign');
+    const foreignBytes = 'synthetic foreign evidence must survive';
+    fs.writeFileSync(foreign, foreignBytes, { flag: 'wx', mode: 0o600 });
+    t.mock.method(fs, 'renameSync', (source, destination) => {
+      rename(source, destination);
+      if (source === f.file && destination === archived) {
+        if (collision === 'symlink') fs.symlinkSync(foreign, f.file);
+        else fs.writeFileSync(f.file, foreignBytes, { flag: 'wx', mode: 0o600 });
+      }
+    });
+    assert.throws(() => replaceOutputFixture(f.file, archived), { code: 'EEXIST' });
+    assert.equal(fs.readFileSync(foreign, 'utf8'), foreignBytes);
+    assert.equal(fs.readFileSync(f.file, 'utf8'), foreignBytes);
+    assert.equal(fs.readFileSync(archived, 'utf8'), '');
+  });
+}
+
+for (const variant of ['open-replacement', 'initial-symlink', 'initial-mode', 'read-error', 'close-error']) {
+  test(`output oracle fails closed on ${variant} and closes every retained descriptor`, t => {
+    const f = outputFixture(t); const open = fs.openSync; const close = fs.closeSync;
+    const opened = []; const closed = []; let replaced = false;
+    if (variant === 'initial-symlink') { fs.renameSync(f.file, path.join(f.directory, 'old')); fs.symlinkSync('old', f.file); }
+    if (variant === 'initial-mode') fs.chmodSync(f.file, 0o644);
+    t.mock.method(fs, 'openSync', (file, ...args) => {
+      const fd = open(file, ...args); opened.push(fd);
+      if (!replaced && variant === 'open-replacement' && file === f.file) {
+        replaced = true; replaceOutputFixture(file, path.join(f.directory, 'old'));
+      }
+      return fd;
+    });
+    t.mock.method(fs, 'closeSync', fd => { close(fd); closed.push(fd); if (variant === 'close-error') throw Error('/private/close'); });
+    if (variant === 'read-error') t.mock.method(fs, 'readSync', () => { throw Error('https://outside.invalid /private/path'); });
+    assert.throws(() => captureHistoryOutput(f.directory, () => undefined), { message: 'history_output_capture' });
+    assert.deepEqual(closed.toSorted(), opened.toSorted());
+  });
+}
+
+test('source selector accepts only exact event-specific 40hex heads without merge fallback or payload output', () => {
+  const workflow = fs.readFileSync('.github/workflows/mission-web-history-proof.yml', 'utf8');
+  const block = workflow.match(/      - name: Validate exact source\n([\s\S]*?)      - uses: actions\/checkout/mu)?.[1];
+  assert.ok(block);
+  const script = block.split('        run: |\n')[1].split('\n').map(line => line.startsWith('          ') ? line.slice(10) : line).join('\n');
+  const run = (event, dispatch, pr) => {
+    const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sit-history-file-command-')));
+    try {
+      fs.chmodSync(directory, 0o700);
+      const output = path.join(directory, 'github-output');
+      fs.writeFileSync(output, '', { flag: 'wx', mode: 0o600 });
+      const captured = captureHistoryOutput(directory, () => {
+        try {
+          return { stdout: execFileSync('/bin/bash', ['-e', '-u', '-o', 'pipefail', '-c', script], {
+            env: { EVENT_NAME: event, DISPATCH_SOURCE: dispatch, PR_HEAD: pr, GITHUB_OUTPUT: output },
+            encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 1000,
+          }) };
+        } catch (error) { return { error }; }
+      });
+      if (captured.value.error) {
+        assert.equal(captured.bytes, '');
+        throw captured.value.error;
+      }
+      assert.equal(captured.value.stdout, '');
+      return captured.bytes;
+    } finally {
+      fs.rmSync(directory, { recursive: true });
+      assert.equal(fs.existsSync(directory), false);
+    }
+  };
+  assert.equal(run('pull_request', 'b'.repeat(40), head), `head=${head}\n`);
+  assert.equal(run('workflow_dispatch', head, 'b'.repeat(40)), `head=${head}\n`);
+  for (const values of [['push', head, head], ['pull_request_target', head, head],
+    ['pull_request', head, ''], ['workflow_dispatch', '', head], ['pull_request', head, 'A'.repeat(40)],
+    ['workflow_dispatch', `${head}\nprivate`, head], ['pull_request', head, 'refs/pull/1/merge'],
+    ['workflow_dispatch', '$(private)', head]]) {
+    assert.throws(() => run(...values), error => error.status === 1 && error.stdout === '' && error.stderr === 'history_source\n');
+  }
+});

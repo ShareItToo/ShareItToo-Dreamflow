@@ -1,0 +1,61 @@
+{
+  "package": "WP76_OPERATOR_LEGAL_AND_ROLE_READINESS",
+  "date": "2026-09-09",
+  "status": "draft-only-readiness-complete-public-commercial-no-go",
+  "scope": {
+    "operatorFacts": "confirmed-draft-only",
+    "legalScreenBinding": "validated",
+    "roleReadiness": "validated",
+    "liveOrExternalMutation": false
+  },
+  "operatorDraft": {
+    "sourceFile": "assets/legal/de/operator_readiness_draft_20260909.json",
+    "sha256": "35fd214b0cf355a2f1ee6084a89294f63495d0def49dffa8036105adb778bfcf",
+    "businessDesignation": "ShareItToo – Inhaber Walid Chraibi",
+    "legalForm": "sole-proprietor",
+    "businessRegistration": "required-at-actual-start-not-yet-recorded",
+    "taxNumber": "applied-for-not-issued-not-recorded"
+  },
+  "historicalLegalBaseline": {
+    "v5ManifestSha256": "6cffec53a27f84b24a44aebad50afd6e7ce17a4c196c7946155fba743fdc161f",
+    "v52ManifestSha256": "757289c45dfe50c9f3f3ec9c96953f06b62f15b282bb1d6cdedc6e8e07d2e69b",
+    "preserved": true,
+    "currentDraftSupersedesOnlyContradictoryOperatorPlaceholders": true
+  },
+  "roles": {
+    "soleFounderPrimaryRoleMappings": 6,
+    "independentDelegateAssignments": 0,
+    "technicalRehearsalEvidence": 4,
+    "humanAbsenceRehearsalEvidence": 0,
+    "operationsReady": false,
+    "futureDelegateTargets": 2,
+    "founderSelfDelegationAllowed": false
+  },
+  "openProfessionalReview": [
+    "legal-texts",
+    "retention-and-deletion",
+    "dpa-and-international-transfers",
+    "consumer-and-marketplace-classification",
+    "dsa-applicability"
+  ],
+  "externalHolds": {
+    "publicCommercialOperation": false,
+    "realInvitations": false,
+    "realMoney": false,
+    "bindingContractAcceptance": false,
+    "publicRegistration": false,
+    "storeActivation": false,
+    "providerActivation": false,
+    "productionRelease": false
+  },
+  "verification": {
+    "focusedValidators": "passed",
+    "fullLocalTechnicalRegression": "passed",
+    "fullGateIncludes": [
+      "static-analysis",
+      "Flutter-tests",
+      "Web-Wasm-loopback-smoke",
+      "Android-debug-build"
+    ]
+  }
+}

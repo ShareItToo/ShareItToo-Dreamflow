@@ -1,0 +1,145 @@
+{
+  "schemaVersion": 4,
+  "version": "V5.4-2026-09-15",
+  "status": "draft-blocked-after-ai-corrections",
+  "activationAllowed": false,
+  "publiclyPublished": false,
+  "effectiveDate": null,
+  "professionalLegalApproval": false,
+  "ownerAdoptionRecorded": false,
+  "operator": {
+    "businessDesignation": "ShareItToo – Inhaber Walid Chraibi",
+    "ownerName": "Walid Chraibi",
+    "legalForm": "sole-proprietor",
+    "serviceAddress": "Bernhaldenweg 47, 71579 Spiegelberg, Deutschland",
+    "contactEmail": "contact@shareittoo.com",
+    "businessRegistration": "required-at-actual-start-not-yet-recorded",
+    "taxNumber": "applied-for-not-issued-not-recorded",
+    "vatId": "not-recorded",
+    "economicIdentificationNumber": "not-recorded",
+    "registerEntry": "not-recorded"
+  },
+  "derivation": {
+    "historicalV52AndV53RemainUnchanged": true,
+    "historicalV52ManifestPath": "assets/legal/de/legal_manifest_v52.json",
+    "historicalV52ManifestSha256": "757289c45dfe50c9f3f3ec9c96953f06b62f15b282bb1d6cdedc6e8e07d2e69b",
+    "predecessorV53ManifestPath": "assets/legal/de/legal_manifest_v53.json",
+    "predecessorV53ManifestSha256": "d1265d31f68a7c616d782a78cd77c22eadb03dabbbd7e9ebe36a485d6d1a49c6",
+    "aiPreassessmentManifestPath": "assets/legal/de/p0b-ai-preassessment-2026-09-14.1/manifest.json",
+    "aiPreassessmentManifestSha256": "ff752ea1a9192d91d0940678d3ba403fda327cc25bf413eaaa59f8d89477552e",
+    "astraCrosscheckManifestPath": "assets/legal/de/p0b-astra-ai-crosscheck-2026-09-14.1/manifest.json",
+    "astraCrosscheckManifestSha256": "b5c062ab65c3c651d983a3624bf1e236d8de8881ccc79f64bd5d3818569c3772",
+    "astraVerdictMatrixPath": "assets/legal/de/p0b-astra-ai-crosscheck-2026-09-14.1/02_verdict_matrix.json",
+    "astraVerdictMatrixSha256": "f1c66c993d966b0d6c83c1e7b5201e7da9de9d515b53aa77f10aa6faffeb48d8",
+    "astraOutcome": "CORRECTIONS_REQUIRED",
+    "astraCaptureComplete": false
+  },
+  "correctionScope": {
+    "addressedInThisDraft": [
+      "groupPlatformContractScope",
+      "completeOfferAndCounterOfferSemantics",
+      "checkoutAndDurableConfirmation",
+      "withdrawalAndFixedPeriodRental",
+      "partialPerformanceAndDivisibilityConsequences",
+      "groupAndPositionCancellationRefundRules",
+      "groupConfirmationAndReceiptIssuerContent"
+    ],
+    "confirmedAndPreserved": [
+      "groupPrivateRentalContractModel",
+      "sharedAppointmentAndPositionEvidenceEffect",
+      "positionLedgerRefundAndChargebackAllocation"
+    ],
+    "stillOpenForLaterPackages": [
+      "positionNeedsReviewAndUnrelatedRelease",
+      "privacyPurposesLegalBasesAndRecipients",
+      "accountExportCompletenessAndCounterpartyProtection",
+      "retentionDeletionLegalHoldPeriodsAndTriggers",
+      "marketplaceTransparencyDsaAndModeration"
+    ],
+    "insufficientExternalEvidence": [
+      "operatorIdentityAndImprint",
+      "groupPaymentAuthorizationAndProviderContract",
+      "businessGlobalConsumerAndTraderVariants"
+    ]
+  },
+  "officialSources": {
+    "bgbOfferBinding145": "https://www.gesetze-im-internet.de/bgb/__145.html",
+    "bgbAcceptancePeriod147": "https://www.gesetze-im-internet.de/bgb/__147.html",
+    "bgbChangedAcceptance150": "https://www.gesetze-im-internet.de/bgb/__150.html",
+    "bgbSuspensiveCondition158": "https://www.gesetze-im-internet.de/bgb/__158.html",
+    "bgbTextForm126b": "https://www.gesetze-im-internet.de/bgb/__126b.html",
+    "bgbDurableConfirmation312f": "https://www.gesetze-im-internet.de/bgb/__312f.html",
+    "bgbElectronicOrder312j": "https://www.gesetze-im-internet.de/bgb/__312j.html",
+    "bgbWithdrawal355": "https://www.gesetze-im-internet.de/bgb/__355.html",
+    "bgbElectronicWithdrawal356a": "https://www.gesetze-im-internet.de/bgb/__356a.html",
+    "bgbWithdrawalConsequences357": "https://www.gesetze-im-internet.de/bgb/__357.html",
+    "bgbRentalDuties535": "https://www.gesetze-im-internet.de/bgb/__535.html",
+    "egbgbConsumerInformation246a1": "https://www.gesetze-im-internet.de/bgbeg/art_246a__1.html",
+    "egbgbInformationForm246a4": "https://www.gesetze-im-internet.de/bgbeg/art_246a__4.html",
+    "egbgbMarketplaceInformation246d1": "https://www.gesetze-im-internet.de/bgbeg/art_246d__1.html"
+  },
+  "contractModel": {
+    "platformContractParty": "renter-and-sit",
+    "privateRentalContractParties": "renter-and-private-owner",
+    "privateRentalStructure": "one-group-contract-with-ordered-position-annex",
+    "listingMeaning": "invitation-to-offer",
+    "changedOrLateAcceptanceMeaning": "rejection-plus-new-counteroffer",
+    "paymentCondition": "suspensive-condition-only-when-prominently-disclosed",
+    "transportUnknownMeaning": "outcome-unknown-reconciliation-required",
+    "unrelatedPositionsRemainUnaffected": true
+  },
+  "receiptRoles": {
+    "rentDebtor": "renter",
+    "rentCreditorAndServiceProvider": "private-owner",
+    "platformFeeDebtor": "renter",
+    "platformFeeCreditorAndServiceProvider": "sit",
+    "paymentConfirmationIssuer": "licensed-provider-after-separate-approval",
+    "paymentConfirmationIsUnderlyingInvoice": false,
+    "combinedOverviewMayBeSingleInvoice": false
+  },
+  "runtimePreparation": {
+    "registryPath": "backend/src/legal_contract_version_registry.js",
+    "activeBindingVersion": "V5.2-2026-08-16",
+    "preparedInactiveVersion": "V5.4-2026-09-15",
+    "preparedVersionBindingAcceptanceAllowed": false,
+    "unknownVersionFallbackAllowed": false,
+    "runtimeActivationChanged": false
+  },
+  "documents": [
+    {"part":"A","type":"platform_terms","path":"assets/legal/de/v54/part_a_platform_terms.html","title":"Teil A – Plattform-Nutzungsbedingungen","sha256":"62efb4b493a8c53101c0ae90b163dbfcc996b90321876f8195590163197db4ad"},
+    {"part":"B","type":"private_rental_terms","path":"assets/legal/de/v54/part_b_private_rental_terms.html","title":"Teil B – Private Gruppen-Mietbedingungen","sha256":"63511b1cba7a425d12814e28bc4ce8e6c8fcd4f49c6f6540bfb94325bba2646d"},
+    {"part":"C","type":"cancellation_refund","path":"assets/legal/de/v54/part_c_cancellation_refund.html","title":"Teil C – Storno-, Beendigungs- und Refund-Matrix","sha256":"05a7f12ac3e8fbb3846e98f91bcc291bbb09c8b7bbc4329e619ee1bea5dd12a4"},
+    {"part":"D","type":"handover_return_damage","path":"assets/legal/de/v54/part_d_handover_return_damage.html","title":"Teil D – Übergabe, Rückgabe und Schäden","sha256":"cb4e9b828efad3b5eaceaeba9ccf7452aba318357b2e260f572b361421c9db7b"},
+    {"part":"E","type":"payment_payout","path":"assets/legal/de/v54/part_e_payment_payout.html","title":"Teil E – Zahlung, Auszahlung und Belege","sha256":"d8a18fdc85cc26caf0ad85f490c36894173cdbf709b69fe644600b262a4f6699"},
+    {"part":"F","type":"community_safety","path":"assets/legal/de/v54/part_f_community_safety.html","title":"Teil F – Community und Sicherheit","sha256":"6f6fea5edec90a0b86461abb0930d175965b33b7119e778a88b1e9ed5bc5222a"},
+    {"part":"G","type":"reporting_moderation_review","path":"assets/legal/de/v54/part_g_reporting_moderation_review.html","title":"Teil G – Meldung, Moderation und Review","sha256":"e7e342131382f44d708fae6ce6285b72864c2f57a54d9e2053149e88f84bbcae"},
+    {"part":"H","type":"privacy","path":"assets/legal/de/v54/part_h_privacy.html","title":"Teil H – Datenschutz","sha256":"ef979030c4092999b756b94230ed5231dba0b726d62144bb9384de82f6367b40"},
+    {"part":"I","type":"imprint_withdrawal_shorttexts","path":"assets/legal/de/v54/part_i_imprint_withdrawal_shorttexts.html","title":"Teil I – Impressum, Widerruf und Kurztexte","sha256":"ae759e5e460419041daa3938e33de538b1b3216db4033d78a5022f978ce98a76"}
+  ],
+  "openProfessionalReviewGates": [
+    "operator-and-imprint-completeness",
+    "business-registration-at-actual-start",
+    "tax-treatment-and-invoice-logic",
+    "consumer-marketplace-and-agb-classification",
+    "contract-scope-offer-checkout-cancellation-withdrawal-and-receipts",
+    "payment-service-provider-contract-and-zag-flow",
+    "privacy-retention-deletion-and-supervisory-authority",
+    "processor-dpa-region-and-transfer-evidence",
+    "dsa-classification-contact-points-terms-and-notice-action",
+    "business-global-and-trader-variants",
+    "public-route-and-download-delivery"
+  ],
+  "externalBoundaries": {
+    "publicCommercialOperation": false,
+    "publicRegistration": false,
+    "realInvitations": false,
+    "bindingContractAcceptance": false,
+    "realMoney": false,
+    "paymentProviderActivation": false,
+    "storeActivation": false,
+    "productionRelease": false,
+    "firebaseChanged": false,
+    "cloudOrVpsChanged": false,
+    "pullRequestMerged": false
+  }
+}

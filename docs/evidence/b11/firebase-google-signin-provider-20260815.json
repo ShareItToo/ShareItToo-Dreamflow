@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "kind": "firebase-google-signin-provider-configuration",
+  "capturedAt": "2026-08-15T15:13:07Z",
+  "status": "google-provider-enabled-configs-refreshed-release-gates-closed",
+  "firebase": {
+    "projectId": "shareittoo-staging",
+    "providerId": "google.com",
+    "providerEnabled": true,
+    "phoneProviderStillEnabled": true,
+    "appleProviderEnabled": false,
+    "facebookProviderEnabled": false,
+    "publicProjectName": "ShareItToo",
+    "businessSupportContactConfigured": true
+  },
+  "localConfigurations": {
+    "android": {
+      "path": "android/app/google-services.json",
+      "sha256": "e77e8761cc69f0aa7019ffe2b7ccdf31b01b4e804c37e138820db6a4e02f51eb",
+      "projectAndPackageVerified": true,
+      "oauthClientCount": 3,
+      "certificateBoundClientCount": 2,
+      "distinctCertificateHashCount": 2,
+      "uploadSigningSha1ClientPresent": true,
+      "playAppSigningSha1ClientPresent": true,
+      "webClientCount": 1,
+      "playSigningCoverageEvidenceRef": "docs/evidence/b11/firebase-phone-play-signing-allowlist-20260814.json",
+      "gitIgnored": true,
+      "ownerOnlyPermissions": true
+    },
+    "ios": {
+      "path": "ios/Runner/GoogleService-Info.plist",
+      "sha256": "2928f12ddb24aa01882636a8c4eeb0afe6ff462efd12568cf83e0b21cf68e93c",
+      "projectAndBundleVerified": true,
+      "googleClientIdPresent": true,
+      "reversedClientIdPresent": true,
+      "googleSignInEnabled": true,
+      "analyticsEnabled": false,
+      "advertisingEnabled": false,
+      "gitIgnored": true,
+      "ownerOnlyPermissions": true
+    },
+    "previousFilesBackedUpOutsideRepository": true,
+    "crossPlatformValidation": "passed-google-oauth-upload-and-play-signing-covered"
+  },
+  "stagingBackendProbe": {
+    "route": "/v1/auth/social",
+    "syntheticInvalidTokenHttpStatus": 401,
+    "syntheticInvalidTokenErrorCode": "invalid_social_token",
+    "result": "endpoint-enabled-invalid-token-rejected",
+    "accountCreated": false,
+    "validProviderTokenUsed": false
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081509",
+    "commit": "3fa045b98897f9551f91da932136c2b100b2d700",
+    "googleLoginReleaseGateEnabled": false,
+    "appleLoginReleaseGateEnabled": false,
+    "facebookLoginReleaseGateEnabled": false
+  },
+  "nextRequired": [
+    "include Google login only in the next consolidated candidate",
+    "validate the Google account chooser, SIT consent, account linking and logout on a physical staging device",
+    "keep Apple blocked until Apple Developer configuration exists",
+    "keep Facebook blocked until the Meta app and its provider configuration exist"
+  ],
+  "boundaries": {
+    "firebaseGoogleProviderChanged": true,
+    "backendDeploymentChanged": false,
+    "newAppCandidateBuilt": false,
+    "currentPlayCandidateChanged": false,
+    "productionChanged": false,
+    "realUserAccountCreated": false,
+    "providerLoginPerformed": false,
+    "containsSecrets": false,
+    "containsClientIds": false,
+    "containsEmailAddresses": false,
+    "containsAccountIdentifiers": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

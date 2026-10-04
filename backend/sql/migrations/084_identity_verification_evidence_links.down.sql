@@ -1,0 +1,4 @@
+DROP INDEX IF EXISTS identity_verification_webhook_session_idx;
+DROP INDEX IF EXISTS identity_verification_redaction_session_idx;
+ALTER TABLE identity_verification_webhook_events DROP COLUMN IF EXISTS identity_session_id;
+ALTER TABLE identity_verification_redaction_outbox DROP COLUMN IF EXISTS identity_session_id;

@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp05-background-family-contrast-local",
+  "observedOn": "2026-09-05",
+  "status": "VERIFIED_LOCAL_SUCCESSOR_CANDIDATE_PENDING",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "baseHead": "56c0c01346f3a447d285df405070943449cd155f",
+    "implementationHead": "833dfc1361cef532b1fe7394b79de581776377bb"
+  },
+  "retainedFinding": {
+    "priorCandidateBuildNumber": "2026090407",
+    "priorCandidateCommit": "8f66c9a823abbd01119c729d747a43ad4018a542",
+    "severity": "P1",
+    "condition": "persisted-dark-background-with-system-light-mode",
+    "priorCandidateEvidenceRemainsImmutable": true
+  },
+  "correction": {
+    "explicitDarkBackgroundSelectsDarkTheme": true,
+    "explicitLightBackgroundSelectsLightTheme": true,
+    "clearedChoiceRestoresSystemTheme": true,
+    "systemResetIsPersisted": true,
+    "systemResetMinimumTouchTargetDp": 48,
+    "exactSelectionSemantics": true,
+    "familyAwareBackgroundScrim": true,
+    "familyAwarePreviewLabels": true,
+    "backgroundAssetsChanged": false,
+    "globalThemeRedesignPerformed": false,
+    "workaroundIntroduced": false
+  },
+  "focusedVerification": {
+    "controllerAndWidgetTestsPassed": 2,
+    "combinedResilienceTestsPassed": 7,
+    "declaredProfileSkips": 1,
+    "wiringTestsPassed": 4,
+    "analyzerIssues": 0,
+    "diffCheck": "PASS",
+    "workingTreeSecretScan": "PASS"
+  },
+  "fullTechnicalRegression": {
+    "status": "PASS",
+    "defaultFlutterSuite": "PASS",
+    "mandatoryProfiles": "PASS",
+    "analyzerIssues": 0,
+    "webBuild": "PASS",
+    "wasmDryRun": "PASS",
+    "loopbackSmoke": "PASS",
+    "androidDebugBuild": "PASS",
+    "minSdk": 24,
+    "androidReleaseSurface": "PASS",
+    "thirdPartyGradleDeprecationWarningsVisible": true,
+    "newSitOwnedAndroidWarnings": false
+  },
+  "sourceInventory": [
+    {
+      "path": "lib/main.dart",
+      "sha256": "d803c1e10f4600e5ffda883af02f03e354c9f3579964268434f7a8ebb7cbe472"
+    },
+    {
+      "path": "lib/screens/background_settings_screen.dart",
+      "sha256": "72cd3ba612d9574f0c8ff4bafe03b7fef6afe66f53699d33af135211f8b08380"
+    },
+    {
+      "path": "lib/services/background_theme_service.dart",
+      "sha256": "f4807c751f43363902e5c608d6a32fa85da3e255c5fe97841f451d9658eb5795"
+    },
+    {
+      "path": "lib/theme.dart",
+      "sha256": "52dbf446a04882a0e5b4191628775209d5579788d508c997aa489456d49385e0"
+    },
+    {
+      "path": "test/background_theme_contrast_test.dart",
+      "sha256": "bbf2b043bce34782e83577d833bcbe254ed4bab8b67a57af2f2222d2eca7519d"
+    },
+    {
+      "path": "test/tool/background_theme_contrast_wiring.test.mjs",
+      "sha256": "606a4fcadff81f657eb37f055135c879f6a9346ff29670d70194537195fefcf1"
+    }
+  ],
+  "nextGates": {
+    "strictlyNewerSignedCandidate": "OPEN",
+    "exactCleanCheckoutReproducibility": "OPEN",
+    "pixelVisualAcceptance": "OPEN",
+    "exactGithubRegressionAndCodeql": "OPEN"
+  },
+  "boundaries": {
+    "priorCandidateOverwritten": false,
+    "pixelChanged": false,
+    "onePlusContacted": false,
+    "backendDeployed": false,
+    "providerConfigurationChanged": false,
+    "googlePlayChanged": false,
+    "productionChanged": false,
+    "realMoneyUsed": false,
+    "credentialsPrintedOrCopied": false,
+    "pullRequestMerged": false
+  }
+}

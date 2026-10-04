@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "kind": "store-review-access-diagnostic",
+  "status": "technical-review-access-passed-store-fields-pending",
+  "capturedAt": "2026-08-15T00:16:10.442Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081411",
+    "commit": "7f86ffd1a2c18a41a8b0479c5deba5251fb3a911"
+  },
+  "roles": [
+    "owner",
+    "renter"
+  ],
+  "checks": {
+    "isolatedStagingFixture": true,
+    "ownerPasswordLoginWithoutOtp": true,
+    "renterPasswordLoginWithoutOtp": true,
+    "ownerActiveVerifiedAndConsented": true,
+    "renterActiveVerifiedAndConsented": true,
+    "ownerListingVisible": true,
+    "acceptedBookingVisibleToBothRoles": true,
+    "sharedChatVisibleToBothRoles": true,
+    "sharedChatReadableByBothRoles": true
+  },
+  "environment": {
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "paymentMode": "memory",
+    "stripeLivemode": false,
+    "paymentEndpointCalled": false
+  },
+  "boundaries": {
+    "productDataReadOnly": true,
+    "businessDataMutations": false,
+    "authenticationSessionsCreated": true,
+    "containsSecrets": false,
+    "containsEmailAddresses": false,
+    "containsTokens": false,
+    "containsAccountIdentifiers": false,
+    "containsFixtureIdentifiers": false,
+    "syntheticAccountsOnly": true,
+    "publicStoreChanged": false,
+    "productionChanged": false
+  }
+}

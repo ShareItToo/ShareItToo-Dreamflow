@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-release-candidate",
+  "status": "installed-pending-manual-matrix",
+  "generatedAt": "2026-08-10T01:28:42Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081009",
+    "commit": "199ce55d4b28cf8dc48f416419d349b669edddcc",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "android": {
+    "delivery": "pending",
+    "aabSha256": "714d1b555fbed2ea08647f372c8322741643a14c79c4159a1ef77d4eef08a6aa",
+    "apkSha256": "9eb533503575b46db1dcdccfd17d2a1fe590fe725c50fb2e9baad005259ef4ff",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "packageIdentityVerified": true
+  },
+  "privacyAndNetwork": {
+    "binaryScan": "passed",
+    "targetSdkVersion": 35,
+    "backupDisabled": true,
+    "cleartextTrafficDisabled": true,
+    "analyticsSdkPresent": false,
+    "advertisingSdkPresent": false,
+    "disclosedSdks": [
+      "Firebase Cloud Messaging",
+      "Firebase Crashlytics"
+    ],
+    "findings": []
+  },
+  "accessibilityDiagnostics": {
+    "largeTextScale": 2.0,
+    "firstCategoryBoundary": "passed",
+    "lastCategoryBoundary": "passed",
+    "horizontalCategoryScroll": "passed",
+    "originalFontScaleRestored": true,
+    "restoredFontScale": 0.85,
+    "screenReader": "not-tested"
+  },
+  "offlineRecoveryDiagnostics": {
+    "checkedAt": "2026-08-10T01:35:26.000Z",
+    "offlineErrorState": "passed",
+    "retryActionVisible": true,
+    "networkRecovery": "passed",
+    "originalWifiStateRestored": true,
+    "originalMobileDataStateRestored": true
+  },
+  "staging": {
+    "serverCommit": "9a1371e02d8e7d63d3dee30ca169c6c7f37fa966",
+    "liveHttpStatus": 200,
+    "readyHttpStatus": 200,
+    "fcmEnabled": true,
+    "googleCredentialValidation": "passed",
+    "productionInvariant": "passed"
+  },
+  "boundaries": {
+    "uploadedToStore": false,
+    "installedOnPhysicalDevice": true,
+    "realPushSent": false,
+    "iosValidated": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}
