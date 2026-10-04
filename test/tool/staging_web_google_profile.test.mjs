@@ -99,7 +99,8 @@ test('Google successor binds the same canonical digest and compile-time fields a
     if (!['SIT_SOCIAL_GOOGLE_ENABLED', 'SIT_SOCIAL_PROVIDER_ACTIVATION_VALIDATED'].includes(key)) assert.equal(p[key], value, key);
   }
   const dart = fs.readFileSync(path.join(repo, 'lib/services/web_google_auth.dart'), 'utf8');
-  const keyOrder = [...dart.matchAll(/^\s*'([A-Za-z]+)': [A-Za-z]+,$/gm)].map((match) => match[1]);
+  const publicConfigBody = dart.match(/Map<String, String> get _publicConfig => \{([\s\S]*?)\n\s*\};/u)?.[1] ?? '';
+  const keyOrder = [...publicConfigBody.matchAll(/^\s*'([A-Za-z]+)': [A-Za-z]+,$/gm)].map((match) => match[1]);
   assert.deepEqual(keyOrder, Object.keys(googleWeb.config));
   const runtime = fs.readFileSync(path.join(repo, 'lib/services/firebase_runtime.dart'), 'utf8');
   for (const key of Object.keys(p).filter((key) => key.startsWith('SIT_FIREBASE_'))) assert.ok(runtime.includes(`'${key}'`), key);

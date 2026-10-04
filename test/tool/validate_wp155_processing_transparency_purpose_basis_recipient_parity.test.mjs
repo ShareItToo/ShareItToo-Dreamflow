@@ -16,7 +16,7 @@ const evidence = JSON.parse(readFileSync(evidencePath, 'utf8'));
 
 test('accepts the fail-closed WP155 processing-transparency package', () => {
   const result = validateWp155ProcessingTransparency({ repositoryRoot });
-  assert.equal(result.processingActivityCount, 14);
+  assert.equal(result.processingActivityCount, 15);
   assert.equal(result.approvedProcessingDecisions, 0);
   assert.equal(result.externalGates, 'hold');
 });
@@ -54,9 +54,13 @@ test('rejects an incomplete consent, Article 9 or service-recipient register', (
   const value = structuredClone(evidence);
   const path = 'store/privacy-disclosures.json';
   const privacy = JSON.parse(readFileSync(resolve(repositoryRoot, path), 'utf8'));
-  privacy.processingTransparency.activities[2].purposes[1].consentControl = null;
-  privacy.processingTransparency.activities[5].specialCategory.article9BasisStatus = 'not_applicable';
-  privacy.processingTransparency.activities[8].recipients = ['firstPartyBackend'];
+  privacy.processingTransparency.activities
+    .find(({ id }) => id === 'discovery_wishlist_and_location').purposes[1].consentControl = null;
+  privacy.processingTransparency.activities
+    .find(({ id }) => id === 'support_moderation_and_product_safety')
+    .specialCategory.article9BasisStatus = 'not_applicable';
+  privacy.processingTransparency.activities
+    .find(({ id }) => id === 'transactional_email').recipients = ['firstPartyBackend'];
   assert.throws(
     () => validateWp155ProcessingTransparency({
       repositoryRoot,
