@@ -3061,18 +3061,34 @@ class BackendRepository {
     required String id,
     bool? read,
     bool? archived,
+    AuthSessionOwner? expectedOwner,
   }) async {
+    final body = {
+      if (read != null) 'read': read,
+      if (archived != null) 'archived': archived,
+    };
+    final path = '/notifications/${Uri.encodeComponent(id)}';
+    if (expectedOwner != null) {
+      await _authorizedForOwner(
+          owner: expectedOwner, method: 'PATCH', path: path, body: body);
+      return;
+    }
     await _authorized(
       method: 'PATCH',
-      path: '/notifications/${Uri.encodeComponent(id)}',
-      body: {
-        if (read != null) 'read': read,
-        if (archived != null) 'archived': archived,
-      },
+      path: path,
+      body: body,
     );
   }
 
-  static Future<void> markAllNotificationsRead() async {
+  static Future<void> markAllNotificationsRead(
+      {AuthSessionOwner? expectedOwner}) async {
+    if (expectedOwner != null) {
+      await _authorizedForOwner(
+          owner: expectedOwner,
+          method: 'POST',
+          path: '/notifications/read-all');
+      return;
+    }
     await _authorized(method: 'POST', path: '/notifications/read-all');
   }
 

@@ -16,6 +16,7 @@ import 'package:lendify/models/item.dart';
 import 'package:lendify/models/rental_request.dart';
 import 'package:lendify/models/user.dart';
 import 'package:lendify/services/data_service.dart';
+import 'package:lendify/services/auth_service.dart';
 import 'package:lendify/services/notification_cta_resolver.dart';
 import 'package:lendify/services/localization_service.dart';
 import 'package:lendify/services/notification_preferences_service.dart';
@@ -72,6 +73,8 @@ enum _NotifFilter {
 enum _DateBucket { today, yesterday, week, older }
 
 enum _MenuAction { settings, markAllRead, unreadOnly, contactSupport, help }
+
+enum _ReadOutcome { read, openUnread, cancel }
 
 String _deriveSitCategory(Map<String, dynamic> notification) {
   String lower(Object? value) =>
@@ -159,6 +162,7 @@ bool notificationAllowedByPreferences(
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   var _supportPrincipal = SupportPrincipalController();
+  SupportPrincipalController? _readActionPrincipal;
   _NotifFilter _filter = _NotifFilter.all;
   bool _loading = true;
   bool _loadFailed = false;
@@ -271,14 +275,99 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
-  Future<void> _markAllRead() async {
-    final uid = _currentUserId;
-    if (uid == null) return;
-    await DataService.markAllNotificationsRead(uid);
-    await _load();
+  Future<_ReadOutcome> _readWithRecovery({
+    required SupportPrincipalController principal,
+    required AuthSessionOwner owner,
+    required Future<void> Function() write,
+    bool allowOpenUnread = false,
+  }) async {
+    while (mounted && principal == _supportPrincipal) {
+      if (!await principal.isCurrent(owner) ||
+          !mounted ||
+          principal != _supportPrincipal) {
+        return _ReadOutcome.cancel;
+      }
+      try {
+        await write();
+        return _ReadOutcome.read;
+      } catch (_) {
+        if (!await principal.isCurrent(owner) ||
+            !mounted ||
+            principal != _supportPrincipal) {
+          return _ReadOutcome.cancel;
+        }
+        var retry = false;
+        var openUnread = false;
+        await principal.showOwnedDialog(
+          context: context,
+          owner: owner,
+          builder: (_, dismiss) => AlertDialog(
+            title: const Text('Lesestatus nicht bestätigt'),
+            content: Text(allowOpenUnread
+                ? 'Der Lesestatus konnte nicht bestätigt werden. Du kannst es erneut versuchen oder die Nachricht trotzdem öffnen.'
+                : 'Die Benachrichtigungen konnten nicht als gelesen bestätigt werden. Bitte versuche es erneut.'),
+            actions: [
+              TextButton(onPressed: dismiss, child: const Text('Abbrechen')),
+              if (allowOpenUnread)
+                TextButton(
+                    onPressed: () {
+                      openUnread = true;
+                      dismiss();
+                    },
+                    child: const Text('Trotzdem öffnen')),
+              TextButton(
+                  onPressed: () {
+                    retry = true;
+                    dismiss();
+                  },
+                  child: const Text('Erneut versuchen')),
+            ],
+          ),
+        );
+        if (openUnread) return _ReadOutcome.openUnread;
+        if (!retry) return _ReadOutcome.cancel;
+      }
+    }
+    return _ReadOutcome.cancel;
   }
 
-  void _handleMenuSelection(_MenuAction action, int unreadCount) async {
+  Future<void> _markAllRead(SupportPrincipalController principal) async {
+    final uid = _currentUserId;
+    final owner = principal.capture();
+    if (uid == null ||
+        owner == null ||
+        uid != owner.userId ||
+        principal != _supportPrincipal ||
+        _readActionPrincipal == principal) {
+      return;
+    }
+    _readActionPrincipal = principal;
+    try {
+      final outcome = await _readWithRecovery(
+        principal: principal,
+        owner: owner,
+        write: () => DataService.markAllNotificationsRead(uid,
+            expectedSessionOwner: owner),
+      );
+      if (outcome != _ReadOutcome.read ||
+          !await principal.isCurrent(owner) ||
+          !mounted ||
+          principal != _supportPrincipal) {
+        return;
+      }
+      setState(() {
+        _feed = [
+          for (final entry in _feed) {...entry, 'read': true}
+        ];
+      });
+    } finally {
+      if (_readActionPrincipal == principal) _readActionPrincipal = null;
+    }
+  }
+
+  void _handleMenuSelection(_MenuAction action, int unreadCount,
+      SupportPrincipalController principal) async {
+    if (principal != _supportPrincipal) return;
     switch (action) {
       case _MenuAction.settings:
         await Navigator.of(context).push(MaterialPageRoute(
@@ -290,7 +379,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           _showNotice('Alles ist bereits gelesen.');
           return;
         }
-        await _markAllRead();
+        await _markAllRead(principal);
         break;
       case _MenuAction.unreadOnly:
         setState(() => _showUnreadOnly = !_showUnreadOnly);
@@ -368,43 +457,58 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         n['userId'] != uid ||
         owner == null ||
         uid != owner.userId ||
-        !await principal.isCurrent(owner) ||
+        _readActionPrincipal == principal ||
         !mounted) {
       return;
     }
-
-    final id = (n['id'] ?? '').toString();
-    if (id.isNotEmpty) {
-      // Mark read immediately to make the UI feel responsive.
-      await DataService.markNotificationRead(userId: uid, notificationId: id);
+    _readActionPrincipal = principal;
+    try {
       if (!await principal.isCurrent(owner) || !mounted) return;
-      if (mounted) {
-        setState(() {
-          _feed = [
-            for (final e in _feed)
-              if ((e['id'] ?? '').toString() == id) {...e, 'read': true} else e,
-          ];
-        });
+      final id = (n['id'] ?? '').toString();
+      if (id.isNotEmpty) {
+        final outcome = await _readWithRecovery(
+          principal: principal,
+          owner: owner,
+          allowOpenUnread: true,
+          write: () => DataService.markNotificationRead(
+              userId: uid, notificationId: id, expectedSessionOwner: owner),
+        );
+        if (outcome == _ReadOutcome.cancel) return;
+        if (!await principal.isCurrent(owner) || !mounted) return;
+        if (outcome == _ReadOutcome.read) {
+          setState(() {
+            _feed = [
+              for (final e in _feed)
+                if ((e['id'] ?? '').toString() == id)
+                  {...e, 'read': true}
+                else
+                  e,
+            ];
+          });
+        }
       }
-    }
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    // Always open a full-screen detail page (no popups / bottom sheets).
-    await principal.pushOwnedRoute<void>(
-      context: context,
-      owner: owner,
-      route: MaterialPageRoute(
-        builder: (_) => NotificationDetailScreen(
-          notification: n,
-          onCta: () {
-            if (principal.isCurrentNow(owner)) _handleNotificationCta(n);
-          },
+      // Always open a full-screen detail page (no popups / bottom sheets).
+      await principal.pushOwnedRoute<void>(
+        context: context,
+        owner: owner,
+        route: MaterialPageRoute(
+          settings: const RouteSettings(name: 'notification-detail'),
+          builder: (_) => NotificationDetailScreen(
+            notification: n,
+            onCta: () {
+              if (principal.isCurrentNow(owner)) _handleNotificationCta(n);
+            },
+          ),
         ),
-      ),
-    );
-    if (mounted && principal == _supportPrincipal) {
-      await _refreshCoordinator.schedule(_load);
+      );
+      if (mounted && principal == _supportPrincipal) {
+        await _refreshCoordinator.schedule(_load);
+      }
+    } finally {
+      if (_readActionPrincipal == principal) _readActionPrincipal = null;
     }
   }
 
@@ -738,6 +842,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final principal = _supportPrincipal;
     final l10n = context.watch<LocalizationController>();
     final theme = Theme.of(context);
 
@@ -913,7 +1018,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     ],
                   ),
                   onSelected: (action) =>
-                      _handleMenuSelection(action, unreadCount),
+                      _handleMenuSelection(action, unreadCount, principal),
                   itemBuilder: (context) => [
                     PopupMenuItem(
                       value: _MenuAction.settings,
@@ -923,8 +1028,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             size: 18,
                             color: Colors.white.withValues(alpha: 0.85)),
                         const SizedBox(width: 10),
-                        const Text('Benachrichtigungseinstellungen',
-                            style: TextStyle(fontSize: 13)),
+                        const Expanded(
+                            child: Text('Benachrichtigungseinstellungen',
+                                style: TextStyle(fontSize: 13))),
                       ]),
                     ),
                     PopupMenuItem(
@@ -935,8 +1041,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             size: 18,
                             color: Colors.white.withValues(alpha: 0.85)),
                         const SizedBox(width: 10),
-                        const Text('Alle als gelesen markieren',
-                            style: TextStyle(fontSize: 13)),
+                        const Expanded(
+                            child: Text('Alle als gelesen markieren',
+                                style: TextStyle(fontSize: 13))),
                       ]),
                     ),
                     const PopupMenuDivider(height: 8),
@@ -949,8 +1056,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             size: 18,
                             color: Colors.white.withValues(alpha: 0.85)),
                         const SizedBox(width: 10),
-                        const Text('Nur ungelesene anzeigen',
-                            style: TextStyle(fontSize: 13)),
+                        const Expanded(
+                            child: Text('Nur ungelesene anzeigen',
+                                style: TextStyle(fontSize: 13))),
                       ]),
                     ),
                     const PopupMenuDivider(height: 8),
@@ -971,10 +1079,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           ),
                         ),
                         const SizedBox(width: 10),
-                        Text('Support kontaktieren',
-                            style: TextStyle(
-                                color: theme.colorScheme.primary,
-                                fontSize: 13)),
+                        Expanded(
+                            child: Text('Support kontaktieren',
+                                style: TextStyle(
+                                    color: theme.colorScheme.primary,
+                                    fontSize: 13))),
                       ]),
                     ),
                     PopupMenuItem(
@@ -985,8 +1094,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             size: 18,
                             color: Colors.white.withValues(alpha: 0.85)),
                         const SizedBox(width: 10),
-                        const Text('Hilfe zu Benachrichtigungen',
-                            style: TextStyle(fontSize: 13)),
+                        const Expanded(
+                            child: Text('Hilfe zu Benachrichtigungen',
+                                style: TextStyle(fontSize: 13))),
                       ]),
                     ),
                   ],

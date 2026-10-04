@@ -1050,6 +1050,12 @@ flutter test --reporter expanded \
   --dart-define=SIT_LOCAL_QA_SYNTHETIC_PAYMENT_LANE=true \
   test/synthetic_payment_test.dart
 
+# Notification receipt recovery uses real isolated loopback HTTP, no provider.
+flutter test --reporter expanded \
+  --dart-define=SIT_BACKEND_ENABLED=true \
+  --dart-define=SIT_API_BASE_URL=http://127.0.0.1:1/api/v1 \
+  test/notification_read_recovery_http_test.dart
+
 # Managed avatar ownership/restart tests are skipped in the default build.
 # Exercise their real managed-origin branch with synthetic stored sessions.
 flutter test --reporter expanded \

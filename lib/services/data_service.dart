@@ -12448,19 +12448,33 @@ class DataService {
   static Future<void> markNotificationRead({
     required String userId,
     required String notificationId,
+    AuthSessionOwner? expectedSessionOwner,
   }) async {
+    final owner = expectedSessionOwner ??
+        (QaRuntimeService.isEnabled
+            ? null
+            : (await LocalPrincipalActionOwner.capture()).sessionOwner);
+    if (owner == null && !QaRuntimeService.isEnabled) {
+      throw StateError(
+          'Für Benachrichtigungen ist eine Anmeldung erforderlich.');
+    }
     final current =
         await _requireCurrentOperationalUser(requestedUserId: userId);
+    if (owner != null) await _assertSessionOwnerOperationalUser(owner, userId);
     try {
       if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
         await BackendRepository.updateNotification(
           id: notificationId,
           read: true,
+          expectedOwner: owner,
         );
       }
       await _operationalMutationQueue.run(() async {
         await _assertCurrentOperationalUserId(current.id);
         final prefs = await SharedPreferences.getInstance();
+        if (owner != null) {
+          await _assertSessionOwnerOperationalUser(owner, userId);
+        }
         final raw = prefs.getString(_notificationsKey);
         if (raw == null) return;
         final list = _decodeNotificationsStrict(raw);
@@ -12488,16 +12502,29 @@ class DataService {
     }
   }
 
-  static Future<void> markAllNotificationsRead(String userId) async {
+  static Future<void> markAllNotificationsRead(String userId,
+      {AuthSessionOwner? expectedSessionOwner}) async {
+    final owner = expectedSessionOwner ??
+        (QaRuntimeService.isEnabled
+            ? null
+            : (await LocalPrincipalActionOwner.capture()).sessionOwner);
+    if (owner == null && !QaRuntimeService.isEnabled) {
+      throw StateError(
+          'Für Benachrichtigungen ist eine Anmeldung erforderlich.');
+    }
     final current =
         await _requireCurrentOperationalUser(requestedUserId: userId);
+    if (owner != null) await _assertSessionOwnerOperationalUser(owner, userId);
     try {
       if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
-        await BackendRepository.markAllNotificationsRead();
+        await BackendRepository.markAllNotificationsRead(expectedOwner: owner);
       }
       await _operationalMutationQueue.run(() async {
         await _assertCurrentOperationalUserId(current.id);
         final prefs = await SharedPreferences.getInstance();
+        if (owner != null) {
+          await _assertSessionOwnerOperationalUser(owner, userId);
+        }
         final raw = prefs.getString(_notificationsKey);
         if (raw == null) return;
         final list = _decodeNotificationsStrict(raw);
