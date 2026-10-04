@@ -829,7 +829,7 @@
     },
     {
       "path": "backend/ops/backup.sh",
-      "sha256": "f00667d1b8131f3f3d16f05ff89bd171a9cebc37af1678e02dc872405fc1f8f7"
+      "sha256": "b93d4e72802cedf4dbbd75c9564115e3ba1f399e063d13f96c7726a796872636"
     },
     {
       "path": "android/app/src/main/AndroidManifest.xml",
