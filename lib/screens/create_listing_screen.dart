@@ -334,8 +334,9 @@ class _CreateListingScreenState extends State<CreateListingScreen>
     if (ex != null) {
       _titleCtrl.text = ex.title;
       _descCtrl.text = ex.description;
-      _priceCtrl.text = ex.priceRaw.toStringAsFixed(
-          ex.priceRaw.truncateToDouble() == ex.priceRaw ? 0 : 2);
+      final editorPrice = ex.priceUnit == 'week' ? ex.pricePerDay : ex.priceRaw;
+      _priceCtrl.text = editorPrice.toStringAsFixed(
+          editorPrice.truncateToDouble() == editorPrice ? 0 : 2);
       _categoryId = ex.categoryId;
       _subcategory = ex.subcategory;
       _priceUnit = ex.priceUnit;
@@ -2316,7 +2317,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
         );
         _hasCalculatedPrice = true;
       });
-      if (!_priceTouched) _autofillPriceFromMarket();
+      if (!_priceTouched && !_isEdit) _autofillPriceFromMarket();
     } catch (_) {
       if (!mounted) return;
       setState(() => _priceSuggestionError =
@@ -2350,7 +2351,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
       _hasCalculatedPrice = true;
       _priceSuggestionError = null;
     });
-    if (!_priceTouched) _autofillPriceFromMarket();
+    if (!_priceTouched && !_isEdit) _autofillPriceFromMarket();
   }
 
   // Apply fixed, mode-based discount presets unless user touched them
