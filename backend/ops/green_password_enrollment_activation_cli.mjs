@@ -635,7 +635,9 @@ export function createGreenPasswordEnrollmentCommandAdapter({
             'readinessEvidence', 'readinessEvidenceSha256', 'registryReadback', 'runtimeIdentity',
           ])) return undefined;
           const readiness = proof.readinessEvidence?.readiness;
-          if (!plain(readiness) || readiness.runtimeReadbackSha256
+          if (!plain(readiness) || readiness.passwordEnrollmentEnabled !== true
+            || health.passwordEnrollmentEnabled !== true
+            || readiness.runtimeReadbackSha256
             !== greenEnrollmentCandidateRuntimeReadbackSha256({
               mounts, registryReadback: proof.registryReadback,
               runtimeIdentity: proof.runtimeIdentity,
@@ -645,7 +647,7 @@ export function createGreenPasswordEnrollmentCommandAdapter({
                 appPublicUrl: readiness.appPublicUrl,
                 commit: health.commit,
                 deploymentEnvironment: health.deploymentEnvironment,
-                enrollmentEnabled: readiness.passwordEnrollmentEnabled,
+                enrollmentEnabled: true,
                 mailTransport: readiness.mailTransport,
                 paymentTransport: health.paymentTransport,
                 privatePilotEnabled: readiness.privatePilotEnabled,

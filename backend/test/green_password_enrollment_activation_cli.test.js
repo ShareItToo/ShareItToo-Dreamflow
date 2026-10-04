@@ -196,8 +196,9 @@ function candidateArtifacts(state) {
   };
 }
 
-function rebindObservedCandidateRuntime(artifacts) {
+function rebindObservedCandidateRuntime(artifacts, { enrollmentEnabled = true } = {}) {
   const readiness = artifacts.proof.readinessEvidence.readiness;
+  assert.equal(typeof enrollmentEnabled, 'boolean');
   const mounts = artifacts.container.Mounts.map((mount) => ({
     type: mount.Type, source: mount.Type === 'volume' ? mount.Name : mount.Source,
     target: mount.Destination, readOnly: mount.RW === false,
@@ -211,7 +212,7 @@ function rebindObservedCandidateRuntime(artifacts) {
       appPublicUrl: readiness.appPublicUrl,
       commit: artifacts.health.commit,
       deploymentEnvironment: artifacts.health.deploymentEnvironment,
-      enrollmentEnabled: readiness.passwordEnrollmentEnabled,
+      enrollmentEnabled,
       mailTransport: readiness.mailTransport,
       paymentTransport: artifacts.health.paymentTransport,
       privatePilotEnabled: readiness.privatePilotEnabled,
@@ -325,7 +326,7 @@ function commandHarness(state, {
   capsuleOnlyDrift = false,
   candidateUnavailable = false, stopReadbackDelay = 0, renameReadbackDelay = 0,
   runtimeBindingDrift = false, candidateMountDrift = null, registryProofDrift = null,
-  observedReleaseDrift = null, clockNow = null,
+  observedReleaseDrift = null, observedEnrollmentDrift = null, clockNow = null,
 } = {}) {
   const calls = [];
   const mutations = [];
@@ -339,6 +340,14 @@ function commandHarness(state, {
     artifacts.proof.readinessEvidence.readiness.sourceVersion = '9.9.9+2099010101';
     rebindObservedCandidateRuntime(artifacts);
   } else if (observedReleaseDrift !== null) throw new Error('unknown observed release drift');
+  if (observedEnrollmentDrift === 'readiness-false') {
+    artifacts.proof.readinessEvidence.readiness.passwordEnrollmentEnabled = false;
+    rebindObservedCandidateRuntime(artifacts, { enrollmentEnabled: false });
+  } else if (observedEnrollmentDrift === 'health-false') {
+    artifacts.health.passwordEnrollmentEnabled = false;
+  } else if (observedEnrollmentDrift !== null) {
+    throw new Error('unknown observed enrollment drift');
+  }
   if (runtimeBindingDrift) {
     artifacts.proof.readinessEvidence.readiness.runtimeReadbackSha256 = hash('binding-drift');
     artifacts.proof.readinessEvidence.readinessSha256 = hash(JSON.stringify(
@@ -821,6 +830,28 @@ test('consistent observed release drift reaches and fails the independent core i
     }
   });
 
+test('observed enrollment false is rejected before runtime readback hashing', async (t) => {
+  for (const field of ['readiness-false', 'health-false']) {
+    const state = await fixture();
+    t.after(() => rm(state.root, { recursive: true, force: true }));
+    const clock = monotonicClock();
+    const harness = commandHarness(state, {
+      observedEnrollmentDrift: field, clockNow: clock.now,
+    });
+    let caught;
+    try {
+      await runGreenPasswordEnrollmentActivationCli(executeArgs(state), {
+        command: harness.command, now: () => activationNow,
+        monotonicNow: clock.now, wait: clock.wait,
+      });
+    } catch (error) { caught = error; }
+    assert.equal(caught?.state, 'rolled-back', field);
+    assert.equal(clock.value(), 15_000, field);
+    assert.doesNotMatch(JSON.stringify(greenPasswordEnrollmentActivationCliErrorCode(caught)),
+      /pilot|smtp|contact|registry|proposed|shareittoo-staging-api|[a-f0-9]{40}/u, field);
+  }
+});
+
 test('mount and registry substitution cannot satisfy post-start runtime binding', async (t) => {
   const cases = [
     ['mount-type', { candidateMountDrift: 'type' }],
@@ -937,5 +968,9 @@ test('adapter source retains no static credential or shell execution path', asyn
   assert.doesNotMatch(source, /shell\s*:\s*true/u);
   assert.doesNotMatch(source,
     /(?:commit|version):\s*target\.(?:sourceCommit|sourceVersion)/u);
+  assert.match(source, /readiness\.passwordEnrollmentEnabled !== true/u);
+  assert.match(source, /health\.passwordEnrollmentEnabled !== true/u);
+  assert.doesNotMatch(source,
+    /enrollmentEnabled:\s*(?:readiness|health)\.passwordEnrollmentEnabled/u);
   assert.equal(source.includes(['private', '-value'].join('')), false);
 });
