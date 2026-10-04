@@ -32,7 +32,6 @@ if (!databaseUrl) {
       SIT_STAGING_ACCESS_GATE_ENABLED: 'true',
       SIT_STAGING_ALLOWED_USER_IDS: Object.values(ids).join(','),
       SIT_STAGING_PASSWORD_ENROLLMENT_ENABLED: 'false',
-      SIT_STAGING_PASSWORD_ENROLLMENT_INVITATIONS: '',
       SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'false',
       SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST: '',
       PUBLIC_BASE_URL: 'https://staging.shareittoo.com/api',

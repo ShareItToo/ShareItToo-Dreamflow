@@ -10,6 +10,7 @@ process.env.SIT_STAGING_ACCESS_GATE_ENABLED = 'true';
 process.env.SIT_STAGING_ALLOWED_USER_IDS = 'synthetic-enrollment-principal';
 delete process.env.SIT_STAGING_PASSWORD_ENROLLMENT_ENABLED;
 delete process.env.SIT_STAGING_PASSWORD_ENROLLMENT_INVITATIONS;
+delete process.env.SIT_STAGING_PASSWORD_ENROLLMENT_INVITATIONS_FILE;
 const { createApp } = await import('../src/app.js');
 const { config } = await import('../src/config.js');
 
@@ -36,11 +37,26 @@ test('source keeps invitation material out of request logs/export and binds clea
   assert.doesNotMatch(exportSource, /staging_password_enrollment_redemptions/u);
   assert.match(cleanup, /await pruneExpiredStagingPasswordEnrollments\(client\)/u);
   assert.match(template, /^SIT_STAGING_PASSWORD_ENROLLMENT_ENABLED=false$/mu);
-  assert.match(template, /^SIT_STAGING_PASSWORD_ENROLLMENT_INVITATIONS=$/mu);
+  assert.match(template, /^SIT_STAGING_PASSWORD_ENROLLMENT_INVITATIONS_FILE=$/mu);
+  assert.doesNotMatch(template, /^SIT_STAGING_PASSWORD_ENROLLMENT_INVITATIONS=/mu);
   assert.match(app, /app\.post\('\/v1\/auth\/register', registrationLimiter/u);
   assert.match(app, /authorizationPresent: req\.get\('authorization'\) !== undefined/u);
   assert.match(app, /token: req\.body\?\.enrollmentToken,\s*email,\s*authorizationPresent:/u);
   assert.match(app, /const passwordHash = await hashPassword\(password\)/u);
+});
+
+test('password-enrollment staging overlay mounts only a protected path and stays default off', async () => {
+  const overlay = await fs.readFile(
+    new URL('../compose.staging.password-enrollment.yml', import.meta.url),
+    'utf8',
+  );
+  assert.match(overlay, /SIT_STAGING_PASSWORD_ENROLLMENT_ENABLED: \$\{SIT_STAGING_PASSWORD_ENROLLMENT_ENABLED:-false\}/u);
+  assert.match(overlay, /SIT_STAGING_PASSWORD_ENROLLMENT_INVITATIONS_FILE: \/run\/secrets\/staging-password-enrollment-registry\.json/u);
+  assert.match(overlay, /source: \$\{SIT_STAGING_PASSWORD_ENROLLMENT_REGISTRY_HOST_FILE:\?/u);
+  assert.match(overlay, /target: \/run\/secrets\/staging-password-enrollment-registry\.json/u);
+  assert.match(overlay, /read_only: true/u);
+  assert.match(overlay, /create_host_path: false/u);
+  assert.doesNotMatch(overlay, /SIT_STAGING_PASSWORD_ENROLLMENT_INVITATIONS:/u);
 });
 
 test('account passwords retain independent salted scrypt, not invitation/content SHA-256', async () => {

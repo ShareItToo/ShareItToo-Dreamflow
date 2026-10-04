@@ -74,17 +74,27 @@ class InvitationGeneratorTests(unittest.TestCase):
         # binding, expiry boundary and normal server config parsing.
         script = '''
           import fs from 'node:fs';
+          import os from 'node:os';
+          import path from 'node:path';
           import {readStagingPasswordEnrollmentConfiguration as read, resolveStagingPasswordEnrollment as resolve} from './backend/src/staging_password_enrollment.js';
           const bundle = process.argv[1];
           const handoff = JSON.parse(fs.readFileSync(bundle + '/handoff.json'));
           const {schema, version, ...record} = JSON.parse(fs.readFileSync(bundle + '/server-record.json'));
           const now = Date.parse(record.issuedAt);
-          const config = read({SIT_STAGING_PASSWORD_ENROLLMENT_ENABLED:'true',SIT_STAGING_PASSWORD_ENROLLMENT_INVITATIONS:JSON.stringify([record]),PRIVATE_PILOT_V4_ENABLED:'true'}, {now, stagingAccess:{deploymentEnvironment:'test',enabled:true,valid:true,allowedUserIds:[record.userId]}});
-          if(resolve(config,{token:handoff.token,email:handoff.email,now}).userId !== record.userId) process.exit(2);
-          for (const changes of [{email:'other@example.invalid'}, {now:Date.parse(record.expiresAt)}, {now:now-1}]) {
-            let denied=false; try {resolve(config,{token:handoff.token,email:handoff.email,now,...changes});} catch {denied=true;}
-            if(!denied) process.exit(3);
-          }
+          const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'sit-invitation-node-'));
+          try {
+            fs.chmodSync(root, 0o700);
+            const registry = path.join(root, 'registry.json');
+            const ordered = {emailDigest:record.emailDigest,expiresAt:record.expiresAt,issuedAt:record.issuedAt,tokenDigest:record.tokenDigest,userId:record.userId};
+            fs.writeFileSync(registry, JSON.stringify([ordered]) + '\\n', {mode:0o600});
+            fs.chmodSync(registry, 0o600);
+            const config = read({SIT_STAGING_PASSWORD_ENROLLMENT_ENABLED:'true',SIT_STAGING_PASSWORD_ENROLLMENT_INVITATIONS_FILE:registry,PRIVATE_PILOT_V4_ENABLED:'true'}, {now, stagingAccess:{deploymentEnvironment:'test',enabled:true,valid:true,allowedUserIds:[record.userId]}});
+            if(resolve(config,{token:handoff.token,email:handoff.email,now}).userId !== record.userId) process.exit(2);
+            for (const changes of [{email:'other@example.invalid'}, {now:Date.parse(record.expiresAt)}, {now:now-1}]) {
+              let denied=false; try {resolve(config,{token:handoff.token,email:handoff.email,now,...changes});} catch {denied=true;}
+              if(!denied) process.exit(3);
+            }
+          } finally { fs.rmSync(root, {recursive:true,force:true}); }
         '''
         done = subprocess.run(['node', '--input-type=module', '-e', script, str(self.output)], cwd=ROOT, capture_output=True)
         self.assertEqual(done.returncode, 0)

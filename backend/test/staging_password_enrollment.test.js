@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import fs from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import test, { after } from 'node:test';
 import {
   prepareStagingPasswordInvitation,
   readStagingPasswordEnrollmentConfiguration,
@@ -12,11 +15,31 @@ const email = 'password-enrollment-synthetic@example.invalid';
 const userId = 'password-enrollment-synthetic-principal';
 const stagingAccess = { enabled: true, valid: true, deploymentEnvironment: 'test', allowedUserIds: [userId] };
 const make = () => prepareStagingPasswordInvitation({ email, userId, now });
-const environment = (invitation) => ({
-  PRIVATE_PILOT_V4_ENABLED: 'true',
-  SIT_STAGING_PASSWORD_ENROLLMENT_ENABLED: 'true',
-  SIT_STAGING_PASSWORD_ENROLLMENT_INVITATIONS: JSON.stringify([invitation]),
+const registryRoot = fs.mkdtempSync(path.join(fs.realpathSync(tmpdir()), 'sit-password-unit-'));
+fs.chmodSync(registryRoot, 0o700);
+after(() => fs.rmSync(registryRoot, { recursive: true, force: true }));
+let registryIndex = 0;
+const canonicalRecord = (invitation) => ({
+  emailDigest: invitation.emailDigest,
+  expiresAt: invitation.expiresAt,
+  issuedAt: invitation.issuedAt,
+  tokenDigest: invitation.tokenDigest,
+  userId: invitation.userId,
+  ...Object.fromEntries(Object.entries(invitation)
+    .filter(([key]) => !['emailDigest', 'expiresAt', 'issuedAt', 'tokenDigest', 'userId'].includes(key))
+    .toSorted(([left], [right]) => left.localeCompare(right))),
 });
+const environmentRecords = (invitations) => {
+  const file = path.join(registryRoot, `registry-${registryIndex += 1}.json`);
+  fs.writeFileSync(file, `${JSON.stringify(invitations.map(canonicalRecord))}\n`, { mode: 0o600 });
+  fs.chmodSync(file, 0o600);
+  return {
+    PRIVATE_PILOT_V4_ENABLED: 'true',
+    SIT_STAGING_PASSWORD_ENROLLMENT_ENABLED: 'true',
+    SIT_STAGING_PASSWORD_ENROLLMENT_INVITATIONS_FILE: file,
+  };
+};
+const environment = (invitation) => environmentRecords([invitation]);
 const read = (env, gate = stagingAccess) => readStagingPasswordEnrollmentConfiguration(env, { stagingAccess: gate, now });
 const denied = /staging_password_enrollment_unavailable/u;
 
@@ -72,9 +95,7 @@ test('requires valid closed gate and exact unique preauthorized principals', () 
     { ...invitation, expiresAt: new Date(now + 86400001).toISOString() },
     { ...invitation, expiresAt: invitation.issuedAt },
   ]) assert.throws(() => read(environment(changed)), denied);
-  assert.throws(() => read({ ...environment(invitation),
-    SIT_STAGING_PASSWORD_ENROLLMENT_INVITATIONS: JSON.stringify([invitation, invitation]),
-  }), denied);
+  assert.throws(() => read(environmentRecords([invitation, invitation])), denied);
 });
 
 test('exact token/email/expiry succeeds; foreign inputs and authenticated principal switches deny identically', () => {

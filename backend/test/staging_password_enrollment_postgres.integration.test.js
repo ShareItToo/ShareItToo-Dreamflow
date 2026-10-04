@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import http from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 import pg from 'pg';
 import { prepareStagingPasswordInvitation, pruneExpiredStagingPasswordEnrollments } from '../src/staging_password_enrollment.js';
@@ -20,6 +22,20 @@ if (!databaseUrl) {
     });
     const [main, rollback, collision, principalCollision, missingConsent] = fixtures;
     const credential = createEphemeralAcceptancePassword();
+    const registryRoot = await fs.mkdtemp(join(await fs.realpath(tmpdir()), 'sit-password-pg-'));
+    await fs.chmod(registryRoot, 0o700);
+    t.after(() => fs.rm(registryRoot, { recursive: true, force: true }));
+    const registryFile = join(registryRoot, 'registry.json');
+    const records = fixtures.map(({ invitation }) => ({
+      emailDigest: invitation.emailDigest,
+      expiresAt: invitation.expiresAt,
+      issuedAt: invitation.issuedAt,
+      tokenDigest: invitation.tokenDigest,
+      userId: invitation.userId,
+    }));
+    await fs.writeFile(registryFile, `${JSON.stringify(records)}\n`, { mode: 0o600 });
+    await fs.chmod(registryFile, 0o600);
+    delete process.env.SIT_STAGING_PASSWORD_ENROLLMENT_INVITATIONS;
     Object.assign(process.env, {
       DATABASE_URL: databaseUrl,
       JWT_SECRET: `password-enrollment-${crypto.randomBytes(40).toString('hex')}`,
@@ -30,7 +46,7 @@ if (!databaseUrl) {
       SIT_STAGING_ACCESS_GATE_ENABLED: 'true',
       SIT_STAGING_ALLOWED_USER_IDS: fixtures.map((entry) => entry.userId).join(','),
       SIT_STAGING_PASSWORD_ENROLLMENT_ENABLED: 'true',
-      SIT_STAGING_PASSWORD_ENROLLMENT_INVITATIONS: JSON.stringify(fixtures.map((entry) => entry.invitation)),
+      SIT_STAGING_PASSWORD_ENROLLMENT_INVITATIONS_FILE: registryFile,
       SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'false',
       SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST: '',
     });

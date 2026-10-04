@@ -1,10 +1,14 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 
 const digestPattern = /^[a-f0-9]{64}$/u;
 const tokenPattern = /^[A-Za-z0-9_-]{43}$/u;
 const principalPattern = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,119}$/u;
 const maximumLifetimeMs = 24 * 60 * 60 * 1000;
+const maximumRegistryBytes = 64 * 1024;
 const denyCode = 'staging_password_enrollment_unavailable';
+const registryKeys = ['emailDigest', 'expiresAt', 'issuedAt', 'tokenDigest', 'userId'];
 
 export class StagingPasswordEnrollmentError extends Error {
   constructor() {
@@ -19,6 +23,119 @@ const emailDigest = (tokenDigest, email) => hash(`${tokenDigest}\n${email}`);
 const validEmail = (email) => typeof email === 'string'
   && email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email)
   && email === email.trim().toLowerCase();
+
+const fileType = (metadata) => metadata.mode & 0o170000n;
+const regularFile = (metadata) => fileType(metadata) === 0o100000n;
+const directory = (metadata) => fileType(metadata) === 0o040000n;
+const sameFileMetadata = (left, right) => [
+  'dev', 'ino', 'mode', 'nlink', 'uid', 'gid', 'size', 'mtimeNs', 'ctimeNs',
+].every((key) => left[key] === right[key]);
+
+const sameDirectoryMetadata = (left, right, protectedParent) => protectedParent
+  ? sameFileMetadata(left, right)
+  : ['dev', 'ino', 'mode', 'uid', 'gid'].every((key) => left[key] === right[key]);
+
+function openDirectoryChain(directoryPath, fileSystem, descriptors) {
+  if (!path.isAbsolute(directoryPath) || path.normalize(directoryPath) !== directoryPath
+      || directoryPath === path.parse(directoryPath).root) deny();
+  const paths = [path.parse(directoryPath).root];
+  for (const part of path.relative(paths[0], directoryPath).split(path.sep)) {
+    paths.push(path.join(paths.at(-1), part));
+  }
+  return paths.map((directoryPathPart, index) => {
+    const descriptor = fileSystem.openSync(directoryPathPart,
+      fileSystem.constants.O_RDONLY | fileSystem.constants.O_DIRECTORY
+        | fileSystem.constants.O_NOFOLLOW | fileSystem.constants.O_NONBLOCK
+        | fileSystem.constants.O_CLOEXEC);
+    descriptors.push(descriptor);
+    const before = fileSystem.fstatSync(descriptor, { bigint: true });
+    const pathBefore = fileSystem.lstatSync(directoryPathPart, { bigint: true });
+    const protectedParent = index === paths.length - 1;
+    if (!directory(before)
+        || !sameDirectoryMetadata(before, pathBefore, protectedParent)) deny();
+    return { path: directoryPathPart, descriptor, before, protectedParent };
+  });
+}
+
+function assertDirectoryChainUnchanged(directories, fileSystem) {
+  for (const entry of directories) {
+    if (!sameDirectoryMetadata(entry.before,
+      fileSystem.fstatSync(entry.descriptor, { bigint: true }), entry.protectedParent)
+        || !sameDirectoryMetadata(entry.before,
+          fileSystem.lstatSync(entry.path, { bigint: true }), entry.protectedParent)) deny();
+  }
+}
+
+// The runtime consumes invitation records through this descriptor boundary.
+// It never copies file bytes into process.env, argv, rendered Compose output or logs.
+export function readProtectedStagingPasswordEnrollmentRegistry(filePath, {
+  fileSystem = fs,
+  ownerUid = typeof process.getuid === 'function' ? process.getuid() : undefined,
+} = {}) {
+  const descriptors = [];
+  let bytes;
+  let result;
+  let failure;
+  try {
+    if (typeof filePath !== 'string' || filePath.length < 1 || filePath.length > 4096
+        || filePath.includes('\0') || !path.isAbsolute(filePath)
+        || path.normalize(filePath) !== filePath
+        || !Number.isSafeInteger(ownerUid) || ownerUid < 0) deny();
+    const directories = openDirectoryChain(path.dirname(filePath), fileSystem, descriptors);
+    const parent = directories.at(-1).before;
+    if (parent.nlink < 1n || ![0n, BigInt(ownerUid)].includes(parent.uid)
+        || (parent.mode & 0o022n) !== 0n) deny();
+    const linkBefore = fileSystem.lstatSync(filePath, { bigint: true });
+    const descriptor = fileSystem.openSync(filePath,
+      fileSystem.constants.O_RDONLY | fileSystem.constants.O_NOFOLLOW
+        | fileSystem.constants.O_NONBLOCK | fileSystem.constants.O_CLOEXEC);
+    descriptors.push(descriptor);
+    const before = fileSystem.fstatSync(descriptor, { bigint: true });
+    if (!regularFile(before) || !sameFileMetadata(before, linkBefore)
+        || before.nlink !== 1n || (before.mode & 0o777n) !== 0o600n
+        || before.uid !== BigInt(ownerUid) || before.size < 3n
+        || before.size > BigInt(maximumRegistryBytes)) deny();
+    assertDirectoryChainUnchanged(directories, fileSystem);
+
+    bytes = Buffer.alloc(Number(before.size));
+    let bytesRead = 0;
+    while (bytesRead < bytes.length) {
+      const count = fileSystem.readSync(descriptor, bytes, bytesRead,
+        bytes.length - bytesRead, bytesRead);
+      if (count <= 0) deny();
+      bytesRead += count;
+    }
+    if (fileSystem.readSync(descriptor, Buffer.alloc(1), 0, 1, bytes.length) !== 0) deny();
+    const after = fileSystem.fstatSync(descriptor, { bigint: true });
+    const linkAfter = fileSystem.lstatSync(filePath, { bigint: true });
+    if (bytesRead !== Number(before.size) || !sameFileMetadata(before, after)
+        || !sameFileMetadata(after, linkAfter)) deny();
+    assertDirectoryChainUnchanged(directories, fileSystem);
+
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    const records = JSON.parse(text);
+    if (!Array.isArray(records) || records.length < 1 || records.length > 20
+        || records.some((record) => !record || typeof record !== 'object'
+          || Array.isArray(record)
+          || JSON.stringify(Object.keys(record)) !== JSON.stringify(registryKeys))
+        || new Set(records.map((record) => record.emailDigest)).size !== records.length
+        || `${JSON.stringify(records)}\n` !== text) deny();
+    records.forEach(Object.freeze);
+    result = Object.freeze(records);
+  } catch (error) {
+    failure = error instanceof StagingPasswordEnrollmentError
+      ? error : new StagingPasswordEnrollmentError();
+  } finally {
+    bytes?.fill(0);
+    let closeFailed = false;
+    for (const descriptor of descriptors.reverse()) {
+      try { fileSystem.closeSync(descriptor); } catch { closeFailed = true; }
+    }
+    if (closeFailed && failure === undefined) failure = new StagingPasswordEnrollmentError();
+  }
+  if (failure !== undefined) throw failure;
+  return result;
+}
 
 // Ops-only pure preparation: the caller owns protected storage and delivery.
 // No CLI, account write, invitation delivery or provider call is introduced.
@@ -44,10 +161,12 @@ export function readStagingPasswordEnrollmentConfiguration(
   { stagingAccess, now = Date.now() } = {},
 ) {
   const flag = environment.SIT_STAGING_PASSWORD_ENROLLMENT_ENABLED ?? 'false';
-  const raw = environment.SIT_STAGING_PASSWORD_ENROLLMENT_INVITATIONS ?? '';
+  const legacyRaw = environment.SIT_STAGING_PASSWORD_ENROLLMENT_INVITATIONS ?? '';
+  const filePath = environment.SIT_STAGING_PASSWORD_ENROLLMENT_INVITATIONS_FILE ?? '';
   if (!['true', 'false'].includes(flag)) deny();
+  if (typeof legacyRaw !== 'string' || legacyRaw !== ''
+      || typeof filePath !== 'string' || filePath !== filePath.trim()) deny();
   if (flag === 'false') {
-    if (raw !== '') deny();
     return Object.freeze({ enabled: false, invitations: Object.freeze([]) });
   }
   if (!['staging', 'test'].includes(stagingAccess?.deploymentEnvironment)
@@ -55,12 +174,14 @@ export function readStagingPasswordEnrollmentConfiguration(
       || String(environment.STRIPE_LIVEMODE ?? '').trim().toLowerCase() === 'true'
       || String(environment.PRIVATE_PILOT_V4_ENABLED ?? '').trim().toLowerCase() !== 'true'
       || !Number.isSafeInteger(now)) deny();
-  let invitations;
-  try { invitations = JSON.parse(raw); } catch { deny(); }
+  // DEPLOYMENT_ENVIRONMENT=test is used by the real staging runtime and never
+  // grants synthetic authority. Enabled enrollment is file-only in every mode.
+  if (filePath === '') deny();
+  const invitations = readProtectedStagingPasswordEnrollmentRegistry(filePath);
   if (!Array.isArray(invitations) || invitations.length < 1 || invitations.length > 20) deny();
   const tokens = new Set();
   const principals = new Set();
-  const expectedKeys = ['emailDigest', 'expiresAt', 'issuedAt', 'tokenDigest', 'userId'];
+  const expectedKeys = registryKeys;
   for (const invitation of invitations) {
     if (!invitation || typeof invitation !== 'object'
         || JSON.stringify(Object.keys(invitation).sort()) !== JSON.stringify(expectedKeys)
