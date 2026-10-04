@@ -8,6 +8,7 @@ import 'package:lendify/services/web_facebook_auth_config.dart';
 import 'package:lendify/services/web_firebase_auth_startup.dart';
 import 'package:lendify/services/web_google_auth.dart';
 import 'web_apple_direct_config_test.dart' as apple_fixture;
+import 'web_google_auth_test.dart' as google_fixture;
 
 const origin = WebGooglePublicConfig.stagingOrigin;
 final now = DateTime.utc(2026, 10, 3, 12);
@@ -86,8 +87,10 @@ WebFirebaseAuthSelection select({
 }) {
   final f = config ?? facebookConfig();
   final raw = rawEvidence ?? jsonEncode(evidence(f));
+  final g = googlePublicConfig ?? googleConfig();
+  final googleBound = google_fixture.googleEvidence(g, at: clock ?? now);
   return selectWebFirebaseAuth(
-    googleConfig: googlePublicConfig ?? googleConfig(),
+    googleConfig: g,
     facebookConfig: f,
     googleEnabled: google,
     facebookEnabled: facebook,
@@ -95,6 +98,12 @@ WebFirebaseAuthSelection select({
     backendEnabled: backend,
     apiBaseUrl: api,
     origin: atOrigin,
+    googleReadinessJson: googleBound.readinessJson,
+    googleReadinessDigest: googleBound.readinessDigest,
+    googleDecisionJson: googleBound.decisionJson,
+    googleDecisionDigest: googleBound.decisionDigest,
+    googleEvidenceDigest: googleBound.evidenceDigest,
+    googleSourceCommit: googleBound.sourceCommit,
     facebookReadinessJson: raw,
     facebookReadinessDigest: approval ?? digest(raw),
     now: clock ?? now,
@@ -123,14 +132,10 @@ void main() {
     final chosen = select(
         google: true,
         facebook: false,
-        validated: false,
+        validated: true,
         rawEvidence: '',
         approval: '');
-    final previous = googleConfig().optionsFor(
-        googleEnabled: true,
-        backendEnabled: true,
-        apiBaseUrl: '$origin/api/v1',
-        origin: origin);
+    final previous = google_fixture.verifiedOptions(googleConfig());
     expect(chosen.options!.asMap, previous!.asMap);
     expect(chosen.google, isTrue);
     expect(chosen.facebook, isFalse);
@@ -144,7 +149,7 @@ void main() {
     final both = select(google: true);
     expect(both.options!.asMap, fb.options!.asMap);
     expect(both.google && both.facebook, isTrue);
-    expect(select(google: true, validated: false).google, isTrue);
+    expect(select(google: true, validated: false).google, isFalse);
     expect(select(google: true, rawEvidence: '').google, isTrue);
   });
 
@@ -200,6 +205,8 @@ void main() {
     final apple = apple_fixture.directConfig();
     final appleRaw = jsonEncode(apple_fixture.evidence(apple));
     final fb = facebookConfig();
+    final googleBound =
+        google_fixture.googleEvidence(googleConfig(), at: apple_fixture.now);
     for (final raw in ['', jsonEncode(evidence(fb))]) {
       final selected = selectWebFirebaseAuth(
           googleConfig: googleConfig(),
@@ -210,6 +217,12 @@ void main() {
           backendEnabled: true,
           apiBaseUrl: '$origin/api/v1',
           origin: origin,
+          googleReadinessJson: googleBound.readinessJson,
+          googleReadinessDigest: googleBound.readinessDigest,
+          googleDecisionJson: googleBound.decisionJson,
+          googleDecisionDigest: googleBound.decisionDigest,
+          googleEvidenceDigest: googleBound.evidenceDigest,
+          googleSourceCommit: googleBound.sourceCommit,
           facebookReadinessJson: raw,
           facebookReadinessDigest: digest(raw),
           now: apple_fixture.now,

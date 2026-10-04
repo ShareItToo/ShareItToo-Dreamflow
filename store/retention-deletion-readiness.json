@@ -841,7 +841,7 @@
     },
     {
       "path": "lib/services/firebase_runtime.dart",
-      "sha256": "017237dcbeff99ed590cdda4ff468a9602591177cd9cb7af03ee149b79be005e"
+      "sha256": "83295660c6024795ce5dd31dc5a2d6aeb76eea1c2a9b0f6dca7475e63129ab2f"
     },
     {
       "path": "lib/services/auth_service.dart",
@@ -889,7 +889,7 @@
     },
     {
       "path": "lib/services/web_firebase_auth_startup.dart",
-      "sha256": "2925c66cabc90fa85ff3357b23cdc3856ac0cfcb16b78d84769e105d9b0cd2ec"
+      "sha256": "89c7b618401dfc26fed08d3258399deecd14b324288e651ce846f431e8e517b2"
     },
     {
       "path": "lib/services/firebase_service_preferences.dart",
@@ -1001,7 +1001,7 @@
     },
     {
       "path": "lib/screens/legal_privacy_screen.dart",
-      "sha256": "f396a83fa1c665f65f6a69dd9a7b7e9485182dfd42db9680bd408bab03e6fb16"
+      "sha256": "4880270ed30194a08dea59458080100856a14a6384bc0f7c4059660ad7eaa091"
     },
     {
       "path": "store/g2-data-lifecycle.json",

@@ -34,6 +34,12 @@ WebFirebaseAuthSelection selectWebFirebaseAuth({
   required bool backendEnabled,
   required String apiBaseUrl,
   required String origin,
+  String googleReadinessJson = '',
+  String googleReadinessDigest = '',
+  String googleDecisionJson = '',
+  String googleDecisionDigest = '',
+  String googleEvidenceDigest = '',
+  String googleSourceCommit = '',
   required String facebookReadinessJson,
   required String facebookReadinessDigest,
   required DateTime now,
@@ -44,9 +50,17 @@ WebFirebaseAuthSelection selectWebFirebaseAuth({
 }) {
   final google = googleConfig.optionsFor(
     googleEnabled: googleEnabled,
+    activationValidated: activationValidated,
     backendEnabled: backendEnabled,
     apiBaseUrl: apiBaseUrl,
     origin: origin,
+    readinessJson: googleReadinessJson,
+    approvedReadinessDigest: googleReadinessDigest,
+    decisionJson: googleDecisionJson,
+    approvedDecisionDigest: googleDecisionDigest,
+    approvedEvidenceDigest: googleEvidenceDigest,
+    expectedSourceCommit: googleSourceCommit,
+    now: now,
   );
   final facebook = facebookConfig.optionsFor(
     facebookEnabled: facebookEnabled,

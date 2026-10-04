@@ -205,6 +205,7 @@ const sourcePaths = [
   'backend/sql/migrations/102_mission_inventory_resolutions.down.sql',
   'backend/src/mission_supply_demand_workflow.js',
   'backend/src/mission_supply_participation_workflow.js',
+  'backend/src/mission_supply_synthetic_resolver.js',
   'backend/sql/migrations/103_mission_supply_demands.up.sql',
   'backend/sql/migrations/103_mission_supply_demands.down.sql',
   'backend/sql/migrations/104_mission_supply_participation.up.sql',
@@ -359,6 +360,7 @@ const purposeValues = new Set([
 const processingActivityIds = [
   'account_core',
   'profile_listing_publication',
+  'private_inventory_and_targeted_mission_demand',
   'discovery_wishlist_and_location',
   'booking_contract_and_counterparty',
   'messages_handover_and_dispute_evidence',
@@ -801,6 +803,25 @@ function assertProcessingTransparency({ privacy, services, root, sourceTexts }) 
       || !payment.unresolvedGates.includes('exactCandidateParity'))) {
     fail('Payment processing must remain a separately gated disabled provider activity.');
   }
+  const privateMission = activityById.get('private_inventory_and_targeted_mission_demand');
+  const privateMissionPurpose = privateMission?.purposes?.[0];
+  if (!processingApproved && (
+    privateMission?.runtimeState !== 'active_high_risk_legal_gate'
+      || privateMissionPurpose?.id !== 'private_inventory_and_targeted_mission_service'
+      || privateMissionPurpose?.legalBasis !== 'article_6_1_b'
+      || privateMissionPurpose?.basisStatus !== 'professional_review_required'
+      || !privateMission.dataTypes.includes('userId')
+      || !privateMission.dataTypes.includes('approximateLocation')
+      || !privateMission.dataTypes.includes('photos')
+      || !privateMission.dataTypes.includes('otherUserContent')
+      || privateMission.dataTypes.includes('preciseLocation')
+      || !privateMission.recipients.includes('otherRentalParty')
+      || privateMission.recipients.includes('publicProfileAudience')
+      || !privateMission.unresolvedGates.includes('exactPurposeBasisMapping')
+      || !privateMission.unresolvedGates.includes('retentionSchedule')
+  )) {
+    fail('Private inventory and targeted Mission demand must remain purpose-bound, non-public and privacy-gated.');
+  }
   for (const id of ['push_notifications', 'crash_diagnostics']) {
     const activity = activityById.get(id);
     if (!processingApproved
@@ -825,10 +846,15 @@ function assertProcessingTransparency({ privacy, services, root, sourceTexts }) 
     'Art. 6 Abs. 1 Buchst. f DSGVO',
     'Ein deaktivierter Zahlungs-, Social-Login-, Karten- oder KI-Anbieter',
     'technische Vorbereitung gilt nicht als rechtliche Freigabe',
+    'Private Inventargegenstände und ihre Fotos bleiben für andere Nutzer unsichtbar',
+    'Eine gezielte Missionsanfrage enthält nur die erforderliche Bedarfskomponente',
   ]) {
     if (!privacyUi.includes(marker)) {
       fail(`In-app processing transparency is missing ${marker}.`);
     }
+  }
+  if (privacyUi.includes('grundsätzlich sechs Monate nach Rückgabe')) {
+    fail('In-app privacy copy must not claim the unresolved six-month retention period.');
   }
   const legalDraft = sourceText(root, sourceTexts, 'assets/legal/de/privacy_v5.html');
   for (const marker of [

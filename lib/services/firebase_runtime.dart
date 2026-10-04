@@ -139,6 +139,17 @@ class FirebaseRuntimeConfig {
         backendEnabled: BackendConfig.enabled,
         apiBaseUrl: BackendConfig.apiBaseUrl,
         origin: Uri.base.origin,
+        googleReadinessJson:
+            const String.fromEnvironment('SIT_GOOGLE_WEB_READINESS_JSON'),
+        googleReadinessDigest:
+            const String.fromEnvironment('SIT_GOOGLE_WEB_READINESS_SHA256'),
+        googleDecisionJson:
+            const String.fromEnvironment('SIT_GOOGLE_WEB_DECISION_JSON'),
+        googleDecisionDigest:
+            const String.fromEnvironment('SIT_GOOGLE_WEB_DECISION_SHA256'),
+        googleEvidenceDigest:
+            const String.fromEnvironment('SIT_GOOGLE_WEB_EVIDENCE_SHA256'),
+        googleSourceCommit: const String.fromEnvironment('SIT_APP_COMMIT'),
         facebookReadinessJson:
             const String.fromEnvironment('SIT_FACEBOOK_WEB_READINESS_JSON'),
         facebookReadinessDigest:

@@ -72,7 +72,7 @@
     },
     {
       "path": "lib/screens/legal_privacy_screen.dart",
-      "sha256": "f396a83fa1c665f65f6a69dd9a7b7e9485182dfd42db9680bd408bab03e6fb16"
+      "sha256": "4880270ed30194a08dea59458080100856a14a6384bc0f7c4059660ad7eaa091"
     },
     {
       "path": "assets/legal/de/privacy_v5.html",
@@ -803,6 +803,10 @@
       "sha256": "3a9ad4c0a2fac6039fedf99a11ce615b5dbf67c9630828ead09b4926f0c636b2"
     },
     {
+      "path": "backend/src/mission_supply_synthetic_resolver.js",
+      "sha256": "6ec69806f20433b0d12aaa484a525d8600268795077e648ea6b2b8ec7ab292c2"
+    },
+    {
       "path": "backend/sql/migrations/103_mission_supply_demands.up.sql",
       "sha256": "1fad168a69b20199685675a609dad6dc234fc34a1a940312e0dc5c834e3752d9"
     },
@@ -856,7 +860,7 @@
     },
     {
       "path": "lib/services/firebase_runtime.dart",
-      "sha256": "017237dcbeff99ed590cdda4ff468a9602591177cd9cb7af03ee149b79be005e"
+      "sha256": "83295660c6024795ce5dd31dc5a2d6aeb76eea1c2a9b0f6dca7475e63129ab2f"
     },
     {
       "path": "lib/services/web_facebook_auth.dart",
@@ -868,7 +872,7 @@
     },
     {
       "path": "lib/services/web_firebase_auth_startup.dart",
-      "sha256": "2925c66cabc90fa85ff3357b23cdc3856ac0cfcb16b78d84769e105d9b0cd2ec"
+      "sha256": "89c7b618401dfc26fed08d3258399deecd14b324288e651ce846f431e8e517b2"
     },
     {
       "path": "lib/services/firebase_service_preferences.dart",
@@ -1104,7 +1108,7 @@
     },
     {
       "path": "lib/services/web_google_auth.dart",
-      "sha256": "379b3e61a577bd531c7bf188be9e3190058d4f64a6af2d9228311f68d78f9b08"
+      "sha256": "0bee03ecb408ca76e6666aa0949601d7913d0100441a4594a18c45a87b50f0cd"
     },
     {
       "path": "lib/screens/notification_settings_screen.dart",
@@ -1768,6 +1772,56 @@
         "disclosureStatus": "draft_not_legally_approved",
         "unresolvedGates": [
           "exactPurposeBasisMapping",
+          "retentionSchedule"
+        ]
+      },
+      {
+        "id": "private_inventory_and_targeted_mission_demand",
+        "runtimeState": "active_high_risk_legal_gate",
+        "dataTypes": [
+          "userId",
+          "approximateLocation",
+          "photos",
+          "otherUserContent",
+          "appInteractions"
+        ],
+        "dataSources": [
+          "data_subject",
+          "other_rental_party",
+          "service_observation"
+        ],
+        "purposes": [
+          {
+            "id": "private_inventory_and_targeted_mission_service",
+            "legalBasis": "article_6_1_b",
+            "basisStatus": "professional_review_required",
+            "condition": "only_for_user_requested_private_inventory_and_explicit_targeted_mission_demand",
+            "consentControl": null,
+            "legitimateInterest": null,
+            "statutoryReference": null
+          }
+        ],
+        "recipients": [
+          "firstPartyBackend",
+          "hostingerVps",
+          "otherRentalParty"
+        ],
+        "retentionDecisionRefs": [
+          "inactiveAccountPeriod",
+          "communicationPeriod",
+          "externalProcessorRetention",
+          "legalHoldProcess"
+        ],
+        "automatedDecisioning": "none",
+        "specialCategory": {
+          "inScope": false,
+          "article9BasisStatus": "not_applicable"
+        },
+        "disclosureStatus": "draft_not_legally_approved",
+        "unresolvedGates": [
+          "exactPurposeBasisMapping",
+          "controllerAndRecipientIdentity",
+          "processorContractsRegionsTransfers",
           "retentionSchedule"
         ]
       },

@@ -19,6 +19,29 @@ test('Web initialization is auth-only, memory-persistent and cannot enable nativ
   for (const token of ['if (kIsWeb)', 'prepareWebAuth != null', 'prepareWebFirebaseAuth(', 'useMemoryPersistence: prepareWebAuth', 'return false;']) assert.ok(branch.includes(token), token);
   assert.doesNotMatch(branch, /FirebaseMessaging|FirebaseCrashlytics|FirebaseInstallations/);
   assert.match(runtime, /web_firebase_app_binding_mismatch/);
+  assert.ok(runtime.includes("bool.fromEnvironment(\n            'SIT_SOCIAL_PROVIDER_ACTIVATION_VALIDATED'"),
+    'SIT_SOCIAL_PROVIDER_ACTIVATION_VALIDATED');
+  for (const name of [
+    'SIT_GOOGLE_WEB_READINESS_JSON',
+    'SIT_GOOGLE_WEB_READINESS_SHA256',
+    'SIT_GOOGLE_WEB_DECISION_JSON',
+    'SIT_GOOGLE_WEB_DECISION_SHA256',
+    'SIT_GOOGLE_WEB_EVIDENCE_SHA256',
+    'SIT_APP_COMMIT',
+  ]) assert.ok(runtime.includes(`String.fromEnvironment('${name}')`), name);
+  const startup = read('lib/services/web_firebase_auth_startup.dart');
+  for (const token of [
+    'activationValidated: activationValidated',
+    'readinessJson: googleReadinessJson',
+    'approvedReadinessDigest: googleReadinessDigest',
+    'decisionJson: googleDecisionJson',
+    'approvedDecisionDigest: googleDecisionDigest',
+    'approvedEvidenceDigest: googleEvidenceDigest',
+    'expectedSourceCommit: googleSourceCommit',
+  ]) assert.ok(startup.includes(token), token);
+  const google = read('lib/services/web_google_auth.dart');
+  assert.match(google, /!activationValidated/);
+  assert.match(google, /_readinessBound\(/);
   for (const name of ['_retryPendingInstallationCleanup', '_retryPendingPushLocalCleanup', '_retryPendingCrashCleanup']) assert.ok(runtime.includes(`static Future<bool> ${name}() async {\n    if (kIsWeb) return false;`));
   const auth = read('lib/services/auth_service.dart');
   const preparation = auth.slice(auth.indexOf('static Future<void> prepareWebGoogleAuthMemoryPersistence('), auth.indexOf('static bool socialProviderEnabled('));

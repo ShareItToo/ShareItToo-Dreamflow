@@ -66,6 +66,35 @@ test('privacy inventory binds the owner participation API workflow', () => {
   assert.throws(() => validate({ privacyManifest }), /every required privacy source exactly once/u);
 });
 
+test('privacy inventory binds the dormant synthetic recipient resolver', () => {
+  const privacyManifest = clone(basePrivacyManifest);
+  privacyManifest.sourceInventory = privacyManifest.sourceInventory.filter(
+    (entry) => entry.path !== 'backend/src/mission_supply_synthetic_resolver.js',
+  );
+  assert.throws(() => validate({ privacyManifest }), /every required privacy source exactly once/u);
+});
+
+test('private inventory and targeted Mission demand stay explicit, non-public and gated', () => {
+  const activity = basePrivacyManifest.processingTransparency.activities
+    .find((item) => item.id === 'private_inventory_and_targeted_mission_demand');
+  assert.equal(activity.runtimeState, 'active_high_risk_legal_gate');
+  assert.equal(activity.disclosureStatus, 'draft_not_legally_approved');
+  assert.equal(activity.dataTypes.includes('photos'), true);
+  assert.equal(activity.dataTypes.includes('preciseLocation'), false);
+  assert.equal(activity.recipients.includes('otherRentalParty'), true);
+  assert.equal(activity.recipients.includes('publicProfileAudience'), false);
+  assert.equal(activity.unresolvedGates.includes('retentionSchedule'), true);
+
+  const publicLeak = clone(basePrivacyManifest);
+  publicLeak.processingTransparency.activities
+    .find((item) => item.id === 'private_inventory_and_targeted_mission_demand')
+    .recipients.push('publicProfileAudience');
+  assert.throws(
+    () => validate({ privacyManifest: publicLeak }),
+    /Private inventory and targeted Mission demand must remain purpose-bound, non-public and privacy-gated/u,
+  );
+});
+
 test('historical source selection requires a genuine complete snapshot attestation', () => {
   const forged = {
     [boundSnapshotAttestationBrand]: true,
@@ -89,7 +118,7 @@ test('accepts the honest fail-closed privacy disclosure draft', () => {
   assert.equal(result.approvalAllowed, false);
   assert.equal(result.dataTypeCount, 18);
   assert.equal(result.externalServiceCount, 11);
-  assert.equal(result.processingActivityCount, 14);
+  assert.equal(result.processingActivityCount, 15);
   assert.equal(result.binaryReleaseCheck, 'passed');
   assert.equal(result.storeGate, 'open');
 });
@@ -185,6 +214,22 @@ test('rejects in-app privacy copy that hides purpose-specific legal bases', () =
   assert.throws(
     () => validate({ privacyManifest, sourceTexts: { [path]: changed } }),
     /In-app processing transparency is missing Rechtsgrundlagen und Empfänger/u,
+  );
+});
+
+test('rejects the unresolved fixed six-month retention claim', () => {
+  const path = 'lib/screens/legal_privacy_screen.dart';
+  const privacyManifest = clone(basePrivacyManifest);
+  const changed = readFileSync(resolve(repositoryRoot, path), 'utf8')
+    .replace(
+      'Für Buchungschats und Nachweisfotos ist im Privat-Pilot derzeit keine pauschale feste Aufbewahrungsfrist freigegeben.',
+      'Buchungschats und Nachweisfotos werden im Privat-Pilot grundsätzlich sechs Monate nach Rückgabe vorgehalten.',
+    );
+  privacyManifest.sourceInventory.find((entry) => entry.path === path).sha256 =
+    sha256(changed);
+  assert.throws(
+    () => validate({ privacyManifest, sourceTexts: { [path]: changed } }),
+    /must not claim the unresolved six-month retention period/u,
   );
 });
 

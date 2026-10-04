@@ -138,6 +138,10 @@ class LegalPrivacyScreen extends StatelessWidget {
             ),
             SizedBox(height: 10),
             LegalParagraph(
+              'Private Inventargegenstände und ihre Fotos bleiben für andere Nutzer unsichtbar und erscheinen weder in der öffentlichen Suche noch als Inserat. Eine gezielte Missionsanfrage enthält nur die erforderliche Bedarfskomponente und geht an genau einen dafür berechtigten Empfänger; private Inventarfotos und exakte Adress- oder Standortdaten werden dabei nicht offengelegt.',
+            ),
+            SizedBox(height: 10),
+            LegalParagraph(
               'Die genaue Zuordnung je Verarbeitungsvorgang und die noch offenen Anbieter-, Vertrags-, Regions-, Transfer-, Aufbewahrungs- und Löschangaben bleiben bis zur abschließenden Prüfung gesperrt. Eine bloße technische Vorbereitung gilt nicht als rechtliche Freigabe.',
             ),
           ],
@@ -174,7 +178,7 @@ class LegalPrivacyScreen extends StatelessWidget {
             ),
             SizedBox(height: 10),
             LegalParagraph(
-              'Buchungschats und Nachweisfotos werden im Privat-Pilot grundsätzlich sechs Monate nach Rückgabe vorgehalten. Bei einem konkret eröffneten Fall oder gesetzlichen Nachweispflichten erfolgt die Aufbewahrung nur fallbezogen so lange wie erforderlich. Rechtserklärungen bleiben als unveränderbarer Vertragsnachweis erhalten.',
+              'Für Buchungschats und Nachweisfotos ist im Privat-Pilot derzeit keine pauschale feste Aufbewahrungsfrist freigegeben. Löschung, Nachweiszwecke, gesetzliche Pflichten und ein möglicher Legal Hold werden erst nach der offenen Aufbewahrungsentscheidung angewendet; aus der technischen Vorbereitung wird keine automatische Löschfrist oder Freigabe abgeleitet.',
             ),
             SizedBox(height: 10),
             LegalParagraph(
