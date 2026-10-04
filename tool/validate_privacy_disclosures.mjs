@@ -375,6 +375,10 @@ const processingActivityIds = [
   'retention_legal_hold_and_claims',
 ];
 
+const historicalProcessingActivityIds = processingActivityIds.filter(
+  (id) => id !== 'private_inventory_and_targeted_mission_demand',
+);
+
 const processingRecipientClasses = [
   'deviceLocalOnly',
   'firstPartyBackend',
@@ -513,7 +517,13 @@ function assertApproval(value, label) {
   }
 }
 
-function assertProcessingTransparency({ privacy, services, root, sourceTexts }) {
+function assertProcessingTransparency({
+  privacy,
+  services,
+  root,
+  sourceTexts,
+  requiredActivityIds = processingActivityIds,
+}) {
   const register = object(
     privacy.processingTransparency,
     'processingTransparency',
@@ -572,7 +582,7 @@ function assertProcessingTransparency({ privacy, services, root, sourceTexts }) 
   }
 
   if (!Array.isArray(register.activities)
-      || register.activities.length !== processingActivityIds.length) {
+      || register.activities.length !== requiredActivityIds.length) {
     fail('Processing transparency must contain every required activity exactly once.');
   }
   const observedActivityIds = [];
@@ -763,7 +773,7 @@ function assertProcessingTransparency({ privacy, services, root, sourceTexts }) 
     }
     activity.unresolvedGates.forEach((id) => usedProcessingGates.add(id));
   }
-  if (observedActivityIds.join(',') !== processingActivityIds.join(',')) {
+  if (observedActivityIds.join(',') !== requiredActivityIds.join(',')) {
     fail('Processing transparency activities must use the required IDs and order.');
   }
   if (dataTypeIds.some((id) => !coveredDataTypes.has(id))) {
@@ -805,7 +815,8 @@ function assertProcessingTransparency({ privacy, services, root, sourceTexts }) 
   }
   const privateMission = activityById.get('private_inventory_and_targeted_mission_demand');
   const privateMissionPurpose = privateMission?.purposes?.[0];
-  if (!processingApproved && (
+  if (requiredActivityIds.includes('private_inventory_and_targeted_mission_demand')
+      && !processingApproved && (
     privateMission?.runtimeState !== 'active_high_risk_legal_gate'
       || privateMissionPurpose?.id !== 'private_inventory_and_targeted_mission_service'
       || privateMissionPurpose?.legalBasis !== 'article_6_1_b'
@@ -838,7 +849,7 @@ function assertProcessingTransparency({ privacy, services, root, sourceTexts }) 
   }
 
   const privacyUi = sourceText(root, sourceTexts, 'lib/screens/legal_privacy_screen.dart');
-  for (const marker of [
+  const privacyUiMarkers = [
     'Rechtsgrundlagen und Empfänger',
     'Art. 6 Abs. 1 Buchst. a DSGVO',
     'Art. 6 Abs. 1 Buchst. b DSGVO',
@@ -846,14 +857,20 @@ function assertProcessingTransparency({ privacy, services, root, sourceTexts }) 
     'Art. 6 Abs. 1 Buchst. f DSGVO',
     'Ein deaktivierter Zahlungs-, Social-Login-, Karten- oder KI-Anbieter',
     'technische Vorbereitung gilt nicht als rechtliche Freigabe',
-    'Private Inventargegenstände und ihre Fotos bleiben für andere Nutzer unsichtbar',
-    'Eine gezielte Missionsanfrage enthält nur die erforderliche Bedarfskomponente',
-  ]) {
+  ];
+  if (requiredActivityIds.includes('private_inventory_and_targeted_mission_demand')) {
+    privacyUiMarkers.push(
+      'Private Inventargegenstände und ihre Fotos bleiben für andere Nutzer unsichtbar',
+      'Eine gezielte Missionsanfrage enthält nur die erforderliche Bedarfskomponente',
+    );
+  }
+  for (const marker of privacyUiMarkers) {
     if (!privacyUi.includes(marker)) {
       fail(`In-app processing transparency is missing ${marker}.`);
     }
   }
-  if (privacyUi.includes('grundsätzlich sechs Monate nach Rückgabe')) {
+  if (requiredActivityIds.includes('private_inventory_and_targeted_mission_demand')
+      && privacyUi.includes('grundsätzlich sechs Monate nach Rückgabe')) {
     fail('In-app privacy copy must not claim the unresolved six-month retention period.');
   }
   const legalDraft = sourceText(root, sourceTexts, 'assets/legal/de/privacy_v5.html');
@@ -2679,6 +2696,9 @@ export function validatePrivacyDisclosures({
     services,
     root,
     sourceTexts,
+    requiredActivityIds: historicalSnapshot
+      ? historicalProcessingActivityIds
+      : processingActivityIds,
   });
 
   const decisions = object(privacy.requiredDecisions, 'requiredDecisions');
@@ -2750,7 +2770,7 @@ export function validatePrivacyDisclosures({
     approvalAllowed: privacy.approvalAllowed,
     dataTypeCount: privacy.dataTypes.length,
     externalServiceCount: serviceKeys.length,
-    processingActivityCount: processingActivityIds.length,
+    processingActivityCount: privacy.processingTransparency.activities.length,
     storeGate: storeGate.status,
     binaryReleaseCheck: binary.releaseCheckStatus,
   };

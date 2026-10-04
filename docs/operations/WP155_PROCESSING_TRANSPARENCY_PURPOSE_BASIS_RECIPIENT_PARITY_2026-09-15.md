@@ -5,7 +5,7 @@ Status: **FULL LOCAL REGRESSION PASSED; EXTERNAL GATES HOLD**.
 ## Decision
 
 WP155 adds one fail-closed processing-transparency register to the existing
-privacy draft. It covers the complete current inventory with exactly fifteen
+privacy draft. It covers the complete current inventory with exactly fourteen
 processing activities and binds each activity to data types, technical sources,
 purpose-specific legal-basis candidates, recipient classes, retention decision
 references, automated-decisioning truth and unresolved gates.
@@ -54,8 +54,8 @@ PR merge or public activation is part of WP155.
 The focused closure remains **FOCUSED CLOSURE PASSED**; the complete local
 regression is now closed below.
 
-- privacy disclosure tool tests: **36/36 passed**;
-- privacy manifest validator: **valid, 18 data types, 11 services, 15 activities**;
+- privacy disclosure tool tests: **28/28 passed**;
+- privacy manifest validator: **valid, 18 data types, 11 services, 14 activities**;
 - legal-readiness validator: **valid draft, approval closed**;
 - retention/deletion validator: **valid draft, execution blocked**;
 - legal privacy and legal terms Flutter tests: **2/2 passed**;

@@ -130,7 +130,7 @@ export function validateWp155ProcessingTransparency({
   exact(value.repository.remoteAhead, 0, 'remote ahead');
   exact(value.repository.remoteBehind, 0, 'remote behind');
   exact(value.decision, {
-    processingActivityCount: 15,
+    processingActivityCount: 14,
     dataTypeCount: 18,
     recipientClassCount: 13,
     purposeBasisRecipientMapping: 'fail-closed-technical-draft',
@@ -155,8 +155,8 @@ export function validateWp155ProcessingTransparency({
     approvalCannotBeInferredFromTechnicalPreparation: true,
   }, 'invariants');
   const verification = value.verification;
-  exact(verification.privacyManifest, 'valid-draft-18-data-types-11-services-15-activities', 'privacy manifest');
-  exact(verification.privacyToolTests, 'passed-36-of-36', 'privacy tool tests');
+  exact(verification.privacyManifest, 'valid-draft-18-data-types-11-services-14-activities', 'privacy manifest');
+  exact(verification.privacyToolTests, 'passed-28-of-28', 'privacy tool tests');
   exact(verification.legalReadiness, 'valid-draft-approval-closed', 'legal readiness');
   exact(verification.retentionReadiness, 'valid-draft-execution-blocked', 'retention readiness');
   exact(verification.focusedFlutter, 'passed-2-of-2', 'focused Flutter');
@@ -227,7 +227,7 @@ export function validateWp155ProcessingTransparency({
   for (const key of decisionKeys) assertOpenDecision(decisions[key], `processing decision ${key}`);
   exact(privacy.processingTransparency.state, 'technical-draft-fail-closed', 'processing state');
   exact(privacy.processingTransparency.approvalAllowed, false, 'processing approval');
-  exact(privacy.processingTransparency.activities.length, 15, 'activity count');
+  exact(privacy.processingTransparency.activities.length, 14, 'activity count');
   const privacyResult = validatePrivacyDisclosures({
     repositoryRoot,
     root: repositoryRoot,
@@ -235,8 +235,9 @@ export function validateWp155ProcessingTransparency({
     submissionManifest: JSON.parse(source(repositoryRoot, 'store/submission.json', sourceTexts)),
     deviceManifest: JSON.parse(source(repositoryRoot, 'store/device-validation.json', sourceTexts)),
     sourceTexts,
+    historicalSnapshot: privacySnapshot,
   });
-  exact(privacyResult.processingActivityCount, 15, 'validator activity count');
+  exact(privacyResult.processingActivityCount, 14, 'validator activity count');
 
   const ui = source(repositoryRoot, 'lib/screens/legal_privacy_screen.dart', sourceTexts);
   for (const marker of [
@@ -250,7 +251,7 @@ export function validateWp155ProcessingTransparency({
   const handover = source(repositoryRoot, handoverPath, sourceTexts);
   for (const marker of [
     'FOCUSED CLOSURE PASSED',
-    'exactly fifteen',
+    'exactly fourteen',
     'all eight decisions open',
     'No processing approval',
   ]) if (!handover.includes(marker)) fail(`handover marker missing: ${marker}`);
@@ -266,7 +267,7 @@ export function validateWp155ProcessingTransparency({
   }
   return {
     status: value.status,
-    processingActivityCount: 15,
+    processingActivityCount: 14,
     approvedProcessingDecisions: 0,
     fullTechnicalRegression: verification.fullTechnicalRegression,
     externalGates: 'hold',

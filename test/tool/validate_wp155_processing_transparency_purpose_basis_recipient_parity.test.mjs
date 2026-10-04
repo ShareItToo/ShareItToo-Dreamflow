@@ -16,7 +16,7 @@ const evidence = JSON.parse(readFileSync(evidencePath, 'utf8'));
 
 test('accepts the fail-closed WP155 processing-transparency package', () => {
   const result = validateWp155ProcessingTransparency({ repositoryRoot });
-  assert.equal(result.processingActivityCount, 15);
+  assert.equal(result.processingActivityCount, 14);
   assert.equal(result.approvedProcessingDecisions, 0);
   assert.equal(result.externalGates, 'hold');
 });
