@@ -193,6 +193,7 @@ function commandShapedOperations(state, {
   let candidateContainer = null;
   let candidateInspections = 0;
   let queueReads = 0;
+  let immutableCreateRequest = null;
   const calls = [];
   const phase = (name) => {
     calls.push(name);
@@ -219,6 +220,12 @@ function commandShapedOperations(state, {
     },
     async createExact(plan) {
       phase('createExact');
+      assert.equal(Object.isFrozen(plan), true);
+      assert.equal(Object.isFrozen(plan.args), true);
+      immutableCreateRequest = plan;
+      assert.deepEqual(Object.keys(plan).sort(), [
+        'args', 'currentContainerId', 'expectedContainerName', 'targetImageId',
+      ]);
       assert.ok(plan.args.includes('--mount'));
       assert.ok(plan.args.some((argument) => argument.includes('readonly=true')));
       assert.ok(!plan.args.includes('--volume'));
@@ -229,8 +236,9 @@ function commandShapedOperations(state, {
       if (responseLoss) throw new Error('lost response');
       return { containerId: candidate.container.Id };
     },
-    async resolveCreatedCandidate() {
+    async resolveCreatedCandidate(plan) {
       calls.push('resolveCreatedCandidate');
+      assert.equal(plan, immutableCreateRequest);
       return candidateExists ? { containerId: candidate.container.Id } : null;
     },
     async inspectExact(id) {
@@ -452,6 +460,11 @@ test('lowercase and mixed-case secret names never affect safe hashes or evidence
   });
   assert.equal(greenPasswordEnrollmentContainerSha256(firstContainer),
     greenPasswordEnrollmentContainerSha256(secondContainer));
+  const safeDrift = structuredClone(firstContainer);
+  firstContainer.Config.Env.push('SAFE_BINDING_PROBE=first');
+  safeDrift.Config.Env.push('SAFE_BINDING_PROBE=second');
+  assert.notEqual(greenPasswordEnrollmentContainerSha256(firstContainer),
+    greenPasswordEnrollmentContainerSha256(safeDrift));
 
   const exposed = JSON.stringify({ safeEnvironmentSha256: first.safeEnvironmentSha256 });
   for (const value of [...firstEnvironment.values, ...secondEnvironment.values]) {
@@ -616,6 +629,7 @@ test('execute seals current API and publishes only aggregate proof after v2/read
   assert.equal(result.status, 'activated');
   assert.equal(result.deliveryAuthorized, false);
   assert.equal(result.invitationCount, 1);
+  assert.equal(Object.hasOwn(result, 'createPlanSha256'), false);
   assert.ok(operations.calls.includes('stopExact'));
   assert.ok(operations.calls.includes('collectCandidate'));
   const createdAt = operations.calls.indexOf('createExact');
@@ -651,6 +665,10 @@ test('source retains no static SMTP password assignment literal', async () => {
   assert.doesNotMatch(implementation, /environmentSha256/u);
   assert.doesNotMatch(implementation,
     /sha256\((?:environmentFile\.bytes|proposedEnvironment)\)/u);
+  assert.doesNotMatch(implementation, /readGreenPasswordEnrollmentActivationInputs/u);
+  assert.doesNotMatch(implementation, /canonicalDigest\(createPlan\.args\)/u);
+  assert.doesNotMatch(implementation,
+    /greenPasswordEnrollmentMountsSha256\(expectedMounts\)/u);
 });
 
 test('evidence close failure rolls back; lock close after durable evidence is distinct', async (t) => {

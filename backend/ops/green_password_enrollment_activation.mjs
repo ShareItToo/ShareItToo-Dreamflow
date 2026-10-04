@@ -128,22 +128,24 @@ export function greenPasswordEnrollmentContainerSha256(container) {
   if (!container || typeof container !== 'object' || !container.Config
       || !container.HostConfig || !container.NetworkSettings) deny();
   const { Env: environmentEntries, ...configWithoutEnvironment } = container.Config;
-  const safeConfig = {
-    ...configWithoutEnvironment,
-    Env: Array.isArray(environmentEntries) ? environmentEntries.map((entry) => {
-      const separator = typeof entry === 'string' ? entry.indexOf('=') : -1;
-      if (separator < 1) deny();
-      const name = entry.slice(0, separator);
-      return /(?:password|secret|token|database_url)/iu.test(name)
-        ? `${name}=<redacted>` : entry;
-    }) : environmentEntries,
-  };
+  if (!Array.isArray(environmentEntries)) deny();
+  const safeEnvironmentEntries = environmentEntries.map((entry) => {
+    const separator = typeof entry === 'string' ? entry.indexOf('=') : -1;
+    if (separator < 1) deny();
+    const name = entry.slice(0, separator);
+    return /(?:password|secret|token|database_url)/iu.test(name)
+      ? `${name}=<redacted>` : entry;
+  });
   return canonicalDigest({
-    Config: safeConfig,
+    Config: { ...configWithoutEnvironment, Env: safeEnvironmentEntries },
     HostConfig: container.HostConfig,
     Mounts: (container.Mounts ?? []).map(normalizedMount),
     Networks: container.NetworkSettings.Networks ?? {},
   });
+}
+
+function canonicalEqual(left, right) {
+  return JSON.stringify(canonicalValue(left)) === JSON.stringify(canonicalValue(right));
 }
 
 export function greenPasswordEnrollmentQueueSha256(queue) {
@@ -613,13 +615,11 @@ export function assertGreenPasswordEnrollmentActivationManifest(manifest) {
   return Object.freeze({ ...manifest });
 }
 
-export function readGreenPasswordEnrollmentActivationInputs(manifest, {
+function readProtectedActivationEnvironment(target, {
   fileSystem = fs,
   operatorUid = typeof process.getuid === 'function' ? process.getuid() : undefined,
   operatorGid = typeof process.getgid === 'function' ? process.getgid() : undefined,
-  now = Date.now(),
 } = {}) {
-  const target = assertGreenPasswordEnrollmentActivationManifest(manifest);
   const environmentFile = readProtectedActivationFile(target.environmentFile, {
     fileSystem, expectedUid: target.environmentUid, expectedGid: target.environmentGid,
     operatorUid,
@@ -641,6 +641,13 @@ export function readGreenPasswordEnrollmentActivationInputs(manifest, {
   } finally {
     environmentFile.bytes.fill(0);
   }
+  return Object.freeze(environment);
+}
+
+function readProtectedInvitationRegistry(target, {
+  fileSystem = fs,
+  operatorUid = typeof process.getuid === 'function' ? process.getuid() : undefined,
+} = {}) {
   let invitations;
   try {
     invitations = readProtectedStagingPasswordEnrollmentRegistry(target.registryFile, {
@@ -658,7 +665,7 @@ export function readGreenPasswordEnrollmentActivationInputs(manifest, {
   } finally {
     registryBytes.bytes.fill(0);
   }
-  return Object.freeze({ target, environment: Object.freeze(environment), invitations, now });
+  return invitations;
 }
 
 function immutableImageReference(image, digest) {
@@ -796,7 +803,7 @@ export function buildGreenPasswordEnrollmentCreatePlan(manifest, currentContaine
       || args.some((argument) => argument === '--volume' || argument === '-v')
       || args.at(-((currentContainer.Config?.Cmd ?? []).length + 1))
         !== immutableImageReference(target.targetImage, target.targetImageDigest)) deny();
-  return Object.freeze({ args, mounts: Object.freeze(mounts) });
+  return Object.freeze({ args: Object.freeze([...args]), mounts: Object.freeze(mounts) });
 }
 
 function assertCandidateContainerShape(container, target, currentContainer, proposedEnvironment, {
@@ -822,12 +829,11 @@ function assertCandidateContainerShape(container, target, currentContainer, prop
     Type: 'bind', Name: null, Source: target.registryFile,
     Destination: registryTarget, RW: false,
   }];
-  if (greenPasswordEnrollmentMountsSha256(container.Mounts)
-      !== greenPasswordEnrollmentMountsSha256(expectedMounts)
+  if (!canonicalEqual(container.Mounts.map(normalizedMount), expectedMounts.map(normalizedMount))
       || !Array.isArray(container.HostConfig?.Mounts)
       || container.HostConfig.Mounts.length !== 4
-      || canonicalDigest(container.HostConfig.Mounts.map(normalizedHostMount))
-        !== canonicalDigest(expectedMounts.map((mount) => ({
+      || !canonicalEqual(container.HostConfig.Mounts.map(normalizedHostMount),
+        expectedMounts.map((mount) => ({
           type: mount.Type,
           source: mount.Type === 'volume' ? mount.Name : mount.Source,
           target: mount.Destination,
@@ -1005,37 +1011,43 @@ export async function runGreenPasswordEnrollmentActivation({
   let proposedEnvironmentForRollback;
   try {
     if (typeof execute !== 'boolean' || !currentState || typeof currentState !== 'object') deny();
-    const inputs = readGreenPasswordEnrollmentActivationInputs(manifest, {
+    const inputTarget = assertGreenPasswordEnrollmentActivationManifest(manifest);
+    const proposedEnvironment = readProtectedActivationEnvironment(inputTarget, {
       fileSystem, operatorUid, operatorGid, now,
     });
-    proposedEnvironmentForRollback = inputs.environment;
-    const currentBindings = assertGreenPasswordEnrollmentCurrentState(currentState, inputs.target);
+    const invitations = readProtectedInvitationRegistry(inputTarget, {
+      fileSystem, operatorUid,
+    });
+    proposedEnvironmentForRollback = proposedEnvironment;
+    const currentBindings = assertGreenPasswordEnrollmentCurrentState(currentState, inputTarget);
     const currentEnvironment = environmentFromContainer(currentState.container?.Config?.Env);
     const prepared = activationEnvironment({
-      currentEnvironment, proposedEnvironment: inputs.environment,
-      invitations: inputs.invitations, now,
+      currentEnvironment, proposedEnvironment,
+      invitations, now,
     });
-    const createPlan = buildGreenPasswordEnrollmentCreatePlan(inputs.target, currentState.container);
-    const createPlanSha256 = canonicalDigest(createPlan.args);
+    const createPlan = buildGreenPasswordEnrollmentCreatePlan(inputTarget, currentState.container);
     if (execute) {
-      if (confirmations.sourceCommit !== inputs.target.sourceCommit
-          || confirmations.currentContainerId !== inputs.target.currentContainerId
-          || confirmations.registrySha256 !== inputs.target.registrySha256) deny();
+      if (confirmations.sourceCommit !== inputTarget.sourceCommit
+          || confirmations.currentContainerId !== inputTarget.currentContainerId
+          || confirmations.registrySha256 !== inputTarget.registrySha256) deny();
       const operator = requiredOperations(operations);
-      target = inputs.target;
+      target = inputTarget;
       lock = acquireActivationLock(target.lockFile, { fileSystem, operatorUid });
       originalState = await operator.collectCurrent();
       assertGreenPasswordEnrollmentCurrentState(originalState, target);
-      const freshInputs = readGreenPasswordEnrollmentActivationInputs(target, {
+      const freshEnvironment = readProtectedActivationEnvironment(target, {
         fileSystem, operatorUid, operatorGid, now,
+      });
+      const freshInvitations = readProtectedInvitationRegistry(target, {
+        fileSystem, operatorUid,
       });
       const freshPrepared = activationEnvironment({
         currentEnvironment: environmentFromContainer(originalState.container.Config.Env),
-        proposedEnvironment: freshInputs.environment,
-        invitations: freshInputs.invitations,
+        proposedEnvironment: freshEnvironment,
+        invitations: freshInvitations,
         now,
       });
-      if (canonicalDigest(freshPrepared) !== canonicalDigest(prepared)) deny();
+      if (!canonicalEqual(freshPrepared, prepared)) deny();
       const queueImmediatelyBefore = await operator.readQueue();
       if (greenPasswordEnrollmentQueueSha256(queueImmediatelyBefore)
           !== target.currentQueueSha256) deny();
@@ -1082,7 +1094,7 @@ export async function runGreenPasswordEnrollmentActivation({
       );
       if (originalObservation.running || originalObservation.name !== sealedName) deny();
       const createRequest = Object.freeze({
-        args: createPlan.args, argsSha256: createPlanSha256,
+        args: createPlan.args,
         currentContainerId: target.currentContainerId,
         expectedContainerName: target.apiContainer,
         targetImageId: target.targetImageId,
@@ -1101,11 +1113,11 @@ export async function runGreenPasswordEnrollmentActivation({
           || created.containerId === target.currentContainerId) deny();
       candidateId = created.containerId;
       assertCandidateContainerShape(await operator.inspectExact(candidateId), target,
-        originalState.container, freshInputs.environment,
+        originalState.container, freshEnvironment,
         { running: false, providerAttached: false });
       await operator.connectExact(candidateId, target.providerNetwork, target.providerNetworkId);
       assertCandidateContainerShape(await operator.inspectExact(candidateId), target,
-        originalState.container, freshInputs.environment,
+        originalState.container, freshEnvironment,
         { running: false, providerAttached: true });
       await operator.startExact(candidateId);
       const candidate = await operator.collectCandidate(candidateId, Object.freeze({
@@ -1117,7 +1129,7 @@ export async function runGreenPasswordEnrollmentActivation({
           || candidate.sealedOriginal.name !== sealedName
           || candidate.sealedOriginal.running !== false) deny();
       const candidateBindings = assertGreenPasswordEnrollmentCandidateState(
-        candidate, target, originalState, freshInputs.environment, freshPrepared, now,
+        candidate, target, originalState, freshEnvironment, freshPrepared, now,
       );
       const queueAfterProof = await operator.readQueue();
       if (greenPasswordEnrollmentQueueSha256(queueAfterProof) !== target.currentQueueSha256) deny();
@@ -1140,7 +1152,6 @@ export async function runGreenPasswordEnrollmentActivation({
         candidateHealthSha256: candidateBindings.candidateHealthSha256,
         readinessDigest: candidateBindings.readinessDigest,
         readinessEvidenceDigest: candidateBindings.evidenceDigest,
-        createPlanSha256,
         backupSha256: backupPublication.sha256,
         deliveryAuthorized: false,
       });
@@ -1169,13 +1180,12 @@ export async function runGreenPasswordEnrollmentActivation({
       return result;
     }
     return Object.freeze({
-      status: 'dry-run', sourceCommit: inputs.target.sourceCommit,
-      sourceVersion: inputs.target.sourceVersion,
-      currentContainerId: inputs.target.currentContainerId,
-      registrySha256: inputs.target.registrySha256,
-      targetImageId: inputs.target.targetImageId,
-      targetImageDigest: inputs.target.targetImageDigest,
-      createPlanSha256,
+      status: 'dry-run', sourceCommit: inputTarget.sourceCommit,
+      sourceVersion: inputTarget.sourceVersion,
+      currentContainerId: inputTarget.currentContainerId,
+      registrySha256: inputTarget.registrySha256,
+      targetImageId: inputTarget.targetImageId,
+      targetImageDigest: inputTarget.targetImageDigest,
       deliveryAuthorized: false,
       ...currentBindings,
       ...prepared,
