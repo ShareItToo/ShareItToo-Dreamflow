@@ -31,6 +31,16 @@ older than the working source. That mode is never Play or release evidence and
 must report `currentCandidateReady=false`; do not combine it with CI or candidate
 rollover. A final Android/Play release still requires the unchanged strict gate
 against the exact current signed artifact.
+The local Web source gate may reuse Android source proof only from the baseline
+automatically retained after a successful debug build, minSdk check and R11
+audit. Compare every committed, staged, unstaged and untracked path against
+that exact ancestor: only docs, tests, backend, Web-shell files and this guidance
+are Android-unaffected. Dart, native, assets, dependencies, build tooling and
+unknown paths require Android; missing or invalid evidence also requires it.
+Ignored source and protected local Android configuration must retain their
+private byte bindings too.
+Never seed that baseline from a failed gate, an arbitrary HEAD or Play metadata.
+Report a skipped build/audit explicitly; it proves no current binary or release.
 
 Before every SIT turn, read
 `docs/operations/SIT_PILOT_PHASE_CAPSULE_2026-09-23.md` as the compact entry

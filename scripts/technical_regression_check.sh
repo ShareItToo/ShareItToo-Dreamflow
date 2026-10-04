@@ -1322,6 +1322,18 @@ if printf '%s\n' "$web_build_output" \
 fi
 bash scripts/p0a_web_smoke.sh
 
+android_source_action=build
+if [[ "${SIT_WEB_SOURCE_GATE:-0}" == "1" ]]; then
+  android_source_action="$(node tool/web_source_android_baseline.mjs decide)"
+fi
+case "$android_source_action" in
+  build|skip) ;;
+  *) echo "ERROR: Invalid Android source-reuse decision." >&2; exit 1 ;;
+esac
+if [[ "$android_source_action" == "skip" ]]; then
+  echo "Android debug build/audit: SKIPPED (retained source baseline unchanged; no current binary or release proof)."
+else
+android_build_source_head="$(git rev-parse HEAD)"
 android_dependency_flag=''
 case "${SIT_R10_GRADLE_OFFLINE:-0}" in
   0) ;;
@@ -1377,9 +1389,11 @@ r11_audit_output="$(mktemp)"
 node tool/audit_r11_android_security_surface.mjs \
   --apk "$android_debug_apk" \
   --aapt "$android_aapt" \
-  --source-head "$(git rev-parse HEAD)" \
+  --source-head "$android_build_source_head" \
   --source-branch "$r11_source_branch" \
   --output "$r11_audit_output"
+node tool/web_source_android_baseline.mjs retain "$android_build_source_head" "$r11_audit_output"
+fi
 
 release_host_capacity_end
 if [[ "${SIT_WEB_SOURCE_GATE:-0}" == "1" ]]; then

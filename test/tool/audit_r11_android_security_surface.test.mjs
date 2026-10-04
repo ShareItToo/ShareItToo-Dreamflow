@@ -79,7 +79,7 @@ test('the full technical gate audits the actual merged debug artifact', () => {
   assert.match(regression, /node tool\/audit_r11_android_security_surface\.mjs/u);
   assert.match(regression, /--apk "\$android_debug_apk"/u);
   assert.match(regression, /--aapt "\$android_aapt"/u);
-  assert.match(regression, /--source-head "\$\(git rev-parse HEAD\)"/u);
+  assert.match(regression, /android_build_source_head="\$\(git rev-parse HEAD\)"[\s\S]*:app:assembleDebug[\s\S]*--source-head "\$android_build_source_head"/u);
   assert.doesNotMatch(
     regression,
     /audit_r11_android_security_surface[\s\S]{0,500}(?:deploy|publish|upload|install)/u,
