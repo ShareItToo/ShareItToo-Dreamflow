@@ -148,8 +148,15 @@ export function createStagingGoogleWebReadAdapter({ projectId, projectNumber, ap
       return Object.fromEntries(['projectId', 'messagingSenderId', 'appId', 'apiKey', 'authDomain'].map((key) => [key, value[key]]));
     }),
     readProjectConfig: safe(async () => {
+      // Identity Toolkit returns numeric resource names. Bind that number to
+      // the requested project through Resource Manager before trusting it.
+      const project = await get('cloudresourcemanager', `/v1/projects/${projectId}`);
+      check(project.projectId === projectId && typeof project.projectNumber === 'string'
+        && /^[1-9][0-9]{5,19}$/u.test(project.projectNumber)
+        && project.projectNumber === projectNumber && project.lifecycleState === 'ACTIVE',
+      'project_identity_invalid');
       const value = await get('identitytoolkit', `/admin/v2/projects/${projectId}/config`);
-      check(value.name === `projects/${projectId}/config` && strings(repeated(value, 'authorizedDomains'))
+      check(value.name === `projects/${project.projectNumber}/config` && strings(repeated(value, 'authorizedDomains'))
         && repeated(value, 'authorizedDomains').every((v) => /^[a-z0-9.-]+$/u.test(v)), 'project_config_invalid');
       const { authorizedDomains = [], ...unrelated } = value;
       // Exclude only the intended field; unknown/new fields remain digest-bound.

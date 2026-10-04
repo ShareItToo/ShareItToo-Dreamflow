@@ -25,13 +25,14 @@ function fixture() {
   const deleted = { ...app, name: `projects/${projectId}/webApps/deleted-app`, appId: 'deleted-app', state: 'DELETED' };
   const sdk = { projectId, projectNumber, messagingSenderId: projectNumber, appId, apiKey: publicKey,
     authDomain: `${projectId}.firebaseapp.com`, measurementId: 'synthetic-measurement', storageBucket: 'synthetic-bucket' };
-  const config = { name: `projects/${projectId}/config`, authorizedDomains: ['localhost', 'synthetic.example.invalid'],
+  const config = { name: `projects/${projectNumber}/config`, authorizedDomains: ['localhost', 'synthetic.example.invalid'],
     notification: { sendEmail: { smtp: { password: ['synthetic', 'only'].join('-') } } },
     client: { apiKey: publicKey }, signIn: { email: { enabled: true } } };
   const calls = [];
   const webResource = `/v1beta1/projects/${projectNumber}/webApps`;
   const keyResource = `/v2/projects/${projectNumber}/locations/global/keys`;
   const responses = new Map([
+    [`/v1/projects/${projectId}`, { projectId, projectNumber, lifecycleState: 'ACTIVE' }],
     [webResource, { apps: [app], nextPageToken: 'synthetic-page' }],
     [`${webResource}?synthetic-page`, { apps: [deleted] }],
     [`${webResource}/${encodeURIComponent(appId)}`, app],
@@ -213,6 +214,39 @@ test('project config binds every unrelated field without disclosing raw config o
   assert.equal(JSON.stringify(before).includes(f.config.notification.sendEmail.smtp.password), false);
   f.config.name = 'projects/foreign-project/config'; await assert.rejects(f.adapter.readProjectConfig(), /project_config_invalid/);
 });
+test('numeric config name is bound to the exact Resource Manager project response before config read', async () => {
+  const f = fixture(); await f.adapter.readProjectConfig();
+  assert.deepEqual(f.calls.map(({ service, resource }) => ({ service, resource })), [
+    { service: 'cloudresourcemanager', resource: `/v1/projects/${f.binding.projectId}` },
+    { service: 'identitytoolkit', resource: `/admin/v2/projects/${f.binding.projectId}/config` },
+  ]);
+});
+for (const variant of ['foreignProject', 'missingProject', 'foreignNumber', 'missingNumber', 'numericNumber',
+  'malformedNumber', 'leadingZero', 'missingState', 'inactive']) {
+  test(`Resource Manager project binding rejects ${variant} before Identity Toolkit`, async () => {
+    const f = fixture(); const project = f.responses.get(`/v1/projects/${f.binding.projectId}`);
+    if (variant === 'foreignProject') project.projectId = 'foreign-project';
+    if (variant === 'missingProject') delete project.projectId;
+    if (variant === 'foreignNumber') project.projectNumber = '999999999999';
+    if (variant === 'missingNumber') delete project.projectNumber;
+    if (variant === 'numericNumber') project.projectNumber = 123456789012;
+    if (variant === 'malformedNumber') project.projectNumber = '12345678901x';
+    if (variant === 'leadingZero') project.projectNumber = '012345678901';
+    if (variant === 'missingState') delete project.lifecycleState;
+    if (variant === 'inactive') project.lifecycleState = 'DELETE_REQUESTED';
+    await assert.rejects(f.adapter.readProjectConfig(), { message: 'project_identity_invalid' });
+    assert.equal(f.calls.length, 1);
+  });
+}
+for (const name of ['projects/synthetic-fixture/config', 'projects/999999999999/config',
+  'projects/12345678901x/config', 'projects/123456789012/config/extra', undefined]) {
+  test(`config rejects noncanonical resource name: ${name}`, async () => {
+    const f = fixture();
+    if (name === undefined) delete f.config.name;
+    else f.config.name = name;
+    await assert.rejects(f.adapter.readProjectConfig(), { message: 'project_config_invalid' });
+  });
+}
 test('explicit null and duplicate domains are not silently treated as an empty configuration', async () => {
   for (const value of [null, ['duplicate.invalid', 'duplicate.invalid']]) {
     const f = fixture(); f.config.authorizedDomains = value;

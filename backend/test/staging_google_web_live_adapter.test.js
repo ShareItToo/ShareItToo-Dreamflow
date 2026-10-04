@@ -30,7 +30,7 @@ function fixture() {
     apiTargets: [{ service: 'identitytoolkit.googleapis.com' }, { service: 'securetoken.googleapis.com' }] };
   const key = { name: `projects/${projectNumber}/locations/global/keys/synthetic-key`, uid: apiKeyId,
     displayName: 'Staging Web', restrictions, etag: 'key-etag' };
-  const config = { name: `projects/${projectId}/config`, authorizedDomains: [`${projectId}.firebaseapp.com`, 'localhost'],
+  const config = { name: `projects/${projectNumber}/config`, authorizedDomains: [`${projectId}.firebaseapp.com`, 'localhost'],
     signIn: { email: { enabled: true } }, updateTime: '2026-10-04T11:00:00Z' };
   const binding = { projectId, projectNumber, origin: 'https://staging.shareittoo.com',
     displayName: 'ShareItToo Staging Web', baselineDigest: 'b'.repeat(64),
@@ -48,6 +48,8 @@ function fixture() {
     const url = new URL(urlValue); calls.push({ url: url.toString(), method: init.method, headers: init.headers, body: init.body });
     if (url.origin === 'https://oauth2.googleapis.com') return response({ access_token: 'private-service-token', expires_in: 3600, token_type: 'Bearer' });
     const pathname = url.pathname;
+    if (init.method === 'GET' && url.origin === 'https://cloudresourcemanager.googleapis.com'
+      && pathname === `/v1/projects/${projectId}`) return response({ projectId, projectNumber, lifecycleState: 'ACTIVE' });
     if (init.method === 'GET' && pathname.endsWith('/services/identitytoolkit.googleapis.com')) return response({
       name: `projects/${projectNumber}/services/identitytoolkit.googleapis.com`, parent: `projects/${projectNumber}`,
       state: 'ENABLED', config: { name: 'identitytoolkit.googleapis.com' } });
@@ -62,7 +64,7 @@ function fixture() {
     if (init.method === 'GET' && pathname.endsWith(`/v2/${key.name}/keyString`)) return response({ keyString: publicKey });
     if (init.method === 'GET' && pathname.endsWith(`/projects/${projectId}/config`)) return response(config);
     if (init.method === 'GET' && pathname.endsWith(`/projects/${projectId}/defaultSupportedIdpConfigs/google.com`)) return response({
-      name: `projects/${projectId}/defaultSupportedIdpConfigs/google.com`, enabled: true, clientId: 'private-client-id' });
+      name: `projects/${projectNumber}/defaultSupportedIdpConfigs/google.com`, enabled: true, clientId: 'private-client-id' });
     if (init.method === 'POST' && pathname.endsWith(`/projects/${projectId}/webApps`)) return response({ name: 'operations/synthetic-create' });
     if (init.method === 'GET' && pathname.endsWith('/operations/synthetic-create')) {
       operationReads++;
@@ -138,12 +140,58 @@ test('snapshot independently reads services, exhaustive app inventories, exact k
   assert.equal(snapshot.revision, digest(f.config)); assert.equal(snapshot.runtimeDigest, 'd'.repeat(64));
   assert.equal(snapshot.otherAppsDigest.length, 64); assert.equal(snapshot.providerConfigDigest.length, 64);
   assert.equal(f.calls.filter((call) => call.url.startsWith('https://oauth2.googleapis.com/')).length, 1);
+  const reads = f.calls.filter((call) => call.method === 'GET');
+  assert.equal(reads[0].url, `https://cloudresourcemanager.googleapis.com/v1/projects/${f.binding.projectId}`);
+  assert.equal(reads[1].url, `https://identitytoolkit.googleapis.com/admin/v2/projects/${f.binding.projectId}/config`);
+  assert.equal(reads.filter((call) => call.url.startsWith('https://cloudresourcemanager.googleapis.com/')).length, 1);
   for (const kind of ['webApps', 'androidApps', 'iosApps']) {
     const call = f.calls.find((item) => new URL(item.url).pathname.endsWith(kind));
     assert.equal(new URL(call.url).searchParams.get('showDeleted'), 'true');
   }
   assert.equal(JSON.stringify(snapshot).includes('private'), false);
 });
+
+for (const variant of ['foreignProject', 'foreignNumber', 'missingNumber', 'malformedNumber']) {
+  test(`snapshot fails before provider and numeric inventory reads for Resource Manager ${variant}`, async () => {
+    const f = fixture(); const visited = [];
+    const adapter = f.adapter({ fetchImpl: async (url, init) => {
+      const parsed = new URL(url); visited.push(parsed.origin);
+      if (parsed.origin === 'https://cloudresourcemanager.googleapis.com') {
+        const project = { projectId: f.binding.projectId, projectNumber: f.binding.projectNumber, lifecycleState: 'ACTIVE' };
+        if (variant === 'foreignProject') project.projectId = 'foreign-project';
+        if (variant === 'foreignNumber') project.projectNumber = '999999999999';
+        if (variant === 'missingNumber') delete project.projectNumber;
+        if (variant === 'malformedNumber') project.projectNumber = '12345678901x';
+        return response(project);
+      }
+      return f.fetchImpl(url, init);
+    } });
+    await assert.rejects(adapter.readSnapshot(), { message: 'live_adapter_operation_failed' });
+    assert.deepEqual(visited, ['https://oauth2.googleapis.com', 'https://cloudresourcemanager.googleapis.com']);
+  });
+}
+
+for (const target of ['provider', 'rawConfig']) {
+  for (const number of ['synthetic-project', '999999999999', '12345678901x', undefined]) {
+    test(`snapshot rejects ${target} resource not using the verified numeric project: ${number}`, async () => {
+      const f = fixture(); let configReads = 0;
+      const adapter = f.adapter({ fetchImpl: async (url, init) => {
+        const parsed = new URL(url);
+        const isConfig = parsed.origin === 'https://identitytoolkit.googleapis.com' && parsed.pathname.endsWith('/config');
+        if (isConfig) configReads++;
+        if ((target === 'provider' && parsed.pathname.endsWith('/defaultSupportedIdpConfigs/google.com'))
+          || (target === 'rawConfig' && isConfig && configReads === 2)) {
+          const suffix = target === 'provider' ? 'defaultSupportedIdpConfigs/google.com' : 'config';
+          return response({ ...(target === 'provider' ? { enabled: true } : f.config),
+            name: number === undefined ? undefined : `projects/${number}/${suffix}` });
+        }
+        return f.fetchImpl(url, init);
+      } });
+      await assert.rejects(adapter.readSnapshot(), { message: target === 'provider' ? 'google_provider_not_ready' : 'auth_config_invalid' });
+      assert.equal(f.calls.some((call) => call.method === 'PATCH' || call.url.includes('/webApps') && call.method === 'POST'), false);
+    });
+  }
+}
 
 test('create uses the user credential once, exact displayName/apiKeyId, and never retries an unknown outcome', async () => {
   const f = fixture(); const adapter = f.adapter();

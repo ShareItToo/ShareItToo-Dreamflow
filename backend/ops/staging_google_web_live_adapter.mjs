@@ -21,6 +21,7 @@ const endpoints = Object.freeze({
   identitytoolkit: 'https://identitytoolkit.googleapis.com',
   apikeys: 'https://apikeys.googleapis.com',
   serviceusage: 'https://serviceusage.googleapis.com',
+  cloudresourcemanager: 'https://cloudresourcemanager.googleapis.com',
 });
 const trusted = new WeakSet();
 function fail(code) { const error = new Error(code); trusted.add(error); throw error; }
@@ -248,14 +249,14 @@ export function createStagingGoogleWebLiveAdapter({ binding, serviceCredential, 
   const providerRead = async () => {
     const value = await serviceRequest({ method: 'GET', service: 'identitytoolkit',
       resource: `/admin/v2/projects/${binding.projectId}/defaultSupportedIdpConfigs/google.com` });
-    check(value.name === `projects/${binding.projectId}/defaultSupportedIdpConfigs/google.com`
+    check(value.name === `projects/${binding.projectNumber}/defaultSupportedIdpConfigs/google.com`
       && value.enabled === true, 'google_provider_not_ready');
     return { googleEnabled: true, providerConfigDigest: digest(value) };
   };
   const rawConfig = async () => {
     const value = await serviceRequest({ method: 'GET', service: 'identitytoolkit',
       resource: `/admin/v2/projects/${binding.projectId}/config` });
-    check(value.name === `projects/${binding.projectId}/config` && Array.isArray(value.authorizedDomains), 'auth_config_invalid');
+    check(value.name === `projects/${binding.projectNumber}/config` && Array.isArray(value.authorizedDomains), 'auth_config_invalid');
     return value;
   };
   const otherApps = async () => {
@@ -271,9 +272,12 @@ export function createStagingGoogleWebLiveAdapter({ binding, serviceCredential, 
   };
   return Object.freeze({
     readSnapshot: safe(async () => {
-      const [apps, services, key, project, provider, config, otherAppsDigest, runtime] = await Promise.all([
+      // This first read verifies the exact project ID/number pair with Resource
+      // Manager before any numeric Identity Toolkit resource is accepted.
+      const project = await readAdapter.readProjectConfig();
+      const [apps, services, key, provider, config, otherAppsDigest, runtime] = await Promise.all([
         readAdapter.readWebAppsInventory(), readAdapter.readRequiredAuthServices(), readAdapter.readApiKeyInventory(),
-        readAdapter.readProjectConfig(), providerRead(), rawConfig(), otherApps(), Promise.resolve(runtimeReader(binding.projectId)),
+        providerRead(), rawConfig(), otherApps(), Promise.resolve(runtimeReader(binding.projectId)),
       ]);
       check(services.services.every((service) => service.state === 'ENABLED')
         && key.apiKey.webCompatible === true && runtime.backendProjectId === binding.projectId
