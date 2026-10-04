@@ -1,14 +1,16 @@
 import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 import {
   assert, assertLedger, digest, equal, green98106, objectDigest,
-  repositoryRoot, requiredSourcePaths, validateBinding, validateConfiguration, validateTarget,
+  repositoryRoot, requiredSourcePaths, runtimeManifestPath, validateBinding, validateConfiguration, validateTarget,
 } from './green_staging_98_106_contract.mjs';
 
-// Commit 1 implements the read-only prefix only. A separately reviewed Commit 2
-// MUST implement the mutation adapter after real publication binding. No flag
-// or injected executor can cross this boundary in this implementation.
-export const mutationAdapterImplemented = false;
+// Read-only remains the default. Mutations live in a separate adapter and
+// require complete publication/source/target bindings plus mode-specific consent.
+export const mutationAdapterImplemented = true;
 export const boundary = 'before_stop_seal_or_write';
+export const sealedApiName = 'shareittoo-staging-api-alt-sealed-green-6c0ef70d';
 export const requiredEnvironment = Object.freeze({
   NODE_ENV: 'production', DEPLOYMENT_ENVIRONMENT: 'test', FIREBASE_AUTH_ENABLED: 'true',
   FIREBASE_PHONE_VERIFICATION_ENABLED: 'false', SIT_STAGING_ACCESS_GATE_ENABLED: 'true',
@@ -54,7 +56,19 @@ export function validateGitBinding(binding, { root = repositoryRoot, git = gitRe
     assert(digest(git(['show', `${head}:${relative}`], root))
       === binding.sourceInventory[relative], 'green_98_106_ops_source');
   }
+  // The manifest is compared with the externally supplied Ops commit, never
+  // included in its own sourceInventory (no self-hash or self-commit cycle).
+  assert(digest(git(['show', `${head}:${runtimeManifestPath}`], root))
+    === digest(fs.readFileSync(path.join(root, runtimeManifestPath))), 'green_98_106_manifest_ops_blob');
   return head;
+}
+export function validateCollectorCommit(opsCommit, { root = repositoryRoot, git = gitRead } = {}) {
+  assert(/^[a-f0-9]{40}$/u.test(opsCommit ?? '') && git(['rev-parse', 'HEAD'], root).trim() === opsCommit,
+    'green_98_106_collector_ops_commit');
+  for (const relative of [...requiredSourcePaths, runtimeManifestPath]) {
+    assert(digest(git(['show', `${opsCommit}:${relative}`], root)) === digest(fs.readFileSync(path.join(root, relative))),
+      'green_98_106_collector_source_drift');
+  }
 }
 function gitRead(args, root) {
   return execFileSync('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024,
@@ -116,19 +130,21 @@ function singleton(raw) {
 }
 export function containerFingerprint(record) {
   return objectDigest({ Config: record.Config, HostConfig: record.HostConfig,
-    Mounts: record.Mounts, Networks: record.NetworkSettings?.Networks });
+    Mounts: record.Mounts, Networks: Object.fromEntries(Object.entries(record.NetworkSettings?.Networks ?? {})
+      .map(([name, network]) => [name, { NetworkID: network.NetworkID }])) });
 }
-function checkContainer(record, expected, running) {
+export function checkContainer(record, expected, running) {
   assert(record.Id === expected.id && record.Name === `/${expected.name}`
     && record.State?.Running === running && record.State?.Paused === false
-    && record.Config?.Image?.endsWith(`@${expected.imageDigest}`)
+    && record.Image === expected.imageId
     && containerFingerprint(record) === expected.configSha256, 'green_98_106_container_drift');
 }
-export async function runReadOnlyPreflight(inputs, { command = readOnlyCommand, git = gitRead } = {}) {
+export async function runReadOnlyPreflight(inputs, { command = readOnlyCommand, git = gitRead, sourceSealed = false } = {}) {
   // Bind the actual checkout BEFORE invoking any command executor.
   const actualOpsCommit = validateGitBinding(inputs.binding, { root: inputs.root, git });
   const plan = buildPlan({ ...inputs, actualOpsCommit });
   const { target, config } = inputs;
+  const expectedApi = sourceSealed ? { ...target.api, name: sealedApiName } : target.api;
   const completed = [];
   const run = async (phase, args) => {
     const entry = { phase, command: 'docker', args: Object.freeze(args) };
@@ -137,7 +153,7 @@ export async function runReadOnlyPreflight(inputs, { command = readOnlyCommand, 
     assert(typeof raw === 'string', 'green_98_106_command_output'); completed.push(phase); return raw;
   };
   const api = singleton(await run('api_inspect', ['inspect', target.api.id]));
-  checkContainer(api, target.api, true);
+  checkContainer(api, expectedApi, !sourceSealed);
   assert(objectDigest(api.Config.Env) === config.runtimeEnvironmentSha256
     && objectDigest(api.Mounts) === config.mountsSha256, 'green_98_106_private_config_drift');
   assertEnvironment(api.Config.Env, config);
@@ -171,7 +187,7 @@ export async function runReadOnlyPreflight(inputs, { command = readOnlyCommand, 
   assert(/^16[0-9]{4}$/u.test((await run('postgres_version', psql('SHOW server_version_num'))).trim()),
     'green_98_106_postgres_version');
   // Re-read the active identities last. A successful prefix is never rehearsal or promotion evidence.
-  checkContainer(singleton(await run('api_recheck', ['inspect', target.api.id])), target.api, true);
+  checkContainer(singleton(await run('api_recheck', ['inspect', target.api.id])), expectedApi, !sourceSealed);
   checkContainer(singleton(await run('database_recheck', ['inspect', target.database.id])), target.database, true);
   return { kind: green98106.kind, status: 'read_only_prefix_passed', mutationAdapterImplemented,
     boundary, completed, rehearsalPassed: false, promotionAuthorized: false, publicReleaseComplete: false };

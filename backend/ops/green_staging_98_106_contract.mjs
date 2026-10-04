@@ -113,8 +113,37 @@ export function validatePublication(value) {
 export const requiredSourcePaths = Object.freeze([
   'backend/ops/green_staging_98_106_contract.mjs',
   'backend/ops/green_staging_98_106_promotion.mjs',
+  'backend/ops/green_staging_98_106_collector.mjs',
+  'backend/ops/green_staging_98_106_database.mjs',
+  'backend/ops/green_staging_98_106_evidence.mjs',
+  'backend/ops/green_staging_98_106_execution.mjs',
+  'backend/ops/green_staging_98_106_resources.mjs',
+  'backend/ops/green_staging_promotion.mjs',
+  'backend/ops/green_auth_profile.mjs',
+  'backend/ops/stable_private_file.mjs',
+  'backend/ops/staging_forward_migration_rehearsal.mjs',
+  'backend/ops/staging_controlled_acceptance.mjs',
+  'backend/ops/check_foreign_key_integrity.sql',
+  'backend/src/technical_sandbox_config.js',
   'tool/validate_green_staging_98_106_runtime.mjs',
 ]);
+export const runtimeManifestPath = 'store/green-staging-98-106-runtime.json';
+export function validateRuntimeManifest({ publication, publicationSha256, root = repositoryRoot } = {}) {
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, runtimeManifestPath), 'utf8'));
+  exact(manifest, ['kind', 'schemaVersion', 'runtimeCommit', 'image', 'ociRevision', 'publication',
+    'publicationSha256', 'sourceLedger', 'targetLedger', 'sourceInventory'], 'green_98_106_runtime_manifest');
+  assert(manifest.kind === 'sit-green-staging-98-106-runtime' && manifest.schemaVersion === 1
+    && manifest.runtimeCommit === green98106.runtimeCommit && manifest.ociRevision === green98106.runtimeCommit
+    && manifest.sourceLedger === green98106.sourceLedger && manifest.targetLedger === green98106.targetLedger
+    && manifest.publicationSha256 === publicationSha256 && equal(manifest.publication, publication)
+    && manifest.image === `ghcr.io/shareittoo/shareittoo-api@${publication.digest}`, 'green_98_106_runtime_manifest_binding');
+  validatePublication(publication);
+  exact(manifest.sourceInventory, requiredSourcePaths, 'green_98_106_runtime_source_inventory');
+  for (const relative of requiredSourcePaths) {
+    assert(digest(fs.readFileSync(path.join(root, relative))) === manifest.sourceInventory[relative], 'green_98_106_runtime_source_drift');
+  }
+  return manifest;
+}
 export function validateBinding(binding, { publication, publicationSha256, root = repositoryRoot, actualOpsCommit } = {}) {
   exact(binding, ['kind', 'schemaVersion', 'runtimeCommit', 'publicationSha256',
     'reviewedImplementationCommit', 'opsCommit', 'sourceInventory', 'targetSha256', 'configSha256'],
@@ -146,8 +175,8 @@ export function validateTarget(target) {
   'green_98_106_target');
   for (const [entry, name] of [[target.api, 'shareittoo-staging-api'],
     [target.database, 'sit-green-postgres-20260918011528-wp254']]) {
-    exact(entry, ['name', 'id', 'imageDigest', 'configSha256'], 'green_98_106_container');
-    assert(entry.name === name && id.test(entry.id) && imageDigest.test(entry.imageDigest)
+    exact(entry, ['name', 'id', 'imageId', 'imageDigest', 'configSha256'], 'green_98_106_container');
+    assert(entry.name === name && id.test(entry.id) && imageDigest.test(entry.imageId) && imageDigest.test(entry.imageDigest)
       && hash.test(entry.configSha256), 'green_98_106_container');
   }
   assert(target.api.imageDigest === green98106.predecessorDigest
@@ -166,9 +195,9 @@ export function validateTarget(target) {
     && hash.test(target.uploads.configSha256), 'green_98_106_uploads');
   assert(Array.isArray(target.witnesses) && target.witnesses.length === 21, 'green_98_106_witnesses');
   for (const entry of target.witnesses) {
-    exact(entry, ['name', 'id', 'imageDigest', 'configSha256'], 'green_98_106_witnesses');
-    assert(/^shareittoo-staging-api-[a-z0-9-]+$/u.test(entry.name) && id.test(entry.id)
-      && imageDigest.test(entry.imageDigest) && hash.test(entry.configSha256), 'green_98_106_witnesses');
+    exact(entry, ['name', 'id', 'imageId', 'imageDigest', 'configSha256'], 'green_98_106_witnesses');
+    assert(/^shareittoo-staging-api-[A-Za-z0-9-]+$/u.test(entry.name) && id.test(entry.id)
+      && imageDigest.test(entry.imageId) && imageDigest.test(entry.imageDigest) && hash.test(entry.configSha256), 'green_98_106_witnesses');
   }
   assert(new Set(target.witnesses.map((w) => w.id)).size === 21
     && new Set(target.witnesses.map((w) => w.name)).size === 21

@@ -9,6 +9,7 @@ import { findAvailableLoopbackPort, resolvePostgresBinDir } from '../../tool/run
 import { runMigrations } from '../src/migrations.js';
 import { assertReadinessFindingsUnchanged, buildReadinessFindingSql } from '../ops/staging_forward_migration_rehearsal.mjs';
 import { assertDataTransition, assertLedger, digest, newTableNames } from '../ops/green_staging_98_106_contract.mjs';
+import { readSnapshot, checkForwardIntegrity } from '../ops/green_staging_98_106_database.mjs';
 
 test('disposable native PG16: protected custom dump, restore98, forward106, idempotence and cleanup',
   { skip: process.env.SIT_GREEN_98_106_PG16 !== '1', timeout: 120000 }, async (t) => {
@@ -51,6 +52,10 @@ test('disposable native PG16: protected custom dump, restore98, forward106, idem
       await source.query("INSERT INTO users(id,email,profile) VALUES ('synthetic-green98-owner','synthetic-green98@example.invalid','{\"displayName\":\"Synthetic\"}')");
       const oldNames = (await tables(source)).filter(name => name !== 'schema_migrations');
       const before = await snapshot(source, 98, oldNames);
+      const productionSql = name => async ({ args }) => run('psql', ['--dbname', connection(name),
+        '-X', '-q', '-At', '-v', 'ON_ERROR_STOP=1', '-c', args.at(-1)]);
+      const sqlDatabase = { id: '1'.repeat(64), name: 'synthetic_local', user: 'synthetic_local' };
+      const productionBefore = await readSnapshot(productionSql('source98'), sqlDatabase, 98);
       const readiness = (await source.query(buildReadinessFindingSql())).rows;
       const backup = path.join(temporary, 'backup.dump');
       const fd = fs.openSync(backup, fs.constants.O_RDWR | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW, 0o600);
@@ -68,6 +73,9 @@ test('disposable native PG16: protected custom dump, restore98, forward106, idem
       await runMigrations(restored);
       const after = await snapshot(restored, 106, oldNames);
       assertDataTransition(before, after);
+      const productionAfter = await readSnapshot(productionSql('restore106'), sqlDatabase, 106, oldNames);
+      assertDataTransition(productionBefore.data, productionAfter.data);
+      await checkForwardIntegrity(productionSql('restore106'), sqlDatabase);
       assert.deepEqual((await tables(restored)).sort(), [...oldNames, 'schema_migrations', ...newTableNames()].sort());
       assert.equal((await restored.query("SELECT count(*) FROM pg_constraint WHERE connamespace='public'::regnamespace AND NOT convalidated")).rows[0].count, '0');
       const functions = (await restored.query("SELECT proname FROM pg_proc WHERE pronamespace='public'::regnamespace ORDER BY proname")).rows;

@@ -12,13 +12,13 @@ function fixture() {
     { name: 'sit-staging-provider-egress', id: id(), internal: false }];
   const records = new Map();
   const make = (name, imageDigest, running) => {
-    const record = { Id: id(), Name: `/${name}`, State: { Running: running, Paused: false },
+    const record = { Id: id(), Image: `sha256:${id()}`, Name: `/${name}`, State: { Running: running, Paused: false },
       Config: { Image: `synthetic.invalid/image@${imageDigest}`,
         Env: [...Object.entries(requiredEnvironment).map(([k, v]) => `${k}=${v}`), 'SIT_STAGING_ALLOWED_USER_IDS=synthetic-test-user'], User: '1000:1000' },
       HostConfig: { Privileged: false, ReadonlyRootfs: true }, Mounts: [],
       NetworkSettings: { Networks: Object.fromEntries(nets.map(n => [n.name, { NetworkID: n.id }])) } };
     records.set(record.Id, record);
-    return { name, id: record.Id, imageDigest, configSha256: containerFingerprint(record) };
+    return { name, id: record.Id, imageId: record.Image, imageDigest, configSha256: containerFingerprint(record) };
   };
   const api = make('shareittoo-staging-api', green98106.predecessorDigest, true);
   const database = make('sit-green-postgres-20260918011528-wp254', `sha256:${'b'.repeat(64)}`, true);
@@ -63,7 +63,7 @@ function fixture() {
 test('stateful production-shaped executor reaches exact hard boundary without mutations', async () => {
   const f = fixture(); const result = await runReadOnlyPreflight(f.inputs, f);
   assert.equal(result.status, 'read_only_prefix_passed'); assert.equal(result.boundary, boundary);
-  assert.equal(result.mutationAdapterImplemented, false); assert.equal(result.rehearsalPassed, false);
+  assert.equal(result.mutationAdapterImplemented, true); assert.equal(result.rehearsalPassed, false);
   assert.equal(result.promotionAuthorized, false);
   assert.equal(f.calls.length, 31);
   assert.ok(f.calls.every(c => !c.args.some(a => ['stop', 'rename', 'run', 'create', 'start', 'rm', 'connect'].includes(a))));
@@ -97,7 +97,7 @@ test('stateful running/config/network/ledger/image/PG drift fails closed', async
 test('review commit is external and bound to exact current implementation bytes', () => {
   const f = fixture(); assert.equal(validateGitBinding(f.inputs.binding, f), 'f'.repeat(40));
   assert.throws(() => validateGitBinding(f.inputs.binding, { git: () => '0'.repeat(40) }));
-  const plan = buildPlan(f.inputs); assert.equal(plan.status, 'plan_only'); assert.equal(plan.mutationAdapterImplemented, false);
+  const plan = buildPlan(f.inputs); assert.equal(plan.status, 'plan_only'); assert.equal(plan.mutationAdapterImplemented, true);
 });
 test('environment semantics reject hidden provider activation, emulator, duplicates and allowlist drift', () => {
   const f = fixture(); const env = f.records.get(f.inputs.target.api.id).Config.Env;
