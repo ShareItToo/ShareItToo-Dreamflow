@@ -1190,6 +1190,22 @@ class BackendRepository {
     return Map<String, dynamic>.from(response['resolution'] as Map);
   }
 
+  static Future<Map<String, dynamic>> getMissionQuorumReadbackForOwner({
+    required AuthSessionOwner owner,
+    required String resolutionId,
+  }) async {
+    final response = await _authorizedForOwner(
+      owner: owner,
+      method: 'GET',
+      path:
+          '/mission-inventory-resolutions/${Uri.encodeComponent(resolutionId)}/quorum',
+    );
+    if (response['quorum'] is! Map) {
+      throw const FormatException('mission_quorum_readback_invalid');
+    }
+    return Map<String, dynamic>.from(response['quorum'] as Map);
+  }
+
   static Future<Map<String, dynamic>> createMissionInventoryForOwner({
     required AuthSessionOwner owner,
     required String missionNeedId,

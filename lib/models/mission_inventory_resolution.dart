@@ -600,6 +600,7 @@ class MissionInventoryResolution {
     required this.missionRevision,
     required this.missionPayloadDigest,
     required this.revision,
+    required this.storedResolutionDigest,
     required this.startDate,
     required this.endDate,
     required this.locationSnapshot,
@@ -616,6 +617,7 @@ class MissionInventoryResolution {
   final int missionRevision;
   final String missionPayloadDigest;
   final int revision;
+  final String storedResolutionDigest;
   final DateTime startDate;
   final DateTime endDate;
   final MissionInventoryLocationSnapshot locationSnapshot;
@@ -702,6 +704,9 @@ class MissionInventoryResolution {
     final snapshot = MissionInventorySnapshot.fromJson(
       value['storedResolution'],
     );
+    final storedResolutionDigest = missionInventoryDigest(
+      value['storedResolution'],
+    );
     final missionId = _missionId(
       value['missionNeedId'],
       'mission_inventory_resolution_invalid',
@@ -744,6 +749,7 @@ class MissionInventoryResolution {
         1 << 53,
         'mission_inventory_resolution_invalid',
       ),
+      storedResolutionDigest: storedResolutionDigest,
       startDate: start,
       endDate: end,
       locationSnapshot: location,

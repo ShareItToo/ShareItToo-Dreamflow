@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lendify/models/mission_inventory_resolution.dart';
 import 'package:lendify/models/mission_need.dart';
+import 'package:lendify/models/mission_quorum_readback.dart';
 import 'package:lendify/models/mission_supply_demand.dart';
 import 'package:lendify/screens/mission_inventory_resolution_screen.dart';
 import 'package:lendify/services/auth_service.dart';
@@ -13,6 +14,7 @@ import 'package:lendify/services/listing_mutation_service.dart';
 import 'package:lendify/services/maps_service.dart';
 import 'package:lendify/services/mission_inventory_resolution_gateway.dart';
 import 'package:lendify/services/mission_need_gateway.dart';
+import 'package:lendify/services/mission_quorum_readback_gateway.dart';
 import 'package:lendify/services/session_transition_service.dart';
 import 'package:lendify/services/shared_persistence_sync.dart';
 
@@ -28,9 +30,11 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1000, 1800));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final service = _ContextService();
+    final initialResolution = _resolution(stale: true);
+    final quorumGateway = _QuorumGateway();
     final gateway = _InventoryGateway(
       initial: <MissionInventoryResolution>[
-        _resolution(stale: true),
+        initialResolution,
       ],
     )..correctionError = const BackendException(
         409,
@@ -43,6 +47,7 @@ void main() {
         missionNeedId: testMissionInventoryMissionId,
         missionGateway: _MissionGateway(),
         inventoryGateway: gateway,
+        quorumGateway: quorumGateway,
         listingMutationService: service,
         autocomplete: (_) async => const <MapsAddressSuggestion>[
           MapsAddressSuggestion(
@@ -66,6 +71,16 @@ void main() {
     expect(find.textContaining('Bedarfstyp nicht unterstützt'), findsWidgets);
     expect(find.text('Suche war begrenzt'), findsOneWidget);
     expect(find.textContaining('keine Reservierung, Buchung'), findsOneWidget);
+    expect(find.byKey(const Key('mission-quorum-card')), findsOneWidget);
+    expect(find.textContaining('keine Eignungs- oder Buchungsbestätigung'),
+        findsOneWidget);
+    expect(find.text('plant_container_equipment'), findsWidgets);
+    await tester.tap(find.byKey(const Key('mission-quorum-refresh')));
+    await tester.pumpAndSettle();
+    expect(quorumGateway.calls, 1);
+    expect(find.byKey(const Key('mission-quorum-error')), findsNothing);
+    expect(find.byKey(const Key('mission-quorum-slot-required:plant_container_equipment:1')), findsOneWidget);
+    expect(find.textContaining('veraltet oder unbekannt'), findsOneWidget);
     expect(
       find.byKey(const ValueKey(
         'mission-inventory-demand-required:plant_container_equipment:2',
@@ -96,7 +111,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Ort ausdrücklich ausgewählt'), findsOneWidget);
 
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.byKey(const Key('mission-inventory-save')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('mission-inventory-save')));
     await tester.pumpAndSettle();
     expect(find.textContaining('Revision 2'), findsOneWidget);
@@ -116,6 +133,15 @@ void main() {
           .length,
       1,
     );
+    quorumGateway.delay = Completer<void>();
+    await tester.tap(find.byKey(const Key('mission-quorum-refresh')));
+    await tester.pump();
+    service.activateAccountB();
+    SharedPersistenceSync.notify(SharedPersistenceSync.accountSecurityStateKey);
+    await tester.pump();
+    quorumGateway.activeDelay!.complete();
+    await tester.pumpAndSettle();
+    expect(find.textContaining('veraltet oder unbekannt'), findsNothing);
   });
 
   testWidgets('past correction dates open a safely clamped picker',
@@ -381,6 +407,55 @@ MissionInventoryResolution _resolution({bool stale = false}) =>
     MissionInventoryResolution.fromJson(
       testMissionInventoryResolutionJson(stale: stale),
     );
+
+class _QuorumGateway implements MissionQuorumReadbackGateway {
+  int calls = 0;
+  Completer<void>? delay;
+  Completer<void>? activeDelay;
+
+  @override
+  Future<MissionQuorumReadback> load({
+    required AuthSessionOwner owner,
+    required String missionNeedId,
+    required String resolutionId,
+    required int missionRevision,
+    required int resolutionRevision,
+    required String missionPayloadDigest,
+    required String resolutionDigest,
+  }) async {
+    calls += 1;
+    final pending = delay;
+    if (pending != null) {
+      delay = null;
+      activeDelay = pending;
+      await pending.future;
+      activeDelay = null;
+    }
+    return MissionQuorumReadback.fromJson(<String, dynamic>{
+      'version': missionQuorumReadbackVersion,
+      'missionNeedId': missionNeedId,
+      'resolutionId': resolutionId,
+      'missionRevision': missionRevision,
+      'resolutionRevision': resolutionRevision,
+      'missionPayloadDigest': missionPayloadDigest,
+      'resolutionDigest': resolutionDigest,
+      'observedAt': '2026-10-05T08:00:00.000Z',
+      'status': 'incomplete',
+      'bindingStatus': 'non_binding',
+      'persisted': false,
+      'paymentStatus': 'not_determined',
+      'components': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'slotKey': 'required:plant_container_equipment:1',
+          'needKey': 'plant_container_equipment',
+          'necessity': 'required',
+          'ordinal': 1,
+          'state': 'stale_or_unknown',
+        },
+      ],
+    });
+  }
+}
 
 class _CorrectionCall {
   const _CorrectionCall(this.draft, this.key);

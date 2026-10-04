@@ -133,6 +133,10 @@ import {
   setMissionSupplyParticipationItem,
 } from './mission_supply_participation_workflow.js';
 import {
+  getMissionQuorumReadback,
+  MissionQuorumReadbackError,
+} from './mission_quorum_readback_workflow.js';
+import {
   addPrivateShelfMedia,
   assertPrivateShelfTechnicalAccess,
   createPrivateShelfItem,
@@ -6053,6 +6057,18 @@ export function createApp({
     res.set('Cache-Control', 'private, no-store').json(result);
   }));
 
+  app.get('/v1/mission-inventory-resolutions/:id/quorum', requireAuth, requireActiveAccount, requireUnsuspendedScope('booking'), asyncRoute(async (req, res) => {
+    assertMissionInventoryResolutionTechnicalAccess(config);
+    const result = await inTransaction(async (client) => {
+      await client.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      return getMissionQuorumReadback(client, {
+        actorId: req.auth.userId,
+        resolutionId: safeText(req.params.id, 180),
+      });
+    });
+    res.set('Cache-Control', 'private, no-store').json(result);
+  }));
+
   app.post('/v1/mission-inventory-resolutions/:id/revisions', requireAuth, requireActiveAccount, requireUnsuspendedScope('booking'), asyncRoute(async (req, res) => {
     assertMissionInventoryResolutionTechnicalAccess(config);
     assertMissionAdmission(config, 'correct');
@@ -8488,6 +8504,7 @@ export function createApp({
     const missionNeedError = error instanceof MissionNeedError;
     const missionFitCheckError = error instanceof MissionFitCheckError;
     const missionInventoryResolutionError = error instanceof MissionInventoryResolutionError;
+    const missionQuorumReadbackError = error instanceof MissionQuorumReadbackError;
     const missionSupplyDemandError = error instanceof MissionSupplyDemandError
       || error instanceof MissionSupplyParticipationError || error instanceof MissionAdmissionError;
     const privateShelfError = error instanceof PrivateShelfError;
@@ -8516,7 +8533,7 @@ export function createApp({
           ? 413
           : (uploadFieldsExceeded
               ? 400
-              : (invalidProcessedImage ? 422 : ((error instanceof HttpError || workflowError || rentalCartError || plannerInventoryError || missionNeedError || missionFitCheckError || missionInventoryResolutionError || missionSupplyDemandError || privateShelfError || listingSupplyEnrichmentError || listingSetError || blueOceanListingError || flowTimeError || messageWorkflowError || paymentWorkflowError || moderationWorkflowError || retentionInventoryError || supportCaseError || handoverExceptionError || mfaWorkflowError || pilotCockpitError || mapsProxyError || bookingConfirmationError || syntheticCloneBookingLaneError || v51WithdrawalError || v52ActualLossError || v52HandoverReturnError || error instanceof PhoneVerificationError || error instanceof ComplianceReviewError) ? error.status : (error?.status ?? 500)))));
+              : (invalidProcessedImage ? 422 : ((error instanceof HttpError || workflowError || rentalCartError || plannerInventoryError || missionNeedError || missionFitCheckError || missionInventoryResolutionError || missionQuorumReadbackError || missionSupplyDemandError || privateShelfError || listingSupplyEnrichmentError || listingSetError || blueOceanListingError || flowTimeError || messageWorkflowError || paymentWorkflowError || moderationWorkflowError || retentionInventoryError || supportCaseError || handoverExceptionError || mfaWorkflowError || pilotCockpitError || mapsProxyError || bookingConfirmationError || syntheticCloneBookingLaneError || v51WithdrawalError || v52ActualLossError || v52HandoverReturnError || error instanceof PhoneVerificationError || error instanceof ComplianceReviewError) ? error.status : (error?.status ?? 500)))));
     const code = uploadTooLarge
       ? 'image_too_large'
       : (uploadFieldsExceeded
@@ -8525,7 +8542,7 @@ export function createApp({
               ? error.code
               : (bookingConflict
               ? 'booking_period_unavailable'
-              : ((error instanceof HttpError || workflowError || rentalCartError || plannerInventoryError || missionNeedError || missionFitCheckError || missionInventoryResolutionError || missionSupplyDemandError || privateShelfError || listingSupplyEnrichmentError || listingSetError || blueOceanListingError || flowTimeError || messageWorkflowError || paymentWorkflowError || moderationWorkflowError || retentionInventoryError || supportCaseError || handoverExceptionError || mfaWorkflowError || pilotCockpitError || mapsProxyError || bookingConfirmationError || syntheticCloneBookingLaneError || v51WithdrawalError || v52ActualLossError || v52HandoverReturnError || error instanceof PhoneVerificationError || error instanceof ComplianceReviewError) ? error.code : (status === 500 ? 'internal_error' : 'request_failed')))));
+              : ((error instanceof HttpError || workflowError || rentalCartError || plannerInventoryError || missionNeedError || missionFitCheckError || missionInventoryResolutionError || missionQuorumReadbackError || missionSupplyDemandError || privateShelfError || listingSupplyEnrichmentError || listingSetError || blueOceanListingError || flowTimeError || messageWorkflowError || paymentWorkflowError || moderationWorkflowError || retentionInventoryError || supportCaseError || handoverExceptionError || mfaWorkflowError || pilotCockpitError || mapsProxyError || bookingConfirmationError || syntheticCloneBookingLaneError || v51WithdrawalError || v52ActualLossError || v52HandoverReturnError || error instanceof PhoneVerificationError || error instanceof ComplianceReviewError) ? error.code : (status === 500 ? 'internal_error' : 'request_failed')))));
     if (status >= 500) console.error(safeErrorLog(req, status, code, error));
     res.status(status).json(errorPayload(req, code, error?.details));
   });

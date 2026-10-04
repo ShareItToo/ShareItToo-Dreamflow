@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:lendify/config/planner_technical_config.dart';
 import 'package:lendify/models/mission_inventory_resolution.dart';
 import 'package:lendify/models/mission_need.dart';
+import 'package:lendify/models/mission_quorum_readback.dart';
 import 'package:lendify/models/mission_supply_demand.dart';
 import 'package:lendify/screens/mission_supply_demand_screen.dart';
 import 'package:lendify/services/backend_http.dart';
@@ -15,6 +16,7 @@ import 'package:lendify/services/listing_mutation_service.dart';
 import 'package:lendify/services/maps_service.dart';
 import 'package:lendify/services/mission_inventory_resolution_gateway.dart';
 import 'package:lendify/services/mission_need_gateway.dart';
+import 'package:lendify/services/mission_quorum_readback_gateway.dart';
 import 'package:lendify/services/shared_persistence_sync.dart';
 import 'package:lendify/widgets/listing_mutation_interaction.dart';
 
@@ -51,6 +53,7 @@ class MissionInventoryResolutionScreen extends StatefulWidget {
     required this.missionNeedId,
     this.missionGateway = const BackendMissionNeedGateway(),
     this.inventoryGateway = const BackendMissionInventoryResolutionGateway(),
+    this.quorumGateway = const BackendMissionQuorumReadbackGateway(),
     this.listingMutationService = const ListingMutationService(),
     this.autocomplete = _defaultAutocomplete,
     this.placeLookup = _defaultPlaceLookup,
@@ -62,6 +65,7 @@ class MissionInventoryResolutionScreen extends StatefulWidget {
   final String missionNeedId;
   final MissionNeedGateway missionGateway;
   final MissionInventoryResolutionGateway inventoryGateway;
+  final MissionQuorumReadbackGateway quorumGateway;
   final ListingMutationService listingMutationService;
   final MissionInventoryAutocomplete autocomplete;
   final MissionInventoryPlaceLookup placeLookup;
@@ -101,6 +105,9 @@ class _MissionInventoryResolutionScreenState
   bool _actionActive = false;
   bool _locationLookupActive = false;
   bool _supplyDemandRouteOpening = false;
+  bool _quorumLoading = false;
+  bool _quorumLoadFailed = false;
+  MissionQuorumReadback? _quorum;
   int _accountGeneration = 0;
   String? _message;
   bool _messageIsError = false;
@@ -163,6 +170,9 @@ class _MissionInventoryResolutionScreenState
     _actionActive = false;
     _locationLookupActive = false;
     _supplyDemandRouteOpening = false;
+    _quorumLoading = false;
+    _quorumLoadFailed = false;
+    _quorum = null;
     _message = null;
     _messageIsError = false;
     _boundMissionRevision = null;
@@ -235,6 +245,8 @@ class _MissionInventoryResolutionScreenState
         if (!_editing && _locationController.text.trim().isEmpty) {
           _locationController.text = captured!.user.homeLocation?.trim() ?? '';
         }
+        _quorum = null;
+        _quorumLoadFailed = false;
         _loading = false;
       });
     } catch (_) {
@@ -295,6 +307,51 @@ class _MissionInventoryResolutionScreenState
     } finally {
       if (mounted && generation == _accountGeneration) {
         setState(() => _supplyDemandRouteOpening = false);
+      }
+    }
+  }
+
+  Future<void> _loadQuorum() async {
+    final context = _context;
+    final resolution = _selectedTruth;
+    if (_quorumLoading || context == null || resolution == null) return;
+    final generation = _accountGeneration;
+    setState(() {
+      _quorumLoading = true;
+      _quorumLoadFailed = false;
+    });
+    try {
+      final value = await widget.quorumGateway.load(
+        owner: context.owner.authOwner,
+        missionNeedId: widget.missionNeedId,
+        resolutionId: resolution.resolutionId,
+        missionRevision: resolution.missionRevision,
+        resolutionRevision: resolution.revision,
+        missionPayloadDigest: resolution.missionPayloadDigest,
+        resolutionDigest: resolution.storedResolutionDigest,
+      );
+      if (!await _mayUpdate(context, generation)) return;
+      if (value.missionRevision != resolution.missionRevision ||
+          value.resolutionRevision != resolution.revision) {
+        throw const FormatException('mission_quorum_readback_revision_drift');
+      }
+      setState(() {
+        _quorum = value;
+        _quorumLoadFailed = false;
+        _message = null;
+      });
+    } catch (_) {
+      if (!await _mayUpdate(context, generation)) return;
+      setState(() {
+        _quorum = null;
+        _quorumLoadFailed = true;
+        _message =
+            'Der unverbindliche Missionsstand konnte nicht sicher gelesen werden.';
+        _messageIsError = true;
+      });
+    } finally {
+      if (mounted && generation == _accountGeneration) {
+        setState(() => _quorumLoading = false);
       }
     }
   }
@@ -565,6 +622,8 @@ class _MissionInventoryResolutionScreenState
         _resolutions = <MissionInventoryResolution>[resolution];
         _selectedBase = resolution;
         _selectedTruth = resolution;
+        _quorum = null;
+        _quorumLoadFailed = false;
         _editing = false;
         _selectedPlace = null;
         _locationSourceVersion = null;
@@ -682,6 +741,8 @@ class _MissionInventoryResolutionScreenState
                         if (_selectedTruth case final truth?) ...<Widget>[
                           _buildResolution(truth),
                           const SizedBox(height: 12),
+                          _buildQuorumReadback(),
+                          const SizedBox(height: 12),
                           FilledButton.icon(
                             key: const Key('mission-inventory-correct'),
                             onPressed: _busy ? null : _startCorrection,
@@ -772,6 +833,96 @@ class _MissionInventoryResolutionScreenState
       ],
     );
   }
+
+  Widget _buildQuorumReadback() {
+    final quorum = _quorum;
+    final title = quorum == null
+        ? 'Missionstand unverbindlich lesen'
+        : switch (quorum.status) {
+            MissionQuorumReadbackStatus.needsClarification =>
+              'Missionstand braucht Klärung',
+            MissionQuorumReadbackStatus.readbackRequired =>
+              'Missionstand muss erneut gelesen werden',
+            MissionQuorumReadbackStatus.incomplete =>
+              'Missionstand: nicht vollständig',
+          };
+    return Card(
+      key: const Key('mission-quorum-card'),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                quorum?.status == MissionQuorumReadbackStatus.needsClarification
+                    ? Icons.warning_amber_outlined
+                    : Icons.account_tree_outlined,
+              ),
+              title: Text(title),
+              subtitle: const Text(
+                'Nur aktueller Serverstand. Nicht bindend, keine Eignungs- oder Buchungsbestätigung, kein Vertrag und keine Zahlung.',
+              ),
+            ),
+            if (_quorumLoadFailed)
+              const Text(
+                'Der Serverstand ist nicht bestätigt. Bitte erneut lesen.',
+                key: Key('mission-quorum-error'),
+              ),
+            if (quorum != null)
+              ...quorum.components
+                  .where((entry) => entry.necessity == 'required')
+                  .map(_buildQuorumSlot),
+            OutlinedButton.icon(
+              key: const Key('mission-quorum-refresh'),
+              onPressed: _quorumLoading ? null : _loadQuorum,
+              icon: _quorumLoading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh),
+              label: Text(_quorumLoading
+                  ? 'Serverstand wird gelesen …'
+                  : 'Serverstand lesen'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuorumSlot(MissionQuorumSlotReadback value) => ListTile(
+        key: ValueKey('mission-quorum-slot-${value.slotKey}'),
+        dense: true,
+        contentPadding: EdgeInsets.zero,
+        leading: Icon(_quorumSlotIcon(value.state)),
+        title: Text(_quorumNeedLabel(value.necessity)),
+        subtitle: Text(
+          'Erforderlich · Einheit ${value.ordinal} · ${_quorumSlotLabel(value.state)}',
+        ),
+      );
+
+  IconData _quorumSlotIcon(MissionQuorumSlotState state) => switch (state) {
+        MissionQuorumSlotState.covered => Icons.check_circle_outline,
+        MissionQuorumSlotState.open => Icons.remove_circle_outline,
+        MissionQuorumSlotState.staleOrUnknown => Icons.help_outline,
+        MissionQuorumSlotState.clarificationRequired =>
+          Icons.warning_amber_outlined,
+      };
+
+  String _quorumSlotLabel(MissionQuorumSlotState state) => switch (state) {
+        MissionQuorumSlotState.covered => 'aktuell abgedeckt',
+        MissionQuorumSlotState.open => 'offen',
+        MissionQuorumSlotState.staleOrUnknown => 'veraltet oder unbekannt',
+        MissionQuorumSlotState.clarificationRequired => 'Klärung erforderlich',
+      };
+
+  String _quorumNeedLabel(String necessity) => necessity == 'required'
+      ? 'Erforderlicher Gegenstand'
+      : 'Optionaler Gegenstand';
 
   Widget _buildCoverage(MissionInventoryCoverage value) => Card(
         child: ListTile(
