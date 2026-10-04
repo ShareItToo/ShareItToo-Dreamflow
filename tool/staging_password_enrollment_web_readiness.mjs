@@ -4,6 +4,8 @@ import path from 'node:path';
 
 export const STAGING_ENROLLMENT_WEB_PROFILE =
   'staging-password-enrollment-composite-web-v1';
+export const STAGING_ENROLLMENT_WEB_PROFILE_V2 =
+  'staging-password-enrollment-composite-web-v2';
 export const STAGING_ENROLLMENT_WEB_TARGET =
   'https://staging.shareittoo.com';
 
@@ -15,7 +17,7 @@ const envelopeKeys = Object.freeze([
   'readiness',
   'readinessSha256',
 ]);
-const readinessKeys = Object.freeze([
+const readinessKeysV1 = Object.freeze([
   'sourceCommit',
   'sourceVersion',
   'deploymentEnvironment',
@@ -42,6 +44,46 @@ const readinessKeys = Object.freeze([
   'invitationRecipientMatchCount',
   'unmatchedInvitationRecipientCount',
   'invitationRecipientBindingSha256',
+  'smtpConfigurationSha256',
+  'runtimeReadbackSha256',
+  'mailReadbackSha256',
+  'observedAtUtc',
+  'validUntilUtc',
+]);
+const readinessKeysV2 = Object.freeze([
+  'sourceCommit',
+  'sourceVersion',
+  'targetEnvironment',
+  'runtimeDeploymentEnvironment',
+  'apiBaseUrl',
+  'publicBaseUrl',
+  'appPublicUrl',
+  'returnOrigin',
+  'passwordEnrollmentEnabled',
+  'invitationCount',
+  'invitationConfigurationSha256',
+  'invitationRegistrySha256',
+  'accessGateEnabled',
+  'accessGateValid',
+  'allowedUserCount',
+  'allowedUserIdsSha256',
+  'invitationPrincipalMatchCount',
+  'unmatchedInvitationPrincipalCount',
+  'notificationAllowedUserCount',
+  'notificationAllowedUserIdsSha256',
+  'invitationNotificationUserMatchCount',
+  'unmatchedInvitationNotificationUserCount',
+  'privatePilotEnabled',
+  'realPaymentsEnabled',
+  'mailTransport',
+  'mailerStatus',
+  'recipientGateEnabled',
+  'allowedRecipientCount',
+  'allowedRecipientEmailsSha256',
+  'invitationRecipientMatchCount',
+  'unmatchedInvitationRecipientCount',
+  'invitationRecipientBindingSha256',
+  'runtimeConfigurationSha256',
   'smtpConfigurationSha256',
   'runtimeReadbackSha256',
   'mailReadbackSha256',
@@ -144,6 +186,7 @@ function canonicalEnvelope(evidence) {
     envelopeKeys,
     'password_enrollment_web_readiness_shape',
   );
+  const readinessKeys = evidence.schemaVersion === 2 ? readinessKeysV2 : readinessKeysV1;
   exactObject(
     evidence.readiness,
     readinessKeys,
@@ -153,6 +196,33 @@ function canonicalEnvelope(evidence) {
     ...evidence,
     readiness: ordered(evidence.readiness, readinessKeys),
   }, envelopeKeys);
+}
+
+function readinessSchemaVersion(readiness) {
+  if (readiness !== null && typeof readiness === 'object' && !Array.isArray(readiness)
+      && Object.hasOwn(readiness, 'targetEnvironment')) return 2;
+  return 1;
+}
+
+export function passwordEnrollmentWebReadinessVersion(binding) {
+  exactObject(
+    binding,
+    bindingKeys,
+    'password_enrollment_web_binding_shape',
+  );
+  let readiness;
+  try {
+    readiness = JSON.parse(binding.readinessJson);
+  } catch {
+    throw new Error('password_enrollment_web_readiness_json');
+  }
+  const schemaVersion = readinessSchemaVersion(readiness);
+  exactObject(
+    readiness,
+    schemaVersion === 2 ? readinessKeysV2 : readinessKeysV1,
+    'password_enrollment_web_readiness_shape',
+  );
+  return schemaVersion;
 }
 
 export function bindPasswordEnrollmentWebReadiness(
@@ -176,7 +246,7 @@ export function bindPasswordEnrollmentWebReadiness(
     'password_enrollment_web_evidence_digest_mismatch',
   );
   requireThat(
-    canonical.schemaVersion === 1
+    [1, 2].includes(canonical.schemaVersion)
       && canonical.kind === 'sit-staging-password-enrollment-web-readiness'
       && canonical.evidenceClass === 'verified-runtime'
       && canonical.syntheticFixture === false,
@@ -205,7 +275,7 @@ export function bindPasswordEnrollmentWebReadiness(
   const observed = Date.parse(observedAtUtc);
   const validUntil = Date.parse(validUntilUtc);
   const validatedAt = Date.parse(validatedAtUtc);
-  const digests = [
+  const commonDigests = [
     readiness.invitationConfigurationSha256,
     readiness.allowedUserIdsSha256,
     readiness.allowedRecipientEmailsSha256,
@@ -214,12 +284,10 @@ export function bindPasswordEnrollmentWebReadiness(
     readiness.runtimeReadbackSha256,
     readiness.mailReadbackSha256,
   ];
-  requireThat(
-    sourcePattern.test(readiness.sourceCommit)
+  const commonValid = sourcePattern.test(readiness.sourceCommit)
       && versionPattern.test(readiness.sourceVersion)
       && (expectedSource === null || readiness.sourceCommit === expectedSource)
       && (expectedVersion === null || readiness.sourceVersion === expectedVersion)
-      && readiness.deploymentEnvironment === 'staging'
       && readiness.apiBaseUrl === `${STAGING_ENROLLMENT_WEB_TARGET}/api/v1`
       && readiness.publicBaseUrl === `${STAGING_ENROLLMENT_WEB_TARGET}/api/v1`
       && readiness.appPublicUrl === STAGING_ENROLLMENT_WEB_TARGET
@@ -245,13 +313,29 @@ export function bindPasswordEnrollmentWebReadiness(
       && readiness.allowedRecipientCount <= 100
       && readiness.invitationRecipientMatchCount === readiness.invitationCount
       && readiness.unmatchedInvitationRecipientCount === 0
-      && digests.every((value) => typeof value === 'string'
+      && commonDigests.every((value) => typeof value === 'string'
         && hashPattern.test(value))
       && validUntil > observed
       && validUntil - observed <= maximumEvidenceAgeMs
       && validatedAt >= observed
       && validatedAt - observed <= maximumEvidenceAgeMs
-      && validatedAt < validUntil,
+      && validatedAt < validUntil;
+  const versionValid = canonical.schemaVersion === 1
+    ? readiness.deploymentEnvironment === 'staging'
+    : readiness.targetEnvironment === 'staging-green'
+      && readiness.runtimeDeploymentEnvironment === 'test'
+      && Number.isInteger(readiness.notificationAllowedUserCount)
+      && readiness.notificationAllowedUserCount >= readiness.invitationCount
+      && readiness.notificationAllowedUserCount <= 100
+      && readiness.invitationNotificationUserMatchCount === readiness.invitationCount
+      && readiness.unmatchedInvitationNotificationUserCount === 0
+      && [
+        readiness.invitationRegistrySha256,
+        readiness.notificationAllowedUserIdsSha256,
+        readiness.runtimeConfigurationSha256,
+      ].every((value) => typeof value === 'string' && hashPattern.test(value));
+  requireThat(
+    commonValid && versionValid,
     'password_enrollment_web_readiness_invalid',
   );
 
@@ -286,8 +370,9 @@ export function validatePasswordEnrollmentWebBinding(
   } catch {
     throw new Error('password_enrollment_web_readiness_json');
   }
+  const schemaVersion = passwordEnrollmentWebReadinessVersion(binding);
   const evidence = ordered({
-    schemaVersion: 1,
+    schemaVersion,
     kind: 'sit-staging-password-enrollment-web-readiness',
     evidenceClass: 'verified-runtime',
     syntheticFixture: false,

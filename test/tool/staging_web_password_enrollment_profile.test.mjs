@@ -22,7 +22,9 @@ import {
 } from '../../tool/staging_facebook_web_readiness.mjs';
 import {
   STAGING_ENROLLMENT_WEB_PROFILE,
+  STAGING_ENROLLMENT_WEB_PROFILE_V2,
   bindPasswordEnrollmentWebReadiness,
+  passwordEnrollmentWebReadinessVersion,
   readPasswordEnrollmentWebReadiness,
   validatePasswordEnrollmentWebBinding,
 } from '../../tool/staging_password_enrollment_web_readiness.mjs';
@@ -78,6 +80,50 @@ function readiness(overrides = {}) {
   };
 }
 
+function readinessV2(overrides = {}) {
+  return {
+    sourceCommit: source,
+    sourceVersion: version,
+    targetEnvironment: 'staging-green',
+    runtimeDeploymentEnvironment: 'test',
+    apiBaseUrl: `${TARGET}/api/v1`,
+    publicBaseUrl: `${TARGET}/api/v1`,
+    appPublicUrl: TARGET,
+    returnOrigin: TARGET,
+    passwordEnrollmentEnabled: true,
+    invitationCount: 2,
+    invitationConfigurationSha256: digest('v2 invitation configuration'),
+    invitationRegistrySha256: digest('v2 invitation registry'),
+    accessGateEnabled: true,
+    accessGateValid: true,
+    allowedUserCount: 6,
+    allowedUserIdsSha256: digest('v2 access allowed user ids'),
+    invitationPrincipalMatchCount: 2,
+    unmatchedInvitationPrincipalCount: 0,
+    notificationAllowedUserCount: 4,
+    notificationAllowedUserIdsSha256: digest('v2 notification allowed user ids'),
+    invitationNotificationUserMatchCount: 2,
+    unmatchedInvitationNotificationUserCount: 0,
+    privatePilotEnabled: true,
+    realPaymentsEnabled: false,
+    mailTransport: 'smtp',
+    mailerStatus: 'ok',
+    recipientGateEnabled: true,
+    allowedRecipientCount: 3,
+    allowedRecipientEmailsSha256: digest('v2 allowed recipient emails'),
+    invitationRecipientMatchCount: 2,
+    unmatchedInvitationRecipientCount: 0,
+    invitationRecipientBindingSha256: digest('v2 invitation recipient binding'),
+    runtimeConfigurationSha256: digest('v2 runtime configuration'),
+    smtpConfigurationSha256: digest('v2 smtp configuration'),
+    runtimeReadbackSha256: digest('v2 runtime readback'),
+    mailReadbackSha256: digest('v2 mail readback'),
+    observedAtUtc: isoAt(-30 * 60 * 1000),
+    validUntilUtc: isoAt(30 * 60 * 1000),
+    ...overrides,
+  };
+}
+
 function handoff({ value = readiness(), top = {} } = {}) {
   const envelope = {
     schemaVersion: 1,
@@ -92,8 +138,31 @@ function handoff({ value = readiness(), top = {} } = {}) {
   return { envelope, bytes, evidenceDigest: digest(bytes) };
 }
 
+function handoffV2({ value = readinessV2(), top = {} } = {}) {
+  const envelope = {
+    schemaVersion: 2,
+    kind: 'sit-staging-password-enrollment-web-readiness',
+    evidenceClass: 'verified-runtime',
+    syntheticFixture: false,
+    readiness: value,
+    readinessSha256: digest(JSON.stringify(value)),
+    ...top,
+  };
+  const bytes = JSON.stringify(envelope);
+  return { envelope, bytes, evidenceDigest: digest(bytes) };
+}
+
 function binding(options = {}, now = runClock) {
   const evidence = handoff(options);
+  return bindPasswordEnrollmentWebReadiness(
+    evidence.envelope,
+    evidence.evidenceDigest,
+    { now, expectedSource: source, expectedVersion: version },
+  );
+}
+
+function bindingV2(options = {}, now = runClock) {
+  const evidence = handoffV2(options);
   return bindPasswordEnrollmentWebReadiness(
     evidence.envelope,
     evidence.evidenceDigest,
@@ -229,6 +298,127 @@ test('password enrollment Web profile is default-off and exact-readiness opt-in 
     expectedSource: source,
     expectedVersion: version,
   }), passwordEnrollment);
+});
+
+test('v2 profile binds staging-green target to test runtime without changing v1', () => {
+  const legacy = binding();
+  const successor = bindingV2();
+  assert.equal(passwordEnrollmentWebReadinessVersion(legacy), 1);
+  assert.equal(passwordEnrollmentWebReadinessVersion(successor), 2);
+  assert.equal(
+    JSON.parse(legacy.readinessJson).deploymentEnvironment,
+    'staging',
+  );
+  assert.deepEqual(
+    {
+      targetEnvironment: JSON.parse(successor.readinessJson).targetEnvironment,
+      runtimeDeploymentEnvironment:
+        JSON.parse(successor.readinessJson).runtimeDeploymentEnvironment,
+    },
+    { targetEnvironment: 'staging-green', runtimeDeploymentEnvironment: 'test' },
+  );
+  const enabled = profile(source, version, null, null, successor);
+  assert.equal(enabled.SIT_WEB_PASSWORD_ENROLLMENT_ENABLED, 'true');
+  assert.equal(enabled.SIT_WEB_PASSWORD_ENROLLMENT_READINESS_JSON, successor.readinessJson);
+  assert.equal(enabled.SIT_WEB_PASSWORD_ENROLLMENT_READINESS_SHA256, successor.readinessDigest);
+  assert.deepEqual(validatePasswordEnrollmentWebBinding(successor, {
+    expectedSource: source,
+    expectedVersion: version,
+  }), successor);
+});
+
+test('v2 rejects target/runtime environment confusion and notification-user drift', () => {
+  const invalid = [
+    { targetEnvironment: 'staging' },
+    { targetEnvironment: 'test' },
+    { runtimeDeploymentEnvironment: 'staging-green' },
+    { runtimeDeploymentEnvironment: 'staging' },
+    { notificationAllowedUserCount: 1 },
+    { notificationAllowedUserCount: 101 },
+    { notificationAllowedUserIdsSha256: 'not-a-digest' },
+    { invitationNotificationUserMatchCount: 1 },
+    { unmatchedInvitationNotificationUserCount: 1 },
+    { invitationPrincipalMatchCount: 1 },
+    { unmatchedInvitationPrincipalCount: 1 },
+  ];
+  for (const override of invalid) {
+    const evidence = handoffV2({ value: readinessV2(override) });
+    assert.throws(() => bindPasswordEnrollmentWebReadiness(
+      evidence.envelope,
+      evidence.evidenceDigest,
+      { now: runClock, expectedSource: source, expectedVersion: version },
+    ), /password_enrollment_web_readiness_invalid/u);
+  }
+});
+
+test('v2 requires identity-free registry, config, runtime, SMTP and mail digest bindings', () => {
+  for (const field of [
+    'invitationConfigurationSha256',
+    'invitationRegistrySha256',
+    'runtimeConfigurationSha256',
+    'runtimeReadbackSha256',
+    'smtpConfigurationSha256',
+    'mailReadbackSha256',
+  ]) {
+    const evidence = handoffV2({ value: readinessV2({ [field]: 'b'.repeat(63) }) });
+    assert.throws(() => bindPasswordEnrollmentWebReadiness(
+      evidence.envelope,
+      evidence.evidenceDigest,
+      { now: runClock, expectedSource: source, expectedVersion: version },
+    ), /password_enrollment_web_readiness_invalid/u);
+  }
+  for (const identityField of ['userId', 'email', 'notificationAllowedUserIds']) {
+    const evidence = handoffV2({
+      value: readinessV2({ [identityField]: 'identity-must-not-enter-evidence' }),
+    });
+    assert.throws(() => bindPasswordEnrollmentWebReadiness(
+      evidence.envelope,
+      evidence.evidenceDigest,
+      { now: runClock, expectedSource: source, expectedVersion: version },
+    ), /password_enrollment_web_readiness_shape/u);
+  }
+});
+
+test('v2 rejects stale, nested-hash and cross-version substitution evidence', () => {
+  const stale = handoffV2({ value: readinessV2({
+    observedAtUtc: isoAt(-3 * 60 * 60 * 1000),
+    validUntilUtc: isoAt(-90 * 60 * 1000),
+  }) });
+  assert.throws(() => bindPasswordEnrollmentWebReadiness(
+    stale.envelope,
+    stale.evidenceDigest,
+    { now: runClock, expectedSource: source, expectedVersion: version },
+  ), /password_enrollment_web_readiness_invalid/u);
+
+  const nestedHash = handoffV2();
+  nestedHash.envelope.readinessSha256 = 'b'.repeat(64);
+  assert.throws(() => bindPasswordEnrollmentWebReadiness(
+    nestedHash.envelope,
+    digest(JSON.stringify(nestedHash.envelope)),
+    { now: runClock, expectedSource: source, expectedVersion: version },
+  ), /password_enrollment_web_readiness_digest_mismatch/u);
+
+  const substitutedRegistry = handoffV2();
+  substitutedRegistry.envelope.readiness.invitationRegistrySha256 = digest('substitute');
+  substitutedRegistry.envelope.readinessSha256 = digest(JSON.stringify(
+    substitutedRegistry.envelope.readiness,
+  ));
+  assert.throws(() => bindPasswordEnrollmentWebReadiness(
+    substitutedRegistry.envelope,
+    substitutedRegistry.evidenceDigest,
+    { now: runClock, expectedSource: source, expectedVersion: version },
+  ), /password_enrollment_web_evidence_digest_mismatch/u);
+
+  const v1 = binding();
+  const v2 = bindingV2();
+  assert.throws(() => validatePasswordEnrollmentWebBinding({
+    ...v2,
+    readinessJson: v1.readinessJson,
+    readinessDigest: v1.readinessDigest,
+  }, {
+    expectedSource: source,
+    expectedVersion: version,
+  }), /password_enrollment_web_evidence_digest_mismatch/u);
 });
 
 test('password profile composes with Google, Facebook or both without weakening provider gates', () => {
@@ -507,6 +697,68 @@ test('schema v4 artifact binds readiness, source and served release identity', (
   );
 });
 
+test('schema v5 artifact binds the v2 readiness and profile successor', (t) => {
+  const passwordEnrollment = bindingV2();
+  const artifact = makeArtifact(t, { passwordEnrollment });
+  const manifest = validateArtifact(artifact.directory, artifact.hash, source);
+  assert.equal(manifest.schemaVersion, 5);
+  assert.equal(manifest.profileContractVersion, STAGING_ENROLLMENT_WEB_PROFILE_V2);
+  assert.equal(manifest.passwordEnrollmentReadinessDigest, passwordEnrollment.readinessDigest);
+  assert.equal(manifest.passwordEnrollmentEvidenceDigest, passwordEnrollment.evidenceDigest);
+  assert.equal(manifest.passwordEnrollmentValidatedAtUtc, passwordEnrollment.validatedAtUtc);
+  assert.equal(
+    manifest.profile.SIT_WEB_PASSWORD_ENROLLMENT_READINESS_JSON,
+    passwordEnrollment.readinessJson,
+  );
+  assert.equal(
+    fs.readFileSync(path.join(artifact.directory, 'web/staging_bootstrap.js'), 'utf8'),
+    stagingBootstrapFor(source, version, null, null, passwordEnrollment),
+  );
+});
+
+test('schema v5 composes with Google, Facebook and both providers', (t) => {
+  const passwordEnrollment = bindingV2();
+  const googleWeb = googleBinding();
+  const facebookWeb = facebookBinding();
+  for (const [google, facebook] of [
+    [googleWeb, null],
+    [null, facebookWeb],
+    [googleWeb, facebookWeb],
+  ]) {
+    const artifact = makeArtifact(t, {
+      passwordEnrollment,
+      googleWeb: google,
+      facebookWeb: facebook,
+    });
+    const manifest = validateArtifact(artifact.directory, artifact.hash, source);
+    assert.equal(manifest.schemaVersion, 5);
+    assert.equal(manifest.profileContractVersion, STAGING_ENROLLMENT_WEB_PROFILE_V2);
+    assert.equal(Object.hasOwn(manifest, 'googleWebConfigDigest'), google !== null);
+    assert.equal(Object.hasOwn(manifest, 'facebookWebConfigDigest'), facebook !== null);
+    assert.equal(manifest.profile.SIT_SOCIAL_GOOGLE_ENABLED, google ? 'true' : 'false');
+    assert.equal(manifest.profile.SIT_SOCIAL_FACEBOOK_ENABLED, facebook ? 'true' : 'false');
+    assert.equal(manifest.profile.SIT_WEB_PASSWORD_ENROLLMENT_ENABLED, 'true');
+  }
+});
+
+test('schema v4 and v5 reject readiness-version substitution after rehash', (t) => {
+  for (const [passwordEnrollment, substitutedSchema] of [
+    [binding(), 5],
+    [bindingV2(), 4],
+  ]) {
+    const artifact = makeArtifact(t, { passwordEnrollment });
+    const hash = rewriteManifest(artifact.directory, (manifest) => {
+      manifest.schemaVersion = substitutedSchema;
+      manifest.profileContractVersion = substitutedSchema === 5
+        ? STAGING_ENROLLMENT_WEB_PROFILE_V2 : STAGING_ENROLLMENT_WEB_PROFILE;
+    });
+    assert.throws(
+      () => validateArtifact(artifact.directory, hash, source),
+      /artifact_password_enrollment_web_contract/u,
+    );
+  }
+});
+
 test('schema v4 conditionally binds Google, Facebook and all-provider composites', (t) => {
   const passwordEnrollment = binding();
   const googleWeb = googleBinding();
@@ -670,7 +922,7 @@ test('actual builder composes protected Google, Facebook and password inputs', (
   git('add', '.');
   git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-m', 'fixture');
   const exactSource = git('rev-parse', 'HEAD');
-  const evidence = handoff({ value: readiness({ sourceCommit: exactSource }) });
+  const evidence = handoffV2({ value: readinessV2({ sourceCommit: exactSource }) });
   const evidenceFile = path.join(root, 'password-enrollment-readiness.json');
   fs.writeFileSync(evidenceFile, evidence.bytes, { mode: 0o600 });
   const publicConfig = socialConfig();
@@ -720,7 +972,8 @@ for(const [entry,text] of Object.entries({'index.html':'<script src="flutter_boo
   assert.equal(result.status, 0, result.stderr);
   const summary = JSON.parse(result.stdout.trim());
   const manifest = validateArtifact(output, summary.manifestHash, exactSource);
-  assert.equal(manifest.schemaVersion, 4);
+  assert.equal(manifest.schemaVersion, 5);
+  assert.equal(manifest.profileContractVersion, STAGING_ENROLLMENT_WEB_PROFILE_V2);
   assert.equal(manifest.profile.SIT_WEB_PASSWORD_ENROLLMENT_ENABLED, 'true');
   assert.equal(manifest.profile.SIT_SOCIAL_GOOGLE_ENABLED, 'true');
   assert.equal(manifest.profile.SIT_SOCIAL_FACEBOOK_ENABLED, 'true');

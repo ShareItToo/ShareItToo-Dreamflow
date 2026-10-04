@@ -10,7 +10,9 @@ import {
 } from './staging_facebook_web_readiness.mjs';
 import {
   STAGING_ENROLLMENT_WEB_PROFILE,
+  STAGING_ENROLLMENT_WEB_PROFILE_V2,
   STAGING_ENROLLMENT_WEB_TARGET,
+  passwordEnrollmentWebReadinessVersion,
   validatePasswordEnrollmentWebBinding,
 } from './staging_password_enrollment_web_readiness.mjs';
 
@@ -328,12 +330,16 @@ export function sealArtifact({ directory, source, version, flutterVersion, build
     validateFacebookWebBinding(facebookWeb, { freshAt: new Date() });
   }
   if (passwordEnrollment !== null) {
-    validatePasswordEnrollmentWebBinding(passwordEnrollment, {
+    passwordEnrollment = validatePasswordEnrollmentWebBinding(passwordEnrollment, {
       expectedSource: source,
       expectedVersion: version,
       freshAt: new Date(),
     });
   }
+  const passwordEnrollmentVersion = passwordEnrollment === null
+    ? null : passwordEnrollmentWebReadinessVersion(passwordEnrollment);
+  const artifactSchemaVersion = passwordEnrollmentVersion === 2
+    ? 5 : passwordEnrollment ? 4 : facebookWeb ? 3 : googleWeb ? 2 : 1;
   const buildProfile = profile(source, version, googleWeb, facebookWeb, passwordEnrollment);
   const web = path.join(directory, 'web');
   const index = path.join(web, 'index.html');
@@ -344,9 +350,10 @@ export function sealArtifact({ directory, source, version, flutterVersion, build
   fs.writeFileSync(path.join(web, 'staging_bootstrap.js'), stagingBootstrapFor(source, version, googleWeb, facebookWeb, passwordEnrollment));
   fs.writeFileSync(path.join(web, 'flutter_service_worker.js'), retirementWorker);
   fs.writeFileSync(path.join(web, 'staging-release.json'), `${JSON.stringify({ target: TARGET, source, version, profileDigest: sha256(JSON.stringify(buildProfile)) })}\n`);
-  const manifest = { schemaVersion: passwordEnrollment ? 4 : facebookWeb ? 3 : googleWeb ? 2 : 1, bootstrapContractVersion: 2,
+  const manifest = { schemaVersion: artifactSchemaVersion, bootstrapContractVersion: 2,
     ...(passwordEnrollment ? {
-      profileContractVersion: STAGING_ENROLLMENT_WEB_PROFILE,
+      profileContractVersion: passwordEnrollmentVersion === 2
+        ? STAGING_ENROLLMENT_WEB_PROFILE_V2 : STAGING_ENROLLMENT_WEB_PROFILE,
       ...(googleWeb ? { googleWebConfigDigest: googleWeb.digest } : {}),
       ...(facebookWeb ? {
         facebookWebConfigDigest: facebookWeb.configDigest,
@@ -403,7 +410,8 @@ export function validateArtifact(directory, expectedHash, expectedSource, { mode
     'passwordEnrollmentEvidenceDigest',
     'passwordEnrollmentValidatedAtUtc',
   ].includes(key)).sort();
-  if (m.schemaVersion === 4) {
+  if ([4, 5].includes(m.schemaVersion)) {
+    const passwordEnrollmentVersion = m.schemaVersion === 5 ? 2 : 1;
     const googleEnabled = m.profile?.SIT_SOCIAL_GOOGLE_ENABLED === 'true';
     const facebookEnabled = m.profile?.SIT_SOCIAL_FACEBOOK_ENABLED === 'true';
     const expectedKeys = [
@@ -433,7 +441,8 @@ export function validateArtifact(directory, expectedHash, expectedSource, { mode
       'profile',
       'files',
     ].sort();
-    requireThat(m.profileContractVersion === STAGING_ENROLLMENT_WEB_PROFILE
+    requireThat(m.profileContractVersion === (passwordEnrollmentVersion === 2
+      ? STAGING_ENROLLMENT_WEB_PROFILE_V2 : STAGING_ENROLLMENT_WEB_PROFILE)
       && m.bootstrapContractVersion === 2
       && JSON.stringify(Object.keys(m).sort()) === JSON.stringify(expectedKeys)
       && m.profile?.SIT_SOCIAL_PROVIDER_ACTIVATION_VALIDATED ===
@@ -480,6 +489,10 @@ export function validateArtifact(directory, expectedHash, expectedSource, { mode
       expectedVersion: m.version,
       freshAt: mode === 'candidate' ? new Date() : null,
     });
+    requireThat(
+      passwordEnrollmentWebReadinessVersion(passwordEnrollment) === passwordEnrollmentVersion,
+      'artifact_password_enrollment_web_contract',
+    );
   } else if (m.schemaVersion === 3) {
     const expectedKeys = [
       'schemaVersion',
@@ -541,7 +554,7 @@ export function validateArtifact(directory, expectedHash, expectedSource, { mode
   } else requireThat(providerMetadata.length === 0, 'artifact_provider_web_contract');
   const legacy = !Object.hasOwn(m, 'bootstrapContractVersion');
   requireThat(legacy ? mode !== 'candidate' : m.bootstrapContractVersion === 2, 'artifact_bootstrap_contract');
-  requireThat([1, 2, 3, 4].includes(m.schemaVersion) && m.target === TARGET && m.api === `${TARGET}/api/v1` && m.sourceClean === true &&
+  requireThat([1, 2, 3, 4, 5].includes(m.schemaVersion) && m.target === TARGET && m.api === `${TARGET}/api/v1` && m.sourceClean === true &&
     m.mode === 'release' && m.pwaStrategy === 'none' && m.resourcesCdn === false &&
     sourcePattern.test(m.source) && (!expectedSource || m.source === expectedSource) &&
     /^\d+\.\d+\.\d+\+\d+$/.test(m.version) && hashPattern.test(m.builderDigest), 'artifact_identity_mismatch');
