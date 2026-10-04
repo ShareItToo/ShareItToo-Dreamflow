@@ -16,6 +16,7 @@ import {
 } from '../ops/green_password_enrollment_activation.mjs';
 import {
   GREEN_PASSWORD_ENROLLMENT_REPOSITORY_ROOT,
+  GREEN_PASSWORD_ENROLLMENT_QUEUE_AGGREGATE_SQL,
   executeGreenPasswordEnrollmentArgv,
   greenPasswordEnrollmentActivationCliErrorCode,
   greenEnrollmentCandidateRuntimeReadbackSha256,
@@ -38,6 +39,20 @@ const activationNow = Date.parse('2026-10-04T10:00:00.000Z');
 const credentialField = () => ['SMTP', '_PASS', 'WORD'].join('');
 const envText = (environment) => Buffer.from(`${Object.entries(environment)
   .map(([name, value]) => `${name}=${value}`).join('\n')}\n`);
+
+function assertQueueAggregateSqlMatchesMigration(sql, migration) {
+  const table = /CREATE TABLE notification_outbox \(([\s\S]*?)\n\);/u.exec(migration)?.[1];
+  assert.equal(typeof table, 'string');
+  const columns = new Set([...table.matchAll(/^\s{2}([a-z][a-z0-9_]*)\s+[A-Z]/gmu)]
+    .map((match) => match[1]));
+  const query = /^SELECT status, ([a-z][a-z0-9_]*), count\(\*\)::int AS count FROM notification_outbox GROUP BY status, \1$/u
+    .exec(sql);
+  assert.ok(query, 'queue aggregate SQL shape drifted');
+  assert.ok(columns.has('status'), 'notification_outbox.status is missing');
+  assert.ok(columns.has(query[1]),
+    `queue SQL references unknown notification_outbox column: ${query[1]}`);
+  return query[1];
+}
 
 function currentEnvironment() {
   return {
@@ -586,7 +601,32 @@ test('default dry-run performs exact read-only preflight and no service transiti
   ].join(' ')));
   assert.ok(harness.calls.some((call) => call.args.join(' ')
     === 'ls-files --others --exclude-standard -- .'));
+  const queueProbe = harness.calls.find((call) => call.args[0] === 'exec'
+    && call.args.at(-1).includes('notification_outbox'));
+  assert.ok(queueProbe.args.at(-1).includes(GREEN_PASSWORD_ENROLLMENT_QUEUE_AGGREGATE_SQL));
+  assert.match(queueProbe.args.at(-1), /row\.channel/u);
+  assert.doesNotMatch(queueProbe.args.at(-1), /row\.transport/u);
   assert.doesNotMatch(JSON.stringify(result), /pilot@example|smtp\.relay|contact@/u);
+});
+
+test('queue aggregate SQL is bound to the authoritative notification_outbox schema', async () => {
+  const migration = await readFile(join(
+    GREEN_PASSWORD_ENROLLMENT_REPOSITORY_ROOT,
+    'backend/sql/migrations/006_b7_communications.up.sql',
+  ), 'utf8');
+  assert.equal(
+    assertQueueAggregateSqlMatchesMigration(
+      GREEN_PASSWORD_ENROLLMENT_QUEUE_AGGREGATE_SQL, migration,
+    ),
+    'channel',
+  );
+  assert.throws(
+    () => assertQueueAggregateSqlMatchesMigration(
+      GREEN_PASSWORD_ENROLLMENT_QUEUE_AGGREGATE_SQL.replaceAll('channel', 'transport'),
+      migration,
+    ),
+    /unknown notification_outbox column: transport/u,
+  );
 });
 
 test('execute uses exact confirmations and completes the command-backed transition', async (t) => {

@@ -194,11 +194,14 @@ process.stdout.write(JSON.stringify({
 }) + '\n');
 `;
 
+export const GREEN_PASSWORD_ENROLLMENT_QUEUE_AGGREGATE_SQL =
+  'SELECT status, channel, count(*)::int AS count FROM notification_outbox GROUP BY status, channel';
+
 const queueProbeSource = String.raw`
 import { pool } from './src/db.js';
 try {
   const result = await pool.query(
-    "SELECT status, transport, count(*)::int AS count FROM notification_outbox GROUP BY status, transport",
+    ${JSON.stringify(GREEN_PASSWORD_ENROLLMENT_QUEUE_AGGREGATE_SQL)},
   );
   const output = { dead: 0, pending: 0, processing: 0, retry: 0,
     sentInApp: 0, sentPush: 0, suppressedEmail: 0, suppressedPush: 0 };
@@ -206,10 +209,10 @@ try {
     const count = Number(row.count);
     if (!Number.isSafeInteger(count) || count < 0) throw new Error('queue');
     if (['dead', 'pending', 'processing', 'retry'].includes(row.status)) output[row.status] += count;
-    else if (row.status === 'sent' && row.transport === 'in_app') output.sentInApp += count;
-    else if (row.status === 'sent' && row.transport === 'push') output.sentPush += count;
-    else if (row.status === 'suppressed' && row.transport === 'email') output.suppressedEmail += count;
-    else if (row.status === 'suppressed' && row.transport === 'push') output.suppressedPush += count;
+    else if (row.status === 'sent' && row.channel === 'in_app') output.sentInApp += count;
+    else if (row.status === 'sent' && row.channel === 'push') output.sentPush += count;
+    else if (row.status === 'suppressed' && row.channel === 'email') output.suppressedEmail += count;
+    else if (row.status === 'suppressed' && row.channel === 'push') output.suppressedPush += count;
     else throw new Error('queue');
   }
   process.stdout.write(JSON.stringify(output) + '\n');
