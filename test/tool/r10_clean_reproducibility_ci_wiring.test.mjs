@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 
 const workflow = readFileSync(
@@ -40,6 +43,52 @@ test('R10 CI has no live action, private input, retry or machine-cache fallback'
     /services:|secrets\.|google-services|key\.properties|storepass|deploy|publish|upload|docker|sudo|apt(?:-get)?|sleep|retry|SIT_FLUTTER_TEST_CONCURRENCY/u,
   );
   assert.doesNotMatch(job, /setup-gradle|cache-dependency-path|pnpm install|flutter pub get/u);
+});
+
+test('R10 provisions the exact Android CMake before starting its offline builds', async (t) => {
+  const job = r10Job();
+  const setup = /      - name: Install and verify pinned Android CMake\n        shell: bash\n        run: \|\n(?<script>(?:          .+\n)+)/u.exec(job);
+  assert.ok(setup, 'R10 must explicitly provision its SDK CMake');
+  assert.ok(setup.index < job.indexOf('      - name: Run exact clean-checkout reproducibility proof'));
+  const script = setup.groups.script.replace(/^          /gmu, '');
+  for (const scenario of [
+    { name: 'exact version', version: '3.22.1', status: 0 },
+    { name: 'wrong version', version: '3.31.6', status: 1 },
+    { name: 'missing binary', missing: true, status: 1 },
+    { name: 'SDK installation failed', version: '3.22.1', installStatus: 19, status: 19 },
+    { name: 'CMake cannot execute', version: '3.22.1', cmakeStatus: 23, status: 23 },
+  ]) {
+    await t.test(scenario.name, () => {
+      const sdk = mkdtempSync(path.join(os.tmpdir(), 'sit-r10-cmake-'));
+      try {
+        const managerDir = path.join(sdk, 'cmdline-tools/latest/bin');
+        const cmakeDir = path.join(sdk, 'cmake/3.22.1/bin');
+        mkdirSync(managerDir, { recursive: true });
+        mkdirSync(cmakeDir, { recursive: true });
+        writeFileSync(path.join(managerDir, 'sdkmanager'), `#!/bin/bash
+set -eu
+test "$#" = 3
+test "$1" = "--sdk_root=$ANDROID_HOME"
+test "$2" = --install
+test "$3" = 'cmake;3.22.1'
+exit ${scenario.installStatus ?? 0}
+`, { mode: 0o755 });
+        if (!scenario.missing) {
+          writeFileSync(path.join(cmakeDir, 'cmake'), `#!/bin/bash
+test "$1" = --version || exit 2
+printf 'cmake version ${scenario.version}\\n\\nCMake suite maintained and supported by Kitware.\\n'
+exit ${scenario.cmakeStatus ?? 0}
+`, { mode: 0o755 });
+        }
+        const result = spawnSync('bash', ['--noprofile', '--norc', '-eo', 'pipefail', '-c', script], {
+          env: { ...process.env, ANDROID_HOME: sdk }, encoding: 'utf8',
+        });
+        assert.equal(result.status, scenario.status, result.stderr);
+      } finally {
+        rmSync(sdk, { recursive: true, force: true });
+      }
+    });
+  }
 });
 
 test('R10 consumes only the same-run successful exact-head dependency artifact', () => {

@@ -226,6 +226,16 @@ jobs:
       - name: Extract dependency-only transport
         run: tar -xzf "$RUNNER_TEMP/r10-gradle-transport/dependencies.tar.gz" -C "$RUNNER_TEMP/r10-gradle-transport"
 
+      - name: Install and verify pinned Android CMake
+        shell: bash
+        run: |
+          android_sdk_root="${ANDROID_HOME:?ANDROID_HOME must identify the R10 Android SDK}"
+          "$android_sdk_root/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$android_sdk_root" --install "cmake;3.22.1"
+          cmake_binary="$android_sdk_root/cmake/3.22.1/bin/cmake"
+          test -x "$cmake_binary"
+          cmake_version="$("$cmake_binary" --version)"
+          test "${cmake_version%%$'\n'*}" = 'cmake version 3.22.1'
+
       - name: Run exact clean-checkout reproducibility proof
         run: |
           node tool/run_r10_clean_reproducibility.mjs \
