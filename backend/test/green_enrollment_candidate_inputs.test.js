@@ -1,15 +1,21 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import {
   buildGreenEnrollmentCandidateInputs,
   GREEN_ENROLLMENT_EXACT_TTL_SECONDS,
 } from '../ops/build_green_enrollment_candidate_inputs.mjs';
+import {
+  GREEN_ENROLLMENT_CANDIDATE_INPUTS_EXECUTE_CONFIRMATION,
+  runGreenEnrollmentCandidateInputsCli,
+} from '../ops/build_green_enrollment_candidate_inputs_cli.mjs';
 
 const now = Date.parse('2026-10-05T12:00:00.000Z');
 const uid = process.getuid();
@@ -113,6 +119,29 @@ function run(input, changes = {}) {
     activationScryptSalt: hash('activation-salt'),
     ...changes,
   });
+}
+
+function cliArguments(input) {
+  return [
+    '--current-environment-file', input.currentEnvironmentFile,
+    '--request-file', input.requestFile,
+    '--allowlist-file', input.allowlistFile,
+    '--runtime-identity-file', input.runtimeIdentityFile,
+    '--server-record-file', input.serverRecordFile,
+    '--registry-file', input.registryFile,
+    '--pretransition-output-file', input.pretransitionOutputFile,
+    '--activation-output-file', input.activationOutputFile,
+    '--target-uid', String(uid), '--target-gid', String(gid),
+  ];
+}
+
+function deterministicRandomBytes() {
+  let index = 0;
+  return (size) => {
+    assert.equal(size, 32);
+    index += 1;
+    return crypto.createHash('sha256').update(`cli-salt-${index}`).digest();
+  };
 }
 
 test('dry-run binds protected inputs and execute publishes exact no-leak env pair', async (t) => {
@@ -431,4 +460,69 @@ test('output parent mode drift after descriptor open fails before creation', asy
   assert.equal(observed.code, 'green_enrollment_candidate_inputs_denied');
   assert.equal(fs.existsSync(input.pretransitionOutputFile), false);
   assert.equal(fs.existsSync(input.activationOutputFile), false);
+});
+
+test('CLI is default dry-run and keeps private values out of argv and result', async (t) => {
+  const input = await fixture(t);
+  const argv = cliArguments(input);
+  assert.doesNotMatch(argv.join('\n'),
+    new RegExp(`${principal}|approved@example|protected-relay|${credentialValue}`, 'u'));
+  const result = runGreenEnrollmentCandidateInputsCli(argv, {
+    now: () => now, randomBytesImpl: deterministicRandomBytes(),
+  });
+  assert.equal(result.status, 'dry-run');
+  assert.equal(fs.existsSync(input.pretransitionOutputFile), false);
+  assert.equal(fs.existsSync(input.activationOutputFile), false);
+  assert.doesNotMatch(JSON.stringify(result),
+    new RegExp(`${principal}|approved@example|protected-relay|${credentialValue}|${input.root}`, 'u'));
+});
+
+test('CLI rejects unknown, duplicate and relative arguments', async (t) => {
+  const input = await fixture(t);
+  const argv = cliArguments(input);
+  const deniedCli = /green_enrollment_candidate_inputs_cli_denied/u;
+  assert.throws(() => runGreenEnrollmentCandidateInputsCli(['--unknown']), deniedCli);
+  assert.throws(() => runGreenEnrollmentCandidateInputsCli(
+    [...argv, '--target-uid', String(uid)],
+  ), deniedCli);
+  const relative = [...argv];
+  relative[relative.indexOf('--request-file') + 1] = 'request.json';
+  assert.throws(() => runGreenEnrollmentCandidateInputsCli(relative, {
+    randomBytesImpl: deterministicRandomBytes(),
+  }), deniedCli);
+});
+
+test('CLI execute requires the exact confirmation and publishes only then', async (t) => {
+  const input = await fixture(t);
+  const argv = cliArguments(input);
+  const options = () => ({ now: () => now, randomBytesImpl: deterministicRandomBytes() });
+  assert.throws(() => runGreenEnrollmentCandidateInputsCli([...argv, '--execute'], options()),
+    /green_enrollment_candidate_inputs_cli_denied/u);
+  assert.throws(() => runGreenEnrollmentCandidateInputsCli(
+    [...argv, '--execute', '--confirm-execute', 'WRONG'], options(),
+  ), /green_enrollment_candidate_inputs_cli_denied/u);
+  assert.throws(() => runGreenEnrollmentCandidateInputsCli(
+    [...argv, '--confirm-execute', GREEN_ENROLLMENT_CANDIDATE_INPUTS_EXECUTE_CONFIRMATION], options(),
+  ), /green_enrollment_candidate_inputs_cli_denied/u);
+  const result = runGreenEnrollmentCandidateInputsCli([
+    ...argv, '--execute', '--confirm-execute',
+    GREEN_ENROLLMENT_CANDIDATE_INPUTS_EXECUTE_CONFIRMATION,
+  ], options());
+  assert.equal(result.status, 'created');
+  assert.equal(fs.existsSync(input.pretransitionOutputFile), true);
+  assert.equal(fs.existsSync(input.activationOutputFile), true);
+});
+
+test('CLI process emits only a sanitized JSON failure', () => {
+  const cliFile = fileURLToPath(new URL(
+    '../ops/build_green_enrollment_candidate_inputs_cli.mjs', import.meta.url,
+  ));
+  const privateFragment = 'private-principal@example.test';
+  const result = spawnSync(process.execPath, [cliFile, '--unknown', privateFragment], {
+    encoding: 'utf8', shell: false,
+  });
+  assert.equal(result.status, 1);
+  assert.equal(result.stdout, '');
+  assert.equal(result.stderr, '{"status":"denied"}\n');
+  assert.doesNotMatch(`${result.stdout}${result.stderr}`, new RegExp(privateFragment, 'u'));
 });
