@@ -11,6 +11,69 @@ import { assertReadinessFindingsUnchanged, buildReadinessFindingSql } from '../o
 import { assertDataTransition, assertLedger, digest, newTableNames } from '../ops/green_staging_98_106_contract.mjs';
 import { readSnapshot, checkForwardIntegrity } from '../ops/green_staging_98_106_database.mjs';
 
+function withVerifiedDumpBytes(fd, restore) {
+  let bytes; let reread;
+  try {
+    const stat = fs.fstatSync(fd); assert.equal(stat.mode & 0o777, 0o600); assert.equal(stat.nlink, 1);
+    assert.equal(stat.isFile(), true); assert.ok(stat.size > 0);
+    bytes = Buffer.alloc(stat.size);
+    assert.equal(fs.readSync(fd, bytes, 0, bytes.length, 0), bytes.length);
+    const backupSha256 = digest(bytes);
+    reread = Buffer.alloc(stat.size);
+    // pg_dump shares this descriptor's offset; both reads must start at zero.
+    assert.equal(fs.readSync(fd, reread, 0, reread.length, 0), reread.length);
+    assert.equal(digest(reread), backupSha256);
+    restore(bytes);
+  } finally {
+    bytes?.fill(0);
+    reread?.fill(0);
+  }
+}
+
+for (const scenario of ['success', 'restore-failure', 'hash-drift', 'short-read']) {
+  test(`protected dump descriptor: replaced pathname, ${scenario}, buffers cleared`, (t) => {
+    const temporary = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'sit-green-dump-fd-'));
+    fs.chmodSync(temporary, 0o700);
+    const backup = path.join(temporary, 'backup.dump');
+    const fd = fs.openSync(backup, fs.constants.O_RDWR | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW, 0o600);
+    const original = Buffer.from('synthetic original dump');
+    const buffers = []; const offsets = []; let restored = false;
+    const originalRead = fs.readSync;
+    const read = t.mock.method(fs, 'readSync', (descriptor, buffer, offset, length, position) => {
+      assert.equal(descriptor, fd); buffers.push(buffer); offsets.push(position);
+      const count = originalRead(descriptor, buffer, offset, length, position);
+      if (buffers.length === 1) {
+        // Replace the name after the first read. The opened inode remains ours.
+        fs.renameSync(backup, path.join(temporary, 'opened.dump'));
+        const replacement = path.join(temporary, 'replacement.dump');
+        fs.writeFileSync(replacement, 'synthetic replacement', { flag: 'wx', mode: 0o600 });
+        fs.symlinkSync(replacement, backup);
+        if (scenario === 'hash-drift') fs.writeSync(fd, Buffer.alloc(original.length, 1), 0, original.length, 0);
+      }
+      return scenario === 'short-read' && buffers.length === 2 ? count - 1 : count;
+    });
+    try {
+      fs.writeSync(fd, original); // Deliberately leave the shared offset at EOF.
+      const consume = bytes => {
+        restored = true;
+        assert.deepEqual(bytes, original);
+        if (scenario === 'restore-failure') throw new Error('synthetic restore failure');
+      };
+      if (scenario === 'success') withVerifiedDumpBytes(fd, consume);
+      else assert.throws(() => withVerifiedDumpBytes(fd, consume),
+        scenario === 'restore-failure' ? /synthetic restore failure/u : assert.AssertionError);
+      assert.equal(restored, ['success', 'restore-failure'].includes(scenario));
+      assert.deepEqual(offsets, [0, 0]);
+      assert.equal(buffers.length, 2);
+      for (const buffer of buffers) assert.ok(buffer.every(byte => byte === 0));
+    } finally {
+      read.mock.restore();
+      fs.closeSync(fd);
+      fs.rmSync(temporary, { recursive: true, force: true });
+    }
+  });
+}
+
 test('disposable native PG16: protected custom dump, restore98, forward106, idempotence and cleanup',
   { skip: process.env.SIT_GREEN_98_106_PG16 !== '1', timeout: 120000 }, async (t) => {
     const bin = await resolvePostgresBinDir({ explicitBinDir: process.env.SIT_POSTGRES_BIN_DIR });
@@ -61,13 +124,9 @@ test('disposable native PG16: protected custom dump, restore98, forward106, idem
       const fd = fs.openSync(backup, fs.constants.O_RDWR | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW, 0o600);
       try {
         run('pg_dump', ['--format=custom', '--no-owner', '--no-acl', '--dbname', connection('source98')], { stdio: ['ignore', fd, 'pipe'] });
-        const stat = fs.fstatSync(fd); assert.equal(stat.mode & 0o777, 0o600); assert.equal(stat.nlink, 1);
-        const bytes = Buffer.alloc(stat.size); assert.equal(fs.readSync(fd, bytes, 0, bytes.length, 0), bytes.length);
-        const backupSha256 = digest(bytes); assert.equal(fs.lstatSync(backup).ino, stat.ino);
-        assert.equal(digest(fs.readFileSync(backup)), backupSha256);
-        run('pg_restore', ['--exit-on-error', '--no-owner', '--no-acl', '--dbname', connection('restore106')],
-          { input: bytes, stdio: ['pipe', 'pipe', 'pipe'] });
-        bytes.fill(0);
+        withVerifiedDumpBytes(fd, bytes => run('pg_restore',
+          ['--exit-on-error', '--no-owner', '--no-acl', '--dbname', connection('restore106')],
+          { input: bytes, stdio: ['pipe', 'pipe', 'pipe'] }));
       } finally { fs.closeSync(fd); }
       assert.deepEqual(await snapshot(restored, 98, oldNames), before);
       await runMigrations(restored);
