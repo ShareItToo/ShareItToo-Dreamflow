@@ -521,6 +521,110 @@ if (!databaseUrl) {
         }
       });
 
+      await t.test('client-selected social lanes and optional bearer cannot bypass verified Apple ownership', async () => {
+        const { createApp } = await import('../src/app.js');
+        const { signAccessToken } = await import('../src/security.js');
+        const ownerToken = `codeql-owner-${'o'.repeat(190)}`;
+        const invalidToken = `codeql-invalid-${'i'.repeat(190)}`;
+        const googleToken = `codeql-google-${'g'.repeat(190)}`;
+        const wrongFirebaseToken = `codeql-other-firebase-${'f'.repeat(190)}`;
+        const staleToken = `codeql-stale-${'s'.repeat(190)}`;
+        const verifierOptions = [];
+        let providerCalls = 0;
+        const app = createApp({
+          appleOwnershipConfiguration: configuration,
+          appleOwnershipProvider: {
+            async exchangeAuthorizationCode({ expectedSubject }) {
+              providerCalls += 1;
+              assert.equal(expectedSubject, routeSubject);
+              return `synthetic-codeql-refresh-${crypto.randomUUID()}`;
+            },
+          },
+          verifySocialToken: async (token, options) => {
+            verifierOptions.push(options);
+            if (![ownerToken, googleToken, wrongFirebaseToken].includes(token)) {
+              const error = new Error('synthetic invalid social token');
+              error.status = 401; error.code = 'invalid_social_token'; throw error;
+            }
+            return {
+              provider: token === googleToken ? 'google' : 'apple', subject: routeSubject,
+              firebaseUserId: token === wrongFirebaseToken ? foreignFirebaseUserId : routeFirebaseUserId,
+              firebaseProjectId: configuration.firebaseProjectId,
+              tokenIssuedAt: nowSeconds() - 5, tokenExpiresAt: nowSeconds() + 600,
+              tokenAuthTime: nowSeconds() - 5,
+            };
+          },
+        });
+        const revokedSessionId = crypto.randomUUID();
+        await database.query(
+          "INSERT INTO auth_sessions (id,user_id,device_label,revoked_at) VALUES ($1,$2,'Synthetic revoked',now())",
+          [revokedSessionId, routeUserId],
+        );
+        const revokedBearer = signAccessToken({ id: routeUserId, role: 'user' }, { sessionId: revokedSessionId });
+        const foreignSessionId = (await database.query(
+          'SELECT id FROM auth_sessions WHERE user_id=$1 AND revoked_at IS NULL LIMIT 1', [foreignUserId],
+        )).rows[0].id;
+        const foreignBearer = signAccessToken({ id: foreignUserId, role: 'user' }, { sessionId: foreignSessionId });
+        const snapshot = async () => {
+          const result = {};
+          for (const table of ['apple_ownership_attempts', 'apple_ownership_materials',
+            'apple_ownership_deliveries', 'auth_sessions', 'refresh_tokens']) {
+            result[table] = (await database.query(
+              `SELECT count(*)::int n FROM ${table} WHERE user_id=$1`, [routeUserId],
+            )).rows[0].n;
+          }
+          return result;
+        };
+        const before = await snapshot();
+        const server = http.createServer(app);
+        await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+        const post = async (body, authorization) => {
+          const response = await fetch(`http://127.0.0.1:${server.address().port}/v1/auth/social`, {
+            method: 'POST', headers: { 'content-type': 'application/json',
+              ...(authorization ? { authorization } : {}) },
+            body: JSON.stringify(body), signal: AbortSignal.timeout(5000),
+          });
+          return { status: response.status, body: await response.json() };
+        };
+        const command = { version: 2, operation: 'acquire', requestId: request(),
+          authorizationCode: `synthetic-codeql-code-${crypto.randomUUID()}` };
+        try {
+          for (const [body, authorization, status, error] of [
+            [{ idToken: invalidToken }, undefined, 401, 'invalid_social_token'],
+            [{ idToken: invalidToken, appleAuth: command }, undefined, 401, 'invalid_social_token'],
+            [{ idToken: ownerToken }, undefined, 426, 'apple_ownership_upgrade_required'],
+            [{ idToken: ownerToken, appleAuth: null }, undefined, 400, 'invalid_apple_ownership_request'],
+            [{ idToken: ownerToken, appleAuth: false }, undefined, 400, 'invalid_apple_ownership_request'],
+            [{ idToken: googleToken, appleAuth: command }, undefined, 400, 'invalid_social_provider_material'],
+            [{ idToken: wrongFirebaseToken, appleAuth: command }, undefined, 403, 'apple_ownership_not_eligible'],
+            [{ idToken: staleToken, appleAuth: command }, undefined, 401, 'invalid_social_token'],
+            [{ idToken: ownerToken, appleAuth: command }, 'Bearer synthetic-invalid', 401, 'invalid_or_expired_session'],
+            [{ idToken: ownerToken, appleAuth: command }, `Bearer ${revokedBearer}`, 401, 'invalid_or_expired_session'],
+            [{ idToken: ownerToken, appleAuth: command }, `Bearer ${foreignBearer}`, 409, 'apple_ownership_principal_conflict'],
+          ]) {
+            const result = await post(body, authorization);
+            assert.deepEqual([result.status, result.body.error], [status, error]);
+            assert.equal(providerCalls, 0);
+            assert.deepEqual(await snapshot(), before);
+          }
+          assert.equal(verifierOptions.filter((options) => options?.requireFreshToken === true
+            && options.maxIssuedAgeSeconds === 60).length, 7);
+          // Fresh verified Apple identity is itself the login credential. An
+          // existing SIT bearer is optional and cannot select another owner.
+          const acquired = await post({ idToken: ownerToken, appleAuth: command });
+          assert.equal(acquired.status, 200, JSON.stringify(acquired.body));
+          assert.equal(acquired.body.appleAuth.state, 'ready');
+          assert.equal(Object.hasOwn(acquired.body, 'session'), false);
+          assert.equal(providerCalls, 1);
+          const after = await snapshot();
+          assert.equal(after.auth_sessions, before.auth_sessions);
+          assert.equal(after.refresh_tokens, before.refresh_tokens);
+        } finally {
+          server.closeAllConnections();
+          await new Promise((resolve) => server.close(resolve));
+        }
+      });
+
       await t.test('application tombstone retains cleanup graph; hard delete blocks then cascades when clean', async () => {
         const { eraseAccount } = await import('../src/app.js');
         const client = await database.connect();

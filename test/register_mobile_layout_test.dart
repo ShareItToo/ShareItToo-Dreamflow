@@ -5,6 +5,9 @@ import 'package:lendify/services/auth_service.dart';
 import 'package:lendify/utils/registration_consent_bundle.dart';
 import 'package:lendify/widgets/social_auth_button.dart';
 
+const _facebookLoginOnlyNotice =
+    'Facebook ist nur zur Anmeldung bestehender Konten verfügbar.';
+
 Future<void> pumpRegistration(
   WidgetTester tester, {
   Size size = const Size(390, 844),
@@ -33,6 +36,9 @@ Future<void> pumpRegistration(
 }
 
 void main() {
+  setUpAll(() => WidgetController.hitTestWarningShouldBeFatal = true);
+  tearDownAll(() => WidgetController.hitTestWarningShouldBeFatal = false);
+
   for (final scenario in [
     (size: const Size(390, 844), scale: 1.0, keyboard: 0.0),
     (size: const Size(390, 844), scale: 2.0, keyboard: 0.0),
@@ -56,12 +62,21 @@ void main() {
       await tester.pumpAndSettle();
       final ctaRect = tester.getRect(cta);
       final providerRect = tester.getRect(find.byType(SocialAuthButton).last);
-      expect(providerRect.bottom, lessThan(ctaRect.top));
+      final facebookNotice = find.text(_facebookLoginOnlyNotice);
+      expect(facebookNotice, findsOneWidget);
+      final noticeRect = tester.getRect(facebookNotice);
+      expect(providerRect.bottom, lessThan(noticeRect.top));
+      expect(noticeRect.bottom, lessThan(ctaRect.top));
       expect(ctaRect.top, greaterThanOrEqualTo(24));
       expect(ctaRect.bottom,
           lessThanOrEqualTo(scenario.size.height - scenario.keyboard));
       expect(cta.hitTestable(), findsOneWidget);
       expect(tester.widget<Text>(cta).overflow, isNot(TextOverflow.ellipsis));
+
+      await tester.ensureVisible(facebookNotice);
+      await tester.pumpAndSettle();
+      expect(facebookNotice.hitTestable(), findsOneWidget);
+      expect(tester.widget<Text>(facebookNotice).maxLines, isNull);
 
       final login = find.text('Anmelden');
       await tester.ensureVisible(login);
@@ -83,6 +98,7 @@ void main() {
     await pumpRegistration(tester, keyboard: 300, scale: 2);
     final cta = find.text('Kostenlos registrieren');
     await tester.ensureVisible(cta);
+    expect(cta.hitTestable(), findsOneWidget);
     await tester.tap(cta);
     await tester.pumpAndSettle();
     final emailError = find.text('Bitte gib eine gültige E-Mail-Adresse ein.');
@@ -99,7 +115,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('consent appears once per available action; providers stay off',
+  testWidgets(
+      'consent follows registration availability; Facebook is login-only',
       (tester) async {
     await pumpRegistration(tester);
     expect(
@@ -108,26 +125,36 @@ void main() {
       findsOneWidget,
     );
     var unavailable = 0;
+    expect(find.byType(SocialAuthButton), findsNWidgets(2));
     for (final entry in {
       AuthSocialProvider.google: 'Mit Google registrieren',
       AuthSocialProvider.apple: 'Mit Apple registrieren',
-      AuthSocialProvider.facebook: 'Mit Facebook registrieren',
     }.entries) {
-      final available = AuthService.socialProviderEnabled(entry.key);
+      final available =
+          AuthService.socialRegistrationProviderEnabled(entry.key);
       expect(
         find.bySemanticsLabel(registrationConsentActionText(entry.value)),
         available ? findsOneWidget : findsNothing,
       );
-      final button = tester.widget<SocialAuthButton>(find.ancestor(
+      final buttonFinder = find.ancestor(
         of: find.text(entry.value),
         matching: find.byType(SocialAuthButton),
-      ));
+      );
+      expect(buttonFinder, findsOneWidget);
+      final button = tester.widget<SocialAuthButton>(buttonFinder);
       expect(button.available, available);
+      expect(button.onTap, available ? isNotNull : isNull);
       if (!available) {
         unavailable++;
-        expect(button.onTap, isNull);
       }
     }
+    expect(find.text('Mit Facebook registrieren'), findsNothing);
+    expect(
+      find.bySemanticsLabel(
+          registrationConsentActionText('Mit Facebook registrieren')),
+      findsNothing,
+    );
+    expect(find.text(_facebookLoginOnlyNotice), findsOneWidget);
     expect(find.text('Im Privatpiloten nicht verfügbar'),
         findsNWidgets(unavailable));
     expect(tester.takeException(), isNull);

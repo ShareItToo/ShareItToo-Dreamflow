@@ -244,6 +244,32 @@ test('adapter exposes exact runner methods and neither credentials nor signing c
     'readSdkConfig', 'readSnapshot', 'readWebApp']);
 });
 
+test('domain patch requires an exact hostname array member, never a URL or substring match', async () => {
+  const f = fixture(); const revision = digest(f.config);
+  const adapter = f.adapter({ leaseBytes: f.makeLease(revision), leasePublicKeyBytes: publicPem });
+  const guard = await adapter.acquireDomainGuard({ projectId: f.binding.projectId, revision });
+  for (const authorizedDomains of [
+    'staging.shareittoo.com',
+    'https://staging.shareittoo.com',
+    ['staging.shareittoo.com.attacker.invalid'],
+    ['attacker-staging.shareittoo.com'],
+    ['https://staging.shareittoo.com'],
+    ['https://attacker.invalid/staging.shareittoo.com'],
+    ['https://staging.shareittoo.com@attacker.invalid'],
+    ['staging.shareittoo.com.'],
+    ['STAGING.SHAREITTOO.COM'],
+    [{ hostname: 'staging.shareittoo.com' }],
+    [],
+  ]) {
+    await assert.rejects(adapter.patchAuthorizedDomains({ projectId: f.binding.projectId,
+      updateMask: 'authorizedDomains', authorizedDomains, guard }), { message: 'domain_patch_binding_invalid' });
+  }
+  assert.equal(f.calls.length, 0, 'invalid domain inventories must never reach the provider');
+  await adapter.patchAuthorizedDomains({ projectId: f.binding.projectId,
+    updateMask: 'authorizedDomains', authorizedDomains: [...f.config.authorizedDomains, 'staging.shareittoo.com'], guard });
+  assert.equal(f.calls.filter((call) => call.method === 'PATCH').length, 1);
+});
+
 test('CLI defaults to provider-read-only preflight and does not require user credential or lease', async (t) => {
   const f = fixture(); const snapshot = await f.adapter().readSnapshot();
   const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sit-live-cli-')));

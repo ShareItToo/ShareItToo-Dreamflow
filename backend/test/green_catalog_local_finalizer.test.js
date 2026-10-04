@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { chmodSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, truncateSync, writeFileSync } from 'node:fs';
-import { lstat } from 'node:fs/promises';
+import { constants, chmodSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, truncateSync, writeFileSync } from 'node:fs';
+import { lstat, open } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -78,14 +78,27 @@ function writeInput(root, value, { newline = '\n', mode = 0o600 } = {}) {
   return file;
 }
 
+async function readFinalizedOutput(file, afterValidation = async () => {}) {
+  const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const metadata = await handle.stat();
+    assert.equal(metadata.isFile(), true);
+    assert.equal(metadata.nlink, 1);
+    assert.equal(metadata.mode & 0o777, 0o600);
+    await afterValidation();
+    return await handle.readFile();
+  } finally {
+    await handle.close();
+  }
+}
+
 test('local finalizer repairs JSON newline and emits canonical UTC evidence', async () => {
   const root = fixtureRoot();
   try {
     const input = writeInput(root, validDocument(), { newline: '\r\n' });
     const output = path.join(root, 'final.json');
     const result = await finalizeGreenCatalogLocal({ inputFile: input, outputFile: output, nowUtc });
-    assert.equal((await lstat(output)).mode & 0o777, 0o600);
-    const bytes = readFileSync(output);
+    const bytes = await readFinalizedOutput(output);
     assert.equal(bytes.toString('utf8').endsWith('\n'), true);
     assert.equal(bytes.toString('utf8').endsWith('\n\n'), false);
     assert.equal(bytes.includes(0x0d), false);
@@ -93,6 +106,27 @@ test('local finalizer repairs JSON newline and emits canonical UTC evidence', as
     const parsed = JSON.parse(bytes);
     assertGreenCatalogLocalDocument(parsed, { finalized: true, nowUtc });
     assert.equal(parsed.finalizedAtUtc, nowUtc);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('finalizer evidence read stays on its validated descriptor across a path replacement', async () => {
+  const root = fixtureRoot();
+  try {
+    const input = writeInput(root, validDocument());
+    const output = path.join(root, 'final.json');
+    const foreign = path.join(root, 'foreign.json');
+    writeFileSync(foreign, '{"foreign":true}\n', { mode: 0o600 });
+    const result = await finalizeGreenCatalogLocal({ inputFile: input, outputFile: output, nowUtc });
+    const bytes = await readFinalizedOutput(output, async () => {
+      rmSync(output);
+      symlinkSync(foreign, output);
+    });
+    assert.equal(createHash('sha256').update(bytes).digest('hex'), result.sha256);
+    assertGreenCatalogLocalDocument(JSON.parse(bytes), { finalized: true, nowUtc });
+    await assert.rejects(() => readFinalizedOutput(output), { code: 'ELOOP' });
+    assert.equal(readFileSync(foreign, 'utf8'), '{"foreign":true}\n');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
