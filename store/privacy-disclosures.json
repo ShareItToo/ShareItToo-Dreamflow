@@ -900,7 +900,7 @@
     },
     {
       "path": "lib/services/data_service.dart",
-      "sha256": "2eda79bda040f622d3e3b5c130fa51be1be0ce74a149c7f34812a8011ae99d48"
+      "sha256": "22b86de4f6c0303d7ca7ca07bafe42d48d640e04d4f0bca6cebae8afb6d3b3e8"
     },
     {
       "path": "lib/services/local_safety_privacy_service.dart",
@@ -972,7 +972,7 @@
     },
     {
       "path": "lib/widgets/item_details_overlay.dart",
-      "sha256": "c266bf017a6133e34627712ed70e4ceecc571f2f35174f40e179b0753f37f495"
+      "sha256": "79ead4e1fc1cf1fa9b52df88fefe71929d67d8eeac4619190dd5646e215d36a9"
     },
     {
       "path": "lib/config/private_pilot_config.dart",
@@ -1000,7 +1000,7 @@
     },
     {
       "path": "lib/screens/private_pilot_checkout_screen.dart",
-      "sha256": "5f33d87eafb3ecd57e3154bd8f609b01fe672e4346be82705baf3d6a8b665dcf"
+      "sha256": "f0c49ae5da9893ca4b7981546d8e18f80887a5c9c70a83d247eb5676172b9de4"
     },
     {
       "path": "lib/screens/v52_legal_document_screen.dart",
@@ -1024,7 +1024,7 @@
     },
     {
       "path": "lib/models/invoice.dart",
-      "sha256": "60c5e27d5a742c5570701f6a865137823e8fca01d20b76025f200bbc30226d56"
+      "sha256": "31314c78ecbbc7252fde1e1cc5c132922e6b90e1efdb24bc13c275e89045c14d"
     },
     {
       "path": "lib/services/invoices_service.dart",

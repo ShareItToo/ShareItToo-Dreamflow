@@ -37,6 +37,7 @@ import 'package:lendify/config/private_pilot_config.dart';
 import 'package:lendify/screens/private_pilot_checkout_screen.dart';
 import 'package:lendify/widgets/private_pilot_risk_notice.dart';
 import 'package:lendify/theme.dart';
+import 'package:lendify/utils/rental_calendar.dart';
 
 class ItemDetailsOverlay {
   static Future<void> show(BuildContext context,
@@ -288,7 +289,7 @@ class _ItemDetailsSheetState extends State<_ItemDetailsSheet> {
       if (widget.item.priceUnit == 'week') {
         final start =
             DateTime(picked.start.year, picked.start.month, picked.start.day);
-        final end = start.add(const Duration(days: 6));
+        final end = addRentalCalendarDays(start, 7);
         rangeWithTime = DateTimeRange(start: start, end: end);
       }
       setState(() => _selectedRange = rangeWithTime);
@@ -988,7 +989,7 @@ class _ItemDetailsPageState extends State<_ItemDetailsPage> {
       if (widget.item.priceUnit == 'week') {
         final start =
             DateTime(picked.start.year, picked.start.month, picked.start.day);
-        final end = start.add(const Duration(days: 6));
+        final end = addRentalCalendarDays(start, 7);
         rangeWithTime = DateTimeRange(start: start, end: end);
       }
       setState(() => _selectedRange = rangeWithTime);
@@ -2316,7 +2317,7 @@ class _BottomActionBarState extends State<_BottomActionBar> {
     // Rental part with discounts applied (owner-configured thresholds)
     double rentalSubtotal = 0.0;
     if (range != null) {
-      int days = range.end.difference(range.start).inDays;
+      int days = rentalCalendarDays(range.start, range.end);
       if (days <= 0) days = 1;
       final tuple =
           DataService.computeTotalWithDiscounts(item: item, days: days);

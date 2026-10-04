@@ -26,6 +26,7 @@ import 'package:lendify/config/private_pilot_config.dart';
 import 'package:lendify/config/synthetic_clone_config.dart';
 import 'package:lendify/models/category.dart';
 import 'package:lendify/models/item.dart';
+import 'package:lendify/utils/rental_calendar.dart';
 import 'package:lendify/models/user.dart';
 import 'package:lendify/models/rental_request.dart';
 import 'package:lendify/models/rental_cart.dart';
@@ -1751,7 +1752,7 @@ class DataService {
     Map<String, dynamic>? deliverySel,
   }) {
     // Days
-    final int days = (req.end.difference(req.start).inHours / 24).ceil().clamp(
+    final int days = rentalCalendarDays(req.start, req.end).clamp(
           1,
           365,
         );

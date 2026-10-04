@@ -14,6 +14,7 @@ import 'package:lendify/services/private_pilot_pricing.dart';
 import 'package:lendify/services/qa_runtime_service.dart';
 import 'package:lendify/widgets/app_popup.dart';
 import 'package:lendify/widgets/private_pilot_risk_notice.dart';
+import 'package:lendify/utils/rental_calendar.dart';
 
 class PrivatePilotCheckoutScreen extends StatefulWidget {
   final Item item;
@@ -72,9 +73,7 @@ class _PrivatePilotCheckoutScreenState
     super.dispose();
   }
 
-  int get _days => widget.range.end
-      .difference(widget.range.start)
-      .inDays
+  int get _days => rentalCalendarDays(widget.range.start, widget.range.end)
       .clamp(1, 365)
       .toInt();
 

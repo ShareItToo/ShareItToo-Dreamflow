@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:lendify/models/item.dart';
 import 'package:lendify/models/rental_request.dart';
+import 'package:lendify/utils/rental_calendar.dart';
 import 'package:lendify/models/user.dart';
 import 'package:lendify/services/backend_config.dart';
 import 'package:lendify/services/data_service.dart';
@@ -707,8 +708,7 @@ PrivatePilotQuote? _strictQuoteSnapshot(RentalRequest request) {
 }
 
 int _rentalDays(RentalRequest request) =>
-    ((request.end.difference(request.start).inHours) / 24)
-        .ceil()
+    rentalCalendarDays(request.start, request.end)
         .clamp(1, 365)
         .toInt();
 

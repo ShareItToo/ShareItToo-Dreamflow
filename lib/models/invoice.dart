@@ -1,3 +1,5 @@
+import 'package:lendify/utils/rental_calendar.dart';
+
 enum InvoiceType {
   bookingPaymentReceipt,
   sitFeeReceipt,
@@ -255,7 +257,7 @@ class InvoiceBookingDetails {
 
   int get rentalDays {
     if (startsAt == null || endsAt == null) return 1;
-    return (endsAt!.difference(startsAt!).inHours / 24).ceil().clamp(1, 365);
+    return rentalCalendarDays(startsAt!, endsAt!).clamp(1, 365);
   }
 
   factory InvoiceBookingDetails.fromJson(Map<String, dynamic> json) =>

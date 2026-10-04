@@ -7,12 +7,15 @@ import 'package:lendify/services/data_service.dart';
 import 'package:lendify/services/qa_runtime_service.dart';
 import 'package:lendify/theme.dart';
 import 'package:lendify/widgets/app_popup.dart';
+import 'package:lendify/utils/rental_calendar.dart';
 
 class SelectRentalDurationScreen extends StatefulWidget {
   final Item item;
   final DateTimeRange? initialRange;
+  @visibleForTesting
+  final DateTime? currentDate;
   const SelectRentalDurationScreen(
-      {super.key, required this.item, this.initialRange});
+      {super.key, required this.item, this.initialRange, this.currentDate});
 
   @override
   State<SelectRentalDurationScreen> createState() =>
@@ -55,22 +58,26 @@ class _SelectRentalDurationScreenState
   void initState() {
     super.initState();
     if (widget.item.isSyntheticCatalog) return;
-    final now = DateTime.now();
+    final now = widget.currentDate ?? DateTime.now();
     _firstDate = DateTime(now.year, now.month, now.day);
     _lastDate = DateTime(now.year + 1, now.month, now.day);
     _visibleMonth = DateTime(_firstDate.year, _firstDate.month, 1);
     final r = widget.initialRange;
     if (r != null) {
       _start = _strip(r.start);
-      _end = _strip(r.end);
-      _selectedDays = max(1, _end!.difference(_start!).inDays);
+      _end = widget.item.priceUnit == 'week'
+          ? addRentalCalendarDays(_start!, 7)
+          : _strip(r.end);
+      _selectedDays = max(1, rentalCalendarDays(_start!, _end!));
       _visibleMonth = DateTime(_start!.year, _start!.month, 1);
     }
     _loadUnavailable();
     DataService.clearSavedDeliverySelection(widget.item.id);
   }
 
-  DateTime _strip(DateTime d) => DateTime(d.year, d.month, d.day);
+  DateTime _strip(DateTime d) => rentalCalendarDate(d);
+  DateTime _selectionEnd(DateTime start, int days) =>
+      addRentalCalendarDays(start, widget.item.priceUnit == 'week' ? 7 : days);
   bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
@@ -127,10 +134,11 @@ class _SelectRentalDurationScreenState
     setState(() {
       if (_start == null || (_start != null && _end != null)) {
         _start = _strip(day);
-        _end = null;
-        _selectedDays = 1;
-        _overlapsBlocked = false;
-        _calendarExpanded = true;
+        _end = widget.item.priceUnit == 'week' ? _selectionEnd(_start!, 7) : null;
+        _selectedDays = widget.item.priceUnit == 'week' ? 7 : 1;
+        _overlapsBlocked =
+            _end != null && _rangeOverlapsBooked(_start!, _end!);
+        _calendarExpanded = _end == null;
       } else {
         if (day.isBefore(_start!)) {
           _start = _strip(day);
@@ -138,9 +146,9 @@ class _SelectRentalDurationScreenState
           _overlapsBlocked = false;
           _calendarExpanded = true;
         } else {
-          _end = _strip(day).add(const Duration(days: 1));
+          _end = addRentalCalendarDays(day, 1);
           _overlapsBlocked = _rangeOverlapsBooked(_start!, _end!);
-          _selectedDays = max(1, _end!.difference(_start!).inDays);
+          _selectedDays = max(1, rentalCalendarDays(_start!, _end!));
           _calendarExpanded = false;
         }
       }
@@ -166,16 +174,17 @@ class _SelectRentalDurationScreenState
     final cap = _lastDate;
     DateTime cursor = _start ?? _firstDate;
     while (!cursor.isAfter(cap)) {
-      final end = cursor.add(Duration(days: days));
-      if (end.isAfter(_lastDate.add(const Duration(days: 1)))) break;
+      final end = _selectionEnd(cursor, days);
+      if (end.isAfter(addRentalCalendarDays(_lastDate, 1))) break;
       if (!_rangeOverlapsBooked(cursor, end)) return (cursor, end);
-      cursor = cursor.add(const Duration(days: 1));
+      cursor = addRentalCalendarDays(cursor, 1);
     }
     return null;
   }
 
   List<_ThresholdChip> get _thresholdChips {
-    if (!widget.item.autoApplyDiscounts ||
+    if (widget.item.priceUnit == 'week' ||
+        !widget.item.autoApplyDiscounts ||
         widget.item.longRentalDiscounts.isEmpty) {
       return const [];
     }
@@ -196,8 +205,8 @@ class _SelectRentalDurationScreenState
 
   int get _previewDays {
     if (_start == null) return _selectedDays;
-    final end = _end ?? _start!.add(const Duration(days: 1));
-    return max(1, end.difference(_start!).inDays);
+    final end = _end ?? _selectionEnd(_start!, 1);
+    return max(1, rentalCalendarDays(_start!, end));
   }
 
   _PricePreview get _pricePreview {
@@ -228,7 +237,7 @@ class _SelectRentalDurationScreenState
     setState(() => _checking = true);
     try {
       final start = _start!;
-      final end = _end ?? _start!.add(const Duration(days: 1));
+      final end = _end ?? _selectionEnd(_start!, 1);
       final ok = await DataService.checkAvailability(
           itemId: widget.item.id, start: start, end: end);
       if (!mounted) return;
@@ -257,7 +266,7 @@ class _SelectRentalDurationScreenState
   String _dateSpanText() {
     if (_start == null || _end == null) return '';
     final s = _start!;
-    final e = _end!.subtract(const Duration(days: 1));
+    final e = addRentalCalendarDays(_end!, -1);
     if (_isSameDay(s, e)) {
       return _formatShortDate(s);
     }
@@ -268,7 +277,7 @@ class _SelectRentalDurationScreenState
 
   String _durationLabel() {
     final d = (_start != null && _end != null)
-        ? max(1, _end!.difference(_start!).inDays)
+        ? max(1, rentalCalendarDays(_start!, _end!))
         : _selectedDays;
     return d == 1 ? '1 Miettag' : '$d Miettage';
   }
@@ -432,8 +441,8 @@ class _SelectRentalDurationScreenState
                                                 _start!.year, _start!.month, 1);
                                           }
                                         } else {
-                                          _end = _start!.add(
-                                              Duration(days: _selectedDays));
+                                          _end = _selectionEnd(
+                                              _start!, _selectedDays);
                                           _overlapsBlocked =
                                               _rangeOverlapsBooked(
                                                   _start!, _end!);
@@ -1087,7 +1096,7 @@ class _DayCell extends StatelessWidget {
     final isToday = _sameDay(d, todayOnly);
     final isStart = start != null && _sameDay(d, start!);
     final isEnd =
-        end != null && _sameDay(d, end!.subtract(const Duration(days: 1)));
+        end != null && _sameDay(d, addRentalCalendarDays(end!, -1));
     final inRange =
         start != null && end != null && !d.isBefore(start!) && d.isBefore(end!);
     final selected = isStart || isEnd;
