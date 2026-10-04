@@ -1294,6 +1294,46 @@ class BackendRepository {
         additionalHeaders: <String, String>{'Idempotency-Key': idempotencyKey},
       );
 
+  static Future<Map<String, dynamic>> getMissionSupplyParticipationForOwner(
+    AuthSessionOwner owner,
+  ) =>
+      _authorizedForOwner(
+        owner: owner,
+        method: 'GET',
+        path: '/mission-supply-participation',
+      );
+
+  static Future<Map<String, dynamic>> setMissionSupplyParticipationForOwner({
+    required AuthSessionOwner owner,
+    required Map<String, dynamic> payload,
+    required String idempotencyKey,
+  }) =>
+      _authorizedForOwner(
+        owner: owner,
+        method: 'POST',
+        path: '/mission-supply-participation',
+        body: payload,
+        additionalHeaders: <String, String>{'Idempotency-Key': idempotencyKey},
+      );
+
+  static Future<Map<String, dynamic>>
+      setMissionSupplyParticipationItemForOwner({
+    required AuthSessionOwner owner,
+    required String shelfItemId,
+    required Map<String, dynamic> payload,
+    required String idempotencyKey,
+  }) =>
+          _authorizedForOwner(
+            owner: owner,
+            method: 'POST',
+            path: '/mission-supply-participation/items/'
+                '${Uri.encodeComponent(shelfItemId)}',
+            body: payload,
+            additionalHeaders: <String, String>{
+              'Idempotency-Key': idempotencyKey,
+            },
+          );
+
   static Future<List<Map<String, dynamic>>> getPrivateShelfItemsForOwner(
     AuthSessionOwner owner,
   ) async {

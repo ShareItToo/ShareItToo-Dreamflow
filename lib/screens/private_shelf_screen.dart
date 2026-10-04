@@ -6,11 +6,13 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kReleaseMode, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:lendify/models/mission_supply_participation.dart';
 import 'package:lendify/config/planner_technical_config.dart';
 import 'package:lendify/models/private_shelf_item.dart';
 import 'package:lendify/services/backend_http.dart';
 import 'package:lendify/services/listing_mutation_service.dart';
 import 'package:lendify/services/private_shelf_gateway.dart';
+import 'package:lendify/services/mission_supply_participation_gateway.dart';
 import 'package:lendify/services/shared_persistence_sync.dart';
 import 'package:lendify/widgets/tracked_dialog_route.dart';
 
@@ -36,6 +38,7 @@ class PrivateShelfScreen extends StatefulWidget {
     this.listingMutationService = const ListingMutationService(),
     this.photoPicker = pickPrivateShelfPhoto,
     this.idempotencyKeyFactory = newPrivateShelfIdempotencyKey,
+    this.participationGateway,
     this.enableForTesting = false,
   });
 
@@ -43,6 +46,7 @@ class PrivateShelfScreen extends StatefulWidget {
   final ListingMutationService listingMutationService;
   final PrivateShelfPhotoPicker photoPicker;
   final PrivateShelfIdempotencyKeyFactory idempotencyKeyFactory;
+  final MissionSupplyParticipationGateway? participationGateway;
 
   @visibleForTesting
   final bool enableForTesting;
@@ -79,10 +83,25 @@ class _PrivateShelfScreenState extends State<PrivateShelfScreen> {
   bool _messageIsError = false;
   String? _pendingCreateFingerprint;
   String? _pendingCreateKey;
+  MissionSupplyParticipationSnapshot? _participationSnapshot;
+  bool _participationLoading = false;
+  bool _participationLoadFailed = false;
+  bool _participationBusy = false;
+  String? _participationMessage;
+  bool _participationMessageIsError = false;
 
   bool get _available =>
       PlannerTechnicalConfig.available ||
       (!kReleaseMode && widget.enableForTesting);
+
+  bool get _participationAvailable =>
+      PlannerTechnicalConfig.supplyParticipationAvailable ||
+      (widget.participationGateway != null &&
+          (!kReleaseMode && widget.enableForTesting));
+
+  MissionSupplyParticipationGateway get _participationGateway =>
+      widget.participationGateway ??
+      const BackendMissionSupplyParticipationGateway();
 
   @override
   void initState() {
@@ -107,6 +126,11 @@ class _PrivateShelfScreenState extends State<PrivateShelfScreen> {
           _photoFlowActive = false;
           _pickerFlowActive = false;
           _message = null;
+          _participationSnapshot = null;
+          _participationLoading = false;
+          _participationLoadFailed = false;
+          _participationBusy = false;
+          _participationMessage = null;
         });
       }
       unawaited(_load());
@@ -170,6 +194,9 @@ class _PrivateShelfScreenState extends State<PrivateShelfScreen> {
         _message = null;
         _messageIsError = false;
       });
+      if (_participationAvailable) {
+        unawaited(_loadParticipation(context, generation));
+      }
     } catch (_) {
       if (!mounted || generation != _accountGeneration) return;
       final previousContext = _context;
@@ -198,6 +225,212 @@ class _PrivateShelfScreenState extends State<PrivateShelfScreen> {
             'Dein privates Regal konnte für das aktuell angemeldete Konto nicht sicher geladen werden.';
         _messageIsError = true;
       });
+    }
+  }
+
+  Future<void> _loadParticipation(
+    ListingMutationContext context,
+    int generation,
+  ) async {
+    if (!_participationAvailable ||
+        !mounted ||
+        generation != _accountGeneration) {
+      return;
+    }
+    setState(() {
+      _participationLoading = true;
+      _participationLoadFailed = false;
+    });
+    try {
+      final snapshot =
+          await _participationGateway.load(context.owner.authOwner);
+      if (!await _mayUpdate(context, generation)) return;
+      setState(() {
+        _participationSnapshot = snapshot;
+        _participationLoadFailed = false;
+        _participationMessage = null;
+        _participationMessageIsError = false;
+      });
+    } catch (_) {
+      if (!await _mayUpdate(context, generation)) return;
+      setState(() {
+        _participationSnapshot = null;
+        _participationLoadFailed = true;
+        _participationMessage =
+            'Die private Teilnahme konnte für dieses Konto nicht sicher geladen werden.';
+        _participationMessageIsError = true;
+      });
+    } finally {
+      if (mounted && generation == _accountGeneration) {
+        setState(() => _participationLoading = false);
+      }
+    }
+  }
+
+  Future<void> _retryParticipationLoad() async {
+    final context = _context;
+    if (context == null || _participationLoading) return;
+    await _loadParticipation(context, _accountGeneration);
+  }
+
+  Future<void> _refreshParticipationAfterConflict(
+    ListingMutationContext context,
+    int generation,
+  ) async {
+    if (!await _mayUpdate(context, generation)) return;
+    setState(() {
+      _participationLoading = true;
+      _participationLoadFailed = false;
+    });
+    try {
+      final snapshot =
+          await _participationGateway.load(context.owner.authOwner);
+      if (!await _mayUpdate(context, generation)) return;
+      setState(() {
+        _participationSnapshot = snapshot;
+        _participationMessage = 'Stand aktualisiert – bitte erneut versuchen';
+        _participationMessageIsError = true;
+      });
+    } catch (_) {
+      if (!await _mayUpdate(context, generation)) return;
+      setState(() {
+        _participationLoadFailed = true;
+        _participationMessage =
+            'Stand konnte nicht aktualisiert werden. Bitte erneut laden.';
+        _participationMessageIsError = true;
+      });
+    } finally {
+      if (mounted && generation == _accountGeneration) {
+        setState(() => _participationLoading = false);
+      }
+    }
+  }
+
+  Future<void> _setParticipationStatus() async {
+    final context = _context;
+    if (context == null || _participationBusy || !_participationAvailable) {
+      return;
+    }
+    final current = _participationSnapshot?.participation;
+    final status = current?.status == MissionSupplyParticipationStatus.active
+        ? MissionSupplyParticipationStatus.withdrawn
+        : MissionSupplyParticipationStatus.active;
+    final generation = _accountGeneration;
+    setState(() {
+      _participationBusy = true;
+      _participationMessage = null;
+    });
+    try {
+      final result = await _participationGateway.setParticipation(
+        owner: context.owner.authOwner,
+        status: status,
+        expectedRevision: current?.currentRevision ?? 0,
+        idempotencyKey: widget.idempotencyKeyFactory(),
+      );
+      if (!await _mayUpdate(context, generation)) return;
+      setState(() {
+        _participationSnapshot = result.snapshot;
+        _participationMessage = result.replayed
+            ? 'Der private Teilnahmestand wurde erneut bestätigt.'
+            : status == MissionSupplyParticipationStatus.active
+                ? 'Private Teilnahme aktiviert.'
+                : 'Private Teilnahme zurückgezogen.';
+        _participationMessageIsError = false;
+      });
+    } catch (error) {
+      if (error is BackendException && error.statusCode == 409) {
+        await _refreshParticipationAfterConflict(context, generation);
+        return;
+      }
+      if (!await _mayUpdate(context, generation)) return;
+      setState(() {
+        _participationMessage =
+            'Teilnahme nicht bestätigt. Es wurde keine öffentliche Wirkung ausgelöst.';
+        _participationMessageIsError = true;
+      });
+    } finally {
+      if (mounted && generation == _accountGeneration) {
+        setState(() => _participationBusy = false);
+      }
+    }
+  }
+
+  Future<void> _setParticipationItem(PrivateShelfItem item) async {
+    final context = _context;
+    final snapshot = _participationSnapshot;
+    final participation = snapshot?.participation;
+    if (context == null ||
+        participation == null ||
+        participation.status != MissionSupplyParticipationStatus.active ||
+        _participationBusy ||
+        !_participationAvailable ||
+        item.categoryKey != missionSupplyParticipationNeedKey) {
+      return;
+    }
+    final existing = participation.items.where(
+      (entry) =>
+          entry.availabilityStatus ==
+          MissionSupplyParticipationAvailability.confirmedAvailable,
+    );
+    MissionSupplyParticipationItem? current;
+    for (final entry in participation.items) {
+      if (entry.shelfItemId == item.shelfItemId) {
+        current = entry;
+        break;
+      }
+    }
+    final next = current?.availabilityStatus ==
+            MissionSupplyParticipationAvailability.confirmedAvailable
+        ? MissionSupplyParticipationAvailability.withdrawn
+        : MissionSupplyParticipationAvailability.confirmedAvailable;
+    if (next == MissionSupplyParticipationAvailability.confirmedAvailable &&
+        existing.any((entry) => entry.shelfItemId != item.shelfItemId)) {
+      setState(() {
+        _participationMessage =
+            'Es kann genau ein passendes Regalobjekt bestätigt werden.';
+        _participationMessageIsError = true;
+      });
+      return;
+    }
+    final generation = _accountGeneration;
+    setState(() {
+      _participationBusy = true;
+      _participationMessage = null;
+    });
+    try {
+      final result = await _participationGateway.setItem(
+        owner: context.owner.authOwner,
+        shelfItemId: item.shelfItemId,
+        availabilityStatus: next,
+        expectedParticipationRevision: participation.currentRevision,
+        expectedRevision: current?.revision ?? 0,
+        idempotencyKey: widget.idempotencyKeyFactory(),
+      );
+      if (!await _mayUpdate(context, generation)) return;
+      setState(() {
+        _participationSnapshot = result.snapshot;
+        _participationMessage = result.replayed
+            ? 'Der private Objektstand wurde erneut bestätigt.'
+            : next == MissionSupplyParticipationAvailability.confirmedAvailable
+                ? 'Ein privates Regalobjekt ist für deine private Teilnahme vorgemerkt.'
+                : 'Das private Regalobjekt ist nicht mehr vorgemerkt.';
+        _participationMessageIsError = false;
+      });
+    } catch (error) {
+      if (error is BackendException && error.statusCode == 409) {
+        await _refreshParticipationAfterConflict(context, generation);
+        return;
+      }
+      if (!await _mayUpdate(context, generation)) return;
+      setState(() {
+        _participationMessage =
+            'Objekt nicht bestätigt. Es wurde keine öffentliche Wirkung ausgelöst.';
+        _participationMessageIsError = true;
+      });
+    } finally {
+      if (mounted && generation == _accountGeneration) {
+        setState(() => _participationBusy = false);
+      }
     }
   }
 
@@ -747,6 +980,10 @@ class _PrivateShelfScreenState extends State<PrivateShelfScreen> {
                           )
                         else
                           ..._items.map(_buildItemCard),
+                        if (_participationAvailable) ...<Widget>[
+                          const SizedBox(height: 20),
+                          _buildParticipationCard(context),
+                        ],
                         if (_selected == null && _creating) ...<Widget>[
                           const SizedBox(height: 20),
                           _buildCreateForm(context),
@@ -757,6 +994,139 @@ class _PrivateShelfScreenState extends State<PrivateShelfScreen> {
                       ],
                     ),
                   ),
+      ),
+    );
+  }
+
+  Widget _buildParticipationCard(BuildContext context) {
+    final snapshot = _participationSnapshot;
+    if (_participationLoading || snapshot == null) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: _participationLoading
+              ? const Center(child: CircularProgressIndicator())
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    const Text(
+                        'Private Teilnahme konnte nicht geladen werden.'),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      key: const Key('mission-supply-participation-retry'),
+                      onPressed: _participationLoadFailed
+                          ? _retryParticipationLoad
+                          : null,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Erneut laden'),
+                    ),
+                  ],
+                ),
+        ),
+      );
+    }
+    final participation = snapshot.participation;
+    final active =
+        participation?.status == MissionSupplyParticipationStatus.active;
+    final eligibleItems = _items
+        .where((item) => item.categoryKey == missionSupplyParticipationNeedKey)
+        .toList(growable: false);
+    final confirmed = participation?.items
+            .where((item) =>
+                item.availabilityStatus ==
+                MissionSupplyParticipationAvailability.confirmedAvailable)
+            .toList(growable: false) ??
+        const <MissionSupplyParticipationItem>[];
+    return Card(
+      key: const Key('mission-supply-participation-card'),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Text('Private Teilnahme',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            const Text(
+              'Nur für deine private Teilnahme. Keine öffentliche Anzeige, Suche, Nachricht, Buchung oder Zahlung. Eine automatische Zuordnung bleibt aus.',
+            ),
+            const SizedBox(height: 12),
+            Semantics(
+              button: true,
+              label: active
+                  ? 'Private Teilnahme zurückziehen'
+                  : 'Private Teilnahme aktivieren',
+              child: OutlinedButton.icon(
+                key: const Key('mission-supply-participation-toggle'),
+                onPressed: _participationBusy ? null : _setParticipationStatus,
+                icon: Icon(active ? Icons.pause : Icons.play_arrow),
+                label: Text(active
+                    ? 'Private Teilnahme zurückziehen'
+                    : 'Private Teilnahme aktivieren'),
+              ),
+            ),
+            if (active) ...<Widget>[
+              const SizedBox(height: 12),
+              Text('Genau ein eigenes passendes Regalobjekt bestätigen:',
+                  style: Theme.of(context).textTheme.titleSmall),
+              if (eligibleItems.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    'Lege zuerst ein passendes privates Pflanzobjekt an.',
+                  ),
+                )
+              else
+                ...eligibleItems.map((item) {
+                  MissionSupplyParticipationItem? participationItem;
+                  for (final entry in participation?.items ??
+                      const <MissionSupplyParticipationItem>[]) {
+                    if (entry.shelfItemId == item.shelfItemId) {
+                      participationItem = entry;
+                      break;
+                    }
+                  }
+                  final isConfirmed = participationItem?.availabilityStatus ==
+                      MissionSupplyParticipationAvailability.confirmedAvailable;
+                  final anotherConfirmed = confirmed.any(
+                    (entry) => entry.shelfItemId != item.shelfItemId,
+                  );
+                  return ListTile(
+                    key: ValueKey('mission-supply-item-${item.shelfItemId}'),
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(item.title),
+                    subtitle: Text(isConfirmed
+                        ? 'Privat vorgemerkt · passendes Objekt'
+                        : 'Privat verfügbar · passendes Objekt'),
+                    trailing: OutlinedButton(
+                      key: ValueKey(
+                          'mission-supply-item-toggle-${item.shelfItemId}'),
+                      onPressed: _participationBusy ||
+                              (!isConfirmed && anotherConfirmed)
+                          ? null
+                          : () => _setParticipationItem(item),
+                      child: Text(isConfirmed ? 'Zurückziehen' : 'Bestätigen'),
+                    ),
+                  );
+                }),
+            ],
+            if (_participationMessage != null) ...<Widget>[
+              const SizedBox(height: 8),
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  _participationMessage!,
+                  key: const Key('mission-supply-participation-message'),
+                  style: TextStyle(
+                    color: _participationMessageIsError
+                        ? Theme.of(context).colorScheme.error
+                        : Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
