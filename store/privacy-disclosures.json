@@ -12,7 +12,7 @@
   "sourceInventory": [
     {
       "path": "backend/src/staging_password_enrollment.js",
-      "sha256": "181c56aa6f664de73aaf221de9c1b65dd0cfd3ddf70441563d785273c43bc6da"
+      "sha256": "74a175c0ad5aba07e7609c3ccc9231ef38fdbc63f15f37d1baff3ab1bee99415"
     },
     {
       "path": "backend/sql/migrations/105_staging_password_enrollment_redemptions.up.sql",
