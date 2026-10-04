@@ -796,7 +796,7 @@
     },
     {
       "path": "backend/src/mission_supply_demand_workflow.js",
-      "sha256": "95338c1a1e2073e899cb2f2b3bb57570c87f1230e55c372af4e474a782cf17aa"
+      "sha256": "a0864eb78fc97d122341b52b382cf7625c33bf74ef109f954487723fd6d8a003"
     },
     {
       "path": "backend/src/mission_supply_participation_workflow.js",

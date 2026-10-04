@@ -47,6 +47,7 @@ export const integrationTestGroups = Object.freeze({
   ]),
   missionSupplyDemand: Object.freeze([
     'backend/test/mission_supply_demand_postgres.integration.test.js',
+    'backend/test/mission_supply_synthetic_resolver_postgres.integration.test.js',
   ]),
   missionSupplyParticipation: Object.freeze([
     'backend/test/mission_supply_participation_postgres.integration.test.js',

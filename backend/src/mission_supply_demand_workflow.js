@@ -211,9 +211,18 @@ export function assertMissionSupplyDemandCreateTechnicalAccess(
 
 function validateResolvedRecipient(raw, expected) {
   const candidate = object(raw, 'mission_supply_recipient_resolution_invalid');
-  exactKeys(candidate, [
+  const baseKeys = [
     'eligibilityVersion', 'needKey', 'purpose', 'recipientOwnerId', 'shelfItemId',
-  ], 'mission_supply_recipient_resolution_fields_invalid');
+  ];
+  const boundKeys = [
+    ...baseKeys, 'participationId', 'participationRevision', 'itemRevision',
+  ];
+  const candidateKeys = Object.keys(candidate).sort();
+  const matches = (keys) => candidateKeys.length === keys.length
+    && keys.every((key) => candidateKeys.includes(key));
+  if (!matches(baseKeys) && !matches(boundKeys)) {
+    throw new MissionSupplyDemandError(400, 'mission_supply_recipient_resolution_fields_invalid');
+  }
   const normalized = Object.freeze({
     recipientOwnerId: text(
       candidate.recipientOwnerId,
@@ -235,6 +244,22 @@ function validateResolvedRecipient(raw, expected) {
       'mission_supply_recipient_resolution_invalid',
       404,
     ),
+    ...(matches(boundKeys) ? {
+      participationId: identifier(
+        candidate.participationId,
+        /^mission_supply_participation_[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
+        'mission_supply_recipient_resolution_invalid',
+        404,
+      ),
+      participationRevision: positiveRevision(
+        candidate.participationRevision,
+        'mission_supply_recipient_resolution_invalid',
+      ),
+      itemRevision: positiveRevision(
+        candidate.itemRevision,
+        'mission_supply_recipient_resolution_invalid',
+      ),
+    } : {}),
   });
   if (normalized.recipientOwnerId === expected.requesterId
       || normalized.needKey !== expected.needKey
@@ -245,10 +270,27 @@ function validateResolvedRecipient(raw, expected) {
 }
 
 async function assertResolvedRecipientEligible(client, requesterId, resolved) {
+  const bound = Object.hasOwn(resolved, 'participationId');
   const result = await client.query(
     `SELECT item.id
        FROM private_shelf_items AS item
        JOIN users AS owner ON owner.id = item.owner_id
+      ${bound ? `JOIN mission_supply_participations AS participation
+                    ON participation.id = $4
+                   AND participation.owner_id = $2
+                   AND participation.current_revision = $5
+                   AND participation.current_status = 'active'
+                 JOIN LATERAL (
+                    SELECT history.revision, history.availability_status
+                      FROM mission_supply_participation_item_revisions AS history
+                     WHERE history.participation_id = participation.id
+                       AND history.owner_id = participation.owner_id
+                       AND history.shelf_item_id = item.id
+                       AND history.need_key = $6
+                     ORDER BY history.revision DESC
+                     LIMIT 1
+                 ) AS latest ON latest.revision = $7
+                            AND latest.availability_status = 'confirmed_available'` : ''}
       WHERE item.id = $1
         AND item.owner_id = $2
         AND owner.account_status = 'active'
@@ -256,12 +298,32 @@ async function assertResolvedRecipientEligible(client, requesterId, resolved) {
         AND owner.private_use_confirmed_at IS NOT NULL
         AND owner.private_marketplace_review_status = 'clear'
         AND NOT EXISTS (
+          SELECT 1 FROM user_suspensions AS suspension
+           WHERE suspension.user_id = $2
+             AND suspension.lifted_at IS NULL
+             AND suspension.starts_at <= now()
+             AND (suspension.ends_at IS NULL OR suspension.ends_at > now())
+             AND suspension.scope IN ('account', 'booking')
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM user_suspensions AS suspension
+           WHERE suspension.user_id = $3
+             AND suspension.lifted_at IS NULL
+             AND suspension.starts_at <= now()
+             AND (suspension.ends_at IS NULL OR suspension.ends_at > now())
+             AND suspension.scope IN ('account', 'booking')
+        )
+        AND NOT EXISTS (
           SELECT 1 FROM user_blocks AS block
            WHERE block.unblocked_at IS NULL
              AND ((block.blocker_id = $2 AND block.blocked_id = $3)
                OR (block.blocker_id = $3 AND block.blocked_id = $2))
-        )`,
-    [resolved.shelfItemId, resolved.recipientOwnerId, requesterId],
+        )${bound ? ' FOR KEY SHARE OF participation, item' : ''}`,
+    bound
+      ? [resolved.shelfItemId, resolved.recipientOwnerId, requesterId,
+        resolved.participationId, resolved.participationRevision,
+        resolved.needKey, resolved.itemRevision]
+      : [resolved.shelfItemId, resolved.recipientOwnerId, requesterId],
   );
   if (result.rowCount !== 1) {
     throw new MissionSupplyDemandError(404, 'mission_supply_recipient_not_eligible');

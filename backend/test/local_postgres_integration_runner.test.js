@@ -138,7 +138,8 @@ test('runs readiness, isolated database and integration before guaranteed cleanu
     ['backend/test/private_shelf_postgres.integration.test.js'],
     ['backend/test/mission_fit_check_postgres.integration.test.js'],
     ['backend/test/mission_inventory_resolution_postgres.integration.test.js'],
-    ['backend/test/mission_supply_demand_postgres.integration.test.js'],
+    ['backend/test/mission_supply_demand_postgres.integration.test.js',
+      'backend/test/mission_supply_synthetic_resolver_postgres.integration.test.js'],
     ['backend/test/mission_supply_participation_postgres.integration.test.js'],
     ['backend/test/mission_quorum_projection_postgres.integration.test.js'],
     ['backend/test/mission_admission_postgres.integration.test.js'],
@@ -242,9 +243,10 @@ test('focused mission inventory mode selects only the P5-A PostgreSQL suite', ()
   ]);
 });
 
-test('focused mission supply demand mode selects only the P6-A PostgreSQL suite', () => {
+test('focused mission supply demand mode selects the P6-A/P6-C2 PostgreSQL suites', () => {
   assert.deepEqual(integrationTestPlan({ focusedMissionSupplyDemand: true }), [
-    ['backend/test/mission_supply_demand_postgres.integration.test.js'],
+    ['backend/test/mission_supply_demand_postgres.integration.test.js',
+      'backend/test/mission_supply_synthetic_resolver_postgres.integration.test.js'],
   ]);
 });
 

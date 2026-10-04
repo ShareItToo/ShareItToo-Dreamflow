@@ -29,9 +29,16 @@ test('P6-C1 is private, deterministic and fail-closed for unproven location/lega
   assert.match(down, /DROP TABLE mission_supply_participations/u);
 });
 
-test('P6-C1 never widens the existing injected-only P6-A create resolver', async () => {
+test('P6-C2 keeps P6-A default wiring injected-only while bound reads stay non-matching', async () => {
   const workflow = await readFile(new URL('../src/mission_supply_demand_workflow.js', import.meta.url), 'utf8');
+  const app = await readFile(new URL('../src/app.js', import.meta.url), 'utf8');
   assert.match(workflow, /recipientResolver/u);
   assert.match(workflow, /mission_supply_demand_not_enabled/u);
-  assert.doesNotMatch(workflow, /mission_supply_participation_(?:items?|revisions)/u);
+  assert.match(workflow, /participation\.current_revision = \$5/u);
+  assert.match(workflow, /latest\.revision = \$7/u);
+  assert.match(workflow, /latest\.availability_status = 'confirmed_available'/u);
+  assert.match(workflow, /FOR KEY SHARE OF participation, item/u);
+  assert.doesNotMatch(workflow, /matchingActivated\s*:\s*true/u);
+  assert.doesNotMatch(app, /mission_supply_synthetic_resolver/u);
+  assert.match(app, /resolveMissionSupplyRecipient = null/u);
 });
