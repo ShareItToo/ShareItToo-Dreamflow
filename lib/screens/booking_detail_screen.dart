@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:lendify/utils/booking_date_range.dart';
+import 'package:lendify/utils/rental_calendar.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -24,7 +26,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'dart:ui' as ui;
-import 'dart:math' as math;
 import 'package:lendify/widgets/return_handover_stepper_sheet.dart';
 import 'package:lendify/models/item.dart';
 import 'package:lendify/models/rental_request.dart';
@@ -46,6 +47,22 @@ import 'package:lendify/services/handover_code.dart';
 import 'package:lendify/config/synthetic_clone_config.dart';
 import 'package:lendify/utils/cancellation_policy_text.dart';
 import 'package:share_plus/share_plus.dart';
+
+const _bookingDatesUnavailableMessage =
+    'Buchungsdaten fehlen oder sind ungültig. Bitte lade die Buchung neu; '
+    'Übergabe und Rückgabe bleiben gesperrt.';
+
+class _BookingDatesUnavailableNotice extends StatelessWidget {
+  const _BookingDatesUnavailableNotice();
+  @override
+  Widget build(BuildContext context) => const Card(
+        child: Padding(
+          padding: EdgeInsets.all(12),
+          child: Text(_bookingDatesUnavailableMessage,
+              key: ValueKey('booking-dates-unavailable')),
+        ),
+      );
+}
 
 class BookingDetailScreen extends StatefulWidget {
   final Map<String, dynamic> booking;
@@ -318,6 +335,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
   }
 
   bool get _canCompleteBookingReturn {
+    if (resolveBookingDateRange(widget.booking) == null) return false;
     final status = ((widget.booking['status'] as String?) ?? '').trim();
     return status == 'Laufend' && _isOngoing;
   }
@@ -367,57 +385,20 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     return (raw, '');
   }
 
-  DateTime? _parseGermanDateTime(String s) {
-    // Formats like: 10. Jan (without time)
-    final months = {
-      'Jan': 1,
-      'Feb': 2,
-      'Mär': 3,
-      'Mrz': 3,
-      'Apr': 4,
-      'Mai': 5,
-      'Jun': 6,
-      'Jul': 7,
-      'Aug': 8,
-      'Sep': 9,
-      'Okt': 10,
-      'Nov': 11,
-      'Dez': 12,
-    };
-    final reg = RegExp(r'^(\d{1,2})\.\s*([A-Za-zÄÖÜäöü]{3})');
-    final m = reg.firstMatch(s);
-    if (m == null) return null;
-    final d = int.tryParse(m.group(1)!);
-    final monStr = m.group(2)!;
-    if (d == null) return null;
-    // Normalize month token (e.g., Mär -> Mär)
-    String key = monStr.substring(0, 1).toUpperCase() +
-        monStr.substring(1, math.min(monStr.length, 3)).toLowerCase();
-    if (key == 'Mä' || key == 'Mär') key = 'Mär';
-    final month = months[key];
-    if (month == null) return null;
-    final now = DateTime.now();
-    // Assume current year, time defaults to 00:00
-    return DateTime(now.year, month, d);
+  (DateTime?, DateTime?) _parseDateRange() =>
+      resolveBookingDateRange(widget.booking) ?? (null, null);
+
+  void _showUnavailableBookingDates() {
+    if (!mounted) return;
+    AppPopup.toast(context,
+        icon: Icons.error_outline,
+        title: _bookingDatesUnavailableMessage);
   }
 
-  (DateTime?, DateTime?) _parseDateRange() {
-    final (startText, endText) = _splitDatesText();
-    final start = _parseGermanDateTime(startText);
-    final end = _parseGermanDateTime(endText);
-    if (start == null || end == null) return (start, end);
-    if (end.isBefore(start)) {
-      // If end fell earlier within the same year, assume it crosses into next year
-      return (start, DateTime(start.year + 1, end.month, end.day));
-    }
-    return (start, end);
-  }
-
-  String _formatDurationCompact(Duration d) {
-    final days = d.inDays;
-    if (d.isNegative) {
-      final ad = d.abs();
-      final aDays = ad.inDays;
+  String _formatDurationCompact(DateTime due, DateTime now) {
+    final days = rentalCalendarDays(now.toLocal(), due.toLocal());
+    if (due.isBefore(now)) {
+      final aDays = days.abs();
       if (aDays == 0) return 'Überfällig seit Heute';
       if (aDays == 1) return 'Überfällig seit 1 Tag';
       return 'Überfällig seit $aDays Tagen';
@@ -427,8 +408,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     return 'Rückgabe in $days Tagen';
   }
 
-  String _formatDaysHours(Duration d) {
-    final days = d.inDays;
+  String _formatDaysHours(DateTime start, DateTime end) {
+    final days = rentalCalendarDays(start.toLocal(), end.toLocal());
     if (days == 0) return '1 Tag';
     if (days == 1) return '1 Tag';
     return '$days Tage';
@@ -662,6 +643,10 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
   }
 
   Future<void> _manageBookingTime({required bool isReturn}) async {
+    if (resolveBookingDateRange(widget.booking) == null) {
+      _showUnavailableBookingDates();
+      return;
+    }
     final requestId = (widget.booking['requestId'] as String?)?.trim() ?? '';
     if (requestId.isEmpty || !mounted) return;
     final current = await DataService.getCurrentUser();
@@ -741,10 +726,12 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     }
     if (!mounted) return;
     final (start, end) = _parseDateRange();
+    if (start == null || end == null) {
+      _showUnavailableBookingDates();
+      return;
+    }
     final initial = request == null
-        ? (isReturn
-            ? (end ?? DateTime.now().add(const Duration(days: 1)))
-            : (start ?? DateTime.now().add(const Duration(hours: 2))))
+        ? (isReturn ? end : start).toLocal()
         : (isReturn ? request.end : request.start).toLocal();
     final picked = await SitGlassTimePicker.show(
       context,
@@ -790,6 +777,10 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
   }
 
   Future<bool> _timeConfirmedForStart({required bool isReturn}) async {
+    if (resolveBookingDateRange(widget.booking) == null) {
+      _showUnavailableBookingDates();
+      return false;
+    }
     final requestId = (widget.booking['requestId'] as String?)?.trim() ?? '';
     if (requestId.isEmpty) return true;
     final request = await DataService.getRentalRequestById(requestId);
@@ -1348,7 +1339,6 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     final (start, end) = _parseDateRange();
     final now = DateTime.now();
     final due = end;
-    final diff = (due != null) ? due.difference(now) : const Duration(hours: 0);
     final isOverdue = due != null && now.isAfter(due);
 
     final title = (widget.booking['title'] as String?) ?? '-';
@@ -1358,6 +1348,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        if (start == null || end == null)
+          const _BookingDatesUnavailableNotice(),
         if (widget.booking['workflowStatus'] == 'withdrawalReturnRequired') ...[
           Card(
             color: theme.colorScheme.errorContainer,
@@ -1535,7 +1527,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            _formatDurationCompact(diff),
+                            due == null ? 'Rückgabedatum nicht verfügbar'
+                                : _formatDurationCompact(due, now),
                             style: TextStyle(
                               color: isOverdue
                                   ? const Color(0xFFF43F5E)
@@ -1576,7 +1569,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
           onViewListing: _viewListing,
           datesText: (widget.booking['dates'] as String?) ?? '-',
           durationText: (start != null && end != null)
-              ? _formatDaysHours(end.difference(start))
+              ? _formatDaysHours(start, end)
               : null,
           onAddPickupToCalendar: null, // Calendar links removed per request
           onAddReturnToCalendar: null,
@@ -1716,12 +1709,17 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
               if (_simulationOnly) {
                 return const _SimulationPaymentNotice();
               }
+              if ((start == null || end == null) && _boundPriceSnapshot == null) {
+                return const Text('Preisaufschlüsselung nicht verfügbar.');
+              }
               final daysLocal = (start != null && end != null)
-                  ? end.difference(start).inDays.clamp(1, 365)
+                  ? rentalCalendarDays(start.toLocal(), end.toLocal()).clamp(1, 365)
                   : 1;
               final boundPrice = _boundPriceSnapshot;
               final providedBasePerDay =
-                  (widget.booking['basePerDay'] as num?)?.toDouble();
+                  start != null && end != null
+                      ? (widget.booking['basePerDay'] as num?)?.toDouble()
+                      : null;
               final discountAmountProvided = _discountsFromBooking();
               final baseTotal = boundPrice?.baseRental ??
                   (providedBasePerDay ?? 0.0) * daysLocal;
@@ -2238,10 +2236,12 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     final pricePaidStr = (widget.booking['pricePaid'] as String?) ?? '';
     final totalPaid = boundPrice?.total ?? _parseEuro(pricePaidStr);
     final days = (start != null && end != null)
-        ? end.difference(start).inDays.clamp(1, 365)
+        ? rentalCalendarDays(start.toLocal(), end.toLocal()).clamp(1, 365)
         : 1;
     final providedBasePerDay =
-        (widget.booking['basePerDay'] as num?)?.toDouble();
+        start != null && end != null
+            ? (widget.booking['basePerDay'] as num?)?.toDouble()
+            : null;
     final discountAmountProvided = _discountsFromBooking();
     double baseTotal;
     double discountAmount;
@@ -2266,6 +2266,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        if (start == null || end == null)
+          const _BookingDatesUnavailableNotice(),
         if (_photos.isNotEmpty)
           ClipRRect(
             borderRadius: BorderRadius.circular(16),
@@ -2381,9 +2383,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                       child: Builder(
                         builder: (context) {
                           final now = DateTime.now();
-                          final diff = start.difference(now);
                           final text = _formatPickupCountdown(
-                            diff,
+                            start, now,
                             modeLabel: 'Abholung',
                           );
                           return Container(
@@ -2461,7 +2462,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
           onViewListing: _viewListing,
           datesText: (widget.booking['dates'] as String?) ?? '-',
           durationText: (start != null && end != null)
-              ? _formatDaysHours(end.difference(start))
+              ? _formatDaysHours(start, end)
               : null,
           onAddPickupToCalendar: null, // Calendar links removed per request
           onAddReturnToCalendar: null,
@@ -2635,6 +2636,9 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
             builder: (context) {
               if (_simulationOnly) {
                 return const _SimulationPaymentNotice();
+              }
+              if ((start == null || end == null) && boundPrice == null) {
+                return const Text('Preisaufschlüsselung nicht verfügbar.');
               }
               final totalRenter = boundPrice?.total ??
                   (rentalSubtotal + fee).clamp(0.0, double.infinity);
@@ -3171,27 +3175,18 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     return (widget.booking['requestId'] ?? '').toString().trim();
   }
 
-  DateTime _handoverCodeStart() {
-    DateTime? start = DateTime.tryParse(
-      (widget.booking['startIso'] as String?) ?? '',
-    );
-    if (start == null) {
-      final (s, _) = _CompletionSummaryCard._parseStaticDateRange(
-        widget.booking,
-      );
-      start = s;
-    }
-    return start ?? DateTime.now();
-  }
+  DateTime? _handoverCodeStart() => resolveBookingDateRange(widget.booking)?.$1;
 
   String _confirmationCode({
     required String segment,
     required String presenterRole,
   }) {
+    final start = _handoverCodeStart();
+    if (start == null) return '';
     final title = (widget.booking['title'] as String?) ?? '';
     return HandoverCodeService.codeForTitleAndStart(
       title: title,
-      start: _handoverCodeStart(),
+      start: start,
       bookingId: _computeBookingId(),
       segment: segment,
       presenterRole: presenterRole,
@@ -3204,6 +3199,10 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       );
 
   Future<Map<String, dynamic>?> _issueSecureChallenge(String segment) async {
+    if (resolveBookingDateRange(widget.booking) == null) {
+      _showUnavailableBookingDates();
+      return null;
+    }
     final requestId = (widget.booking['requestId'] as String?)?.trim();
     if (requestId == null || requestId.isEmpty) return null;
     try {
@@ -3228,6 +3227,10 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     String? qrPayload,
     String? code,
   }) async {
+    if (resolveBookingDateRange(widget.booking) == null) {
+      _showUnavailableBookingDates();
+      return false;
+    }
     final requestId = (widget.booking['requestId'] as String?)?.trim();
     if (requestId == null || requestId.isEmpty) return false;
     try {
@@ -3275,12 +3278,14 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     return widget.viewerIsOwner;
   }
 
-  String _formatPickupCountdown(Duration d, {String modeLabel = 'Abholung'}) {
-    if (d.isNegative || d.inDays == 0) {
+  String _formatPickupCountdown(DateTime pickup, DateTime now,
+      {String modeLabel = 'Abholung'}) {
+    final days = rentalCalendarDays(now.toLocal(), pickup.toLocal());
+    if (days <= 0) {
       return '$modeLabel Heute';
     }
-    if (d.inDays == 1) return '$modeLabel in 1 Tag';
-    return '$modeLabel in ${d.inDays} Tagen';
+    if (days == 1) return '$modeLabel in 1 Tag';
+    return '$modeLabel in $days Tagen';
   }
 
   void _showQrOverlay(BuildContext context, String data) {
@@ -3355,9 +3360,11 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     if (requestId == null || requestId.isEmpty) return;
     // Build lightweight Item and RentalRequest to drive the stepper
     final (start, end) = _parseDateRange();
-    final days = (start != null && end != null)
-        ? math.max(1, end.difference(start).inDays)
-        : 1;
+    if (start == null || end == null) {
+      _showUnavailableBookingDates();
+      return;
+    }
+    final days = rentalCalendarDays(start.toLocal(), end.toLocal()).clamp(1, 365);
     final totalPaid = _parseEuro(
       (widget.booking['pricePaid'] as String?) ?? '0',
     );
@@ -3399,8 +3406,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       itemId: item.id,
       ownerId: item.ownerId,
       renterId: (widget.booking['listerId'] as String?) ?? 'renter_local',
-      start: start ?? DateTime.now().subtract(const Duration(days: 1)),
-      end: end ?? DateTime.now().add(const Duration(days: 1)),
+      start: start,
+      end: end,
       status: 'running',
       message: null,
     );
@@ -3517,9 +3524,11 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     final requestId = (widget.booking['requestId'] as String?)?.trim();
     if (requestId == null || requestId.isEmpty) return;
     final (start, end) = _parseDateRange();
-    final days = (start != null && end != null)
-        ? math.max(1, end.difference(start).inDays)
-        : 1;
+    if (start == null || end == null) {
+      _showUnavailableBookingDates();
+      return;
+    }
+    final days = rentalCalendarDays(start.toLocal(), end.toLocal()).clamp(1, 365);
     final totalPaid = _parseEuro(
       (widget.booking['pricePaid'] as String?) ?? '0',
     );
@@ -3561,8 +3570,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       itemId: item.id,
       ownerId: item.ownerId,
       renterId: (widget.booking['listerId'] as String?) ?? 'renter_local',
-      start: start ?? DateTime.now().add(const Duration(hours: 1)),
-      end: end ?? DateTime.now().add(const Duration(days: 1)),
+      start: start,
+      end: end,
       status: 'accepted',
       message: null,
     );
@@ -5035,59 +5044,10 @@ class _CompletionSummaryCard extends StatelessWidget {
 
   static (DateTime?, DateTime?) _parseStaticDateRange(
     Map<String, dynamic> booking,
-  ) {
-    String raw = (booking['dates'] as String?) ?? '';
-    DateTime? parse(String s) {
-      final months = {
-        'Jan': 1,
-        'Feb': 2,
-        'Mär': 3,
-        'Mrz': 3,
-        'Apr': 4,
-        'Mai': 5,
-        'Jun': 6,
-        'Jul': 7,
-        'Aug': 8,
-        'Sep': 9,
-        'Okt': 10,
-        'Nov': 11,
-        'Dez': 12,
-      };
-      final reg = RegExp(r'^(\d{1,2})\.\s*([A-Za-zÄÖÜäöü]{3})');
-      final m = reg.firstMatch(s.trim());
-      if (m == null) return null;
-      final d = int.tryParse(m.group(1)!);
-      String key = m.group(2)!;
-      if (d == null) return null;
-      key = key.substring(0, 1).toUpperCase() +
-          key.substring(1, math.min(key.length, 3)).toLowerCase();
-      if (key == 'Mä' || key == 'Mär') key = 'Mär';
-      final month = months[key];
-      if (month == null) return null;
-      final now = DateTime.now();
-      return DateTime(now.year, month, d);
-    }
+  ) => resolveBookingDateRange(booking) ?? (null, null);
 
-    DateTime? s;
-    DateTime? e;
-    if (raw.contains('–')) {
-      final parts = raw.split('–');
-      s = parse(parts.first);
-      e = parse(parts.length > 1 ? parts[1] : '');
-    } else if (raw.contains('-')) {
-      final parts = raw.split('-');
-      s = parse(parts.first);
-      e = parse(parts.length > 1 ? parts[1] : '');
-    } else {
-      s = parse(raw);
-    }
-    if (s != null && e != null && e.isBefore(s)) {
-      e = DateTime(s.year + 1, e.month, e.day);
-    }
-    return (s, e);
-  }
-
-  static String _fmtDate(DateTime dt) {
+  static String _fmtDate(DateTime instant) {
+    final dt = instant.toLocal();
     final months = [
       'Jan',
       'Feb',
