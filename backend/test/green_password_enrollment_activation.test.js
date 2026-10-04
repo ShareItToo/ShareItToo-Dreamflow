@@ -669,6 +669,33 @@ test('source retains no static SMTP password assignment literal', async () => {
   assert.doesNotMatch(implementation, /canonicalDigest\(createPlan\.args\)/u);
   assert.doesNotMatch(implementation,
     /greenPasswordEnrollmentMountsSha256\(expectedMounts\)/u);
+  const healthBinding = implementation.slice(
+    implementation.indexOf('export function greenPasswordEnrollmentHealthSha256'),
+    implementation.indexOf('\nfunction absolutePath',
+      implementation.indexOf('export function greenPasswordEnrollmentHealthSha256')),
+  );
+  assert.match(healthBinding, /const enrollmentState =/u);
+  assert.doesNotMatch(healthBinding.slice(healthBinding.indexOf('return canonicalDigest')),
+    /passwordEnrollmentEnabled/u);
+});
+
+test('health integrity binds both validated enrollment states without hashing credential material', () => {
+  const base = {
+    commit: sourceCommit, deploymentEnvironment: 'test', firebaseAuthEnabled: true,
+    firebasePhoneEnabled: false, googleRegistrationEnabled: false, liveStatus: 200,
+    mailStatus: 'ok', paymentTransport: 'memory', readyStatus: 200, stripeLivemode: false,
+  };
+  const disabled = greenPasswordEnrollmentHealthSha256({
+    ...base, passwordEnrollmentEnabled: false,
+  });
+  const enabled = greenPasswordEnrollmentHealthSha256({
+    ...base, passwordEnrollmentEnabled: true,
+  });
+  assert.match(disabled, /^[a-f0-9]{64}$/u);
+  assert.notEqual(enabled, disabled);
+  assert.throws(() => greenPasswordEnrollmentHealthSha256({
+    ...base, passwordEnrollmentEnabled: 'true',
+  }), /green_password_enrollment_activation_denied/u);
 });
 
 test('evidence close failure rolls back; lock close after durable evidence is distinct', async (t) => {

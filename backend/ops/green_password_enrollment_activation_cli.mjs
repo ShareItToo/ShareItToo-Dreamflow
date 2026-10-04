@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   GreenPasswordEnrollmentActivationError,
-  assertGreenPasswordEnrollmentActivationManifest,
+  assertGreenEnrollmentActivationManifest,
   greenPasswordEnrollmentHealthSha256,
   readProtectedActivationFile,
   runGreenPasswordEnrollmentActivation,
@@ -357,7 +357,7 @@ export function createGreenPasswordEnrollmentCommandAdapter({
   monotonicNow = () => performance.now(),
   wait = (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)),
 } = {}) {
-  const target = assertGreenPasswordEnrollmentActivationManifest(manifest);
+  const target = assertGreenEnrollmentActivationManifest(manifest);
   if (!Number.isSafeInteger(activationNow) || typeof monotonicNow !== 'function'
       || typeof wait !== 'function') deny();
   const run = commandRunner(command, cwd);
@@ -715,7 +715,7 @@ function readManifest(manifestPath, { fileSystem, operatorUid, operatorGid }) {
     const text = new TextDecoder('utf-8', { fatal: true }).decode(opened.bytes);
     const manifest = JSON.parse(text);
     if (text !== `${JSON.stringify(manifest)}\n`) deny();
-    return assertGreenPasswordEnrollmentActivationManifest(manifest);
+    return assertGreenEnrollmentActivationManifest(manifest);
   } catch (error) {
     if (error instanceof GreenPasswordEnrollmentActivationCliError) throw error;
     deny();

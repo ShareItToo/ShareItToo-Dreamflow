@@ -164,8 +164,24 @@ export function greenPasswordEnrollmentHealthSha256(health) {
     'paymentTransport', 'readyStatus', 'stripeLivemode',
   ])
       || ![health.liveStatus, health.readyStatus].every(Number.isSafeInteger)
-      || typeof health.mailStatus !== 'string') deny();
-  return canonicalDigest(health);
+      || typeof health.mailStatus !== 'string'
+      || typeof health.passwordEnrollmentEnabled !== 'boolean') deny();
+  // This is an operational state bit, not credential material. Validate it
+  // independently, then hash only the closed semantic state projection.
+  const enrollmentState = health.passwordEnrollmentEnabled === true ? 'enabled' : 'disabled';
+  return canonicalDigest({
+    commit: health.commit,
+    deploymentEnvironment: health.deploymentEnvironment,
+    enrollmentState,
+    firebaseAuthEnabled: health.firebaseAuthEnabled,
+    firebasePhoneEnabled: health.firebasePhoneEnabled,
+    googleRegistrationEnabled: health.googleRegistrationEnabled,
+    liveStatus: health.liveStatus,
+    mailStatus: health.mailStatus,
+    paymentTransport: health.paymentTransport,
+    readyStatus: health.readyStatus,
+    stripeLivemode: health.stripeLivemode,
+  });
 }
 
 function absolutePath(value) {
@@ -578,7 +594,7 @@ export function activationEnvironment({
   });
 }
 
-export function assertGreenPasswordEnrollmentActivationManifest(manifest) {
+export function assertGreenEnrollmentActivationManifest(manifest) {
   if (!exactKeys(manifest, manifestKeys) || manifest.schemaVersion !== 1
       || manifest.operation !== 'activate-green-password-enrollment'
       || !commitPattern.test(manifest.sourceCommit) || !versionPattern.test(manifest.sourceVersion)
@@ -613,6 +629,13 @@ export function assertGreenPasswordEnrollmentActivationManifest(manifest) {
       || !/^[a-f0-9]{64}$/u.test(manifest.networkId)
       || !/^[a-f0-9]{64}$/u.test(manifest.providerNetworkId)) deny();
   return Object.freeze({ ...manifest });
+}
+
+// Backward-compatible public name. Internal integrity paths use the
+// credential-free contract name above so a validated manifest is not confused
+// with password material.
+export function assertGreenPasswordEnrollmentActivationManifest(manifest) {
+  return assertGreenEnrollmentActivationManifest(manifest);
 }
 
 function readProtectedActivationEnvironment(target, {
@@ -676,7 +699,7 @@ function immutableImageReference(image, digest) {
 }
 
 export function assertGreenPasswordEnrollmentCurrentState(state, manifest) {
-  const target = assertGreenPasswordEnrollmentActivationManifest(manifest);
+  const target = assertGreenEnrollmentActivationManifest(manifest);
   if (!state || typeof state !== 'object') deny();
   const {
     container, image, targetImage, targetRuntimeIdentity, targetRegistryProbe,
@@ -779,7 +802,7 @@ function normalizedHostMount(mount) {
 }
 
 export function buildGreenPasswordEnrollmentCreatePlan(manifest, currentContainer) {
-  const target = assertGreenPasswordEnrollmentActivationManifest(manifest);
+  const target = assertGreenEnrollmentActivationManifest(manifest);
   if (!currentContainer || currentContainer.Id !== target.currentContainerId
       || !Array.isArray(currentContainer.Mounts) || currentContainer.Mounts.length !== 3) deny();
   const mounts = [
@@ -884,7 +907,7 @@ function validateReadinessEvidence(evidence, expectedDigest, target, prepared, n
 export function assertGreenPasswordEnrollmentCandidateState(
   state, manifest, currentState, proposedEnvironment, prepared, now,
 ) {
-  const target = assertGreenPasswordEnrollmentActivationManifest(manifest);
+  const target = assertGreenEnrollmentActivationManifest(manifest);
   if (!state || typeof state !== 'object'
       || state.image?.Id !== target.targetImageId
       || !state.image?.RepoDigests?.includes(immutableImageReference(
@@ -1011,7 +1034,7 @@ export async function runGreenPasswordEnrollmentActivation({
   let proposedEnvironmentForRollback;
   try {
     if (typeof execute !== 'boolean' || !currentState || typeof currentState !== 'object') deny();
-    const inputTarget = assertGreenPasswordEnrollmentActivationManifest(manifest);
+    const inputTarget = assertGreenEnrollmentActivationManifest(manifest);
     const proposedEnvironment = readProtectedActivationEnvironment(inputTarget, {
       fileSystem, operatorUid, operatorGid, now,
     });

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildReplacementCreateArgs } from './activate_staging_google_auth.mjs';
@@ -10,7 +11,7 @@ import { GREEN_ENROLLMENT_QUEUE_AGGREGATE_SQL,
   GREEN_PASSWORD_ENROLLMENT_REPOSITORY_ROOT } from './green_password_enrollment_activation_cli.mjs';
 import { absolute, canonical, commandRunner, commitPattern, containerEnvironment, deny,
   digestPattern, environment, exact, idPattern, inspect, privateBytes, privateJson,
-  publishPrivateJson, sha256, sourcePreflight } from './green_enrollment_guarded_io.mjs';
+  publishPrivateJson, sourcePreflight } from './green_enrollment_guarded_io.mjs';
 
 export const GREEN_ENROLLMENT_PRETRANSITION_CONFIRMATION = 'APPLY-W12-EXPLICIT-FALSE';
 export const GREEN_ENROLLMENT_PREPARATION_CONFIRMATION = 'WRITE-W12-PRETRANSITION-MANIFEST';
@@ -28,6 +29,8 @@ const keys = ['schemaVersion', 'operation', 'operationId', 'sourceCommit', 'curr
   'environmentScryptDigest', 'lockFile', 'evidenceFile'];
 const queueKeys = ['dead', 'pending', 'processing', 'retry', 'sentInApp', 'sentPush',
   'suppressedEmail', 'suppressedPush'];
+const pretransitionManifestIntegritySha256 = (manifest) => crypto.createHash('sha256')
+  .update(`${JSON.stringify(manifest)}\n`).digest('hex');
 
 export const GREEN_ENROLLMENT_PRETRANSITION_PROBE = String.raw`
 import { pool } from './src/db.js';
@@ -188,7 +191,7 @@ export async function prepareGreenEnrollmentPretransition({ spec, execute = fals
     // Exercise the same preflight the execution entrypoint consumes. A plan
     // cannot be published from stale or incomplete externally shaped evidence.
     await runGreenEnrollmentPretransition({ manifest, command, cwd });
-    const manifestSha256 = sha256(`${JSON.stringify(manifest)}\n`);
+    const manifestSha256 = pretransitionManifestIntegritySha256(manifest);
     if (execute) publishPrivateJson(manifestFile, manifest,
       publicationFileSystem ? { fileSystem: publicationFileSystem } : undefined);
     return { status: execute ? 'created' : 'dry-run', manifestSha256,

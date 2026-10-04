@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { deriveProtectedEnvironmentScryptDigest,
-  assertGreenPasswordEnrollmentActivationManifest } from '../ops/green_password_enrollment_activation.mjs';
+  assertGreenEnrollmentActivationManifest } from '../ops/green_password_enrollment_activation.mjs';
 import { greenPasswordEnrollmentCommandRequest,
   GREEN_PASSWORD_ENROLLMENT_REPOSITORY_ROOT } from '../ops/green_password_enrollment_activation_cli.mjs';
 import { buildGreenEnrollmentPretransitionManifest, runGreenEnrollmentPretransition,
@@ -300,9 +300,17 @@ test('publication is exclusive, private, and rejects symlink parents', (t) => {
   publishPrivateJson(output, { status: 'safe' });
   assert.equal(fs.statSync(output).mode & 0o777, 0o600);
   assert.throws(() => publishPrivateJson(output, { status: 'overwrite' }));
-  assert.deepEqual(privateJson(output).value, { status: 'safe' });
+  assert.deepEqual(privateJson(output), { value: { status: 'safe' } });
   fs.symlinkSync(state.root, path.join(state.root, 'symlink'));
   assert.throws(() => publishPrivateJson(path.join(state.root, 'symlink', 'bad.json'), {}));
+});
+
+test('guarded private I/O never fast-hashes arbitrary protected bytes', () => {
+  const source = fs.readFileSync(
+    new URL('../ops/green_enrollment_guarded_io.mjs', import.meta.url), 'utf8',
+  );
+  assert.doesNotMatch(source, /createHash\(['"]sha256['"]\)/u);
+  assert.doesNotMatch(source, /return\s*\{\s*value,\s*sha256/u);
 });
 
 function preparationSpec(state) {
@@ -320,7 +328,7 @@ test('preparation CLI defaults to read-only, then publishes consumer-compatible 
   const result = await runGreenEnrollmentPretransitionCli(['--prepare-spec', specFile, '--execute',
     '--confirm-execute', GREEN_ENROLLMENT_PREPARATION_CONFIRMATION], { command: h.command });
   assert.equal(result.status, 'created');
-  assert.equal(privateJson(spec.manifestFile).sha256, result.manifestSha256);
+  assert.equal(hash(fs.readFileSync(spec.manifestFile)), result.manifestSha256);
   assert.deepEqual(privateJson(spec.manifestFile).value, state.manifest);
   assert.equal(fs.statSync(spec.manifestFile).mode & 0o777, 0o600);
   assert.equal(h.mutations.length, 0);
@@ -433,15 +441,44 @@ test('real producer output passes unchanged activation manifest validator and bi
     execute: true, confirmation: GREEN_ENROLLMENT_MANIFEST_CONFIRMATION, command: h.command, now });
   assert.equal(result.status, 'created');
   const manifest = privateJson(state.spec.manifestFile);
-  assertGreenPasswordEnrollmentActivationManifest(manifest.value);
+  assertGreenEnrollmentActivationManifest(manifest.value);
   const bindings = privateJson(state.spec.bindingsFile).value;
-  assert.equal(bindings.manifestSha256, manifest.sha256);
+  assert.equal(bindings.manifestSha256, hash(fs.readFileSync(state.spec.manifestFile)));
   assert.equal(bindings.manifestSha256, result.manifestSha256);
   assert.deepEqual(bindings.queue, queue);
-  assert.equal(bindings.artifacts.request.sha256, privateJson(state.spec.requestFile).sha256);
+  assert.equal(bindings.artifacts.request.sha256, hash(fs.readFileSync(state.spec.requestFile)));
+  assert.equal(bindings.artifacts.allowlist.sha256,
+    hash(fs.readFileSync(state.spec.allowlistFile)));
+  assert.equal(bindings.artifacts.runtimeIdentity.sha256,
+    hash(fs.readFileSync(state.spec.runtimeIdentityFile)));
   assert.deepEqual(bindings.activationArguments, result.activationArguments);
   assert.ok(!JSON.stringify(bindings).includes('new@example.test'));
   assert.equal(h.mutations.length, 0);
+});
+test('producer rejects byte-different same-value swaps of every bound JSON artifact', async (t) => {
+  for (const artifact of ['request', 'allowlist', 'runtimeIdentity']) {
+    const state = manifestFixture(t); const h = harness(state); let swapped = false;
+    const file = state.spec[`${artifact}File`];
+    const command = async (executable, args, options) => {
+      const result = await h.command(executable, args, options);
+      if (!swapped && executable === 'docker' && args[0] === 'run') {
+        swapped = true;
+        const value = privateJson(file).value;
+        const reordered = Object.fromEntries(Object.entries(value).reverse());
+        assert.deepEqual(reordered, value);
+        assert.notDeepEqual(jsonBytes(reordered), jsonBytes(value));
+        fs.writeFileSync(file, jsonBytes(reordered), { mode: 0o600 });
+      }
+      return result;
+    };
+    await assert.rejects(buildGreenEnrollmentActivationManifest({ spec: state.spec,
+      execute: true, confirmation: GREEN_ENROLLMENT_MANIFEST_CONFIRMATION, command, now }),
+    /green_enrollment_preparation_denied/u, artifact);
+    assert.equal(swapped, true, artifact);
+    assert.equal(fs.existsSync(state.spec.manifestFile), false, artifact);
+    assert.equal(fs.existsSync(state.spec.bindingsFile), false, artifact);
+    assert.equal(h.mutations.length, 0, artifact);
+  }
 });
 test('producer defaults to dry run without publishing manifest', async (t) => {
   const state = manifestFixture(t); const h = harness(state);

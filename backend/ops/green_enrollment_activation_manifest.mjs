@@ -1,10 +1,11 @@
 #!/usr/bin/env node
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readProtectedEnrollmentRegistry } from '../src/staging_password_enrollment.js';
 import { GREEN_ENROLLMENT_EXACT_TTL_SECONDS } from './build_green_enrollment_candidate_inputs.mjs';
 import {
-  activationEnvironment, assertGreenPasswordEnrollmentActivationManifest,
+  activationEnvironment, assertGreenEnrollmentActivationManifest,
   assertGreenPasswordEnrollmentCurrentState, deriveProtectedEnvironmentScryptDigest,
   greenPasswordEnrollmentContainerSha256, greenPasswordEnrollmentHealthSha256,
   greenPasswordEnrollmentMountsSha256, greenPasswordEnrollmentQueueSha256,
@@ -14,7 +15,7 @@ import { createGreenPasswordEnrollmentCommandAdapter,
   GREEN_PASSWORD_ENROLLMENT_REPOSITORY_ROOT } from './green_password_enrollment_activation_cli.mjs';
 import { GREEN_ENROLLMENT_PRETRANSITION_PROBE } from './green_enrollment_pretransition.mjs';
 import { absolute, canonical, commandRunner, containerEnvironment, deny, environment, exact,
-  inspect, privateBytes, privateJson, publishPrivateJsonSet, sha256, sourcePreflight,
+  inspect, privateBytes, privateJson, publishPrivateJsonSet, sourcePreflight,
 } from './green_enrollment_guarded_io.mjs';
 
 export const GREEN_ENROLLMENT_MANIFEST_CONFIRMATION = 'WRITE-W12-ACTIVATION-MANIFEST';
@@ -24,6 +25,14 @@ const specKeys = ['sourceCommit', 'sourceVersion', 'currentContainerId', 'curren
   'environmentScryptDigest', 'registryFile', 'registryUid', 'registryGid', 'registrySha256',
   'backupFile', 'evidenceFile', 'lockFile', 'requestFile', 'allowlistFile', 'runtimeIdentityFile',
   'manifestFile', 'bindingsFile'];
+
+// These inputs are validated protocol records or already one-way digests. Raw
+// environment secrets are bound separately with scrypt and never enter here.
+const enrollmentIntegritySha256 = (bytes) => crypto.createHash('sha256')
+  .update(bytes).digest('hex');
+const canonicalRecordIntegritySha256 = (value) => enrollmentIntegritySha256(
+  `${JSON.stringify(value)}\n`,
+);
 
 function healthFromProbe(container, probe) {
   const env = containerEnvironment(container);
@@ -77,10 +86,12 @@ export async function buildGreenEnrollmentActivationManifest({ spec, execute = f
     const registry = readProtectedEnrollmentRegistry(spec.registryFile, { ownerUid: spec.registryUid });
     const registryBytes = privateBytes(spec.registryFile, { uid: spec.registryUid, gid: spec.registryGid });
     try {
-      if (sha256(registryBytes) !== spec.registrySha256
+      if (enrollmentIntegritySha256(registryBytes) !== spec.registrySha256
           || !registryBytes.equals(Buffer.from(`${JSON.stringify(registry)}\n`))
           || registry.length !== 1 || registry[0].userId !== request.value.userId
-          || registry[0].emailDigest !== sha256(`${registry[0].tokenDigest}\n${request.value.email}`)
+          || registry[0].emailDigest !== enrollmentIntegritySha256(
+            `${registry[0].tokenDigest}\n${request.value.email}`,
+          )
           || Date.parse(registry[0].expiresAt) - Date.parse(registry[0].issuedAt)
             !== request.value.ttlSeconds * 1000) deny();
     } finally { registryBytes.fill(0); }
@@ -96,7 +107,7 @@ export async function buildGreenEnrollmentActivationManifest({ spec, execute = f
     if (canonical(allowlist.value.allowedUserIds)
         !== canonical(proposed.SIT_STAGING_ALLOWED_USER_IDS.split(','))) deny();
     const health = healthFromProbe(container, probe);
-    const manifest = assertGreenPasswordEnrollmentActivationManifest({
+    const manifest = assertGreenEnrollmentActivationManifest({
       schemaVersion: 1, operation: 'activate-green-password-enrollment', apiContainer: 'shareittoo-staging-api',
       sourceCommit: spec.sourceCommit, sourceVersion: spec.sourceVersion,
       currentContainerId: container.Id, currentImage: container.Config.Image, currentImageId: container.Image,
@@ -127,7 +138,10 @@ export async function buildGreenEnrollmentActivationManifest({ spec, execute = f
         || targetEnvironment.APP_VERSION !== spec.sourceVersion
         || fresh.targetImage.Config.Labels['org.opencontainers.image.version'] !== spec.sourceVersion) deny();
     await runGreenPasswordEnrollmentActivation({ manifest, currentState: fresh, now });
-    const manifestSha256 = sha256(`${JSON.stringify(manifest)}\n`);
+    const manifestSha256 = canonicalRecordIntegritySha256(manifest);
+    const requestSha256 = canonicalRecordIntegritySha256(request.value);
+    const allowlistSha256 = canonicalRecordIntegritySha256(allowlist.value);
+    const runtimeIdentitySha256 = canonicalRecordIntegritySha256(identity.value);
     const bindings = {
       schemaVersion: 1, kind: 'sit-w12-activation-manifest-bindings', sourceCommit: spec.sourceCommit,
       manifestSha256, sourceVersion: spec.sourceVersion, currentVersion: current.APP_VERSION,
@@ -137,9 +151,9 @@ export async function buildGreenEnrollmentActivationManifest({ spec, execute = f
       registrySha256: spec.registrySha256, queue: fresh.queue,
       environmentScryptSalt: spec.environmentScryptSalt, environmentScryptDigest: spec.environmentScryptDigest,
       artifacts: {
-        request: { file: spec.requestFile, sha256: request.sha256 },
-        allowlist: { file: spec.allowlistFile, sha256: allowlist.sha256 },
-        runtimeIdentity: { file: spec.runtimeIdentityFile, sha256: identity.sha256 },
+        request: { file: spec.requestFile, sha256: requestSha256 },
+        allowlist: { file: spec.allowlistFile, sha256: allowlistSha256 },
+        runtimeIdentity: { file: spec.runtimeIdentityFile, sha256: runtimeIdentitySha256 },
       },
       prepared,
       activationArguments: ['--manifest', spec.manifestFile, '--execute', '--confirm-source',
@@ -148,9 +162,10 @@ export async function buildGreenEnrollmentActivationManifest({ spec, execute = f
     if (execute) {
       // Re-read artifacts after live observations; a swapped protected input
       // cannot acquire a manifest based on the earlier snapshot.
-      if (privateJson(spec.requestFile).sha256 !== request.sha256
-          || privateJson(spec.allowlistFile).sha256 !== allowlist.sha256
-          || privateJson(spec.runtimeIdentityFile).sha256 !== identity.sha256) deny();
+      if (canonicalRecordIntegritySha256(privateJson(spec.requestFile).value) !== requestSha256
+          || canonicalRecordIntegritySha256(privateJson(spec.allowlistFile).value) !== allowlistSha256
+          || canonicalRecordIntegritySha256(privateJson(spec.runtimeIdentityFile).value)
+            !== runtimeIdentitySha256) deny();
       await sourcePreflight(run, spec.sourceCommit, cwd);
       const latest = await adapter.collectCurrent();
       assertGreenPasswordEnrollmentCurrentState(latest, manifest);
@@ -162,7 +177,7 @@ export async function buildGreenEnrollmentActivationManifest({ spec, execute = f
     }
     // Do not include environment contents, invitation rows or request identities.
     return { status: execute ? 'created' : 'dry-run', manifestSha256,
-      bindingsSha256: sha256(`${JSON.stringify(bindings)}\n`),
+      bindingsSha256: canonicalRecordIntegritySha256(bindings),
       sourceCommit: spec.sourceCommit, currentContainerId: container.Id,
       registrySha256: spec.registrySha256,
       activationArguments: bindings.activationArguments };

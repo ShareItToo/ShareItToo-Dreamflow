@@ -1,4 +1,3 @@
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { readProtectedActivationFile } from './green_password_enrollment_activation.mjs';
@@ -15,7 +14,6 @@ export class GreenEnrollmentPreparationError extends Error {
   }
 }
 export const deny = (state) => { throw new GreenEnrollmentPreparationError(state); };
-export const sha256 = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 export const exact = (value, keys) => value && Object.getPrototypeOf(value) === Object.prototype
   && Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
 export const canonical = (value) => JSON.stringify(sort(value));
@@ -44,7 +42,7 @@ export function privateJson(file, options) {
   try {
     const value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
     if (!bytes.equals(Buffer.from(`${JSON.stringify(value)}\n`))) deny();
-    return { value, sha256: sha256(bytes) };
+    return { value };
   } catch { deny(); } finally { bytes.fill(0); }
 }
 export function environment(bytes) {
@@ -114,7 +112,7 @@ export function publishPrivateJson(file, value, { fileSystem = fs } = {}) {
     fileSystem.fsyncSync(chain.at(-1).fd);
     const readback = privateBytes(file, { fileSystem });
     try { if (!readback.equals(bytes)) deny(); } finally { readback.fill(0); }
-    return { sha256: sha256(bytes) };
+    return { status: 'published' };
   } catch { deny(created ? 'publication-unconfirmed' : 'denied'); }
   finally {
     bytes.fill(0);
