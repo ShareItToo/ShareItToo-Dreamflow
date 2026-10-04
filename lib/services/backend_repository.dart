@@ -9,6 +9,7 @@ import 'auth_service.dart';
 import 'backend_config.dart';
 import 'backend_http.dart';
 import 'local_principal_scope.dart';
+import 'profile_wire.dart';
 
 final RegExp _technicalSandboxRunIdPattern = RegExp(
   r'^technical_sandbox_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
@@ -488,7 +489,7 @@ class BackendRepository {
     final response = await _authorized(
       method: 'PATCH',
       path: '/profile',
-      body: {'profile': profile},
+      body: {'profile': profileForWire(profile)},
     );
     return Map<String, dynamic>.from(response['user'] as Map);
   }
@@ -501,7 +502,7 @@ class BackendRepository {
       owner: owner,
       method: 'PATCH',
       path: '/profile',
-      body: {'profile': profile},
+      body: {'profile': profileForWire(profile)},
     );
     return Map<String, dynamic>.from(response['user'] as Map);
   }
