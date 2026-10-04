@@ -51,21 +51,45 @@ test('R10 provisions the exact Android CMake before starting its offline builds'
   assert.ok(setup, 'R10 must explicitly provision its SDK CMake');
   assert.ok(setup.index < job.indexOf('      - name: Run exact clean-checkout reproducibility proof'));
   const script = setup.groups.script.replace(/^          /gmu, '');
+  // Android's official cmake-3.22.1-linux.zip (SHA-1
+  // fd0a48b4a758310df8c7aa51f59840ed48fe7ed8) contains this metadata and
+  // version suffix; the installed macOS SDK binary reports the same version.
+  // Source: https://dl.google.com/android/repository/repository2-1.xml
+  const sdkProperties = 'Pkg.Revision = 3.22.1\nPkg.Path = cmake;3.22.1\nPkg.Desc = CMake 3.22.1\n';
   for (const scenario of [
-    { name: 'exact version', version: '3.22.1', status: 0 },
-    { name: 'wrong version', version: '3.31.6', status: 1 },
-    { name: 'missing binary', missing: true, status: 1 },
-    { name: 'SDK installation failed', version: '3.22.1', installStatus: 19, status: 19 },
-    { name: 'CMake cannot execute', version: '3.22.1', cmakeStatus: 23, status: 23 },
+    { name: 'real Android SDK version suffix', status: 0 },
+    { name: 'upstream exact version', version: '3.22.1', status: 0 },
+    { name: 'wrong version', version: '3.31.6', status: 1, diagnostic: 'CMake version mismatch' },
+    { name: 'version prefix collision', version: '3.22.10', status: 1, diagnostic: 'CMake version mismatch' },
+    { name: 'prerelease is not pinned release', version: '3.22.1-rc1', status: 1, diagnostic: 'CMake version mismatch' },
+    { name: 'unknown suffix', version: '3.22.1-gfffffff', status: 1, diagnostic: 'CMake version mismatch' },
+    { name: 'missing binary', missing: true, status: 1, diagnostic: 'CMake binary missing or not executable' },
+    { name: 'non-executable binary', mode: 0o644, status: 1, diagnostic: 'CMake binary missing or not executable' },
+    { name: 'binary in wrong SDK path', binaryPackage: '3.31.6', status: 1, diagnostic: 'CMake binary missing or not executable' },
+    { name: 'missing metadata', missingProperties: true, status: 1, diagnostic: 'SDK package metadata missing or unreadable' },
+    { name: 'wrong revision', properties: sdkProperties.replace('Pkg.Revision = 3.22.1', 'Pkg.Revision = 3.22.10'), status: 1, diagnostic: 'Pkg.Revision mismatch' },
+    { name: 'wrong package path', properties: sdkProperties.replace('cmake;3.22.1', 'cmake;3.31.6'), status: 1, diagnostic: 'Pkg.Path mismatch' },
+    { name: 'missing package path', properties: 'Pkg.Revision = 3.22.1\n', status: 1, diagnostic: 'Pkg.Path mismatch' },
+    { name: 'duplicate revision', properties: `${sdkProperties}Pkg.Revision = 3.31.6\n`, status: 1, diagnostic: 'Pkg.Revision mismatch' },
+    { name: 'duplicate package path', properties: `${sdkProperties}Pkg.Path = cmake;3.31.6\n`, status: 1, diagnostic: 'Pkg.Path mismatch' },
+    { name: 'missing SDK root', missingSdk: true, status: 1, diagnostic: 'Android SDK root missing' },
+    { name: 'missing SDK manager', missingManager: true, status: 1, diagnostic: 'SDK manager not executable' },
+    { name: 'SDK installation failed', installStatus: 19, status: 19, diagnostic: 'SDK package installation failed' },
+    { name: 'CMake cannot execute', cmakeStatus: 23, status: 23, diagnostic: 'CMake --version execution failed' },
   ]) {
     await t.test(scenario.name, () => {
       const sdk = mkdtempSync(path.join(os.tmpdir(), 'sit-r10-cmake-'));
       try {
         const managerDir = path.join(sdk, 'cmdline-tools/latest/bin');
-        const cmakeDir = path.join(sdk, 'cmake/3.22.1/bin');
+        const cmakeRoot = path.join(sdk, 'cmake/3.22.1');
+        const cmakeDir = path.join(sdk, 'cmake', scenario.binaryPackage ?? '3.22.1', 'bin');
         mkdirSync(managerDir, { recursive: true });
+        mkdirSync(cmakeRoot, { recursive: true });
         mkdirSync(cmakeDir, { recursive: true });
-        writeFileSync(path.join(managerDir, 'sdkmanager'), `#!/bin/bash
+        if (!scenario.missingProperties) {
+          writeFileSync(path.join(cmakeRoot, 'source.properties'), scenario.properties ?? sdkProperties);
+        }
+        if (!scenario.missingManager) writeFileSync(path.join(managerDir, 'sdkmanager'), `#!/bin/bash
 set -eu
 test "$#" = 3
 test "$1" = "--sdk_root=$ANDROID_HOME"
@@ -76,14 +100,20 @@ exit ${scenario.installStatus ?? 0}
         if (!scenario.missing) {
           writeFileSync(path.join(cmakeDir, 'cmake'), `#!/bin/bash
 test "$1" = --version || exit 2
-printf 'cmake version ${scenario.version}\\n\\nCMake suite maintained and supported by Kitware.\\n'
+printf 'cmake version ${scenario.version ?? '3.22.1-g37088a8'}\\n\\nCMake suite maintained and supported by Kitware (kitware.com/cmake).\\n'
 exit ${scenario.cmakeStatus ?? 0}
-`, { mode: 0o755 });
+`, { mode: scenario.mode ?? 0o755 });
         }
         const result = spawnSync('bash', ['--noprofile', '--norc', '-eo', 'pipefail', '-c', script], {
-          env: { ...process.env, ANDROID_HOME: sdk }, encoding: 'utf8',
+          env: { ...process.env, ANDROID_HOME: scenario.missingSdk ? '' : sdk }, encoding: 'utf8',
         });
         assert.equal(result.status, scenario.status, result.stderr);
+        if (scenario.diagnostic) {
+          assert.ok(result.stderr.includes(`::error::R10 CMake: ${scenario.diagnostic}`), result.stderr);
+          assert.doesNotMatch(result.stdout, /R10 CMake verified/u);
+        } else {
+          assert.match(result.stdout, /R10 CMake verified: cmake;3\.22\.1; 3\.22\.1; cmake version 3\.22\.1/u);
+        }
       } finally {
         rmSync(sdk, { recursive: true, force: true });
       }

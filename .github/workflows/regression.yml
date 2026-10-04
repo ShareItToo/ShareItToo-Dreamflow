@@ -229,12 +229,28 @@ jobs:
       - name: Install and verify pinned Android CMake
         shell: bash
         run: |
-          android_sdk_root="${ANDROID_HOME:?ANDROID_HOME must identify the R10 Android SDK}"
-          "$android_sdk_root/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$android_sdk_root" --install "cmake;3.22.1"
-          cmake_binary="$android_sdk_root/cmake/3.22.1/bin/cmake"
-          test -x "$cmake_binary"
-          cmake_version="$("$cmake_binary" --version)"
-          test "${cmake_version%%$'\n'*}" = 'cmake version 3.22.1'
+          fail_cmake() { printf '::error::R10 CMake: %s\n' "$1" >&2; exit "${2:-1}"; }
+          android_sdk_root="${ANDROID_HOME:-}"
+          [[ -n "$android_sdk_root" && -d "$android_sdk_root" ]] || fail_cmake 'Android SDK root missing (ANDROID_HOME)'
+          sdkmanager_binary="$android_sdk_root/cmdline-tools/latest/bin/sdkmanager"
+          [[ -x "$sdkmanager_binary" ]] || fail_cmake "SDK manager not executable: $sdkmanager_binary"
+          "$sdkmanager_binary" --sdk_root="$android_sdk_root" --install "cmake;3.22.1" || fail_cmake 'SDK package installation failed: cmake;3.22.1' "$?"
+          cmake_root="$android_sdk_root/cmake/3.22.1"
+          cmake_properties="$cmake_root/source.properties"
+          [[ -f "$cmake_properties" && -r "$cmake_properties" ]] || fail_cmake "SDK package metadata missing or unreadable: $cmake_properties"
+          cmake_revision="$(sed -n 's/^Pkg\.Revision[[:blank:]]*=[[:blank:]]*//p' "$cmake_properties")" || fail_cmake 'Cannot read Pkg.Revision'
+          [[ "$cmake_revision" == '3.22.1' ]] || fail_cmake "Pkg.Revision mismatch: expected 3.22.1, got [$cmake_revision]"
+          cmake_package="$(sed -n 's/^Pkg\.Path[[:blank:]]*=[[:blank:]]*//p' "$cmake_properties")" || fail_cmake 'Cannot read Pkg.Path'
+          [[ "$cmake_package" == 'cmake;3.22.1' ]] || fail_cmake "Pkg.Path mismatch: expected cmake;3.22.1, got [$cmake_package]"
+          cmake_binary="$cmake_root/bin/cmake"
+          [[ -f "$cmake_binary" && -x "$cmake_binary" ]] || fail_cmake "CMake binary missing or not executable: $cmake_binary"
+          cmake_version="$("$cmake_binary" --version)" || fail_cmake 'CMake --version execution failed' "$?"
+          cmake_first_line="${cmake_version%%$'\n'*}"
+          case "$cmake_first_line" in
+            'cmake version 3.22.1'|'cmake version 3.22.1-g37088a8') ;;
+            *) fail_cmake "CMake version mismatch: expected Android SDK 3.22.1, got [$cmake_first_line]" ;;
+          esac
+          printf 'R10 CMake verified: %s; %s; %s\n' "$cmake_package" "$cmake_revision" "$cmake_first_line"
 
       - name: Run exact clean-checkout reproducibility proof
         run: |
