@@ -13,6 +13,10 @@ import 'package:lendify/models/rental_request.dart';
 import 'package:lendify/widgets/app_popup.dart';
 import 'package:lendify/services/data_service.dart';
 import 'package:lendify/services/handover_code.dart';
+import 'package:lendify/services/backend_config.dart';
+import 'package:lendify/services/booking_confirmation_challenge.dart';
+import 'package:lendify/services/local_principal_scope.dart';
+import 'package:lendify/services/qa_runtime_service.dart';
 import 'package:lendify/services/local_artifact_storage_service.dart';
 import 'package:lendify/services/safety_action_service.dart';
 import 'package:lendify/services/shared_persistence_sync.dart';
@@ -244,6 +248,12 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
   bool _otherPartyConfirmed = false;
   late String _handoverCode;
   String? _qrPayload;
+  late final Future<LocalPrincipalActionOwner?> _challengeOwner;
+  BookingConfirmationChallenge? _challenge;
+  Timer? _challengeExpiry;
+  int _stepAttempt = 0;
+  bool _advancing = false;
+  String? _challengeError;
 
   @override
   void initState() {
@@ -251,14 +261,18 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
     _safetyService = widget.safetyActionService ?? const SafetyActionService();
     _handoverCode = widget.handoverCode;
     _qrPayload = widget.qrPayload;
+    _challengeOwner = _captureChallengeOwner();
     if (widget.mode == ReturnFlowMode.returnFlow) {
       unawaited(_loadSafetyContext());
-      _securitySubscription = SharedPersistenceSync.changes.listen((key) {
-        if (key == SharedPersistenceSync.accountSecurityStateKey) {
-          _safetyActions.invalidate();
-        }
-      });
     }
+    _securitySubscription = SharedPersistenceSync.changes.listen((key) {
+      if (key == SharedPersistenceSync.accountSecurityStateKey) {
+        _safetyActions.invalidate();
+        if (mounted && widget.confirmationChallengeLoader != null) {
+          setState(_invalidateChallenge);
+        }
+      }
+    });
     unawaited(_loadConditionEvidence());
   }
 
@@ -323,6 +337,7 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
 
   @override
   void dispose() {
+    _challengeExpiry?.cancel();
     _securitySubscription?.cancel();
     _releaseScreenRoute?.call();
     _safetyActions.dispose();
@@ -353,6 +368,7 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
   }
 
   bool get _canContinue {
+    if (_advancing) return false;
     final kind = _steps[_step];
     switch (kind) {
       case _StepKind.photos:
@@ -562,34 +578,39 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
   }
 
   Future<void> _next() async {
+    if (_advancing) return;
     if (!_canContinue) {
       await AppPopup.toast(context,
           icon: Icons.error_outline,
           title: 'Bitte die Anforderungen dieses Schritts erfüllen.');
       return;
     }
+    final attempt = ++_stepAttempt;
+    setState(() => _advancing = true);
+    try {
+      await _advance(attempt);
+    } finally {
+      if (mounted && attempt == _stepAttempt) {
+        setState(() => _advancing = false);
+      }
+    }
+  }
+
+  Future<void> _advance(int attempt) async {
     if (_steps[_step] == _StepKind.photos && !_evidencePersisted) {
       final saved = await _saveConditionEvidenceStep();
-      if (!saved) return;
+      if (!saved || !mounted || attempt != _stepAttempt) return;
     }
     if (_steps[_step] == _StepKind.damage && _hasDamage) {
       final saved = await _saveDamageCaseStep();
-      if (!saved) return;
+      if (!saved || !mounted || attempt != _stepAttempt) return;
     }
     if (_step < _steps.length - 1 &&
-        _steps[_step] == _StepKind.photos &&
         _steps[_step + 1] == _StepKind.codes &&
         widget.confirmationChallengeLoader != null) {
-      final challenge = await widget.confirmationChallengeLoader!();
-      if (!mounted || challenge == null) return;
-      final code = challenge['code']?.toString().trim() ?? '';
-      if (code.isEmpty) return;
-      setState(() {
-        _handoverCode = code;
-        _qrPayload = challenge['qrPayload']?.toString();
-      });
+      if (!await _loadConfirmationChallenge(attempt)) return;
     }
-    if (!mounted) return;
+    if (!mounted || attempt != _stepAttempt) return;
     if (_step < _steps.length - 1) {
       setState(() => _step++);
     } else {
@@ -597,6 +618,89 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
           confirmed: true,
           galleryUsed:
               _galleryUsedInCheckoutPhotos || _presenterNonCameraUsed));
+    }
+  }
+
+  Future<LocalPrincipalActionOwner?> _captureChallengeOwner() async {
+    try {
+      return await LocalPrincipalActionOwner.capture();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _invalidateChallenge() {
+    _stepAttempt++;
+    _advancing = false;
+    _challengeExpiry?.cancel();
+    _challenge = null;
+    _handoverCode = '';
+    _qrPayload = null;
+    _otherPartyConfirmed = false;
+    _challengeError =
+        'Sicherer Bestätigungscode nicht verfügbar. Bitte erneut versuchen.';
+  }
+
+  Future<bool> _loadConfirmationChallenge(int attempt) async {
+    try {
+      final owner = await _challengeOwner;
+      final presenterId = widget.mode == ReturnFlowMode.returnFlow
+          ? widget.request.renterId
+          : widget.request.ownerId;
+      if (!mounted || attempt != _stepAttempt) return false;
+      if (!_viewerIsPresenter ||
+          owner?.sessionOwner?.userId != presenterId ||
+          owner == null ||
+          !await owner.isCurrent()) {
+        throw StateError('confirmation_principal_changed');
+      }
+      if (!mounted || attempt != _stepAttempt) return false;
+      final raw = await widget.confirmationChallengeLoader!();
+      if (!mounted || attempt != _stepAttempt) return false;
+      if (!await owner.isCurrent()) {
+        if (mounted && attempt == _stepAttempt) setState(_invalidateChallenge);
+        return false;
+      }
+      if (!mounted || attempt != _stepAttempt) return false;
+      final challenge = BookingConfirmationChallenge.parse(
+        raw,
+        bookingId: widget.request.id,
+        segment: _evidenceSegment,
+        now: DateTime.now(),
+        allowLocalDemo: !BackendConfig.enabled || QaRuntimeService.isEnabled,
+      );
+      if (challenge == null) throw StateError('invalid_confirmation_challenge');
+      setState(() {
+        _challenge = challenge;
+        _handoverCode = challenge.code;
+        _qrPayload = challenge.qrPayload;
+        _challengeError = null;
+      });
+      _challengeExpiry?.cancel();
+      _challengeExpiry =
+          Timer(challenge.expiresAt.difference(DateTime.now()), () {
+        if (mounted) setState(_invalidateChallenge);
+      });
+      return true;
+    } catch (_) {
+      if (mounted && attempt == _stepAttempt) {
+        setState(() => _challengeError =
+            'Sicherer Bestätigungscode nicht verfügbar. Bitte erneut versuchen.');
+      }
+      return false;
+    }
+  }
+
+  Future<void> _retryChallenge() async {
+    if (_advancing) return;
+    final attempt = ++_stepAttempt;
+    setState(() => _advancing = true);
+    try {
+      await _loadConfirmationChallenge(attempt);
+    } finally {
+      if (mounted && attempt == _stepAttempt) {
+        setState(() => _advancing = false);
+      }
     }
   }
 
@@ -668,6 +772,9 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
   }
 
   Future<void> _back() async {
+    if (widget.confirmationChallengeLoader != null) {
+      setState(_invalidateChallenge);
+    }
     if (_step == 0) {
       await _closeStepper();
     } else {
@@ -815,6 +922,10 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
                               ),
                             ),
                           ),
+                          if (_challengeError != null &&
+                              _steps[_step] != _StepKind.codes)
+                            Text(_challengeError!,
+                                style: const TextStyle(color: Colors.white)),
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                             child: Builder(builder: (context) {
@@ -1349,6 +1460,15 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
   }
 
   Widget _stepCodes() {
+    if (widget.confirmationChallengeLoader != null && _challenge == null) {
+      return Column(mainAxisSize: MainAxisSize.min, children: [
+        Text(_challengeError ?? 'Sicherer Bestätigungscode nicht verfügbar.',
+            style: const TextStyle(color: Colors.white)),
+        TextButton(
+            onPressed: _advancing ? null : _retryChallenge,
+            child: const Text('Code erneut laden')),
+      ]);
+    }
     final isReturn = widget.mode == ReturnFlowMode.returnFlow;
     final flowLabel = isReturn ? 'Rückgabe' : 'Übergabe';
     final bookingSeed = _computeBookingSeed(widget.item, widget.request);

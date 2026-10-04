@@ -50,7 +50,7 @@ test('damage retries retain upload ids and one opaque action idempotency key', (
 test('code/completion cannot advance until the server receipt is recorded', () => {
   assert.match(source, /if \(_steps\[_step\] == _StepKind\.damage && _hasDamage\)/u);
   assert.match(source, /final saved = await _saveDamageCaseStep\(\)/u);
-  assert.match(source, /if \(!saved\) return;/u);
+  assert.match(source, /if \(!saved \|\| !mounted \|\| attempt != _stepAttempt\) return;/u);
   assert.match(source, /if \(!result\.reportRecorded\) return false/u);
   assert.match(source, /_damageReceipt = result\.receipt \?\?/u);
 });

@@ -1094,6 +1094,11 @@ flutter test --reporter expanded --platform chrome \
   --dart-define=SIT_API_BASE_URL=http://127.0.0.1:1/api/v1 \
   test/web_avatar_persistence_test.dart
 
+# Exercise the real QR-step navigation in Chrome with isolated synthetic
+# persisted counts; these fixtures are never authentic photo evidence.
+flutter test --reporter expanded --platform chrome \
+  test/return_handover_challenge_test.dart
+
 # Offline SDK mocks exercise enabled providers without a release artifact,
 # real credentials, SMS, provider login or network access. Cold Google init
 # owns a fresh process because the production SDK initialization is cached.
