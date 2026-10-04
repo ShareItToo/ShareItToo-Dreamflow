@@ -196,6 +196,35 @@ function candidateArtifacts(state) {
   };
 }
 
+function rebindObservedCandidateRuntime(artifacts) {
+  const readiness = artifacts.proof.readinessEvidence.readiness;
+  const mounts = artifacts.container.Mounts.map((mount) => ({
+    type: mount.Type, source: mount.Type === 'volume' ? mount.Name : mount.Source,
+    target: mount.Destination, readOnly: mount.RW === false,
+  }));
+  readiness.runtimeReadbackSha256 = greenEnrollmentCandidateRuntimeReadbackSha256({
+    mounts, registryReadback: artifacts.proof.registryReadback,
+    runtimeIdentity: artifacts.proof.runtimeIdentity,
+    runtime: {
+      accessGateEnabled: readiness.accessGateEnabled,
+      accessGateValid: readiness.accessGateValid,
+      appPublicUrl: readiness.appPublicUrl,
+      commit: artifacts.health.commit,
+      deploymentEnvironment: artifacts.health.deploymentEnvironment,
+      enrollmentEnabled: readiness.passwordEnrollmentEnabled,
+      mailTransport: readiness.mailTransport,
+      paymentTransport: artifacts.health.paymentTransport,
+      privatePilotEnabled: readiness.privatePilotEnabled,
+      stripeLivemode: artifacts.health.stripeLivemode,
+      version: readiness.sourceVersion,
+    },
+  });
+  artifacts.proof.readinessEvidence.readinessSha256 = hash(JSON.stringify(readiness));
+  artifacts.proof.readinessEvidenceSha256 = hash(JSON.stringify(
+    artifacts.proof.readinessEvidence,
+  ));
+}
+
 async function fixture() {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'sit-green-activation-cli-')));
   await chmod(root, 0o700);
@@ -296,12 +325,20 @@ function commandHarness(state, {
   capsuleOnlyDrift = false,
   candidateUnavailable = false, stopReadbackDelay = 0, renameReadbackDelay = 0,
   runtimeBindingDrift = false, candidateMountDrift = null, registryProofDrift = null,
-  clockNow = null,
+  observedReleaseDrift = null, clockNow = null,
 } = {}) {
   const calls = [];
   const mutations = [];
   const current = structuredClone(state.currentState.container);
   const artifacts = candidateArtifacts(state);
+  if (observedReleaseDrift === 'commit') {
+    artifacts.health.commit = '1'.repeat(40);
+    artifacts.proof.readinessEvidence.readiness.sourceCommit = '1'.repeat(40);
+    rebindObservedCandidateRuntime(artifacts);
+  } else if (observedReleaseDrift === 'version') {
+    artifacts.proof.readinessEvidence.readiness.sourceVersion = '9.9.9+2099010101';
+    rebindObservedCandidateRuntime(artifacts);
+  } else if (observedReleaseDrift !== null) throw new Error('unknown observed release drift');
   if (runtimeBindingDrift) {
     artifacts.proof.readinessEvidence.readiness.runtimeReadbackSha256 = hash('binding-drift');
     artifacts.proof.readinessEvidence.readinessSha256 = hash(JSON.stringify(
@@ -761,6 +798,29 @@ test('runtime readback binding covers every mount field and registry aggregate',
     /pilot|smtp|contact|registry|proposed|shareittoo-staging-api|[a-f0-9]{40}/u);
 });
 
+test('consistent observed release drift reaches and fails the independent core identity gate',
+  async (t) => {
+    for (const field of ['commit', 'version']) {
+      const state = await fixture();
+      t.after(() => rm(state.root, { recursive: true, force: true }));
+      const clock = monotonicClock();
+      const harness = commandHarness(state, { observedReleaseDrift: field, clockNow: clock.now });
+      let caught;
+      try {
+        await runGreenPasswordEnrollmentActivationCli(executeArgs(state), {
+          command: harness.command, now: () => activationNow,
+          monotonicNow: clock.now, wait: clock.wait,
+        });
+      } catch (error) { caught = error; }
+      assert.equal(caught?.state, 'rolled-back', field);
+      assert.equal(clock.value(), 0, `${field}: adapter must accept the internally consistent proof`);
+      assert.equal(harness.calls.filter((call) => call.args[0] === 'exec'
+        && call.args.at(-1).includes?.('verifyMailer')).length, 1, field);
+      assert.doesNotMatch(JSON.stringify(greenPasswordEnrollmentActivationCliErrorCode(caught)),
+        /pilot|smtp|contact|registry|proposed|shareittoo-staging-api|[a-f0-9]{40}/u, field);
+    }
+  });
+
 test('mount and registry substitution cannot satisfy post-start runtime binding', async (t) => {
   const cases = [
     ['mount-type', { candidateMountDrift: 'type' }],
@@ -875,5 +935,7 @@ test('adapter source retains no static credential or shell execution path', asyn
     import.meta.url), 'utf8');
   assert.doesNotMatch(source, /exec\s*\(|spawn\s*\([^,]+,\s*[^[]/u);
   assert.doesNotMatch(source, /shell\s*:\s*true/u);
+  assert.doesNotMatch(source,
+    /(?:commit|version):\s*target\.(?:sourceCommit|sourceVersion)/u);
   assert.equal(source.includes(['private', '-value'].join('')), false);
 });

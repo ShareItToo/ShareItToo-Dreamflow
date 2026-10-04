@@ -640,11 +640,17 @@ export function createGreenPasswordEnrollmentCommandAdapter({
               mounts, registryReadback: proof.registryReadback,
               runtimeIdentity: proof.runtimeIdentity,
               runtime: {
-                accessGateEnabled: true, accessGateValid: true,
-                appPublicUrl: 'https://staging.shareittoo.com', commit: target.sourceCommit,
-                deploymentEnvironment: 'test', enrollmentEnabled: true,
-                mailTransport: 'smtp', paymentTransport: 'memory', privatePilotEnabled: true,
-                stripeLivemode: false, version: target.sourceVersion,
+                accessGateEnabled: readiness.accessGateEnabled,
+                accessGateValid: readiness.accessGateValid,
+                appPublicUrl: readiness.appPublicUrl,
+                commit: health.commit,
+                deploymentEnvironment: health.deploymentEnvironment,
+                enrollmentEnabled: readiness.passwordEnrollmentEnabled,
+                mailTransport: readiness.mailTransport,
+                paymentTransport: health.paymentTransport,
+                privatePilotEnabled: readiness.privatePilotEnabled,
+                stripeLivemode: health.stripeLivemode,
+                version: readiness.sourceVersion,
               },
             })) return undefined;
           return Object.freeze({
