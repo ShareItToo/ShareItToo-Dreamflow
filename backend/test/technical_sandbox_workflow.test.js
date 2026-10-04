@@ -455,6 +455,55 @@ test('receipt CAS miss rereads the current paid truth instead of returning stale
   assert.equal(reads, 2);
 });
 
+test('completed idempotent replay returns the same run and verified receipt without a checkout URL or provider create', async () => {
+  const key = 'technical-sandbox:key-00000001';
+  const row = {
+    id: runId,
+    user_id: userId,
+    idempotency_key: key,
+    ...rowBinding(),
+    status: 'paid',
+    amount_minor: 100,
+    currency: 'EUR',
+    synthetic_email: syntheticEmail,
+    provider_session_id: 'cs_test_technical',
+    checkout_expires_at: new Date('2026-09-19T10:30:00.000Z'),
+  };
+  let providerReads = 0;
+  const queries = [];
+  const query = async (sql, params) => {
+    queries.push(sql);
+    if (sql.startsWith('SELECT * FROM technical_sandbox_runs WHERE idempotency_key')) {
+      assert.equal(params[0], key);
+      return { rowCount: 1, rows: [row] };
+    }
+    if (sql.includes("SET status = 'paid'")) return { rowCount: 0, rows: [] };
+    assert.equal(sql, 'SELECT * FROM technical_sandbox_runs WHERE id = $1 AND user_id = $2');
+    assert.deepEqual(params, [runId, userId]);
+    return { rowCount: 1, rows: [row] };
+  };
+  const result = await createTechnicalSandboxCheckout({
+    actor: { id: userId }, key, configuration, now,
+    databasePool: { query },
+    transaction: async (fn) => fn({ query }),
+    provider: {
+      async createTechnicalSandboxCheckout() { assert.fail('must not create again'); },
+      async retrieveTechnicalSandboxCheckout() {
+        providerReads++;
+        return receiptFixture();
+      },
+    },
+  });
+  assert.equal(result.id, runId);
+  assert.equal(result.replayed, true);
+  assert.equal(result.status, 'paid');
+  assert.equal(result.checkoutUrl, null);
+  assert.equal(result.receipt.valid, true);
+  assert.equal(result.receipt.runId, runId);
+  assert.equal(providerReads, 1);
+  assert.equal(queries.some((sql) => /\b(INSERT|payments|bookings|ledger|connect)\b/iu.test(sql)), false);
+});
+
 test('expired provider readback closes the run without manufacturing success', async () => {
   const row = {
     id: runId,

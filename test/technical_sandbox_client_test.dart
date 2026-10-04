@@ -1,9 +1,14 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lendify/screens/payment_methods_screen.dart';
 import 'package:lendify/screens/technical_sandbox_screen.dart';
 import 'package:lendify/services/auth_service.dart';
 import 'package:lendify/services/backend_repository.dart';
+import 'package:lendify/services/backend_http.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 Map<String, dynamic> availableCapabilities() => {
       'technicalSandbox': {
@@ -44,6 +49,7 @@ Map<String, dynamic> validReceipt() => {
     };
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
   test('capability parsing fails closed for foreign/tampered values', () {
     final foreign = TechnicalSandboxCapabilities.fromJson({
       ...availableCapabilities()['technicalSandbox'] as Map<String, dynamic>,
@@ -242,6 +248,263 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('Serverbestätigter Test'), findsOneWidget);
   });
+
+  for (final status in ['paid', 'expired', 'pending', 'unknown']) {
+    testWidgets('URL-less $status replay is recovered by one status read',
+        (tester) async {
+      final keys = <String>[];
+      final reads = <String>[];
+      var opens = 0;
+      await tester.pumpWidget(MaterialApp(
+        home: TechnicalSandboxScreen(
+          loadCapabilities: () async => availableCapabilities(),
+          startCheckout: (key) async {
+            keys.add(key);
+            // The create response was lost. The retry returns the existing
+            // run, not a new provider session; terminal sessions have no URL.
+            if (keys.length == 1) {
+              throw const BackendException(503, 'synthetic_response_lost');
+            }
+            return TechnicalSandboxCheckout(
+              id: runId,
+              status: status,
+              amountMinor: 100,
+              currency: 'EUR',
+              checkoutUrl: null,
+              checkoutExpiresAt: null,
+              replayed: true,
+            );
+          },
+          loadRun: (id) async {
+            reads.add(id);
+            return TechnicalSandboxRun(
+              id: runId,
+              status: status,
+              amountMinor: 100,
+              currency: 'EUR',
+              checkoutUrl: null,
+              checkoutExpiresAt: null,
+              receipt: status == 'paid' ? validReceipt() : null,
+            );
+          },
+          openExternal: (_) async {
+            opens++;
+            return true;
+          },
+        ),
+      ));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Technischen Zahlungstest starten'));
+      await tester.pumpAndSettle();
+      expect(reads, isEmpty);
+      await tester.tap(find.text('Technischen Zahlungstest starten'));
+      await tester.pumpAndSettle();
+      expect(keys, hasLength(2));
+      expect(keys.toSet(), hasLength(1));
+      expect(reads, [runId]);
+      expect(opens, 0);
+      expect(find.textContaining('Serverbestätigter Test'),
+          status == 'paid' ? findsOneWidget : findsNothing);
+      expect(find.textContaining('ist abgelaufen'),
+          status == 'expired' ? findsOneWidget : findsNothing);
+      expect(find.textContaining('Der Checkout wurde geöffnet'), findsNothing);
+      if (status == 'pending' || status == 'unknown') {
+        await tester.tap(find.text('Sandbox-Status prüfen'));
+        await tester.pumpAndSettle();
+        expect(keys, hasLength(2));
+        expect(reads, [runId, runId]);
+      }
+    });
+  }
+
+  for (final outcome in ['foreign-run', 'no-receipt', 'read-failed']) {
+    testWidgets('URL-less recovery fails closed for $outcome', (tester) async {
+      var creates = 0;
+      var reads = 0;
+      await tester.pumpWidget(MaterialApp(
+        home: TechnicalSandboxScreen(
+          loadCapabilities: () async => availableCapabilities(),
+          startCheckout: (_) async {
+            creates++;
+            return const TechnicalSandboxCheckout(
+              id: runId,
+              status: 'pending',
+              amountMinor: 100,
+              currency: 'EUR',
+              checkoutUrl: null,
+              checkoutExpiresAt: null,
+              replayed: true,
+            );
+          },
+          loadRun: (id) async {
+            expect(id, runId);
+            reads++;
+            if (outcome == 'read-failed') {
+              throw const BackendException(503, 'synthetic_read_failed');
+            }
+            const foreignId =
+                'technical_sandbox_123e4567-e89b-42d3-a456-426614174001';
+            return TechnicalSandboxRun(
+              id: outcome == 'foreign-run' ? foreignId : runId,
+              status: 'paid',
+              amountMinor: 100,
+              currency: 'EUR',
+              checkoutUrl: null,
+              checkoutExpiresAt: null,
+              receipt: outcome == 'foreign-run'
+                  ? {...validReceipt(), 'runId': foreignId}
+                  : null,
+            );
+          },
+          openExternal: (_) async => throw StateError('must not open'),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Technischen Zahlungstest starten'));
+      await tester.pumpAndSettle();
+      expect(creates, 1);
+      expect(reads, 1);
+      expect(find.textContaining('Serverbestätigter Test'), findsNothing);
+      await tester.tap(find.text('Sandbox-Status prüfen'));
+      await tester.pumpAndSettle();
+      expect(creates, 1);
+      expect(reads, 2);
+    });
+  }
+
+  for (final invalid in ['refunded', 'amount', 'currency', 'id']) {
+    testWidgets('URL-less $invalid envelope is rejected before status read',
+        (tester) async {
+      var reads = 0;
+      await tester.pumpWidget(MaterialApp(
+        home: TechnicalSandboxScreen(
+          loadCapabilities: () async => availableCapabilities(),
+          startCheckout: (_) async => TechnicalSandboxCheckout(
+            id: invalid == 'id' ? 'foreign-invalid-id' : runId,
+            status: invalid == 'refunded' ? 'refunded' : 'paid',
+            amountMinor: invalid == 'amount' ? 99 : 100,
+            currency: invalid == 'currency' ? 'USD' : 'EUR',
+            checkoutUrl: null,
+            checkoutExpiresAt: null,
+            replayed: true,
+          ),
+          loadRun: (_) async {
+            reads++;
+            throw StateError('must not read invalid envelope');
+          },
+          openExternal: (_) async => throw StateError('must not open'),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Technischen Zahlungstest starten'));
+      await tester.pumpAndSettle();
+      expect(reads, 0);
+      expect(find.textContaining('sicher geladen'), findsOneWidget);
+      expect(find.textContaining('Serverbestätigter Test'), findsNothing);
+    });
+  }
+
+  for (final transition in ['foreign-owner', 'same-owner-new-epoch']) {
+    for (final boundary in ['create', 'read']) {
+      testWidgets('$transition rejects late $boundary recovery response',
+          (tester) async {
+        final storedSession = jsonEncode({
+          'userId': 'synthetic_sandbox_user_owner',
+          'sessionId': 'synthetic-session-a',
+          'email': 'a@example.invalid',
+          'createdAt': '2026-09-19T10:00:00.000Z',
+        });
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('auth_session_v1', storedSession);
+        final owner =
+            AuthService.captureSessionOwner((await AuthService.readSession())!);
+        final createResponse = Completer<TechnicalSandboxCheckout>();
+        final readResponse = Completer<TechnicalSandboxRun>();
+        var creates = 0;
+        var reads = 0;
+        var opens = 0;
+        await tester.pumpWidget(MaterialApp(
+          home: Builder(
+              builder: (context) => TextButton(
+                    onPressed: () =>
+                        Navigator.of(context).push(MaterialPageRoute<void>(
+                      builder: (_) => TechnicalSandboxScreen(
+                        sessionReader: AuthService.readSession,
+                        loadCapabilities: () async => availableCapabilities(),
+                        startCheckout: (_) {
+                          creates++;
+                          return createResponse.future;
+                        },
+                        loadRun: (_) {
+                          reads++;
+                          return readResponse.future;
+                        },
+                        openExternal: (_) async {
+                          opens++;
+                          return true;
+                        },
+                      ),
+                    )),
+                    child: const Text('Open synthetic route'),
+                  )),
+        ));
+        await tester.tap(find.text('Open synthetic route'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Technischen Zahlungstest starten'));
+        await tester.pump();
+        const replay = TechnicalSandboxCheckout(
+          id: runId,
+          status: 'paid',
+          amountMinor: 100,
+          currency: 'EUR',
+          checkoutUrl: null,
+          checkoutExpiresAt: null,
+          replayed: true,
+        );
+        if (boundary == 'read') {
+          createResponse.complete(replay);
+          await tester.pump();
+          expect(reads, 1);
+        }
+        if (transition == 'same-owner-new-epoch') {
+          // Real local epoch transition only; no provider/realtime logout.
+          expect(
+              await AuthService.clearSessionOwnerIfMatches(owner,
+                  runLogoutCleanup: false),
+              isNotNull);
+          await prefs.setString('auth_session_v1', storedSession);
+          expect(AuthService.sessionEpoch, greaterThan(owner.epoch));
+        } else {
+          await prefs.setString(
+              'auth_session_v1',
+              jsonEncode({
+                'userId': 'synthetic_sandbox_user_other',
+                'sessionId': 'synthetic-session-b',
+                'email': 'b@example.invalid',
+              }));
+        }
+        if (boundary == 'create') {
+          createResponse.complete(replay);
+        } else {
+          readResponse.complete(TechnicalSandboxRun(
+            id: runId,
+            status: 'paid',
+            amountMinor: 100,
+            currency: 'EUR',
+            checkoutUrl: null,
+            checkoutExpiresAt: null,
+            receipt: validReceipt(),
+          ));
+        }
+        await tester.pumpAndSettle();
+        expect(creates, 1);
+        expect(reads, boundary == 'read' ? 1 : 0);
+        expect(opens, 0);
+        expect(find.byType(TechnicalSandboxScreen), findsNothing);
+        expect(find.textContaining('Serverbestätigter Test'), findsNothing);
+      });
+    }
+  }
 
   testWidgets('tampered checkout host is rejected before external open',
       (tester) async {

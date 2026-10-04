@@ -11,6 +11,7 @@ class TechnicalSandboxScreen extends StatefulWidget {
   final Future<TechnicalSandboxCheckout> Function(String key)? startCheckout;
   final Future<TechnicalSandboxRun> Function(String runId)? loadRun;
   final Future<bool> Function(Uri uri)? openExternal;
+  final Future<AuthSession?> Function()? sessionReader;
 
   const TechnicalSandboxScreen({
     super.key,
@@ -18,6 +19,7 @@ class TechnicalSandboxScreen extends StatefulWidget {
     this.startCheckout,
     this.loadRun,
     this.openExternal,
+    this.sessionReader,
   });
 
   @override
@@ -55,14 +57,18 @@ class _TechnicalSandboxScreenState extends State<TechnicalSandboxScreen>
   }
 
   Future<AuthSessionOwner?> _captureOwner() async {
-    if (widget.loadCapabilities != null) return null;
-    final session = await AuthService.readSession();
+    if (widget.sessionReader == null && widget.loadCapabilities != null) {
+      return null;
+    }
+    final session = await (widget.sessionReader ?? AuthService.readSession)();
     return session == null ? null : AuthService.captureSessionOwner(session);
   }
 
   Future<bool> _isCurrent(AuthSessionOwner? owner) async {
     if (!mounted) return false;
-    if (owner == null) return widget.loadCapabilities != null;
+    if (owner == null) {
+      return widget.sessionReader == null && widget.loadCapabilities != null;
+    }
     return await AuthService.isSessionOwnerDefinitelyCurrent(owner);
   }
 
@@ -147,7 +153,7 @@ class _TechnicalSandboxScreenState extends State<TechnicalSandboxScreen>
         await _invalidateStaleRoute();
         return;
       }
-      if (!run.isValidEnvelope) {
+      if (!run.isValidEnvelope || run.id != runId) {
         throw const BackendException(502, 'technical_sandbox_run_invalid');
       }
       if (!mounted) return;
@@ -195,28 +201,33 @@ class _TechnicalSandboxScreenState extends State<TechnicalSandboxScreen>
         return;
       }
       final runId = checkout.id.trim();
-      final rawUrl = checkout.checkoutUrl?.trim() ?? '';
-      final uri = Uri.tryParse(rawUrl);
-      if (!isValidTechnicalSandboxRunId(runId) ||
+      final run = TechnicalSandboxRun(
+        id: runId,
+        status: checkout.status,
+        amountMinor: checkout.amountMinor ?? 0,
+        currency: checkout.currency ?? '',
+        checkoutUrl: checkout.checkoutUrl,
+        checkoutExpiresAt: checkout.checkoutExpiresAt,
+        receipt: null,
+      );
+      if (!run.isValidEnvelope ||
+          (_run != null && _run!.id != runId) ||
           checkout.amountMinor != _capabilities.amountMinor ||
-          checkout.currency != _capabilities.currency ||
-          uri == null ||
-          !isValidTechnicalSandboxHostedCheckoutUrl(rawUrl)) {
+          checkout.currency != _capabilities.currency) {
         throw const BackendException(502, 'technical_sandbox_checkout_invalid');
       }
       if (mounted) {
-        setState(() {
-          _run = TechnicalSandboxRun(
-            id: runId,
-            status: checkout.status,
-            amountMinor: _capabilities.amountMinor,
-            currency: _capabilities.currency,
-            checkoutUrl: checkout.checkoutUrl,
-            checkoutExpiresAt: checkout.checkoutExpiresAt,
-            receipt: null,
-          );
-        });
+        setState(() => _run = run);
       }
+      // A replay can be terminal or temporarily lack a hosted URL. Keep its
+      // identity and reconcile once; never recreate a session or infer success.
+      if (run.checkoutUrl == null ||
+          run.status == 'paid' ||
+          run.status == 'expired') {
+        await _refreshRun();
+        return;
+      }
+      final uri = Uri.parse(run.checkoutUrl!);
       final opened = await (widget.openExternal ??
           (Uri target) => launchUrl(
                 target,
@@ -327,7 +338,7 @@ class _TechnicalSandboxScreenState extends State<TechnicalSandboxScreen>
                             )
                           else if (run != null)
                             const Text(
-                              'Der Checkout wurde geöffnet. Nach der Rückkehr wird der Status erneut ausschließlich vom Server gelesen.',
+                              'Der Testlauf ist angelegt. Sein Zahlungsstatus wird ausschließlich vom Server gelesen.',
                             )
                           else
                             const Text(
@@ -340,13 +351,19 @@ class _TechnicalSandboxScreenState extends State<TechnicalSandboxScreen>
                             SizedBox(
                               width: double.infinity,
                               child: FilledButton.icon(
-                                onPressed: _working ? null : _startCheckout,
+                                onPressed: _working
+                                    ? null
+                                    : run != null && run.checkoutUrl == null
+                                        ? _refreshRun
+                                        : _startCheckout,
                                 icon: const Icon(Icons.open_in_new),
                                 label: Text(_working
                                     ? 'Bitte warten …'
                                     : run == null
                                         ? 'Technischen Zahlungstest starten'
-                                        : 'Checkout erneut öffnen'),
+                                        : run.checkoutUrl == null
+                                            ? 'Sandbox-Status prüfen'
+                                            : 'Checkout erneut öffnen'),
                               ),
                             ),
                           ],
