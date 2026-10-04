@@ -680,6 +680,34 @@ for (const variant of ['replacement', 'symlink', 'hardlink', 'permissions', 'par
   });
 }
 
+function replaceOutputFixture(file, archivedFile) {
+  fs.renameSync(file, archivedFile);
+  // A replacement deliberately needs a new inode; exclusive creation must
+  // reject any file or symlink that appears after the original is moved.
+  fs.writeFileSync(file, '', { flag: 'wx', mode: 0o600 });
+}
+
+for (const collision of ['file', 'symlink']) {
+  test(`output replacement fixture refuses an intervening ${collision} without overwriting it`, t => {
+    const f = outputFixture(t); const rename = fs.renameSync;
+    const archived = path.join(f.directory, 'old');
+    const foreign = path.join(f.directory, 'foreign');
+    const foreignBytes = 'synthetic foreign evidence must survive';
+    fs.writeFileSync(foreign, foreignBytes, { flag: 'wx', mode: 0o600 });
+    t.mock.method(fs, 'renameSync', (source, destination) => {
+      rename(source, destination);
+      if (source === f.file && destination === archived) {
+        if (collision === 'symlink') fs.symlinkSync(foreign, f.file);
+        else fs.writeFileSync(f.file, foreignBytes, { flag: 'wx', mode: 0o600 });
+      }
+    });
+    assert.throws(() => replaceOutputFixture(f.file, archived), { code: 'EEXIST' });
+    assert.equal(fs.readFileSync(foreign, 'utf8'), foreignBytes);
+    assert.equal(fs.readFileSync(f.file, 'utf8'), foreignBytes);
+    assert.equal(fs.readFileSync(archived, 'utf8'), '');
+  });
+}
+
 for (const variant of ['open-replacement', 'initial-symlink', 'initial-mode', 'read-error', 'close-error']) {
   test(`output oracle fails closed on ${variant} and closes every retained descriptor`, t => {
     const f = outputFixture(t); const open = fs.openSync; const close = fs.closeSync;
@@ -689,7 +717,7 @@ for (const variant of ['open-replacement', 'initial-symlink', 'initial-mode', 'r
     t.mock.method(fs, 'openSync', (file, ...args) => {
       const fd = open(file, ...args); opened.push(fd);
       if (!replaced && variant === 'open-replacement' && file === f.file) {
-        replaced = true; fs.renameSync(file, path.join(f.directory, 'old')); fs.writeFileSync(file, '', { mode: 0o600 });
+        replaced = true; replaceOutputFixture(file, path.join(f.directory, 'old'));
       }
       return fd;
     });
