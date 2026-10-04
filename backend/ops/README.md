@@ -604,17 +604,36 @@ The health, backup and restore-check services call `shareittoo-alert@.service`
 on failure. `alert.sh` uses the already configured SMTP transport to deliver a
 critical notification to `ALERT_EMAIL_TO` (default:
 `contact@shareittoo.com`). It keeps SMTP credentials out of process arguments
-and calls the adjacent Python 3 stdlib helper `alert_state.py`. A service incident
-gets an immediate first attempt, at most one unresolved reminder every 24 hours,
-and one recovery attempt after a later successful job. A new incident after
-recovery alerts immediately. The deployed units and script default both use
-86,400 seconds; shorter overrides are rejected. State and locks remain private
-in `/var/lib/shareittoo-alerts`, with per-service atomic, fsynced state replacement.
+and calls the adjacent Python 3 stdlib helper `alert_state.py`. The source units
+explicitly select `ALERT_NOTIFICATION_POLICY=transitions-only`, also the helper's
+default and its only accepted policy. An incident gets one immediate failure
+attempt. An unchanged open failure stays quiet indefinitely; elapsed time and a
+new timer invocation do not send reminders. A changed failure class or target
+gets one new attempt. A later verified success gets one recovery attempt, and
+the next failure after that recovery opens a new incident immediately.
+`ALERT_COOLDOWN_SECONDS` no longer determines notification eligibility.
+
+Version-2 state binds the exact service, systemd result/exit tuple and, for the
+health service, a sorted set of allowlisted health failure tags. The helper
+resolves the currently failed service with `systemctl show`; health tags must
+come from exactly one failure record in that same invocation's journal. When
+systemd provides `MONITOR_UNIT` and `MONITOR_INVOCATION_ID`, both must match the
+observed target. The invocation ID is an evidence binding, not part of the
+deduplication fingerprint. A reordered tag set stays quiet; changed health tags,
+service target or exit class are distinct transitions. Other service classes
+use their systemd result/exit tuple, not arbitrary stderr text.
+
+Missing, corrupt, non-failed or mismatched invocation evidence fails explicitly
+before SMTP and before claiming suppression. It leaves the previous incident
+state intact and records a sanitized operational error requiring investigation;
+it is not a successful notification or proof that mail was already delivered.
+State and locks remain private in `/var/lib/shareittoo-alerts`, with per-service
+locking, descriptor/linked-file readback and atomic, fsynced state replacement.
 
 The helper reserves attempts durably before SMTP. A timeout or interrupted
-attempt means **delivery unknown**, not proof of nondelivery: it does not retry
-rapidly. Unresolved incidents remain eligible for their daily reminder; recovery
-has one attempt only, so SMTP cannot guarantee exactly-once recipient delivery.
+attempt means **delivery unknown**, not proof of nondelivery: the same failure
+fingerprint is not retried, even after days. Recovery also has one attempt only,
+so SMTP cannot guarantee exactly-once recipient delivery.
 Known pre-transport configuration failures are `not_sent` and do not consume
 that attempt: after repair, the next natural failure/recovery run can send
 immediately. Only started or uncertain transport attempts consume the limit.
@@ -624,11 +643,17 @@ printed. TLS is required for authenticated and IP-allowlisted relay delivery.
 The health unit's best-effort success hook reports recovery. Backup and restore
 scripts call recovery only after verified completion: their lock-busy exit 0 is
 a skipped job, not evidence of recovery. Notification errors do not fail an
-otherwise successful job. Legacy `.last` timestamps are imported conservatively
-and retained unchanged; malformed/private-state failures stop before SMTP.
+otherwise successful job. Version-1 JSON remains readable without redefining its
+historical schema. A closed, delivered v1 recovery stays unchanged and sends no
+extra recovery mail. A legacy `.last` timestamp is retained unchanged. An open
+v1/legacy incident has no recorded failure class, so its next independently
+classified failure gets one v2 successor attempt; later identical failures stay
+quiet. Malformed state, unsafe permissions, a replaced held lock or state drift
+fails explicitly before sending or claiming suppression. Do not delete state
+to restart alerts, or downgrade v2 state into a v1-only helper.
 
 Installing this source requires Python 3 with `fcntl` and directory-fsync support
-on the target Linux host, plus the existing curl/Docker tooling. Source tests do
+on the target Linux host, plus systemctl/journalctl and existing curl/Docker tooling. Source tests do
 not prove target readiness. Any existing masked alert instance remains masked;
 unmasking and live readback require their separate operational authorization.
 
@@ -637,21 +662,31 @@ After the first version-labelled rollout and successful isolated restore, set
 production `.env`. The health service will then also reject an unknown runtime
 commit or a restore proof older than roughly eight days.
 
-Install the included units in `/etc/systemd/system`, reload systemd, run the
-backup, health and restore-check services once, then enable all three timers.
+For an authorized update of an existing installation, first record installed
+and reviewed source hashes, unit/timer state, masks, protected state metadata
+and a private rollback copy of each exact file below. Review the source tests
+and current journal classification before installation. Install only the alert
+entrypoint/helper and the four named units; retain the existing timers and masks.
+The following update does not start a job or send a probe mail:
 
 ```sh
 install -m 0750 ops/alert.sh /docker/shareittoo/backend/ops/alert.sh
 install -m 0640 ops/alert_state.py /docker/shareittoo/backend/ops/alert_state.py
-install -m 0644 ops/systemd/shareittoo-*.service /etc/systemd/system/
-install -m 0644 ops/systemd/shareittoo-*.timer /etc/systemd/system/
+install -m 0644 ops/systemd/shareittoo-alert@.service /etc/systemd/system/
+install -m 0644 ops/systemd/shareittoo-health.service /etc/systemd/system/
+install -m 0644 ops/systemd/shareittoo-backup.service /etc/systemd/system/
+install -m 0644 ops/systemd/shareittoo-restore-check.service /etc/systemd/system/
 systemctl daemon-reload
-systemctl start shareittoo-backup.service
-systemctl start shareittoo-restore-check.service
-systemctl start shareittoo-health.service
-systemctl enable --now shareittoo-backup.timer shareittoo-restore-check.timer shareittoo-health.timer
 systemctl list-timers 'shareittoo-*'
 ```
+
+Verify installed hashes, the effective transition-only policy and preserved
+sandbox/masks/timers without dumping SMTP environments. Observe the next natural
+timer cycle using only safe journal classifications. Do not call `alert.sh`,
+force a failed check, start a recovery hook or reset incident state to test mail.
+A first installation or timer enablement is a separate operational step. A
+rollback after v2 state exists must use a state-compatible reviewed helper and
+retain that evidence; blindly restoring the old reminder helper is not safe.
 
 ## B10 quality and load acceptance
 

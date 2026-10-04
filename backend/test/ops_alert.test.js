@@ -55,6 +55,14 @@ if [[ "\${ALERT_FAKE_DOCKER_EMPTY:-false}" != true ]]; then
 fi
 `);
     await fs.chmod(fakeDocker, 0o755);
+    await fs.writeFile(path.join(fakeBin, 'systemctl'), `#!/usr/bin/env python3
+import sys
+print('Id='+sys.argv[2]+'\\nInvocationID='+'a'*32+'\\nResult=exit-code\\nExecMainCode=1\\nExecMainStatus=1')
+`, { mode: 0o755 });
+    await fs.writeFile(path.join(fakeBin, 'journalctl'), `#!/usr/bin/env python3
+import json
+print(json.dumps({'_SYSTEMD_UNIT':'shareittoo-health.service','_SYSTEMD_INVOCATION_ID':'a'*32,'MESSAGE':'ShareItToo health check failed: disk'}))
+`, { mode: 0o755 });
 
     const currentDir = path.dirname(fileURLToPath(import.meta.url));
     const script = path.resolve(currentDir, '../ops/alert.sh');
@@ -63,7 +71,7 @@ fi
       PATH: `${fakeBin}:${process.env.PATH}`,
       ALERT_ENV_FILE: envFile,
       ALERT_STATE_DIR: stateDir,
-      ALERT_COOLDOWN_SECONDS: '86400',
+      ALERT_NOTIFICATION_POLICY: 'transitions-only',
       ALERT_CAPTURE_ARGS: argumentCapture,
       ALERT_CAPTURE_CONFIG: configCapture,
       ALERT_CAPTURE_COUNT: countCapture,
@@ -78,7 +86,7 @@ fi
 
     const second = await run('bash', [script, 'shareittoo-health.service'], { env: environment });
     assert.equal(second.code, 0, second.stderr);
-    assert.match(second.stdout, /suppressed by cooldown/);
+    assert.match(second.stdout, /suppressed unchanged failure/);
     assert.equal(await fs.readFile(countCapture, 'utf8'), 'called\n');
 
     const relayEnvFile = path.join(temporaryDir, 'relay.env');
@@ -109,14 +117,14 @@ fi
   }
 });
 
-test('production alert unit limits repeated mail to one reminder per day', async () => {
+test('production alert unit explicitly selects transition-only notification policy', async () => {
   const currentDir = path.dirname(fileURLToPath(import.meta.url));
   const unit = await fs.readFile(
     path.resolve(currentDir, '../ops/systemd/shareittoo-alert@.service'),
     'utf8',
   );
 
-  assert.match(unit, /^Environment=ALERT_COOLDOWN_SECONDS=86400$/m);
+  assert.match(unit, /^Environment=ALERT_NOTIFICATION_POLICY=transitions-only$/m);
   assert.match(unit, /^StateDirectory=shareittoo-alerts$/m);
   assert.match(unit, /^ProtectSystem=strict$/m);
 });

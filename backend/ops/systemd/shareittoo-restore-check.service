@@ -7,7 +7,7 @@ OnFailure=shareittoo-alert@%n.service
 [Service]
 Type=oneshot
 ExecStart=/docker/shareittoo/backend/ops/verify_restore.sh
-Environment=ALERT_COOLDOWN_SECONDS=86400
+Environment=ALERT_NOTIFICATION_POLICY=transitions-only
 # Recovery runs only at the script's completed-work branch, never on lock-busy skip.
 User=root
 Group=root

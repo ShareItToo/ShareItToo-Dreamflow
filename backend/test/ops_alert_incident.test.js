@@ -51,8 +51,25 @@ sys.exit(int(os.environ.get('FAKE_CURL_CODE', '0')))
 `, { mode: 0o755 });
   await fs.writeFile(path.join(bin, 'docker'), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
   await fs.writeFile(path.join(bin, 'date'), '#!/bin/sh\nif [ "$1" = +%s ]; then printf "%s\\n" "$FAKE_NOW"; else /bin/date "$@"; fi\n', { mode: 0o755 });
+  await fs.writeFile(path.join(bin, 'systemctl'), `#!/usr/bin/env python3
+import os, sys
+print('Id='+sys.argv[2])
+print('InvocationID='+os.environ.get('FAKE_INVOCATION_ID','a'*32))
+print('Result='+os.environ.get('FAKE_SERVICE_RESULT','exit-code'))
+print('ExecMainCode=1')
+print('ExecMainStatus='+os.environ.get('FAKE_MAIN_STATUS','1'))
+`, { mode: 0o755 });
+  await fs.writeFile(path.join(bin, 'journalctl'), `#!/usr/bin/env python3
+import json, os, sys
+if os.environ.get('FAKE_JOURNAL_MODE') == 'missing': sys.exit(0)
+if os.environ.get('FAKE_JOURNAL_MODE') == 'corrupt':
+    print('not-json'); sys.exit(0)
+print(json.dumps({'_SYSTEMD_UNIT':'shareittoo-health.service',
+  '_SYSTEMD_INVOCATION_ID':os.environ.get('FAKE_JOURNAL_INVOCATION_ID',os.environ.get('FAKE_INVOCATION_ID','a'*32)),
+  'MESSAGE':'ShareItToo health check failed: '+os.environ.get('FAKE_FAILURE_TAGS','disk')}))
+`, { mode: 0o755 });
   const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, ALERT_ENV_FILE: envFile,
-    ALERT_STATE_DIR: state, ALERT_COOLDOWN_SECONDS: '86400', ALERT_CAPTURE: path.join(root, 'capture'),
+    ALERT_STATE_DIR: state, ALERT_NOTIFICATION_POLICY: 'transitions-only', ALERT_CAPTURE: path.join(root, 'capture'),
     FAKE_SECRET: secret, FAKE_STATE_NAME: stateName(), FAKE_NOW: '2000000000' };
   return { root, state, envFile, env, secret,
     call: (mode = 'failure', key = service, extra = {}) => run('bash', [path.join(ops, 'alert.sh'), key, mode], { env: { ...env, ...extra } }),
@@ -64,7 +81,7 @@ sys.exit(int(os.environ.get('FAKE_CURL_CODE', '0')))
   };
 }
 
-test('incident opens, reminds only at 24h, recovers once, then opens immediately', async (t) => {
+test('incident opens once, stays silent indefinitely, recovers once, then opens immediately', async (t) => {
   const f = await fixture(t);
   assert.equal((await f.call('recovery')).code, 0);
   assert.equal((await f.messages()).length, 0);
@@ -73,17 +90,103 @@ test('incident opens, reminds only at 24h, recovers once, then opens immediately
   await f.call('failure', service, { FAKE_NOW: '2000086399' });
   assert.equal((await f.messages()).length, 1);
   await f.call('failure', service, { FAKE_NOW: '2000086400' });
-  assert.equal((await f.messages()).length, 2);
+  await f.call('failure', service, { FAKE_NOW: '2031536000', FAKE_INVOCATION_ID: 'b'.repeat(32) });
+  assert.equal((await f.messages()).length, 1);
   await f.call('recovery', service, { FAKE_NOW: '2000086401' });
   await f.call('recovery', service, { FAKE_NOW: '2000086402' });
-  assert.equal((await f.messages()).length, 3);
+  assert.equal((await f.messages()).length, 2);
   assert.equal((await f.read()).phase, 'closed');
   await f.call('failure', service, { FAKE_NOW: '2000086403' });
   const messages = await f.messages();
-  assert.equal(messages.length, 4);
-  assert.match(messages[1].message, /unresolved reminder/);
-  assert.match(messages[2].message, /service recovered/);
+  assert.equal(messages.length, 3);
+  assert.match(messages[1].message, /service recovered/);
   assert.equal((await f.read()).phase, 'open');
+});
+
+test('changed health class or target alerts once while reordered reasons and later invocations stay quiet', async (t) => {
+  const f = await fixture(t);
+  await f.call('failure', service, { FAKE_FAILURE_TAGS: 'disk api' });
+  const first = (await f.read()).failure_fingerprint;
+  await f.call('failure', service, { FAKE_FAILURE_TAGS: 'api disk', FAKE_INVOCATION_ID: 'b'.repeat(32) });
+  assert.equal((await f.messages()).length, 1);
+  assert.equal((await f.read()).failure_fingerprint, first);
+  await f.call('failure', service, { FAKE_FAILURE_TAGS: 'database', FAKE_INVOCATION_ID: 'c'.repeat(32) });
+  assert.equal((await f.messages()).length, 2);
+  assert.notEqual((await f.read()).failure_fingerprint, first);
+  await f.call('failure', service, { FAKE_FAILURE_TAGS: 'database', FAKE_NOW: '2031536000' });
+  assert.equal((await f.messages()).length, 2);
+  await f.call('failure', 'shareittoo-backup.service');
+  await f.call('failure', 'shareittoo-backup.service');
+  assert.equal((await f.messages()).length, 3);
+  await f.call('failure', 'shareittoo-backup.service', { FAKE_MAIN_STATUS: '2' });
+  assert.equal((await f.messages()).length, 4);
+});
+
+test('stale, unrecognized and non-failed invocation identity cannot suppress or send', async (t) => {
+  const f = await fixture(t);
+  await f.call();
+  const original = await fs.readFile(path.join(f.state, stateName()), 'utf8');
+  for (const extra of [
+    { FAKE_FAILURE_TAGS: 'unrecognized-private-reason' },
+    { FAKE_FAILURE_TAGS: '' }, { FAKE_FAILURE_TAGS: 'disk disk' },
+    { FAKE_SERVICE_RESULT: 'success' }, { FAKE_MAIN_STATUS: 'not-an-exit-code' },
+    { FAKE_JOURNAL_INVOCATION_ID: 'b'.repeat(32) },
+    { FAKE_JOURNAL_MODE: 'missing' }, { FAKE_JOURNAL_MODE: 'corrupt' },
+    { MONITOR_INVOCATION_ID: 'b'.repeat(32) }, { MONITOR_UNIT: 'other.service' },
+  ]) {
+    const result = await f.call('failure', service, extra);
+    assert.notEqual(result.code, 0);
+    assert.match(result.stderr, /failure identity unavailable/);
+    assert.doesNotMatch(result.stdout, /suppressed|delivered/);
+    assert.equal(`${result.stdout}${result.stderr}`.includes('unrecognized-private-reason'), false);
+    assert.equal(await fs.readFile(path.join(f.state, stateName()), 'utf8'), original);
+  }
+  assert.equal((await f.messages()).length, 1);
+});
+
+test('valid v1 state stays readable and closed historical recovery never generates another mail', async (t) => {
+  const f = await fixture(t);
+  const historical = { version: 1, service, phase: 'closed', kind: 'recovery',
+    last_attempt: 1900000000, delivery: 'delivered' };
+  const bytes = `${JSON.stringify(historical, null, 2)}\n`;
+  await fs.writeFile(path.join(f.state, stateName()), bytes, { mode: 0o600 });
+  assert.equal((await f.call('recovery')).code, 0);
+  assert.equal((await f.messages()).length, 0);
+  assert.equal(await fs.readFile(path.join(f.state, stateName()), 'utf8'), bytes);
+  await f.call();
+  assert.equal((await f.messages()).length, 1);
+  assert.equal((await f.read()).version, 2);
+});
+
+test('state or held lock replacement during classification fails explicitly before suppression', async (t) => {
+  for (const replaced of ['state', 'lock']) {
+    const f = await fixture(t);
+    await f.call();
+    const code = `import importlib.util, os, sys
+spec = importlib.util.spec_from_file_location('alert', sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+original = module.failure_fingerprint
+def raced(service):
+    value = original(service)
+    filename = os.path.join(os.environ['ALERT_STATE_DIR'], '${stateName().replace('.json', replaced === 'state' ? '.json' : '.lock')}')
+    os.unlink(filename)
+    if '${replaced}' == 'state':
+        with open(filename, 'w') as target: target.write('{}\\n')
+        os.chmod(filename, 0o600)
+    else:
+        fd = os.open(filename, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        os.close(fd)
+    return value
+module.failure_fingerprint = raced
+sys.argv = ['alert', '${service}', 'failure']
+sys.exit(module.main())`;
+    const result = await run('python3', ['-B', '-c', code, path.join(ops, 'alert_state.py')], { env: f.env });
+    assert.notEqual(result.code, 0);
+    assert.match(result.stderr, /state unavailable/);
+    assert.doesNotMatch(result.stdout, /suppressed|delivered/);
+    assert.equal((await f.messages()).length, 1);
+  }
 });
 
 test('real concurrent processes serialize one service, preserve restart state and distinct raw keys', async (t) => {
@@ -144,14 +247,14 @@ test('failed or timed-out transport is unknown and bounded, including recovery',
       await f.call();
       assert.equal((await f.messages()).length, 1);
       await f.call('failure', service, { FAKE_NOW: '2000086400' });
-      assert.equal((await f.messages()).length, 2);
+      assert.equal((await f.messages()).length, 1);
       await f.call('recovery', service, { FAKE_CURL_CODE: code, FAKE_NOW: '2000086401' });
       assert.equal((await f.read()).phase, 'closed');
       assert.equal((await f.read()).delivery, 'unknown');
       await f.call('recovery');
-      assert.equal((await f.messages()).length, 3);
+      assert.equal((await f.messages()).length, 2);
       await f.call('failure', service, { FAKE_NOW: '2000086402' });
-      assert.equal((await f.messages()).length, 4);
+      assert.equal((await f.messages()).length, 3);
     });
   }
 });
@@ -166,17 +269,18 @@ test('post-send persistence failure is explicit and never claims confirmed deliv
   assert.equal((await fs.readdir(f.state)).some((name) => name.endsWith('.tmp')), false);
 });
 
-test('legacy timestamp migrates conservatively and remains untouched', async (t) => {
+test('legacy timestamp remains untouched and unknown old class gets one classified successor', async (t) => {
   const f = await fixture(t);
   const legacy = path.join(f.state, `${service}.last`);
   await fs.writeFile(legacy, '2000000000\n', { mode: 0o600 });
   await f.call();
-  assert.equal((await f.messages()).length, 0);
-  await f.call('recovery');
   assert.equal((await f.messages()).length, 1);
+  assert.equal((await f.read()).version, 2);
+  await f.call('recovery');
+  assert.equal((await f.messages()).length, 2);
   assert.equal(await fs.readFile(legacy, 'utf8'), '2000000000\n');
   await f.call();
-  assert.equal((await f.messages()).length, 2);
+  assert.equal((await f.messages()).length, 3);
 });
 
 test('SMTP TLS, secret-free output/argv, relay mode and temporary cleanup', async (t) => {
@@ -194,18 +298,18 @@ test('SMTP TLS, secret-free output/argv, relay mode and temporary cleanup', asyn
   assert.doesNotMatch(message.config, /^user\s*=/m);
 });
 
-test('invalid modes and shorter-than-daily deployed policy fail before send', async (t) => {
+test('invalid modes and unsupported notification policies fail before send', async (t) => {
   const f = await fixture(t);
   for (const mode of ['bad', '--recovery']) assert.notEqual((await f.call(mode)).code, 0);
-  for (const cooldown of ['0', '3600', 'bad']) {
-    assert.notEqual((await f.call('failure', service, { ALERT_COOLDOWN_SECONDS: cooldown })).code, 0);
+  for (const policy of ['', 'daily', 'bad']) {
+    assert.notEqual((await f.call('failure', service, { ALERT_NOTIFICATION_POLICY: policy })).code, 0);
   }
   assert.equal((await f.messages()).length, 0);
 });
 
-test('units retain daily failure alert sandbox and best-effort success-only recovery hooks', async () => {
+test('units explicitly configure transition-only alerts and retain sandbox and success-only recovery hooks', async () => {
   const unit = await fs.readFile(path.join(ops, 'systemd/shareittoo-alert@.service'), 'utf8');
-  assert.match(unit, /^Environment=ALERT_COOLDOWN_SECONDS=86400$/m);
+  assert.match(unit, /^Environment=ALERT_NOTIFICATION_POLICY=transitions-only$/m);
   assert.match(unit, /^ExecStart=.*alert.sh %i failure$/m);
   for (const setting of ['StateDirectory=shareittoo-alerts', 'StateDirectoryMode=0700', 'ProtectSystem=strict', 'PrivateTmp=true', 'NoNewPrivileges=true']) {
     assert.ok(unit.split('\n').includes(setting));
@@ -218,7 +322,7 @@ test('units retain daily failure alert sandbox and best-effort success-only reco
     } else {
       assert.doesNotMatch(source, /^ExecStartPost=/m);
     }
-    assert.match(source, /^Environment=ALERT_COOLDOWN_SECONDS=86400$/m);
+    assert.match(source, /^Environment=ALERT_NOTIFICATION_POLICY=transitions-only$/m);
     assert.doesNotMatch(source, /^ExecStopPost=/m);
   }
 });
@@ -285,7 +389,7 @@ sys.exit(module.main())`;
   assert.equal((await f.read()).delivery, 'unknown');
   assert.equal((await f.messages()).length, 0);
   await f.call('failure', service, { FAKE_NOW: '2000086400' });
-  assert.equal((await f.messages()).length, 1);
+  assert.equal((await f.messages()).length, 0);
 });
 
 test('simultaneous successful runs produce one recovery attempt', async (t) => {
@@ -300,7 +404,7 @@ test('default policy creates private state and rejects unsafe lock or directory'
   const f = await fixture(t);
   await fs.rmdir(f.state);
   const environment = { ...f.env };
-  delete environment.ALERT_COOLDOWN_SECONDS;
+  delete environment.ALERT_NOTIFICATION_POLICY;
   assert.equal((await run('bash', [path.join(ops, 'alert.sh'), service, 'failure'], { env: environment })).code, 0);
   assert.equal((await fs.stat(f.state)).mode & 0o777, 0o700);
   const lock = path.join(f.state, stateName().replace('.json', '.lock'));

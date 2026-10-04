@@ -3,7 +3,7 @@
 
 SMTP cannot guarantee exactly-once recipient delivery. A durable pending attempt
 is therefore treated as unknown after interruption, never as permission to retry.
-Recovery gets one attempt; unresolved failures get a bounded daily reminder.
+Recovery gets one attempt; an unchanged open failure never sends a reminder.
 """
 import email.utils
 import fcntl
@@ -41,7 +41,15 @@ def read_private(directory, name):
         return None
     with os.fdopen(fd, 'rb') as source:
         private_metadata(source.fileno())
+        before = os.fstat(source.fileno())
         data = source.read(4097)
+        after = os.fstat(source.fileno())
+        linked = os.stat(name, dir_fd=directory, follow_symlinks=False)
+        fields = ('st_dev', 'st_ino', 'st_mode', 'st_uid', 'st_gid', 'st_nlink',
+                  'st_size', 'st_mtime_ns', 'st_ctime_ns')
+        if any(getattr(before, key) != getattr(after, key)
+               or getattr(after, key) != getattr(linked, key) for key in fields):
+            raise AlertError('state unavailable: changed during read')
     if len(data) > 4096 or not data.endswith(b'\n'):
         raise AlertError('state unavailable')
     return data
@@ -80,14 +88,22 @@ def load_state(directory, name, service):
         return value
     try:
         value = json.loads(data)
+        base_keys = {'version', 'service', 'phase', 'kind', 'last_attempt', 'delivery'}
         if (not isinstance(value, dict)
-                or set(value) != {'version', 'service', 'phase', 'kind', 'last_attempt', 'delivery'}
-                or type(value['version']) is not int or value['version'] != 1
+                or type(value.get('version')) is not int or value['version'] not in (1, 2)
+                or set(value) != (base_keys if value['version'] == 1
+                                  else base_keys | {'failure_fingerprint'})
                 or value['service'] != service or value['phase'] not in ('open', 'closed')
                 or value['kind'] not in ('failure', 'reminder', 'recovery')
                 or (value['phase'] == 'closed') != (value['kind'] == 'recovery')
                 or type(value['last_attempt']) is not int or not 0 <= value['last_attempt'] <= 2**53
                 or value['delivery'] not in ('pending', 'unknown', 'delivered', 'not_sent')):
+            raise ValueError()
+        if value['version'] == 2 and not (
+                value['kind'] in ('failure', 'recovery')
+                and
+                isinstance(value['failure_fingerprint'], str)
+                and re.fullmatch(r'[a-f0-9]{64}', value['failure_fingerprint'])):
             raise ValueError()
     except (ValueError, TypeError, UnicodeError):
         raise AlertError('state unavailable') from None
@@ -96,6 +112,71 @@ def load_state(directory, name, service):
         replace_state(directory, name, value)
         print('ShareItToo alert previous delivery unknown for ' + service)
     return value
+
+
+def failure_fingerprint(service):
+    """Classify an exact failed invocation without retaining raw journal data."""
+    properties = ('Id', 'InvocationID', 'Result', 'ExecMainCode', 'ExecMainStatus')
+    result = subprocess.run(['systemctl', 'show', service,
+                             '--property=' + ','.join(properties), '--no-pager'],
+                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                            timeout=10, check=False, text=True)
+    if result.returncode != 0 or len(result.stdout) > 4096:
+        raise AlertError('failure identity unavailable')
+    observed = {}
+    for line in result.stdout.splitlines():
+        key, separator, value = line.partition('=')
+        if not separator or key not in properties or key in observed:
+            raise AlertError('failure identity unavailable')
+        observed[key] = value
+    if (set(observed) != set(properties) or observed['Id'] != service
+            or not re.fullmatch(r'[a-f0-9]{32}', observed['InvocationID'])
+            or observed['Result'] not in ('exit-code', 'signal', 'core-dump', 'timeout',
+                                         'watchdog', 'protocol', 'resources',
+                                         'start-limit-hit', 'oom-kill')
+            or not re.fullmatch(r'[0-9]{1,3}', observed['ExecMainCode'])
+            or not re.fullmatch(r'[0-9]{1,3}', observed['ExecMainStatus'])
+            or os.environ.get('MONITOR_UNIT', service) != service
+            or os.environ.get('MONITOR_INVOCATION_ID', observed['InvocationID'])
+            != observed['InvocationID']):
+        raise AlertError('failure identity unavailable')
+    tags = []
+    if service == 'shareittoo-health.service':
+        journal = subprocess.run(['journalctl', '--quiet', '--no-pager', '--output=json',
+                                  '--lines=200', '_SYSTEMD_UNIT=' + service,
+                                  '_SYSTEMD_INVOCATION_ID=' + observed['InvocationID']],
+                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                 timeout=10, check=False, text=True)
+        if journal.returncode != 0 or len(journal.stdout) > 262144:
+            raise AlertError('failure identity unavailable')
+        allowed = {'website', 'api', 'database', 'mail', 'release', 'release-identity',
+                   'disk', 'backup', 'restore-check', 'container:shareittoo-web',
+                   'container:shareittoo-api', 'container:shareittoo-postgres',
+                   'health:shareittoo-api', 'health:shareittoo-postgres'}
+        matches = []
+        try:
+            for line in journal.stdout.splitlines():
+                record = json.loads(line)
+                message = record.get('MESSAGE', '')
+                if not isinstance(message, str) or not message.startswith('ShareItToo health check failed: '):
+                    continue
+                if (record.get('_SYSTEMD_UNIT') != service
+                        or record.get('_SYSTEMD_INVOCATION_ID') != observed['InvocationID']):
+                    raise ValueError()
+                reasons = message.removeprefix('ShareItToo health check failed: ').split()
+                if not reasons or not set(reasons) <= allowed or len(reasons) != len(set(reasons)):
+                    raise ValueError()
+                matches.append(sorted(reasons))
+        except (ValueError, TypeError, AttributeError):
+            raise AlertError('failure identity unavailable') from None
+        if len(matches) != 1:
+            raise AlertError('failure identity unavailable')
+        tags = matches[0]
+    # A subsequent timer invocation is not a new incident. Deliberately omit
+    # invocation ID/time while binding target and actual failure classification.
+    identity = {key: observed[key] for key in ('Id', 'Result', 'ExecMainCode', 'ExecMainStatus')}
+    identity['tags'] = tags
+    return hashlib.sha256(json.dumps(identity, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 
 def smtp_settings():
@@ -143,10 +224,8 @@ def send_mail(values, service, kind):
     if not envelope_from:
         raise AlertError('SMTP alert delivery is not configured')
     subject = {'failure': 'ShareItToo critical service alert',
-               'reminder': 'ShareItToo critical service alert: unresolved reminder',
                'recovery': 'ShareItToo service recovered'}[kind]
     description = {'failure': 'A critical ShareItToo service check failed.',
-                   'reminder': 'The ShareItToo service failure remains unresolved.',
                    'recovery': 'A later successful run confirms the ShareItToo service recovered.'}[kind]
     with tempfile.TemporaryDirectory(prefix='sit-alert-') as temporary:
         message_path = os.path.join(temporary, 'message.eml')
@@ -179,7 +258,7 @@ def send_mail(values, service, kind):
             return False
 
 
-def incident(directory, service, mode, cooldown):
+def incident(directory, service, mode):
     key = hashlib.sha256(service.encode()).hexdigest()
     try:
         lock = os.open(key + '.lock', os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_NONBLOCK,
@@ -200,6 +279,20 @@ def incident(directory, service, mode, cooldown):
                 time.sleep(0.05)
         name = key + '.json'
         previous = load_state(directory, name, service)
+        state_snapshot = read_private(directory, name)
+        if (None if state_snapshot is None else json.loads(state_snapshot)) != previous:
+            raise AlertError('state unavailable: changed while locked')
+        fingerprint = failure_fingerprint(service) if mode == 'failure' else (
+            previous.get('failure_fingerprint') if previous else None)
+        # V1 did not record a failure class; preserve its reader contract, then
+        # bind one fresh classified event instead of claiming the class matched.
+        if mode == 'recovery' and previous and fingerprint is None:
+            fingerprint = hashlib.sha256(('legacy\n' + service).encode()).hexdigest()
+        linked_lock = os.stat(key + '.lock', dir_fd=directory, follow_symlinks=False)
+        held_lock = os.fstat(held.fileno())
+        if ((linked_lock.st_dev, linked_lock.st_ino) != (held_lock.st_dev, held_lock.st_ino)
+                or read_private(directory, name) != state_snapshot):
+            raise AlertError('state unavailable: changed while locked')
         now = int(subprocess.check_output(['date', '+%s'], stderr=subprocess.DEVNULL, timeout=5))
         if now < 0:
             raise AlertError('state unavailable')
@@ -207,14 +300,13 @@ def incident(directory, service, mode, cooldown):
         unsent = previous is not None and previous['delivery'] == 'not_sent'
         if mode == 'recovery' and not opened and not unsent:
             return 0
-        if mode == 'failure' and opened and not unsent and now - previous['last_attempt'] < cooldown:
-            print('ShareItToo alert suppressed by cooldown for ' + service)
+        if (mode == 'failure' and opened and not unsent
+                and previous.get('failure_fingerprint') == fingerprint):
+            print('ShareItToo alert suppressed unchanged failure for ' + service)
             return 0
-        kind = 'recovery' if mode == 'recovery' else ('reminder' if opened else 'failure')
-        if mode == 'failure' and opened and unsent:
-            kind = previous['kind']
-        state = dict(version=1, service=service, phase='closed' if mode == 'recovery' else 'open',
-                     kind=kind, last_attempt=now, delivery='pending')
+        kind = 'recovery' if mode == 'recovery' else 'failure'
+        state = dict(version=2, service=service, phase='closed' if mode == 'recovery' else 'open',
+                     kind=kind, last_attempt=now, delivery='pending', failure_fingerprint=fingerprint)
         # Reserve durably before any transport. A crash cannot grant rapid retry.
         replace_state(directory, name, state)
         try:
@@ -239,11 +331,10 @@ def main():
     os.umask(0o077)
     service = sys.argv[1] if len(sys.argv) >= 2 else ''
     mode = sys.argv[2] if len(sys.argv) >= 3 else 'failure'
-    cooldown_text = os.environ.get('ALERT_COOLDOWN_SECONDS', '86400')
+    policy = os.environ.get('ALERT_NOTIFICATION_POLICY', 'transitions-only')
     if (len(sys.argv) > 3 or not re.fullmatch(r'[A-Za-z0-9_.@:-]{1,160}', service)
-            or mode not in ('failure', 'recovery') or not re.fullmatch(r'[0-9]{1,10}', cooldown_text)
-            or not 86400 <= int(cooldown_text) <= 31536000):
-        print('Invalid alert service, mode or reminder policy', file=sys.stderr)
+            or mode not in ('failure', 'recovery') or policy != 'transitions-only'):
+        print('Invalid alert service, mode or notification policy', file=sys.stderr)
         return 2
     state_dir = os.environ.get('ALERT_STATE_DIR', '/var/lib/shareittoo-alerts')
     try:
@@ -260,7 +351,7 @@ def main():
         directory = os.open(state_dir, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         try:
             private_metadata(directory, directory=True)
-            return incident(directory, service, mode, int(cooldown_text))
+            return incident(directory, service, mode)
         finally:
             os.close(directory)
     except AlertError as error:
