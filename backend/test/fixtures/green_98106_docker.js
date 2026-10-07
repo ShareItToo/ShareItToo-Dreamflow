@@ -79,7 +79,10 @@ export function dockerFixture() {
     privateRuntime: { kind: 'sit-green-staging-98-106-private-runtime', schemaVersion: 1, collectedAt: new Date().toISOString(),
       api: structuredClone(api), acceptanceMfaFile: '/protected/synthetic/acceptance-mfa' } };
   const ledgers = migrationInventory().map(r => ({ ...r, applied_at: '2026-10-04T00:00:00.000Z' }));
-  const dbStates = new Map([[database.Id, { schema: 98, business: { users: { count: 1, sha256: '3'.repeat(64) }, auth_identities: { count: 1, sha256: '4'.repeat(64) } } }]]);
+  const dbStates = new Map([[database.Id, { schema: 98, business: { users: { count: 1, sha256: '3'.repeat(64) }, auth_identities: { count: 1, sha256: '4'.repeat(64) } },
+    watchdog: { singleton: true, worker_version: 'support-deadline-watchdog-v1', last_started_at: '2020-01-01T00:00:00.000Z',
+      last_succeeded_at: '2020-01-01T00:00:00.000Z', last_failed_at: null, last_error_code: null,
+      last_inspected_count: 0, last_alert_count: 0, attempt_count: 1, success_count: 1, updated_at: '2020-01-01T00:00:00.000Z' } }]]);
   const functions = migrationInventory().slice(98).flatMap(({ name }) => [...fs.readFileSync(path.join(repositoryRoot, 'backend/sql/migrations', name), 'utf8')
     .matchAll(/^CREATE(?: OR REPLACE)? FUNCTION ([a-z][a-z0-9_]+)\(/gmu)].map(m => m[1]));
   const materials = { mfaFile: '/protected/synthetic/mfa', firebaseFile: '/protected/synthetic/firebase', acceptanceMfaFile: '/protected/synthetic/acceptance-mfa',
@@ -150,6 +153,15 @@ export function dockerFixture() {
         } else r.output = JSON.stringify({ uid: 100, gid: 101, mfa: materials.mfaSha256, firebase: materials.firebaseSha256, acceptance: materials.mfaSha256 });
         r.State.Running = false; r.State.Status = 'exited';
         for (const n of Object.values(records.get(a[1]).NetworkSettings.Networks)) if (records.has(n.NetworkID)) delete records.get(n.NetworkID).Containers[r.Id];
+      } else if (r.Config.Cmd?.includes('src/server.js')) {
+        const host = new URL(r.Config.Env.find(x => x.startsWith('DATABASE_URL=')).slice('DATABASE_URL='.length)).hostname;
+        const db = [...records.values()].find(v => dbStates.has(v.Id)
+          && Object.values(v.NetworkSettings.Networks).some(n => n.IPAddress === host || v.Name === `/${host}`));
+        if (!db) throw new Error('synthetic_startup_database_unbound');
+        const watchdog = dbStates.get(db.Id).watchdog;
+        watchdog.last_started_at = new Date(Date.parse(watchdog.updated_at) + 1000).toISOString();
+        watchdog.last_succeeded_at = watchdog.last_started_at; watchdog.updated_at = watchdog.last_started_at;
+        watchdog.attempt_count++; watchdog.success_count++;
       }
       out = r.Id;
     } else if (a[0] === 'stop') {
@@ -184,9 +196,10 @@ export function dockerFixture() {
         else if (['postgres_version', 'postgres_major'].includes(entry.phase)) out = '160015';
         else if (entry.phase.startsWith('postgres_select_')) out = '1';
         else if (entry.phase === 'foreign_writers') out = String(foreignWriters);
-        else if (entry.phase === 'table_names') out = JSON.stringify([...Object.keys(state.business), 'schema_migrations', ...(state.schema === 106 ? newTableNames() : [])].sort());
+        else if (entry.phase === 'table_names') out = JSON.stringify([...Object.keys(state.business), 'schema_migrations', 'support_deadline_watchdog_state', ...(state.schema === 106 ? newTableNames() : [])].sort());
         else if (entry.phase === 'ledger_rows') out = JSON.stringify(ledgers.slice(0, state.schema));
         else if (entry.phase === 'business_fingerprint') out = JSON.stringify(state.business);
+        else if (entry.phase === 'watchdog_state') out = JSON.stringify([state.watchdog]);
         else if (entry.phase === 'new_namespace_count') out = '0';
         else if (entry.phase === 'readiness_fingerprint') out = JSON.stringify({ paymentRecoveryNeedsReview: [], supportNextUpdateOverdue: [] });
         else if (entry.phase === 'function_inventory') out = JSON.stringify(functions);

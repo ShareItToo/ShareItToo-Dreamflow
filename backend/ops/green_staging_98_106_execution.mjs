@@ -6,7 +6,7 @@ import { assertEnvironment, buildPlan, canonicalMounts, checkContainer, containe
 import { assertReadinessFindingsUnchanged } from './staging_forward_migration_rehearsal.mjs';
 import { assertGreenRuntimeReadbacks } from './green_staging_promotion.mjs';
 import { assertLoopbackPortAvailable, runMfaProbe } from './staging_controlled_acceptance.mjs';
-import { assertNoWriters, checkForwardIntegrity, readDatabase, readSnapshot } from './green_staging_98_106_database.mjs';
+import { assertNoWriters, assertStartupHeartbeat, checkForwardIntegrity, readDatabase, readSnapshot, snapshotFailureDiagnostic } from './green_staging_98_106_database.mjs';
 import { assertArtifactFamily, closeArtifact, exclusiveArtifact, openArtifact, privateDirectory, verifyArtifact, writeArtifact } from './green_staging_98_106_evidence.mjs';
 import { dockerCommand, dockerObject, OwnedDocker, ownershipLabel, validId } from './green_staging_98_106_resources.mjs';
 
@@ -253,6 +253,7 @@ export async function runRehearsal(inputs, options, dependencies = {}) {
     await migrate('migrateone');
     const oldNames = Object.keys(before.data.business);
     const after = await readSnapshot(command, isolated, 106, oldNames);
+    assert(equal(before.watchdog, after.watchdog), 'green_98_106_migration_watchdog_drift');
     assertDataTransition(before.data, after.data); assertReadinessFindingsUnchanged(before.readiness, after.readiness);
     await checkForwardIntegrity(command, isolated); await migrate('migratetwo');
     assert(equal(await readSnapshot(command, isolated, 106, oldNames), after), 'green_98_106_idempotence');
@@ -275,19 +276,19 @@ export async function runRehearsal(inputs, options, dependencies = {}) {
     await poll(() => probes(command, candidate.id, green98106.runtimeCommit), dependencies.delay);
     assert([502, 503].includes((await (dependencies.publicReadback ?? publicReadback)()).status), 'green_98_106_public_candidate_served');
     const started = await readSnapshot(command, isolated, 106, oldNames);
-    assert(equal(started, after), 'green_98_106_candidate_start_drift');
+    assertStartupHeartbeat(after, started);
     const featureProbes = await runMfaProbe({ container: candidate.id, commandRunner: async (_cmd, args, input) =>
       String(await command({ phase: 'candidate_mfa_identity', args, input })) });
     assertReadinessFindingsUnchanged(after.readiness, (await readSnapshot(command, isolated, 106, oldNames)).readiness);
     await owned.cleanup();
     await inspectSource(command, inputs, sealedApiName, false); await assertNoWriters(command, database);
     assert(equal(await readSnapshot(command, database, 98), before), 'green_98_106_source_final_drift');
-    result = { kind: 'sit-green-staging-98-106-rehearsal', schemaVersion: 1, status: 'passed',
+    result = { kind: 'sit-green-staging-98-106-rehearsal', schemaVersion: 2, status: 'passed',
       runtimeCommit: green98106.runtimeCommit, opsCommit: inputs.binding.opsCommit,
       publicationSha256: inputs.binding.publicationSha256, targetSha256: inputs.binding.targetSha256,
       configSha256: inputs.binding.configSha256, backupSha256: backupBytes.sha256,
       materialBindingSha256: objectDigest({ mfa: materials.mfaSha256, firebase: materials.firebaseSha256 }),
-      source: before, migrated: after, featureProbes, cleanupVerified: true, servicesRemainQuiesced: true,
+      source: before, migrated: after, started, featureProbes, cleanupVerified: true, servicesRemainQuiesced: true,
       publicCandidateServed: false, publicReleaseComplete: false, providerTraffic: false,
       createdAt: new Date().toISOString() };
   } catch (error) { operationError = error; }
@@ -299,6 +300,7 @@ export async function runRehearsal(inputs, options, dependencies = {}) {
     writeArtifact(directory, `${nonce}.failure.json`, { kind: 'sit-green-staging-98-106-failure',
       runtimeCommit: green98106.runtimeCommit, opsCommit: inputs.binding.opsCommit,
       phase: 'rehearsal', cleanupVerified: !cleanupError, code: safeError(cleanupError ?? operationError),
+      ...(snapshotFailureDiagnostic(operationError) ? { snapshotDrift: snapshotFailureDiagnostic(operationError) } : {}),
       publicReleaseComplete: false, oldImageRestarted: false });
     throw cleanupError ?? operationError;
   }
@@ -308,10 +310,10 @@ export async function runRehearsal(inputs, options, dependencies = {}) {
 
 export function validateRehearsal(receipt, inputs, { now = Date.now() } = {}) {
   exact(receipt, ['kind', 'schemaVersion', 'status', 'runtimeCommit', 'opsCommit', 'publicationSha256',
-    'targetSha256', 'configSha256', 'backupSha256', 'materialBindingSha256', 'source', 'migrated',
+    'targetSha256', 'configSha256', 'backupSha256', 'materialBindingSha256', 'source', 'migrated', 'started',
     'featureProbes', 'cleanupVerified', 'servicesRemainQuiesced', 'publicCandidateServed',
     'publicReleaseComplete', 'providerTraffic', 'createdAt'], 'green_98_106_rehearsal_receipt');
-  assert(receipt.kind === 'sit-green-staging-98-106-rehearsal' && receipt.schemaVersion === 1 && receipt.status === 'passed'
+  assert(receipt.kind === 'sit-green-staging-98-106-rehearsal' && receipt.schemaVersion === 2 && receipt.status === 'passed'
     && receipt.runtimeCommit === green98106.runtimeCommit && receipt.opsCommit === inputs.binding.opsCommit
     && receipt.publicationSha256 === inputs.binding.publicationSha256 && receipt.targetSha256 === inputs.binding.targetSha256
     && receipt.configSha256 === inputs.binding.configSha256 && /^[a-f0-9]{64}$/u.test(receipt.backupSha256)
@@ -324,6 +326,8 @@ export function validateRehearsal(receipt, inputs, { now = Date.now() } = {}) {
   assert(equal(receipt.featureProbes, { mfa: 'enroll-pending-cancel-passed', identity: 'start-status-resume-revoke-passed' }),
     'green_98_106_rehearsal_acceptance');
   assertDataTransition(receipt.source.data, receipt.migrated.data);
+  assert(receipt.source.schemaVersion === 2 && equal(receipt.source.watchdog, receipt.migrated.watchdog), 'green_98_106_rehearsal_watchdog_drift');
+  assertStartupHeartbeat(receipt.migrated, receipt.started, { now });
   assertReadinessFindingsUnchanged(receipt.source.readiness, receipt.migrated.readiness);
 }
 
@@ -404,6 +408,7 @@ export async function runPromotion(inputs, options, dependencies = {}) {
     assert(await owned.task(worker) === 'migration-complete', 'green_98_106_canonical_migration'); await owned.remove(worker);
     const oldNames = Object.keys(inputs.rehearsal.source.data.business);
     const migrated = await readSnapshot(command, database, 106, oldNames);
+    assert(equal(inputs.rehearsal.source.watchdog, migrated.watchdog), 'green_98_106_migration_watchdog_drift');
     assertDataTransition(inputs.rehearsal.source.data, migrated.data);
     assertReadinessFindingsUnchanged(inputs.rehearsal.source.readiness, migrated.readiness);
     await checkForwardIntegrity(command, database);
@@ -442,7 +447,7 @@ export async function runPromotion(inputs, options, dependencies = {}) {
     try { await command({ phase: 'final_start', args: ['start', finalId] }); } catch { /* Read back exact ID. */ }
     assert((await finalInspect()).State?.Running === true, 'green_98_106_final_start_unconfirmed');
     await poll(() => probes(command, finalId, green98106.runtimeCommit), dependencies.delay);
-    assert(equal(await readSnapshot(command, database, 106, oldNames), migrated), 'green_98_106_final_start_data_drift');
+    assertStartupHeartbeat(migrated, await readSnapshot(command, database, 106, oldNames), { code: 'green_98_106_final_start_data_drift' });
     // Last public-route boundary: provider network is attached only after internal acceptance.
     await inspectSource(command, inputs, sealedApiName, false); materials.recheck(); await finalInspect();
     const providerNow = dockerObject(await command({ phase: 'provider_network_cas', args: ['network', 'inspect', provider.id] }));
@@ -456,7 +461,9 @@ export async function runPromotion(inputs, options, dependencies = {}) {
     assert(publicVersion.status === 200 && publicVersion.body?.commit === green98106.runtimeCommit
       && publicVersion.body?.environment === 'test', 'green_98_106_public_version_mismatch');
     await owned.cleanup();
-    assertDataTransition(inputs.rehearsal.source.data, (await readSnapshot(command, database, 106, oldNames)).data);
+    const finalSnapshot = await readSnapshot(command, database, 106, oldNames);
+    assertStartupHeartbeat(migrated, finalSnapshot, { code: 'green_98_106_final_start_data_drift' });
+    assertDataTransition(inputs.rehearsal.source.data, finalSnapshot.data);
     result = { kind: 'sit-green-staging-98-106-promotion', schemaVersion: 1, status: 'promoted',
       runtimeCommit: green98106.runtimeCommit, opsCommit: inputs.binding.opsCommit, rehearsalSha256: inputs.rehearsalSha256,
       targetSha256: inputs.binding.targetSha256, imageDigest: inputs.publication.digest,
@@ -498,7 +505,8 @@ export async function runPromotion(inputs, options, dependencies = {}) {
       runtimeCommit: green98106.runtimeCommit, opsCommit: inputs.binding.opsCommit,
       phase: 'promotion', canonicalMigrationStarted: canonicalStarted, forwardRecoveryRequired: canonicalStarted,
       cleanupVerified: !cleanupError, oldImageRestarted: false, automaticRestoreAttempted: false,
-      code: safeError(cleanupError ?? operationError), publicReleaseComplete: false });
+      code: safeError(cleanupError ?? operationError), publicReleaseComplete: false,
+      ...(snapshotFailureDiagnostic(operationError) ? { snapshotDrift: snapshotFailureDiagnostic(operationError) } : {}) });
     throw cleanupError ?? operationError;
   }
   return { status: result.status, artifact, publicReleaseComplete: false };

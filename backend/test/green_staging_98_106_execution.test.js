@@ -25,6 +25,8 @@ test('complete stateful rehearsal stays quiesced; separate receipt-confirmed pro
   const f = dockerFixture(); const directory = temporary();
   try {
     const promotion = await preparePromotion(f, directory);
+    assert.equal(f.inputs.rehearsal.schemaVersion, 2);
+    assert.equal(f.inputs.rehearsal.started.watchdog.attempt_count, f.inputs.rehearsal.migrated.watchdog.attempt_count + 1);
     assert.equal(f.dbStates.get(f.database.Id).schema, 98);
     assert.equal(f.api.State.Running, false);
     assert.ok(!f.calls.some(c => c.phase === 'final_create'));
@@ -34,6 +36,40 @@ test('complete stateful rehearsal stays quiesced; separate receipt-confirmed pro
     assert.ok(!f.calls.some(c => c.args[0] === 'start' && c.args[1] === f.api.Id));
     assert.ok(!f.calls.some(c => c.args[0] === 'volume' && ['create', 'rm'].includes(c.args[1])));
     assert.equal([...f.records.values()].filter(r => r.Name?.startsWith('/sit-g98106-') || r.Name?.startsWith('sit-g98106-')).length, 0);
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+test('real-shaped startup business drift fails before MFA and writes only component/table diagnosis', async () => {
+  const f = dockerFixture(), directory = temporary(), original = f.dependencies.command;
+  let started = false;
+  f.dependencies.command = async entry => {
+    const raw = await original(entry);
+    if (entry.phase === 'start_candidate') started = true;
+    if (started && entry.phase === 'business_fingerprint') {
+      const state = JSON.parse(raw); state.users.sha256 = '9'.repeat(64); return JSON.stringify(state);
+    }
+    return raw;
+  };
+  try {
+    await assert.rejects(runRehearsal(f.inputs, rehearseOptions(f, directory), f.dependencies), /candidate_start_drift/u);
+    assert.ok(!f.calls.some(c => c.phase === 'candidate_mfa_identity'));
+    const name = fs.readdirSync(directory).find(n => n.endsWith('.failure.json'));
+    const failure = JSON.parse(fs.readFileSync(path.join(directory, name)));
+    assert.deepEqual(failure.snapshotDrift, { components: ['business', 'watchdog'], tables: ['users'] });
+    assert.equal(failure.cleanupVerified, true);
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+test('migration-only watchdog writes fail before any candidate start', async () => {
+  const f = dockerFixture(), directory = temporary(), original = f.dependencies.command;
+  f.dependencies.command = async entry => {
+    const raw = await original(entry);
+    if (entry.phase === 'watchdog_state' && f.dbStates.get(entry.args[2])?.schema === 106) {
+      const rows = JSON.parse(raw); rows[0].attempt_count++; return JSON.stringify(rows);
+    }
+    return raw;
+  };
+  try {
+    await assert.rejects(runRehearsal(f.inputs, rehearseOptions(f, directory), f.dependencies), /migration_watchdog_drift/u);
+    assert.ok(!f.calls.some(c => c.phase === 'start_candidate'));
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
 test('rehearsal response-loss is reconciled by owned identities and exact postconditions', async t => {
@@ -204,13 +240,14 @@ test('late promotion receipt collision cannot leave an unacknowledged successor 
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
 test('promotion requires fresh successful acceptance, unchanged backup/material/source and independent consent', async t => {
-  for (const fault of ['confirmation', 'expired', 'cleanup', 'acceptance', 'backup', 'materials', 'source', 'foreign-network', 'missing-router', 'database-IP']) {
+  for (const fault of ['confirmation', 'expired', 'receipt-v1', 'cleanup', 'acceptance', 'backup', 'materials', 'source', 'foreign-network', 'missing-router', 'database-IP']) {
     await t.test(fault, async () => {
       const f = dockerFixture(), directory = temporary();
       try {
         const options = await preparePromotion(f, directory); const prior = f.calls.length;
         if (fault === 'confirmation') options.confirmation = rehearseOptions(f, directory).confirmation;
         if (fault === 'expired') f.inputs.rehearsal.createdAt = '2020-01-01T00:00:00Z';
+        if (fault === 'receipt-v1') f.inputs.rehearsal.schemaVersion = 1;
         if (fault === 'cleanup') f.inputs.rehearsal.cleanupVerified = false;
         if (fault === 'acceptance') f.inputs.rehearsal.featureProbes.mfa = 'not-verified';
         if (fault === 'backup') fs.appendFileSync(options.backupFile, 'drift');

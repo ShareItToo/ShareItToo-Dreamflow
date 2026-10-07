@@ -113,12 +113,21 @@ test('disposable native PG16: protected custom dump, restore98, forward106, idem
       await source.query(fs.readFileSync(new URL('../sql/schema.sql', import.meta.url), 'utf8'));
       await runMigrations(source, { through: 98 });
       await source.query("INSERT INTO users(id,email,profile) VALUES ('synthetic-green98-owner','synthetic-green98@example.invalid','{\"displayName\":\"Synthetic\"}')");
+      await source.query(`INSERT INTO support_deadline_watchdog_state (
+        singleton, worker_version, last_started_at, last_succeeded_at,
+        last_failed_at, last_error_code, last_inspected_count, last_alert_count,
+        attempt_count, success_count, updated_at
+      ) VALUES (
+        true, 'support-deadline-watchdog-v1', '2026-10-07T00:00:00.000Z', '2026-10-07T00:00:00.000Z',
+        NULL, NULL, 0, 0, 1, 1, '2026-10-07T00:00:00.000Z'
+      )`);
       const oldNames = (await tables(source)).filter(name => name !== 'schema_migrations');
       const before = await snapshot(source, 98, oldNames);
       const productionSql = name => async ({ args }) => run('psql', ['--dbname', connection(name),
         '-X', '-q', '-At', '-v', 'ON_ERROR_STOP=1', '-c', args.at(-1)]);
       const sqlDatabase = { id: '1'.repeat(64), name: 'synthetic_local', user: 'synthetic_local' };
       const productionBefore = await readSnapshot(productionSql('source98'), sqlDatabase, 98);
+      const strictBusinessNames = Object.keys(productionBefore.data.business);
       const readiness = (await source.query(buildReadinessFindingSql())).rows;
       const backup = path.join(temporary, 'backup.dump');
       const fd = fs.openSync(backup, fs.constants.O_RDWR | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW, 0o600);
@@ -132,8 +141,9 @@ test('disposable native PG16: protected custom dump, restore98, forward106, idem
       await runMigrations(restored);
       const after = await snapshot(restored, 106, oldNames);
       assertDataTransition(before, after);
-      const productionAfter = await readSnapshot(productionSql('restore106'), sqlDatabase, 106, oldNames);
+      const productionAfter = await readSnapshot(productionSql('restore106'), sqlDatabase, 106, strictBusinessNames);
       assertDataTransition(productionBefore.data, productionAfter.data);
+      assert.deepEqual(productionAfter.watchdog, productionBefore.watchdog);
       await checkForwardIntegrity(productionSql('restore106'), sqlDatabase);
       assert.deepEqual((await tables(restored)).sort(), [...oldNames, 'schema_migrations', ...newTableNames()].sort());
       assert.equal((await restored.query("SELECT count(*) FROM pg_constraint WHERE connamespace='public'::regnamespace AND NOT convalidated")).rows[0].count, '0');
@@ -149,6 +159,8 @@ test('disposable native PG16: protected custom dump, restore98, forward106, idem
       assert.deepEqual(await snapshot(restored, 106, oldNames), after);
       assert.deepEqual((await restored.query('SELECT * FROM schema_migrations ORDER BY name')).rows, ledgerBeforeIdempotence);
       assert.deepEqual((await restored.query(buildReadinessFindingSql())).rows, afterReadiness);
+      assert.deepEqual((await readSnapshot(productionSql('restore106'), sqlDatabase, 106, strictBusinessNames)).watchdog,
+        productionAfter.watchdog);
       t.diagnostic(`PG16 local synthetic proof: ${oldNames.length} old tables preserved; ${newTableNames().length} new tables empty; exact 98/106 ledgers; second run unchanged.`);
     } finally {
       for (const p of pools) await p.end();
