@@ -1,7 +1,7 @@
-# Green Staging 106 → 106 successor: read-only execution preflight
+# Green Staging 106 → 106 successor: isolated rehearsal
 
-Status: **read-only collector/CLI, binding and execution preflight implemented; no rehearsal or
-promotion adapter implemented**. Tests are synthetic/local PG16; no live
+Status: **read-only collector/CLI, binding, execution preflight and isolated rehearsal implemented;
+no canonical promotion adapter implemented**. Tests are synthetic/local PG16; no live
 collection, publication or deployment verification is claimed. Existing 98→106 source and evidence remain
 unchanged. The successor must be independently reviewed and gated before use.
 
@@ -20,9 +20,10 @@ This validates supplied data, not the provenance or completeness of live data.
 and explicitly returns all execution/readiness flags false (`collectionImplemented`
 is true, but does not claim a collection happened). It rejects
 `collect`, `preflight`, `rehearse`, `promote` and `execute`, even with valid
-confirmation text. Distinct future consent strings are defined as:
+confirmation text. The separate CLI rehearsal requires the current preflight
+receipt content hash as well; promotion remains unimplemented:
 
-- `rehearse:RUNTIME_COMMIT:OPS_COMMIT:TARGET_CONTENT_SHA256`
+- `rehearse:RUNTIME_COMMIT:OPS_COMMIT:TARGET_CONTENT_SHA256:PREFLIGHT_CONTENT_SHA256`
 - `promote:RUNTIME_COMMIT:OPS_COMMIT:REHEARSAL_BYTE_SHA256`
 
 No expected runtime/image is invented or embedded in its own Ops source.
@@ -84,8 +85,9 @@ Independent target review/binding is still required before later execution.
 
 Explicit `--mode preflight` additionally requires protected `--target`,
 `--execution-config` and `--runtime-manifest`, each with its own `-sha256`
-raw-byte argument. Default remains `plan`; no write/rehearse/promote mode is
-accepted. The new source closure includes both preflight and image reader.
+raw-byte argument. Default remains `plan`; mutation requires the separate explicit
+`rehearse` mode described below. `promote` and `execute` remain rejected.
+The source closure includes preflight, image reader and rehearsal dependencies.
 
 `green_staging_106_106_preflight.mjs` defines separate version-1 kinds
 `sit-green-staging-106-106-execution-config` and
@@ -114,8 +116,8 @@ Preflight checks the digest twice and requires zero unvalidated public
 constraints. All table/ledger/readiness/watchdog contents must still equal the
 independently bound collection. A sealed source additionally requires zero
 other database connections before and after. This is not a backup or a frozen
-database: sequence current values, materialized-view contents and broader
-restore-compatibility proof remain part of the future rehearsal package.
+database: sequence current values, materialized-view contents and restore
+compatibility are separately checked by the rehearsal package.
 
 `green_staging_106_106_image.mjs` consumes `docker image save` stdout only,
 without extraction, pulls, temporary files or new containers. Its bounded tar
@@ -136,54 +138,48 @@ and after all reads. No name-based fallback or old-image restart exists.
 
 Pure disposable primitives specify new run-scoped names/labels, exact image and
 captured-ID ownership checks, an internal network, and anonymous attached PG
-storage only. They do not create or remove resources. Resource lifecycle,
-response-loss handling and actual cleanup belong to the later executor.
+storage only. The separate `green_staging_106_106_resources.mjs` adapter supplies
+the captured-ID lifecycle, response-loss reconciliation and verified cleanup.
 
 Preflight PASS remains **read-only evidence**, with
 `namespaceReadabilityVerified=false`, `rehearsalPassed=false`,
 `promotionAuthorized=false` and `mutationAdapterImplemented=false`. Static
-UID/group/mode proof does not replace the exact candidate namespace's future
+UID/group/mode proof does not replace the exact candidate namespace's rehearsal
 material readability/config import probe. Synthetic image archives and mocked
 root-material metadata are not actual Docker-image or host-material proof.
 
-## Exact remaining modules, in order
+## Implemented isolated rehearsal
 
-1. **Runtime namespace proof and explicit protected evidence writing**:
-   Add the separately consented, isolated exact-image material readability and
-   config-import probe; prove mounted target parent traversal as the resolved
-   nonroot user without weakening root-only host parents. Any future writer
-   needs its own explicit mode and 0600/0700 no-follow held-descriptor contract.
-   Verify the actual exported image format in the authorized target environment
-   before claiming operational runtime proof; unsupported export variants fail.
+`green_staging_106_106_rehearsal.mjs` is exposed only by explicit `--mode rehearse`.
+In addition to all five preflight input files and byte hashes, supply protected
+`--preflight`/`--preflight-sha256`, `--evidence-directory` and the exact `--confirm`
+string above. The version-2 preflight receipt must be fresh (at most one hour),
+nonfuture and identical to a repeated preflight except its timestamp. Schema-1
+receipts, wrong consent and preexisting evidence names fail before mutation.
 
-2. **Disposable lifecycle and complete restore compatibility**:
-   `backend/ops/green_staging_106_106_database.mjs`,
-   `backend/ops/green_staging_106_106_resources.mjs` and
-   `backend/test/fixtures/green_106106_docker.js`.
-   Extend the pure ownership/storage primitives into the stateful executor.
-   Complete sequence-value/materialized-view and restore-compatibility checks;
-   orchestrate strict comparisons and the bounded startup heartbeat exception.
-   Use new run-scoped names/labels, exact-ID lifecycle checks, anonymous volumes
-   attached to owned containers and cleanup by captured IDs. Tests must model
-   Docker mount permutation, active network membership and stopped-source
-   absence, router preservation, foreign joins and response-loss handling.
+The runner verifies PG16 tools and candidate namespace material readability/config
+import as the resolved nonroot identity. It quiesces and seals the exact source ID,
+proves zero writers, and creates an exclusive descriptor-held custom-format backup.
+It restores verified bytes into run-scoped, owned PG16/internal-network/anonymous
+storage resources after initialization and two successful readiness reads.
+Tables (including populated Mission tables), ledger106/timestamps, readiness,
+physical schema, sequence values and materialized contents must match. Candidate
+startup permits only the strict single successful watchdog heartbeat; exact version
+and readiness precede isolated synthetic MFA/identity probes. Providers remain
+neutral and no ports/public networks are attached.
 
-3. **Protected rehearsal and isolated acceptance**:
-   `backend/ops/green_staging_106_106_execution.mjs` plus
-   `backend/test/green_staging_106_106_execution.test.js`.
-   Validate all inputs/tools/material/readability and the fresh target first;
-   require explicit rehearsal consent. Quiesce/seal the exact source and prove
-   no DB writers, create an exclusive verified backup, restore its held bytes
-   into owned isolated PG16 after init-complete plus two SELECT 1 successes.
-   Start the immutable candidate only in an isolated DB/uploads context with
-   neutral providers; require exact version/readiness and synthetic MFA/identity
-   acceptance. No migration delta is allowed; startup must leave all baseline
-   data, schema, ledger/timestamps and readiness findings unchanged (apart from
-   the validated one-heartbeat transition) before
-   synthetic fixture activity. Verify fixture cleanup separately. Cleanup
-   failure overrides PASS. Source remains sealed/stopped; no automatic restart.
+Cleanup uses captured IDs and verifies anonymous-volume absence; any cleanup
+failure overrides PASS. Final sealed source, canonical database and complete
+network/router membership are rechecked. Success evidence is written only afterward.
+The source remains stopped/sealed on success or failure; there is no old-image
+restart or canonical swap. Failures expose fixed stage/code labels, not secret data.
+The stateful Docker model covers response loss, foreign joins and cleanup failure;
+native PG16 tests verify actual custom dump/restore and catalog/data invariants.
+Neither establishes execution against an actual candidate image or staging host.
 
-4. **Separately confirmed canonical swap and evidence**:
+## Exact remaining module
+
+1. **Separately confirmed canonical swap and evidence**:
    extend the same new executor, never the old 98→106 runner. Require a fresh
    successful receipt (maximum one hour), exact backup/material/source bindings
    and distinct promotion consent. Recheck sealed source and the complete
@@ -211,7 +207,7 @@ new shared implementation, with old files/evidence preserved.
 ## Focused first-slice verification
 
 ```sh
-SIT_GREEN_106_106_PG16=1 node --import ./backend/test_setup.js --test backend/test/green_staging_106_106_contract.test.js backend/test/green_staging_106_106_collector.test.js backend/test/green_staging_106_106_preflight.test.js backend/test/green_staging_106_106_postgres.integration.test.js
+SIT_GREEN_106_106_PG16=1 node --import ./backend/test_setup.js --test backend/test/green_staging_106_106_contract.test.js backend/test/green_staging_106_106_collector.test.js backend/test/green_staging_106_106_preflight.test.js backend/test/green_staging_106_106_rehearsal.test.js backend/test/green_staging_106_106_postgres.integration.test.js
 node --test test/tool/validate_green_staging_106_106_runtime.test.mjs
 ```
 

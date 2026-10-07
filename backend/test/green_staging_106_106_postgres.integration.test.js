@@ -9,6 +9,7 @@ import { findAvailableLoopbackPort, resolvePostgresBinDir } from '../../tool/run
 import { runMigrations } from '../src/migrations.js';
 import { decodeSnapshot, snapshotSql } from '../ops/green_staging_106_106_database.mjs';
 import { physicalSchemaSql } from '../ops/green_staging_106_106_preflight.mjs';
+import { auxiliarySql } from '../ops/green_staging_106_106_rehearsal.mjs';
 
 test('native PG16 successor SQL collects populated tables consistently and cannot write',
   { skip: process.env.SIT_GREEN_106_106_PG16 !== '1', timeout: 120000 }, async t => {
@@ -36,13 +37,33 @@ test('native PG16 successor SQL collects populated tables consistently and canno
       // discovery; no hardcoded 98/106 namespace or emptiness list can pass.
       await pool.query('CREATE TABLE successor_collector_synthetic(value text NOT NULL)');
       await pool.query("INSERT INTO successor_collector_synthetic VALUES ('synthetic-only')");
+      await pool.query('CREATE SEQUENCE successor_collector_sequence START 17');
+      await pool.query("SELECT nextval('successor_collector_sequence')");
+      await pool.query('CREATE MATERIALIZED VIEW successor_collector_materialized AS SELECT value FROM successor_collector_synthetic');
       const args = ['--dbname', connection, '-X', '-q', '-At', '-v', 'ON_ERROR_STOP=1'];
       const collect = () => decodeSnapshot(run('psql', args, { input: snapshotSql, stdio: ['pipe', 'pipe', 'pipe'] }));
       const physical = () => run('psql', args, { input: physicalSchemaSql, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+      const auxiliary = () => run('psql', args, { input: auxiliarySql, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+      const auxiliaryBefore = auxiliary();
+      assert.equal(JSON.parse(auxiliaryBefore.split('\n')[0]).successor_collector_sequence.last_value, 17);
+      assert.equal(JSON.parse(auxiliaryBefore.split('\n')[1]).successor_collector_materialized.count, 1);
       const physicalBefore = physical(); assert.match(physicalBefore, /^[a-f0-9]{64}$/u);
       assert.equal(physical(), physicalBefore);
       const before = collect(), after = collect();
       assert.deepEqual(after, before);
+      const dump = run('pg_dump', ['--format=custom', '--no-owner', '--no-acl', '--dbname', connection], { encoding: 'buffer' });
+      assert.equal(dump.subarray(0, 5).toString(), 'PGDMP');
+      run('createdb', ['-h', '127.0.0.1', '-p', String(port), '-U', user, 'successor_restore']);
+      const restoredConnection = connection.replace(/\/postgres$/u, '/successor_restore');
+      try { run('pg_restore', ['--exit-on-error', '--no-owner', '--no-acl', '--dbname', restoredConnection], { input: dump, stdio: ['pipe', 'pipe', 'pipe'] }); }
+      finally { dump.fill(0); }
+      const restoredArgs = ['--dbname', restoredConnection, '-X', '-q', '-At', '-v', 'ON_ERROR_STOP=1'];
+      for (const [query, expected] of [[physicalSchemaSql, physicalBefore], [auxiliarySql, auxiliaryBefore]]) {
+        assert.equal(run('psql', restoredArgs, { input: query, stdio: ['pipe', 'pipe', 'pipe'] }).trim(), expected);
+      }
+      assert.deepEqual(decodeSnapshot(run('psql', restoredArgs, { input: snapshotSql, stdio: ['pipe', 'pipe', 'pipe'] })), before);
+      await pool.query("SELECT nextval('successor_collector_sequence')"); assert.notEqual(auxiliary(), auxiliaryBefore);
+      await pool.query("SELECT setval('successor_collector_sequence',17,true)"); assert.equal(auxiliary(), auxiliaryBefore);
       assert.equal(before.data.business.successor_collector_synthetic.count, 1);
       assert.ok(Object.keys(before.data.business).some(n => n.startsWith('mission_')));
       assert.throws(() => run('psql', args, { input: "BEGIN READ ONLY; INSERT INTO successor_collector_synthetic VALUES ('forbidden'); COMMIT;",
@@ -54,7 +75,7 @@ test('native PG16 successor SQL collects populated tables consistently and canno
       assert.notEqual(physical(), unvalidated);
       await pool.query('ALTER TABLE successor_collector_synthetic DROP CONSTRAINT successor_positive_length');
       assert.equal(physical(), physicalBefore);
-      t.diagnostic(`PG16 consistent snapshot: ${Object.keys(before.data.business).length} business tables, exact ledger106, typed singleton; read-only write rejected.`);
+      t.diagnostic(`PG16 exact custom dump/restore: ${Object.keys(before.data.business).length} business tables, ledger106, singleton, physical schema, sequence and materialized state; read-only write rejected.`);
     } finally {
       await pool?.end();
       if (started) {

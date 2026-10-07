@@ -156,7 +156,7 @@ export function assertOwnedNetwork(record, plan, capturedId) {
 }
 
 export async function executionPreflight({ binding, publicationBytes, target, config, manifest },
-  { command = preflightRead, sourceOptions, materials = bindExecutionMaterials } = {}) {
+  { command = preflightRead, sourceOptions, materials = bindExecutionMaterials, now = Date.now } = {}) {
   validateSuccessorSource(binding, sourceOptions); validateExecutionInputs(config, manifest, binding, target);
   const publication = validateSuccessorPublication(publicationBytes, binding);
   const one = async (kind, id) => {
@@ -209,7 +209,7 @@ export async function executionPreflight({ binding, publicationBytes, target, co
     require(String(await command({ args, input: physicalSchemaSql })).trim() === schema, 'physical_schema');
     require(String(await command({ args, input: constraintsSql })).trim() === '0', 'physical_constraints');
     if (config.sourceState === 'sealed') require(String(await command({ args, input: writersSql })).trim() === '0', 'preflight_writer');
-    return { kind: 'sit-green-staging-106-106-preflight', schemaVersion: 1, status: 'read_only_preflight_passed',
+    return { kind: 'sit-green-staging-106-106-preflight', schemaVersion: 2, status: 'read_only_preflight_passed', createdAt: new Date(now()).toISOString(),
       targetSha256: manifest.targetSha256, configSha256: manifest.configSha256, physicalSchemaSha256: schema,
       materialBindingSha256: held.sha256, candidateContent: content,
       resources: disposableResourcePlan(config.runId, binding.candidateImageId, binding.scope.database.imageId),

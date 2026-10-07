@@ -7,6 +7,23 @@ import { main, parseArguments, runCli } from '../../tool/validate_green_staging_
 import { digest, migrationInventory, repositoryRoot } from '../../backend/ops/green_staging_98_106_contract.mjs';
 import { successorSourcePaths } from '../../backend/ops/green_staging_106_106_binding.mjs';
 import { inputs } from '../../backend/test/fixtures/green_106106_preflight.js';
+import { rehearsalFixture } from '../../backend/test/fixtures/green_106106_rehearsal.js';
+
+async function protectedRehearsal() {
+  const directory = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'sit-rehearsal-cli-'));
+  fs.chmodSync(directory, 0o700);
+  const state = await rehearsalFixture(directory);
+  const artifacts = { binding: state.data.binding, publication: state.data.publicationBytes, target: state.data.target,
+    'execution-config': state.data.config, 'runtime-manifest': state.data.manifest, preflight: state.options.preflight };
+  const args = ['--mode', 'rehearse'], files = {};
+  for (const [name, value] of Object.entries(artifacts)) {
+    const bytes = Buffer.isBuffer(value) ? value : Buffer.from(JSON.stringify(value));
+    const file = path.join(directory, `${name}.json`); fs.writeFileSync(file, bytes, { mode: 0o600 });
+    args.push(`--${name}`, file, `--${name}-sha256`, digest(bytes)); files[name] = file;
+  }
+  args.push('--evidence-directory', directory, '--confirm', state.options.confirmation);
+  return { ...state, args, files, directory, close: () => fs.rmSync(directory, { recursive: true, force: true }) };
+}
 
 async function protectedPreflight() {
   const state = await inputs();
@@ -27,13 +44,55 @@ async function protectedPreflight() {
   return { ...state, args, files, directory, snapshot, close: () => fs.rmSync(directory, { recursive: true, force: true }) };
 }
 
-test('successor CLI parses only explicit protected read inputs and never mutation/output arguments', () => {
+test('successor CLI defaults read-only and rejects promotion, output and incomplete rehearsal arguments', () => {
   const args = ['--binding', '/private/binding', '--binding-sha256', 'a'.repeat(64),
     '--publication', '/private/publication', '--publication-sha256', 'b'.repeat(64)];
   assert.equal(parseArguments(args).mode, 'plan');
   assert.equal(parseArguments([...args, '--mode', 'collect']).mode, 'collect');
   for (const suffix of [['--mode', 'promote'], ['--mode', 'rehearse'], ['--output', '/private/result'],
-    ['--confirm', 'yes'], ['--binding', '/duplicate'], ['--mode']]) assert.throws(() => parseArguments([...args, ...suffix]));
+    ['--binding', '/duplicate'], ['--mode']]) assert.throws(() => parseArguments([...args, ...suffix]));
+});
+
+test('CLI explicit rehearsal reads all six protected artifacts and runs only the injected isolated lifecycle', async t => {
+  const s = await protectedRehearsal(), opened = new Set(), originalOpen = fs.openSync;
+  const mock = t.mock.method(fs, 'openSync', (file, ...args) => { opened.add(file); return originalOpen(file, ...args); });
+  try {
+    const result = await main(s.args, s.dependencies);
+    assert.equal(result.status, 'rehearsal_passed_services_sealed');
+    assert.equal(result.canonicalPromotionImplemented, false);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(s.directory, 'synthetic-run.rehearsal.json'))).cleanupVerified, true);
+    assert.equal(s.probeRan(), true);
+    for (const file of Object.values(s.files)) assert.ok(opened.has(file));
+    assert.equal(s.source.State.Running, false);
+    assert.ok(!s.calls.some(c => c.args[0] === 'start' && c.args.includes(s.source.Id)));
+    assert.ok(fs.existsSync(path.join(s.directory, 'synthetic-run.rehearsal.json')));
+  } finally { mock.mock.restore(); s.close(); }
+});
+
+test('CLI rehearsal requires protected inputs, exact hashes and consent before any command or evidence write', async t => {
+  const s = await protectedRehearsal(), baseline = fs.readdirSync(s.directory).sort();
+  const reject = async args => { await assert.rejects(main(args, s.dependencies)); assert.equal(s.calls.length, 0);
+    assert.deepEqual(fs.readdirSync(s.directory).sort(), baseline); };
+  try {
+    for (const key of ['target', 'target-sha256', 'execution-config', 'execution-config-sha256', 'runtime-manifest',
+      'runtime-manifest-sha256', 'preflight', 'preflight-sha256', 'evidence-directory', 'confirm']) {
+      await t.test(`missing ${key}`, async () => { const args = [...s.args]; args.splice(args.indexOf(`--${key}`), 2); await reject(args); });
+      await t.test(`duplicate ${key}`, async () => { await reject([...s.args, `--${key}`, s.args[s.args.indexOf(`--${key}`) + 1]]); });
+    }
+    for (const name of Object.keys(s.files)) {
+      await t.test(`hash mismatch ${name}`, async () => { const args = [...s.args]; args[args.indexOf(`--${name}-sha256`) + 1] = '0'.repeat(64); await reject(args); });
+      await t.test(`permissions ${name}`, async () => { fs.chmodSync(s.files[name], 0o644);
+        try { await reject(s.args); } finally { fs.chmodSync(s.files[name], 0o600); } });
+      await t.test(`tamper ${name}`, async () => { const bytes = fs.readFileSync(s.files[name]); fs.appendFileSync(s.files[name], ' ');
+        try { await reject(s.args); } finally { fs.writeFileSync(s.files[name], bytes); } });
+    }
+    for (const confirmation of ['yes', s.options.confirmation.slice(0, -1) + 'x']) {
+      const args = [...s.args]; args[args.indexOf('--confirm') + 1] = confirmation; await reject(args);
+      let err = '', out = '';
+      assert.equal(await runCli(args, { dependencies: s.dependencies, stdout: { write: v => { out += v; } }, stderr: { write: v => { err += v; } } }), 1);
+      assert.equal(out, ''); assert.equal(err, 'green_106_106_rehearse_failed\n');
+    }
+  } finally { s.close(); }
 });
 test('CLI consumes held exact publication bytes and protected binding; default performs no Docker or writes', async () => {
   const temporary = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'sit-successor-cli-'));

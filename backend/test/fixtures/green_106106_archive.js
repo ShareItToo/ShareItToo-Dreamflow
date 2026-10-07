@@ -23,7 +23,7 @@ export function candidateArchive(env, { changeEntries = () => {}, extraLayers = 
     data: fs.readFileSync(`${repositoryRoot}/backend/sql/migrations/${row.name}`) });
   changeEntries(entries);
   const layers = [tar(entries), ...extraLayers.map(tar)];
-  const config = { config: { User: 'sitworker', Env: [...env, `APP_COMMIT=${'a'.repeat(40)}`, 'APP_VERSION=synthetic', 'APP_BUILD_TIME=2020-01-01T00:00:00.000Z'],
+  const config = { config: { User: 'sitworker', Entrypoint: null, Cmd: ['node', 'src/server.js'], Env: [...env, `APP_COMMIT=${'a'.repeat(40)}`, 'APP_VERSION=synthetic', 'APP_BUILD_TIME=2020-01-01T00:00:00.000Z'],
     Labels: { 'org.opencontainers.image.revision': 'a'.repeat(40), 'org.opencontainers.image.version': 'synthetic', 'org.opencontainers.image.created': '2020-01-01T00:00:00.000Z' } },
     rootfs: { type: 'layers', diff_ids: layers.map(l => `sha256:${digest(l)}`) } };
   const configBytes = Buffer.from(JSON.stringify(config));
