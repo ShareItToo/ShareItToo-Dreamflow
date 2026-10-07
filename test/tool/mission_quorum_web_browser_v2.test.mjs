@@ -6,7 +6,7 @@ import path from 'node:path';
 import vm from 'node:vm';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { runProbe, parseArgs, contract, toolchain, boundFiles, buildArguments, project,
+import { runProbe, parseArgs, inventoryContracts, toolchain, boundFiles, buildArguments, project,
   artifactDigest, validateArtifact, matrixPlan, validateMatrix, classifyAsset,
   classifyBlockedRequest, networkReasonKeys, validateNetworkDiagnostic, ownsBuildGroup,
   launchArgs, privilegeArgs, validateInventory, validateNetwork, validateCleanup,
@@ -116,6 +116,13 @@ test('context mismatch fails closed without stale-context retry; expression inte
 
 const head = 'a'.repeat(40);
 const sha = 'b'.repeat(64);
+const expectedRunnerInventories = [
+  { inventoryCommit: '1275e33f5019b02660b81ecc5622fe196211fa89',
+    imageOS: 'ubuntu24', imageVersion: '20260927.320.1', arch: 'x64', node: '22.23.3', chrome: '154.0.8037.57' },
+  { inventoryCommit: 'e3fe113a581eb9a44ca43f479b69f9c93f36df34',
+    imageOS: 'ubuntu24', imageVersion: '20261004.327.1', arch: 'x64', node: '22.23.3', chrome: '154.0.8037.97' },
+];
+const contract = expectedRunnerInventories[1];
 const counts = () => Object.fromEntries(networkReasonKeys.map(k => [k, 0]));
 const matrix = () => matrixPlan.map(row => ({ ...row, disclosure: row.scenario !== 'unavailable',
   geometry: true, keyboard: row.scenario === 'unavailable' ? 'not_applicable' : true,
@@ -155,6 +162,66 @@ test('success is exact scoped sanitized source/artifact evidence only after clea
   assert.deepEqual(journal.at(-1),{sequence:journal.length,phase:'cleanup',result:'confirmed'});
   assert.doesNotMatch(JSON.stringify(r),/private|\/tmp\/|pid|portNumber|requestId|https?:/iu);
   assert.deepEqual(Object.keys(r).sort(),['artifact','boundaries','cleanup','evidenceClass','inventory','mode','proof','schemaVersion','sourceHead','status'].sort());
+});
+test('both exact official fleet tuples bind browser observation and emitted proof with cleanup',async()=>{
+  assert.deepEqual(inventoryContracts,expectedRunnerInventories);
+  assert.equal(Object.isFrozen(inventoryContracts),true);
+  for(const [index,expected]of expectedRunnerInventories.entries()){
+    assert.equal(Object.isFrozen(inventoryContracts[index]),true);
+    const {inventoryCommit,...tuple}=expected;
+    const value={...inventory(),...tuple,
+      digests:{runnerSha256:String(index+1).repeat(64),chromeSha256:String(index+3).repeat(64),nodeSha256:String(index+5).repeat(64)}};
+    delete value.inventoryCommit; // Runtime inventory observes versions; the exact tuple selects provenance.
+    assert.equal(validateInventory(value,head),inventoryContracts[index]);
+    const adapter=fake();const observe=adapter.observe;let cleaned=0;
+    adapter.inventory=async()=>value;
+    adapter.observe=async()=>({...await observe(),browser:`Chrome/${expected.chrome}`});
+    adapter.cleanup=async()=>{cleaned++;return cleanup();};
+    const result=await runProbe({expectedHead:head,adapter});
+    assert.equal(result.status,'pass');assert.equal(cleaned,1);
+    assert.deepEqual(result.inventory,{...expected,digests:value.digests});
+    adapter.observe=async()=>({...await observe(),browser:`Chrome/${expectedRunnerInventories[1-index].chrome}`});
+    const rejected=await runProbe({expectedHead:head,adapter});
+    assert.equal(rejected.code,'probe_version');assert.equal(cleaned,2);
+    assert.equal(Object.hasOwn(rejected,'inventory'),false);
+  }
+});
+test('mixed tuples and independent runner drift fail before build and always clean up',async()=>{
+  for(const expected of expectedRunnerInventories){
+    const other=expectedRunnerInventories.find(value=>value!==expected);
+    for(const changed of [
+      {imageVersion:other.imageVersion},{chrome:other.chrome},
+      {imageVersion:expected.imageVersion+'0'},{chrome:expected.chrome+'0'},
+      {node:'22.23.4'},{imageOS:'ubuntu22'},{arch:'arm64'},
+      {platform:'darwin'},{head:'c'.repeat(40)},{clean:false},
+    ]){
+      let built=false;let cleaned=0;
+      const adapter=fake({inventory:async()=>({...inventory(),...expected,...changed}),
+        build:async()=>{built=true;return artifact();},cleanup:async()=>{cleaned++;return cleanup();}});
+      const result=await runProbe({expectedHead:head,adapter});
+      assert.equal(result.code,'probe_inventory');assert.equal(built,false);assert.equal(cleaned,1);
+      assert.equal(Object.hasOwn(result,'inventory'),false);
+    }
+  }
+});
+test('controller passes selected inventory into worker which checks exact Node, architecture and CDP Chrome',()=>{
+  const source=fs.readFileSync('test/support/mission_quorum_web_browser_v2.mjs','utf8');
+  assert.ok(source.includes('`SIT_P7_V2_INVENTORY_COMMIT=${validateInventory(inventory, expectedHead).inventoryCommit}`'));
+  const worker=source.slice(source.indexOf('async function worker(directory)'));
+  const selection=worker.slice(worker.indexOf('  const matchedInventory ='),worker.indexOf('  const s ='));
+  assert.ok(selection.length>0);
+  const check=(condition,code)=>{if(!condition)throw Error(code);};
+  for(const expected of expectedRunnerInventories){
+    const execute=changed=>vm.runInNewContext(selection+'; matchedInventory.chrome',{
+      inventoryContracts,check,process:{env:{SIT_P7_V2_INVENTORY_COMMIT:expected.inventoryCommit},
+        arch:expected.arch,versions:{node:expected.node},...changed},
+    });
+    assert.equal(execute({}),expected.chrome);
+    for(const changed of [{env:{}},{env:{SIT_P7_V2_INVENTORY_COMMIT:'unknown'}},
+      {arch:'arm64'},{versions:{node:'22.23.4'}}])assert.throws(()=>execute(changed),/probe_inventory/u);
+  }
+  assert.ok(worker.includes('data.Browser === `Chrome/${matchedInventory.chrome}`'));
+  assert.doesNotMatch(worker,/contract\.chrome/u);
 });
 test('matrix binds each case/viewport/axis/evidence/QR/fallback, keyboard, reset and screenshots',()=>{
   assert.doesNotThrow(()=>validateMatrix(matrix()));

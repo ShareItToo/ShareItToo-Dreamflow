@@ -1,11 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { contract, parseArgs, validateInventory, validateNetwork, validateObservation,
+import { inventoryContracts, parseArgs, validateInventory, validateNetwork, validateObservation,
   validateCleanup, runProbe, launchArgs, privilegeArgs, summarizeTargets, validateTargetDiagnostic,
   inventoryPhases, runInventoryPhases, classifyCommandFailure, validateTargetInventory, selectBlankTarget } from '../support/mission_web_entry_linux_probe.mjs';
 
 const sha = 'a'.repeat(40);
+const expectedInventories = [
+  { inventoryCommit: '1275e33f5019b02660b81ecc5622fe196211fa89', imageOS: 'ubuntu24',
+    imageVersion: '20260927.320.1', arch: 'x64', node: '22.23.3', chrome: '154.0.8037.57' },
+  { inventoryCommit: 'e3fe113a581eb9a44ca43f479b69f9c93f36df34', imageOS: 'ubuntu24',
+    imageVersion: '20261004.327.1', arch: 'x64', node: '22.23.3', chrome: '154.0.8037.97' },
+];
 const digests = () => ({ runnerSha256: '1'.repeat(64), chromeSha256: '2'.repeat(64), nodeSha256: '3'.repeat(64) });
 const inventory = () => ({ platform: 'linux', arch: 'x64', imageOS: 'ubuntu24',
   imageVersion: '20260927.320.1', node: '22.23.3', chrome: '154.0.8037.57',
@@ -58,7 +64,49 @@ test('closed CLI, source and exact official image versions reject drift', () => 
   for (const args of [[], ['--linux-blank-preflight'], ['--worker'], ['--linux-blank-preflight', '--source-head', sha, 'https://foreign.invalid']]) assert.throws(() => parseArgs(args));
   validateInventory(inventory(), sha);
   for (const [key, value] of Object.entries({ platform: 'darwin', arch: 'arm64', imageOS: 'ubuntu22', imageVersion: 'next', node: '22.0.0', chrome: '154.0.8037.93', uid: 0, gid: 0, head: 'b'.repeat(40), clean: false })) assert.throws(() => validateInventory({ ...inventory(), [key]: value }, sha));
-  assert.equal(contract.inventoryCommit, 'db776964592d0362a6bed85f90bc4e2980250e49');
+  assert.deepEqual(inventoryContracts, expectedInventories);
+  assert.ok(Object.isFrozen(inventoryContracts) && inventoryContracts.every(Object.isFrozen));
+});
+test('each complete official tuple binds browser observation and sanitized proof', async () => {
+  for (const expected of expectedInventories) {
+    const supplied = { ...inventory(), ...expected };
+    assert.deepEqual(validateInventory(supplied, sha), expected);
+    const f = fake({ inventory: async () => supplied,
+      observe: async () => ({ ...observation(), browser: `Chrome/${expected.chrome}` }) });
+    const result = await runProbe({ expectedHead: sha, adapter: f.adapter });
+    assert.equal(result.status, 'pass');
+    assert.deepEqual(result.inventory, { ...expected, digests: digests() });
+    assert.deepEqual(result.cleanup, cleanup());
+    assert.equal(f.calls.at(-1), 'cleanup');
+  }
+});
+test('mixed official tuples and nearby runtime drift fail closed and clean up before launch', async () => {
+  for (const [index, expected] of expectedInventories.entries()) {
+    for (const change of [{ chrome: expectedInventories[1 - index].chrome },
+      { imageVersion: expectedInventories[1 - index].imageVersion },
+      { imageVersion: '20261004.327.2' }, { node: '22.23.4' }, { chrome: '154.0.8037.98' },
+      { imageOS: 'ubuntu22' }, { arch: 'arm64' }]) {
+      const supplied = { ...inventory(), ...expected, ...change };
+      assert.throws(() => validateInventory(supplied, sha), /probe_inventory/);
+      const f = fake({ inventory: async () => supplied });
+      const result = await runProbe({ expectedHead: sha, adapter: f.adapter });
+      assert.equal(result.status, 'fail'); assert.equal(result.code, 'probe_inventory');
+      assert.deepEqual(f.calls, ['cleanup']);
+      assert.equal(result.inventory, undefined); assert.equal(result.proof, undefined);
+    }
+  }
+});
+test('browser from the other accepted tuple or a nearby version cannot satisfy the selected inventory', async () => {
+  for (const [index, expected] of expectedInventories.entries()) {
+    for (const chrome of [expectedInventories[1 - index].chrome, '154.0.8037.98']) {
+      const f = fake({ inventory: async () => ({ ...inventory(), ...expected }),
+        observe: async () => ({ ...observation(), browser: `Chrome/${chrome}` }) });
+      const result = await runProbe({ expectedHead: sha, adapter: f.adapter });
+      assert.equal(result.status, 'fail'); assert.equal(result.code, 'probe_version');
+      assert.deepEqual(f.calls, ['prepare', 'cleanup']);
+      assert.equal(result.inventory, undefined); assert.equal(result.proof, undefined);
+    }
+  }
 });
 test('inventory requires exactly three named lowercase SHA-256 digests without paths', () => {
   for (const value of [undefined, null, [], {}, { ...digests(), extra: '4'.repeat(64) }])
@@ -110,7 +158,7 @@ test('fake-only successful run is detached, ordered and sanitized', async () => 
   const result = await runProbe({ expectedHead: sha, adapter: f.adapter, journal: row => journal.push(row) });
   assert.equal(result.status, 'pass'); assert.deepEqual(f.calls, ['inventory', 'prepare', 'observe', 'cleanup']);
   assert.deepEqual(Object.keys(result), ['schemaVersion', 'mode', 'status', 'sourceHead', 'inventory', 'proof', 'cleanup']);
-  assert.deepEqual(result.inventory, { ...contract, digests: digests() });
+  assert.deepEqual(result.inventory, { ...expectedInventories[0], digests: digests() });
   const supplied = inventory();
   const detached = await runProbe({ expectedHead: sha, adapter: fake({ inventory: async () => supplied }).adapter });
   supplied.digests.runnerSha256 = '4'.repeat(64);
@@ -198,6 +246,10 @@ test('workflow is narrowly triggered, read-only and software-download-free', () 
 test('real execution is explicitly gated; tests and regression only exercise fakes', () => {
   const source = fs.readFileSync(new URL('../support/mission_web_entry_linux_probe.mjs', import.meta.url), 'utf8');
   assert.match(source, /NODE_TEST_CONTEXT/); assert.match(source, /GITHUB_ACTIONS/);
+  assert.ok(source.includes('`SIT_D6_INVENTORY_COMMIT=${validateInventory(inventory, expectedHead).inventoryCommit}`'));
+  assert.match(source, /inventoryContracts\.find\(candidate => candidate\.inventoryCommit === process\.env\.SIT_D6_INVENTORY_COMMIT\)/);
+  assert.match(source, /check\(matchedInventory && process\.arch === matchedInventory\.arch && process\.versions\.node === matchedInventory\.node, 'probe_inventory'\)/);
+  assert.ok(source.includes('data.Browser === `Chrome/${matchedInventory.chrome}`'));
   assert.match(source, /60000/); assert.match(source, /SIGTERM/); assert.match(source, /SIGKILL/);
   assert.match(source, /Seccomp_filters/); assert.match(source, /NoNewPrivs/);
   assert.match(source, /s\.Groups === ''/);
