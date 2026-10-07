@@ -11,6 +11,34 @@ authorized remediation without environment/secret output or test mail.
 
 ## Live mail-noise closure — Sol readback
 
+### ALERT-TRANSITION-W2 source successor — 2026-10-07
+
+The bounded successor in `backend/ops/alert_state.py` now implements the unit's
+declared `transitions-only` notification policy literally. One service incident
+sends at most one failure attempt while it remains open, regardless of later
+failure-tag, exit-status or invocation changes. A known configuration failure
+with `delivery: not_sent` may retry on the next natural invocation; durable
+`pending`, `unknown` and `delivered` attempts may not. Recovery still receives
+one attempt, closes the incident, and permits the next independent incident to
+notify immediately. Distinct raw service names retain distinct SHA-256 state
+keys and the existing exclusive lock, protected state, mandatory TLS and
+secret-free logging contracts remain unchanged.
+
+The adversarial regression in `backend/test/ops_alert_incident.test.js` covers
+100 alternating fingerprints inside one open incident and requires exactly one
+failure message, followed by one recovery and one immediate post-recovery
+failure. It also preserves separate-service, concurrency, configuration-repair,
+unknown-delivery and legacy-state checks. The generic failure email contains no
+failure classification, while the health journal retains the safe reason tags;
+repeating the same generic mail on a classification change therefore adds no
+recipient-visible diagnostic detail.
+
+This is source and deterministic-test evidence only. It installs no bytes,
+changes no timer, recipient, SMTP/provider setting or unit, and sends no live
+email. Live closure still requires exact installed-byte readback and observation
+of a later natural timer cycle; no forced failure or test mail is authorized by
+this successor.
+
 ### ALERT-RECOVERY-W1 source successor — 2026-10-04
 
 The successor source uses `backend/ops/alert.sh` as the stable entrypoint and

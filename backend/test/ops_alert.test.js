@@ -86,7 +86,7 @@ print(json.dumps({'_SYSTEMD_UNIT':'shareittoo-health.service','_SYSTEMD_INVOCATI
 
     const second = await run('bash', [script, 'shareittoo-health.service'], { env: environment });
     assert.equal(second.code, 0, second.stderr);
-    assert.match(second.stdout, /suppressed unchanged failure/);
+    assert.match(second.stdout, /suppressed open incident/);
     assert.equal(await fs.readFile(countCapture, 'utf8'), 'called\n');
 
     const relayEnvFile = path.join(temporaryDir, 'relay.env');

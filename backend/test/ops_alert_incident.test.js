@@ -103,7 +103,7 @@ test('incident opens once, stays silent indefinitely, recovers once, then opens 
   assert.equal((await f.read()).phase, 'open');
 });
 
-test('changed health class or target alerts once while reordered reasons and later invocations stay quiet', async (t) => {
+test('one open service incident stays silent across changed classes, status and reordered reasons', async (t) => {
   const f = await fixture(t);
   await f.call('failure', service, { FAKE_FAILURE_TAGS: 'disk api' });
   const first = (await f.read()).failure_fingerprint;
@@ -111,15 +111,36 @@ test('changed health class or target alerts once while reordered reasons and lat
   assert.equal((await f.messages()).length, 1);
   assert.equal((await f.read()).failure_fingerprint, first);
   await f.call('failure', service, { FAKE_FAILURE_TAGS: 'database', FAKE_INVOCATION_ID: 'c'.repeat(32) });
-  assert.equal((await f.messages()).length, 2);
-  assert.notEqual((await f.read()).failure_fingerprint, first);
-  await f.call('failure', service, { FAKE_FAILURE_TAGS: 'database', FAKE_NOW: '2031536000' });
-  assert.equal((await f.messages()).length, 2);
+  await f.call('failure', service, { FAKE_MAIN_STATUS: '2', FAKE_INVOCATION_ID: 'd'.repeat(32) });
+  assert.equal((await f.messages()).length, 1);
+  assert.equal((await f.read()).failure_fingerprint, first);
   await f.call('failure', 'shareittoo-backup.service');
   await f.call('failure', 'shareittoo-backup.service');
-  assert.equal((await f.messages()).length, 3);
+  assert.equal((await f.messages()).length, 2);
   await f.call('failure', 'shareittoo-backup.service', { FAKE_MAIN_STATUS: '2' });
-  assert.equal((await f.messages()).length, 4);
+  assert.equal((await f.messages()).length, 2);
+});
+
+test('one hundred alternating fingerprints emit one failure mail until recovery', async (t) => {
+  const f = await fixture(t);
+  const code = `import importlib.util, os, sys
+spec = importlib.util.spec_from_file_location('alert', sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+for index in range(100):
+    os.environ['FAKE_FAILURE_TAGS'] = 'disk api' if index % 2 == 0 else 'database'
+    os.environ['FAKE_MAIN_STATUS'] = '1' if index % 3 else '2'
+    os.environ['FAKE_INVOCATION_ID'] = format(index % 16, 'x') * 32
+    sys.argv = ['alert', '${service}', 'failure']
+    assert module.main() == 0
+`;
+  const result = await run('python3', ['-B', '-c', code, path.join(ops, 'alert_state.py')], { env: f.env });
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal((await f.messages()).length, 1);
+  assert.equal((await f.read()).phase, 'open');
+  await f.call('recovery', service, { FAKE_NOW: '2000000100' });
+  await f.call('failure', service, { FAKE_NOW: '2000000101', FAKE_FAILURE_TAGS: 'api' });
+  assert.equal((await f.messages()).length, 3);
 });
 
 test('stale, unrecognized and non-failed invocation identity cannot suppress or send', async (t) => {
@@ -269,18 +290,18 @@ test('post-send persistence failure is explicit and never claims confirmed deliv
   assert.equal((await fs.readdir(f.state)).some((name) => name.endsWith('.tmp')), false);
 });
 
-test('legacy timestamp remains untouched and unknown old class gets one classified successor', async (t) => {
+test('legacy open marker suppresses repeats, recovers once, then permits a new incident', async (t) => {
   const f = await fixture(t);
   const legacy = path.join(f.state, `${service}.last`);
   await fs.writeFile(legacy, '2000000000\n', { mode: 0o600 });
   await f.call();
-  assert.equal((await f.messages()).length, 1);
-  assert.equal((await f.read()).version, 2);
+  assert.equal((await f.messages()).length, 0);
+  assert.equal((await f.read()).version, 1);
   await f.call('recovery');
-  assert.equal((await f.messages()).length, 2);
+  assert.equal((await f.messages()).length, 1);
   assert.equal(await fs.readFile(legacy, 'utf8'), '2000000000\n');
   await f.call();
-  assert.equal((await f.messages()).length, 3);
+  assert.equal((await f.messages()).length, 2);
 });
 
 test('SMTP TLS, secret-free output/argv, relay mode and temporary cleanup', async (t) => {

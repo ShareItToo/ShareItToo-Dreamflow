@@ -3,7 +3,8 @@
 
 SMTP cannot guarantee exactly-once recipient delivery. A durable pending attempt
 is therefore treated as unknown after interruption, never as permission to retry.
-Recovery gets one attempt; an unchanged open failure never sends a reminder.
+Recovery gets one attempt; an open service incident never sends another failure
+notification, even when its observed failure classification changes.
 """
 import email.utils
 import fcntl
@@ -300,9 +301,8 @@ def incident(directory, service, mode):
         unsent = previous is not None and previous['delivery'] == 'not_sent'
         if mode == 'recovery' and not opened and not unsent:
             return 0
-        if (mode == 'failure' and opened and not unsent
-                and previous.get('failure_fingerprint') == fingerprint):
-            print('ShareItToo alert suppressed unchanged failure for ' + service)
+        if mode == 'failure' and opened and not unsent:
+            print('ShareItToo alert suppressed open incident for ' + service)
             return 0
         kind = 'recovery' if mode == 'recovery' else 'failure'
         state = dict(version=2, service=service, phase='closed' if mode == 'recovery' else 'open',
