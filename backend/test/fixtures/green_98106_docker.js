@@ -45,6 +45,7 @@ export function dockerFixture() {
   };
   const api = make('shareittoo-staging-api', `ghcr.io/shareittoo/shareittoo-api:${green98106.predecessorCommit}@${green98106.predecessorDigest}`, green98106.predecessorDigest, true);
   const database = make('sit-green-postgres-20260918011528-wp254', green98106.postgresImage, green98106.postgresImage.split('@')[1], true, postgresImage);
+  delete database.Config.Labels['com.shareittoo.sit.green.run_id'];
   database.NetworkSettings.Networks = { [nets[0].name]: database.NetworkSettings.Networks[nets[0].name] };
   delete records.get(nets[1].id).Containers[database.Id];
   const witnesses = historicalWitnesses.map(w => make(w.name, w.image ?? `ghcr.io/shareittoo/shareittoo-api:d3c2f5d7@${w.imageDigest}`, w.imageDigest, false));

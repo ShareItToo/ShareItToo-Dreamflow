@@ -27,9 +27,14 @@ export async function collectTarget({ directory, command = collectorCommand, pre
   };
   const descriptor = async (name, expectedDigest, running) => {
     const record = await inspect('container', name);
+    // The WP254 database predates the API run-id label (the legacy target-set
+    // contract explicitly records its empty Docker label readback). Accept only
+    // an absent key on that exact database; never relax API/witness identity.
+    const historicalDatabase = name === greenTarget.databaseContainer
+      && record.Config?.Labels && !Object.hasOwn(record.Config.Labels, 'com.shareittoo.sit.green.run_id');
     assert(record.Name === `/${name}` && record.State?.Running === running && record.State.Paused === false
       && record.Config?.Labels?.['com.shareittoo.sit.green'] === 'true'
-      && record.Config.Labels['com.shareittoo.sit.green.run_id'] === greenTarget.runId,
+      && (historicalDatabase || record.Config.Labels['com.shareittoo.sit.green.run_id'] === greenTarget.runId),
     'green_98_106_collector_identity');
     const image = await inspect('image', record.Image);
     assert(image.Id === record.Image && image.RepoDigests?.some(value => value.endsWith(`@${expectedDigest}`)),

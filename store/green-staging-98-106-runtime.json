@@ -23,7 +23,7 @@
   "sourceInventory": {
     "backend/ops/green_staging_98_106_contract.mjs": "58b12ef5251d538e4c84598a1689724a8d9463dd64855cef1e4b82d9e76eb18e",
     "backend/ops/green_staging_98_106_promotion.mjs": "54bcee638e064dfcb6215e9f92024b70272d180c2b13973527e77b764f799c63",
-    "backend/ops/green_staging_98_106_collector.mjs": "698552f846e8a51081ea62ef73eb3ed656233be96e93d8209996ce38b10986ab",
+    "backend/ops/green_staging_98_106_collector.mjs": "b19e1014ba32dab6a68c2494e114a279b3db9bc0537547a0506318cabda27340",
     "backend/ops/green_staging_98_106_database.mjs": "e5e464d8ef7d9aae06771d98ee52daf68b5a1904dbf57f6081451272675d9720",
     "backend/ops/green_staging_98_106_evidence.mjs": "033238cbf20f3c51c48ec83f7ab61e215f0826c3bbd5489292ec0d3d55f150b4",
     "backend/ops/green_staging_98_106_execution.mjs": "7e1dfbe27c5653abd748abfe8d6f267b4c4e13ca4415b3df8f81ec847b3dc5e7",

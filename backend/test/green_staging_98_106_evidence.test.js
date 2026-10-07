@@ -44,6 +44,53 @@ test('collector rejects readback drift before writing and its dispatcher rejects
     }
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
+test('collector accepts the historical database label shape and preserves exact bindings', async t => {
+  for (const runId of [undefined, '20260918011528-wp254']) await t.test(runId ?? 'historical-absent', async () => {
+    const f = dockerFixture(), directory = temporary();
+    if (runId !== undefined) f.database.Config.Labels['com.shareittoo.sit.green.run_id'] = runId;
+    try {
+      const result = await collectTarget({ directory, command: f.dependencies.command, acceptanceMfaFile: '/synthetic/protected/acceptance' });
+      const target = JSON.parse(fs.readFileSync(path.join(directory, result.artifacts[0].name)));
+      assert.deepEqual(target.database, { ...f.inputs.target.database, configSha256: containerFingerprint(f.database) });
+      assert.equal(Object.hasOwn(f.database.Config.Labels, 'com.shareittoo.sit.green.run_id'), runId !== undefined);
+      assert.ok(f.calls.some(c => c.args[0] === 'inspect' && c.args[1] === f.database.Id));
+      assert.ok(f.calls.every(c => c.args[0] === 'inspect' || c.args[1] === 'inspect'));
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+});
+test('historical database exception rejects label, image, state and immutable recheck drift before writing', async t => {
+  const runLabel = 'com.shareittoo.sit.green.run_id';
+  for (const fault of ['api-missing-run', 'api-wrong-run', 'witness-missing-run', 'witness-wrong-run', 'db-wrong-run', 'db-empty-run', 'db-null-run',
+    'db-missing-green', 'db-false-green', 'db-paused', 'db-stopped', 'db-name', 'db-image', 'db-id-recheck', 'db-config-recheck']) {
+    await t.test(fault, async () => {
+      const f = dockerFixture(), directory = temporary(), original = f.dependencies.command;
+      if (fault === 'api-missing-run') delete f.api.Config.Labels[runLabel];
+      if (fault === 'api-wrong-run') f.api.Config.Labels[runLabel] = 'foreign-run';
+      if (fault === 'witness-missing-run') delete f.records.get(f.inputs.target.witnesses[0].id).Config.Labels[runLabel];
+      if (fault === 'witness-wrong-run') f.records.get(f.inputs.target.witnesses[0].id).Config.Labels[runLabel] = 'foreign-run';
+      if (fault === 'db-wrong-run') f.database.Config.Labels[runLabel] = 'foreign-run';
+      if (fault === 'db-empty-run') f.database.Config.Labels[runLabel] = '';
+      if (fault === 'db-null-run') f.database.Config.Labels[runLabel] = null;
+      if (fault === 'db-missing-green') delete f.database.Config.Labels['com.shareittoo.sit.green'];
+      if (fault === 'db-false-green') f.database.Config.Labels['com.shareittoo.sit.green'] = 'false';
+      if (fault === 'db-paused') f.database.State.Paused = true;
+      if (fault === 'db-stopped') f.database.State.Running = false;
+      try {
+        await assert.rejects(collectTarget({ directory, acceptanceMfaFile: '/synthetic/protected/acceptance', command: async entry => {
+          const rows = JSON.parse(await original(entry));
+          if (fault === 'db-name' && entry.args[1] === f.inputs.target.database.name) rows[0].Name += '-foreign';
+          if (fault === 'db-image' && entry.args[0] === 'image' && entry.args[2] === f.database.Image) rows[0].RepoDigests = [];
+          if (entry.args[0] === 'inspect' && entry.args[1] === f.database.Id) {
+            if (fault === 'db-id-recheck') rows[0].Id = 'f'.repeat(64);
+            if (fault === 'db-config-recheck') rows[0].Config.Labels[runLabel] = '20260918011528-wp254';
+          }
+          return JSON.stringify(rows);
+        } }), /green_98_106_collector_(identity|image|drift)/u);
+        assert.deepEqual(fs.readdirSync(directory), []);
+      } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+    });
+  }
+});
 test('real identity variants retain their exact tag, UTC name, image ID and stable network identity', async t => {
   for (const variant of ['tag-only', 'uppercase-UTC', 'image-ID-vs-RepoDigest', 'transient-endpoint']) await t.test(variant, async () => {
     const f = dockerFixture();
@@ -109,4 +156,14 @@ test('runtime manifest binds real publication and rejects substituted publicatio
   const f = dockerFixture(); assert.equal(validateRuntimeManifest(f.inputs).runtimeCommit, f.inputs.publication.commit);
   assert.throws(() => validateRuntimeManifest({ ...f.inputs, publicationSha256: '0'.repeat(64) }));
   assert.throws(() => validateRuntimeManifest({ ...f.inputs, publication: { ...f.inputs.publication, runAttempt: '2' } }));
+});
+test('runtime manifest binds the current collector and rejects its stale source hash', t => {
+  const f = dockerFixture(), manifest = validateRuntimeManifest(f.inputs);
+  const collector = 'backend/ops/green_staging_98_106_collector.mjs';
+  assert.equal(manifest.sourceInventory[collector], digest(fs.readFileSync(new URL('../ops/green_staging_98_106_collector.mjs', import.meta.url))));
+  const stale = structuredClone(manifest); stale.sourceInventory[collector] = '0'.repeat(64);
+  const read = fs.readFileSync;
+  t.mock.method(fs, 'readFileSync', (file, ...args) => String(file).endsWith('/store/green-staging-98-106-runtime.json')
+    ? JSON.stringify(stale) : read(file, ...args));
+  assert.throws(() => validateRuntimeManifest(f.inputs), /green_98_106_runtime_source_drift/u);
 });
