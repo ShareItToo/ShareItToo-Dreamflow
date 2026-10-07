@@ -10,10 +10,15 @@ import { createHash } from 'node:crypto';
 import { spawn, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-// Official inventory, accessed 2026-10-07; runner labels alone are not immutable.
+// Official rolling-fleet inventories, accessed 2026-10-07; labels alone are not immutable.
+// https://github.com/actions/runner-images/blob/1275e33f5019b02660b81ecc5622fe196211fa89/images/ubuntu/Ubuntu2404-Readme.md
 // https://github.com/actions/runner-images/blob/e3fe113a581eb9a44ca43f479b69f9c93f36df34/images/ubuntu/Ubuntu2404-Readme.md
-export const contract = Object.freeze({ inventoryCommit: 'e3fe113a581eb9a44ca43f479b69f9c93f36df34',
-  imageOS: 'ubuntu24', imageVersion: '20261004.327.1', arch: 'x64', node: '22.23.3', chrome: '154.0.8037.97' });
+export const inventoryContracts = Object.freeze([
+  Object.freeze({ inventoryCommit: '1275e33f5019b02660b81ecc5622fe196211fa89',
+    imageOS: 'ubuntu24', imageVersion: '20260927.320.1', arch: 'x64', node: '22.23.3', chrome: '154.0.8037.57' }),
+  Object.freeze({ inventoryCommit: 'e3fe113a581eb9a44ca43f479b69f9c93f36df34',
+    imageOS: 'ubuntu24', imageVersion: '20261004.327.1', arch: 'x64', node: '22.23.3', chrome: '154.0.8037.97' }),
+]);
 const self = fileURLToPath(import.meta.url);
 const chrome = '/opt/google/chrome/chrome';
 const mode = 'linux-history-harness';
@@ -156,14 +161,16 @@ export function launchArgs(directory) {
     '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', 'about:blank'];
 }
 export function validateInventory(v, expectedHead) {
-  check(v?.platform === 'linux' && v.arch === contract.arch && v.imageOS === contract.imageOS
-    && v.imageVersion === contract.imageVersion && v.node === contract.node && v.chrome === contract.chrome
+  const matched = inventoryContracts.find(candidate => ['arch', 'imageOS', 'imageVersion', 'node', 'chrome']
+    .every(key => v?.[key] === candidate[key]));
+  check(v?.platform === 'linux' && matched
     && v.head === expectedHead && v.clean === true, 'probe_inventory'); privilegeArgs(v.uid, v.gid);
   const names = ['runnerSha256', 'chromeSha256', 'nodeSha256'];
   check(v.digests && typeof v.digests === 'object' && !Array.isArray(v.digests)
     && Reflect.ownKeys(v.digests).length === names.length
     && names.every(name => Object.hasOwn(v.digests, name) && typeof v.digests[name] === 'string'
       && /^[a-f0-9]{64}$/u.test(v.digests[name])), 'probe_inventory');
+  return matched;
 }
 export function validateNetwork(v) {
   check(JSON.stringify(v?.links) === '["lo"]' && Array.isArray(v.routes4) && v.routes4.length === 0
@@ -173,7 +180,8 @@ export function validateObservation(v, inventory, artifact) {
   check(v?.artifactDigest === artifact.artifactDigest && v.sourceDigest === artifact.sourceDigest
     && v.sourceHead === artifact.sourceHead && v.isolation === isolationScope
     && JSON.stringify(v.isolationHashes) === JSON.stringify(artifact.isolationHashes), 'history_artifact');
-  check(v?.browser === `Chrome/${contract.chrome}` && v.protocol === '1.3' && v.httpStatus === 200, 'probe_version');
+  const matched = validateInventory(inventory, artifact.sourceHead);
+  check(v?.browser === `Chrome/${matched.chrome}` && v.protocol === '1.3' && v.httpStatus === 200, 'probe_version');
   validateTargetInventory(v.targetCounts);
   check(v.evaluated === true && v.workerPrivileges === true && v.renderers?.length > 0, 'probe_sandbox');
   for (const r of v.renderers) check(r.uid === inventory.uid && r.gid === inventory.gid && r.seccomp === 2
@@ -189,7 +197,7 @@ export function validateCleanup(v, requireNormalExit = true) {
 }
 export async function runProbe({ expectedHead, adapter, journal = () => {}, signal } = {}) {
   if (adapter && !process.env.NODE_TEST_CONTEXT) return fail('probe_test_hooks');
-  let sequence = 0; let code; let inventory; let artifact; let activeStage; let diagnostic; let networkDiagnostic;
+  let sequence = 0; let code; let inventory; let matchedInventory; let artifact; let activeStage; let diagnostic; let networkDiagnostic;
   const emit = (phase, result) => {
     check(phases.includes(phase) && ['begin', 'confirmed', 'failed'].includes(result), 'probe_failure');
     journal(Object.freeze({ sequence: ++sequence, phase, result }));
@@ -199,7 +207,7 @@ export async function runProbe({ expectedHead, adapter, journal = () => {}, sign
   try {
     for (const stage of ['inventory', 'build', 'prepare', 'observe']) {
       abort(); activeStage = stage; emit(stage, 'begin');
-      if (stage === 'inventory') { inventory = await active.inventory(); validateInventory(inventory, expectedHead); }
+      if (stage === 'inventory') { inventory = await active.inventory(); matchedInventory = validateInventory(inventory, expectedHead); }
       if (stage === 'build') { artifact = validateArtifact(await active.build()); check(artifact.sourceHead === expectedHead, 'history_source'); }
       if (stage === 'prepare') validateNetwork(await active.prepare());
       if (stage === 'observe') validateObservation(await active.observe(), inventory, artifact);
@@ -231,7 +239,7 @@ export async function runProbe({ expectedHead, adapter, journal = () => {}, sign
   }
   if (signal?.aborted && !code) code = 'probe_aborted';
   if (code) return fail(code, code === 'history_network' ? networkDiagnostic : diagnostic);
-  return { schemaVersion: 1, mode, status: 'pass', sourceHead: expectedHead, inventory: { ...contract, digests: { ...inventory.digests } },
+  return { schemaVersion: 1, mode, status: 'pass', sourceHead: expectedHead, inventory: { ...matchedInventory, digests: { ...inventory.digests } },
     evidenceClass: 'exact-production-navigation-code-harness', fullAppRoot: false,
     isolation: isolationScope, providerBootstrap: false, googleAuth: false,
     artifact: { sourceDigest: artifact.sourceDigest, sourceHashes: artifact.sourceHashes, lockSha256: artifact.lockSha256,
@@ -378,6 +386,7 @@ function realAdapter(expectedHead, emit, signal) {
       const args = ['-n', '--', '/usr/sbin/ip', 'netns', 'exec', namespace, '/usr/bin/setpriv',
         ...privilegeArgs(inventory.uid, inventory.gid), '/usr/bin/env', '-i', 'PATH=/usr/bin:/bin',
         `HOME=${directory}`, `TMPDIR=${directory}`, 'LANG=C.UTF-8', 'SIT_D6_HISTORY_WORKER=1',
+        `SIT_D6_INVENTORY_COMMIT=${validateInventory(inventory, expectedHead).inventoryCommit}`,
         process.execPath, self, '--worker', directory];
       child = spawn('/usr/bin/sudo', args, { detached: true, stdio: ['pipe', 'pipe', 'ignore'], env: { PATH: '/usr/bin:/bin' } });
       child.stdin.on('error', () => {});
@@ -513,6 +522,8 @@ async function worker(directory) {
   const phase = (name, result) => send({ event: 'phase', phase: name, result });
   check(process.platform === 'linux' && process.env.SIT_D6_HISTORY_WORKER === '1'
     && /^\/tmp\/sit-d6-history-[a-zA-Z0-9]{6}$/u.test(directory), 'probe_arguments');
+  const matchedInventory = inventoryContracts.find(candidate => candidate.inventoryCommit === process.env.SIT_D6_INVENTORY_COMMIT);
+  check(matchedInventory && process.arch === matchedInventory.arch && process.versions.node === matchedInventory.node, 'probe_inventory');
   const s = statusFields(fs.readFileSync('/proc/self/status', 'utf8'));
   const workerPrivileges = process.getuid() > 0 && process.getgid() > 0 && s.Groups === ''
     && s.NoNewPrivs === '1' && ['CapInh', 'CapPrm', 'CapEff', 'CapBnd', 'CapAmb'].every(key => s[key] === '0000000000000000');
@@ -548,7 +559,7 @@ async function worker(directory) {
     phase('cdp-connect', 'begin');
     const response = await fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(3000), redirect: 'error' });
     check(response.status === 200, 'probe_version'); const data = await response.json();
-    check(data.Browser === `Chrome/${contract.chrome}` && data['Protocol-Version'] === '1.3', 'probe_version');
+    check(data.Browser === `Chrome/${matchedInventory.chrome}` && data['Protocol-Version'] === '1.3', 'probe_version');
     const url = new URL(data.webSocketDebuggerUrl);
     check(url.protocol === 'ws:' && url.hostname === '127.0.0.1' && url.port === String(port)
       && /^\/devtools\/browser\/[\w-]+$/u.test(url.pathname) && !url.username && !url.password && !url.search && !url.hash, 'probe_version');

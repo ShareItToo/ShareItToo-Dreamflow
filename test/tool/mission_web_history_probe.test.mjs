@@ -10,7 +10,7 @@ import { validateSdkState, validateHistoryMatrix, artifactDigest, buildArguments
   isolateGoogleRegistrationGraph, validateIsolatedRegistrant, isolationScope,
   contract, inventoryTree, readHistoryFile } from '../support/mission_web_history_build.mjs';
 import { runProbe, parseArgs, launchArgs, privilegeArgs, ownsBuildGroup, preloadHistoryAssetResponses,
-  contract as runnerContract } from '../support/mission_web_history_probe.mjs';
+  inventoryContracts, validateInventory } from '../support/mission_web_history_probe.mjs';
 
 function assetFixture(t) {
   const outer = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sit-history-assets-')));
@@ -460,13 +460,36 @@ test('harness uses production classes, not test route hooks or a replacement rou
   assert.doesNotMatch(source, /restoreForTesting|testEnabled|testWeb:|RouterDelegate|pushState|replaceState|AppRoot\(/u);
 });
 
-test('runner inventory pins the official image and rejects stale or independently drifted fields before build', async () => {
-  assert.deepEqual(runnerContract, {
-    inventoryCommit: 'e3fe113a581eb9a44ca43f479b69f9c93f36df34',
-    imageOS: 'ubuntu24', imageVersion: '20261004.327.1', arch: 'x64', node: '22.23.3', chrome: '154.0.8037.97',
-  });
+const expectedRunnerInventories = [
+  { inventoryCommit: '1275e33f5019b02660b81ecc5622fe196211fa89',
+    imageOS: 'ubuntu24', imageVersion: '20260927.320.1', arch: 'x64', node: '22.23.3', chrome: '154.0.8037.57' },
+  { inventoryCommit: 'e3fe113a581eb9a44ca43f479b69f9c93f36df34',
+    imageOS: 'ubuntu24', imageVersion: '20261004.327.1', arch: 'x64', node: '22.23.3', chrome: '154.0.8037.97' },
+];
+test('both exact official fleet inventories pass and bind the observed tuple and byte hashes', async () => {
+  assert.deepEqual(inventoryContracts, expectedRunnerInventories);
+  assert.equal(Object.isFrozen(inventoryContracts), true);
+  for (const [index, expected] of expectedRunnerInventories.entries()) {
+    assert.equal(Object.isFrozen(inventoryContracts[index]), true);
+    const adapter = fake(); const readInventory = adapter.inventory; const observe = adapter.observe;
+    const { inventoryCommit, ...tuple } = expected;
+    const inventory = { ...await readInventory(), ...tuple,
+      digests: { runnerSha256: String(index + 1).repeat(64), chromeSha256: String(index + 3).repeat(64), nodeSha256: String(index + 5).repeat(64) } };
+    assert.equal(validateInventory(inventory, head), inventoryContracts[index]);
+    adapter.inventory = async () => inventory;
+    adapter.observe = async () => ({ ...await observe(), browser: `Chrome/${expected.chrome}` });
+    const result = await runProbe({ expectedHead: head, adapter });
+    assert.equal(result.status, 'pass');
+    assert.deepEqual(result.inventory, { ...expected, digests: inventory.digests });
+    // A CDP/browser version from the other reviewed image cannot prove this tuple.
+    adapter.observe = async () => ({ ...await observe(), browser: `Chrome/${expectedRunnerInventories[1 - index].chrome}` });
+    assert.equal((await runProbe({ expectedHead: head, adapter })).code, 'probe_version');
+  }
+});
+test('runner inventory rejects mixed or independently drifted fields before build and still cleans up', async () => {
   for (const changed of [
-    { imageVersion: '20260927.320.1', chrome: '154.0.8037.57' },
+    { imageVersion: '20260927.320.1' }, { chrome: '154.0.8037.57' },
+    { imageVersion: '20260927.320.2', chrome: '154.0.8037.57' },
     { imageVersion: '20261004.327.2' }, { chrome: '154.0.8037.98' },
     { node: '22.23.4' }, { imageOS: 'ubuntu22' }, { arch: 'arm64' },
   ]) {
@@ -487,7 +510,7 @@ test('sanitized proof binds artifact/source/toolchain but never emits raw histor
   const result = await runProbe({ expectedHead: head, adapter: fake(), journal: row => journal.push(row) });
   assert.equal(result.status, 'pass');
   const { digests, ...observedRunner } = result.inventory;
-  assert.deepEqual(observedRunner, runnerContract);
+  assert.deepEqual(observedRunner, expectedRunnerInventories[1]);
   assert.deepEqual(digests, (await fake().inventory()).digests);
   assert.equal(result.evidenceClass, 'exact-production-navigation-code-harness'); assert.equal(result.fullAppRoot, false);
   assert.equal(result.artifact.artifactDigest, artifact().artifactDigest);
