@@ -9,7 +9,8 @@ import { validateSdkState, validateHistoryMatrix, artifactDigest, buildArguments
   validateArtifact, classifyAsset, classifyBlockedRequest, networkReasonKeys, validateNetworkDiagnostic,
   isolateGoogleRegistrationGraph, validateIsolatedRegistrant, isolationScope,
   contract, inventoryTree, readHistoryFile } from '../support/mission_web_history_build.mjs';
-import { runProbe, parseArgs, launchArgs, privilegeArgs, ownsBuildGroup, preloadHistoryAssetResponses } from '../support/mission_web_history_probe.mjs';
+import { runProbe, parseArgs, launchArgs, privilegeArgs, ownsBuildGroup, preloadHistoryAssetResponses,
+  contract as runnerContract } from '../support/mission_web_history_probe.mjs';
 
 function assetFixture(t) {
   const outer = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sit-history-assets-')));
@@ -231,12 +232,12 @@ const artifact = () => {
     lockSha256: '2'.repeat(64), toolchain: { ...contract }, files, artifactDigest: artifactDigest(files) };
 };
 const fake = overrides => ({
-  inventory: async () => ({ platform: 'linux', arch: 'x64', imageOS: 'ubuntu24', imageVersion: '20260927.320.1',
-    node: '22.23.3', chrome: '154.0.8037.57', uid: 1001, gid: 1001, head, clean: true,
+  inventory: async () => ({ platform: 'linux', arch: 'x64', imageOS: 'ubuntu24', imageVersion: '20261004.327.1',
+    node: '22.23.3', chrome: '154.0.8037.97', uid: 1001, gid: 1001, head, clean: true,
     digests: { runnerSha256: '3'.repeat(64), chromeSha256: '4'.repeat(64), nodeSha256: '5'.repeat(64) } }),
   build: async () => artifact(),
   prepare: async () => ({ links: ['lo'], routes4: [], routes6: [], resolverEmpty: true }),
-  observe: async () => ({ browser: 'Chrome/154.0.8037.57', protocol: '1.3', httpStatus: 200,
+  observe: async () => ({ browser: 'Chrome/154.0.8037.97', protocol: '1.3', httpStatus: 200,
     targetCounts: {pageBlank: 1, pageOther: 0, browserUi: 2, extension: 0, serviceWorker: 0, other: 0},
     evaluated: true, workerPrivileges: true, externalTcp: 'ENETUNREACH', loopback: 200,
     renderers: [{ uid: 1001, gid: 1001, seccomp: 2, filters: 1, noNewPrivs: 1,
@@ -459,10 +460,35 @@ test('harness uses production classes, not test route hooks or a replacement rou
   assert.doesNotMatch(source, /restoreForTesting|testEnabled|testWeb:|RouterDelegate|pushState|replaceState|AppRoot\(/u);
 });
 
+test('runner inventory pins the official image and rejects stale or independently drifted fields before build', async () => {
+  assert.deepEqual(runnerContract, {
+    inventoryCommit: 'e3fe113a581eb9a44ca43f479b69f9c93f36df34',
+    imageOS: 'ubuntu24', imageVersion: '20261004.327.1', arch: 'x64', node: '22.23.3', chrome: '154.0.8037.97',
+  });
+  for (const changed of [
+    { imageVersion: '20260927.320.1', chrome: '154.0.8037.57' },
+    { imageVersion: '20261004.327.2' }, { chrome: '154.0.8037.98' },
+    { node: '22.23.4' }, { imageOS: 'ubuntu22' }, { arch: 'arm64' },
+  ]) {
+    const adapter = fake(); const inventory = adapter.inventory;
+    adapter.inventory = async () => ({ ...await inventory(), ...changed });
+    let built = false; let cleaned = false;
+    adapter.build = async () => { built = true; return artifact(); };
+    const cleanup = adapter.cleanup;
+    adapter.cleanup = async () => { cleaned = true; return cleanup(); };
+    const result = await runProbe({ expectedHead: head, adapter });
+    assert.equal(result.status, 'fail'); assert.equal(result.code, 'probe_inventory');
+    assert.equal(built, false); assert.equal(cleaned, true);
+  }
+});
+
 test('sanitized proof binds artifact/source/toolchain but never emits raw history or target data', async () => {
   const journal = [];
   const result = await runProbe({ expectedHead: head, adapter: fake(), journal: row => journal.push(row) });
   assert.equal(result.status, 'pass');
+  const { digests, ...observedRunner } = result.inventory;
+  assert.deepEqual(observedRunner, runnerContract);
+  assert.deepEqual(digests, (await fake().inventory()).digests);
   assert.equal(result.evidenceClass, 'exact-production-navigation-code-harness'); assert.equal(result.fullAppRoot, false);
   assert.equal(result.artifact.artifactDigest, artifact().artifactDigest);
   assert.equal(result.isolation, isolationScope); assert.equal(result.providerBootstrap, false); assert.equal(result.googleAuth, false);

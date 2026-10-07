@@ -10,10 +10,10 @@ import { createHash } from 'node:crypto';
 import { spawn, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-// Official inventory, accessed 2026-10-03; runner labels alone are not immutable.
-// https://github.com/actions/runner-images/blob/db776964592d0362a6bed85f90bc4e2980250e49/images/ubuntu/Ubuntu2404-Readme.md
-export const contract = Object.freeze({ inventoryCommit: 'db776964592d0362a6bed85f90bc4e2980250e49',
-  imageOS: 'ubuntu24', imageVersion: '20260927.320.1', arch: 'x64', node: '22.23.3', chrome: '154.0.8037.57' });
+// Official inventory, accessed 2026-10-07; runner labels alone are not immutable.
+// https://github.com/actions/runner-images/blob/e3fe113a581eb9a44ca43f479b69f9c93f36df34/images/ubuntu/Ubuntu2404-Readme.md
+export const contract = Object.freeze({ inventoryCommit: 'e3fe113a581eb9a44ca43f479b69f9c93f36df34',
+  imageOS: 'ubuntu24', imageVersion: '20261004.327.1', arch: 'x64', node: '22.23.3', chrome: '154.0.8037.97' });
 const self = fileURLToPath(import.meta.url);
 const chrome = '/opt/google/chrome/chrome';
 const mode = 'linux-history-harness';
