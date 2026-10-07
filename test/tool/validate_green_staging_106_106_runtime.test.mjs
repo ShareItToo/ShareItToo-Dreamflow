@@ -3,11 +3,111 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { main, parseArguments, runCli } from '../../tool/validate_green_staging_106_106_runtime.mjs';
+import { main, parseArguments, runCli, PromotionCliFailure } from '../../tool/validate_green_staging_106_106_runtime.mjs';
 import { digest, migrationInventory, repositoryRoot } from '../../backend/ops/green_staging_98_106_contract.mjs';
 import { successorSourcePaths } from '../../backend/ops/green_staging_106_106_binding.mjs';
 import { inputs } from '../../backend/test/fixtures/green_106106_preflight.js';
 import { rehearsalFixture } from '../../backend/test/fixtures/green_106106_rehearsal.js';
+import { promotionFixture } from '../../backend/test/fixtures/green_106106_promotion.js';
+
+async function protectedPromotion() {
+  const directory = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'sit-promotion-cli-'));
+  fs.chmodSync(directory, 0o700);
+  const state = await promotionFixture(directory), args = ['--mode', 'promote'], files = {};
+  for (const [name, value] of Object.entries({ binding: state.data.binding, publication: state.data.publicationBytes,
+    target: state.data.target, 'execution-config': state.data.config, 'runtime-manifest': state.data.manifest })) {
+    const bytes = Buffer.isBuffer(value) ? value : Buffer.from(JSON.stringify(value)), file = path.join(directory, `${name}.json`);
+    fs.writeFileSync(file, bytes, { mode: 0o600 }); files[name] = file;
+    args.push(`--${name}`, file, `--${name}-sha256`, digest(bytes));
+  }
+  files.rehearsal = path.join(directory, `${state.config.runId}.rehearsal.json`);
+  args.push('--rehearsal', files.rehearsal, '--rehearsal-sha256', state.options.rehearsalSha256,
+    '--evidence-directory', directory, '--confirm', state.options.confirmation);
+  return { ...state, args, files, directory, close: () => fs.rmSync(directory, { recursive: true, force: true }) };
+}
+async function captureCli(args, dependencies) {
+  let out = '', err = '';
+  const code = await runCli(args, { dependencies, stdout: { write: v => { out += v; } }, stderr: { write: v => { err += v; } } });
+  return { code, out, err };
+}
+
+test('explicit promote CLI consumes every protected input, reopens the exact receipt, and succeeds only at owner-smoke pending', async t => {
+  const s = await protectedPromotion(), opened = [], original = fs.openSync;
+  const mock = t.mock.method(fs, 'openSync', (file, ...args) => { opened.push(file); return original(file, ...args); });
+  try {
+    const result = await captureCli(s.args, s.dependencies);
+    assert.equal(result.code, 0); assert.equal(result.err, '');
+    const value = JSON.parse(result.out); assert.equal(value.status, 'promoted_owner_smoke_pending');
+    assert.equal(value.publicReleaseComplete, false); assert.equal(value.ownerSmokePassed, false);
+    for (const file of Object.values(s.files)) assert.ok(opened.includes(file));
+    assert.ok(opened.filter(file => file === s.files.rehearsal).length >= 2);
+    assert.ok(opened.includes(path.join(s.directory, `${s.config.runId}.pgdump`)));
+    assert.equal(s.calls.filter(c => c.phase === 'promotion_rename').length, 1);
+    assert.equal(s.source.State.Running, false);
+  } finally { mock.mock.restore(); s.close(); }
+});
+test('promotion arguments never imply promotion when explicit mode is absent; no Docker or evidence writes', async () => {
+  const s = await protectedPromotion(), before = fs.readdirSync(s.directory).sort();
+  try {
+    const result = await main(s.args.slice(2), { ...s.dependencies, command: () => assert.fail('default Docker') });
+    assert.equal(result.status, 'read_only_plan'); assert.deepEqual(fs.readdirSync(s.directory).sort(), before);
+    assert.equal(s.calls.length, 0);
+  } finally { s.close(); }
+});
+test('promote requires every argument once and exact protected bytes, permissions, directory, derived path and consent before commands', async t => {
+  const s = await protectedPromotion(), baseline = fs.readdirSync(s.directory).sort();
+  const reject = async args => { await assert.rejects(main(args, s.dependencies)); assert.equal(s.calls.length, 0);
+    assert.deepEqual(fs.readdirSync(s.directory).sort(), baseline); };
+  try {
+    for (const key of ['binding', 'binding-sha256', 'publication', 'publication-sha256', 'target', 'target-sha256',
+      'execution-config', 'execution-config-sha256', 'runtime-manifest', 'runtime-manifest-sha256', 'rehearsal',
+      'rehearsal-sha256', 'evidence-directory', 'confirm']) {
+      await t.test(`missing ${key}`, async () => { const a = [...s.args]; a.splice(a.indexOf(`--${key}`), 2); await reject(a); });
+      await t.test(`duplicate ${key}`, async () => { await reject([...s.args, `--${key}`, s.args[s.args.indexOf(`--${key}`) + 1]]); });
+    }
+    for (const [name, file] of Object.entries(s.files)) {
+      for (const hash of ['invalid', '0'.repeat(64)]) await t.test(`hash ${name} ${hash.length}`, async () => {
+        const a = [...s.args]; a[a.indexOf(`--${name}-sha256`) + 1] = hash; await reject(a);
+      });
+      await t.test(`permissions ${name}`, async () => { fs.chmodSync(file, 0o644);
+        try { await reject(s.args); } finally { fs.chmodSync(file, 0o600); } });
+      await t.test(`tamper ${name}`, async () => { const bytes = fs.readFileSync(file); fs.appendFileSync(file, ' ');
+        try { await reject(s.args); } finally { fs.writeFileSync(file, bytes); } });
+    }
+    for (const suffix of ['rehearsal.json', `${s.config.runId}.pgdump`, `../${path.basename(s.directory)}/${s.config.runId}.rehearsal.json`]) {
+      const a = [...s.args]; a[a.indexOf('--rehearsal') + 1] = `${s.directory}/${suffix}`; await reject(a);
+    }
+    fs.chmodSync(s.directory, 0o750);
+    try { await reject(s.args); } finally { fs.chmodSync(s.directory, 0o700); }
+    const a = [...s.args]; a[a.indexOf('--confirm') + 1] = 'PRIVATE-invalid-consent'; await reject(a);
+    const failure = await captureCli(a, s.dependencies);
+    assert.deepEqual(failure, { code: 1, out: '', err: 'green_106_106_promote_failed\n' });
+  } finally { s.close(); }
+});
+test('promotion preflight rejection and forward recovery preserve safe result but exit nonzero without retry', async t => {
+  for (const status of ['preflight_rejected', 'forward_recovery_required']) await t.test(status, async () => {
+    const s = await protectedPromotion(); let commands = 0;
+    try {
+      if (status === 'preflight_rejected') s.dependencies.command = () => { commands++; throw Error('PRIVATE-DYNAMIC-ERROR'); };
+      else s.failures.add('promotion_start');
+      const result = await captureCli(s.args, s.dependencies), safe = JSON.parse(result.out);
+      assert.equal(safe.status, status); assert.equal(result.code, status === 'preflight_rejected' ? 2 : 3);
+      assert.equal(result.err, `green_106_106_promote_${status}\n`);
+      assert.ok(!result.out.includes('PRIVATE')); assert.equal(safe.oldImageRestarted, false);
+      if (status === 'preflight_rejected') { assert.equal(commands, 1); assert.equal(safe.lockRetained, false); }
+      else {
+        assert.equal(s.calls.filter(c => c.phase === 'promotion_start').length, 1);
+        assert.equal(safe.lockRetained, true);
+        assert.ok(fs.existsSync(path.join(s.directory, `${s.config.runId}.promotion-failure.json`)));
+      }
+      assert.ok(!fs.existsSync(path.join(s.directory, `${s.config.runId}.promotion.json`)));
+    } finally { s.close(); }
+  });
+  const failure = new PromotionCliFailure({ status: 'preflight_rejected', sourceId: 'PRIVATE', candidateId: 'PRIVATE', stage: 'PRIVATE' });
+  assert.equal(failure.exitCode, 2); assert.equal(failure.result.sourceId, null); assert.equal(failure.result.stage, 'unknown');
+  assert.ok(!JSON.stringify(failure.result).includes('PRIVATE'));
+  assert.throws(() => new PromotionCliFailure({ status: 'PRIVATE' }));
+});
 
 async function protectedRehearsal() {
   const directory = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'sit-rehearsal-cli-'));
@@ -44,7 +144,7 @@ async function protectedPreflight() {
   return { ...state, args, files, directory, snapshot, close: () => fs.rmSync(directory, { recursive: true, force: true }) };
 }
 
-test('successor CLI defaults read-only and rejects promotion, output and incomplete rehearsal arguments', () => {
+test('successor CLI defaults read-only and rejects output and incomplete promotion/rehearsal arguments', () => {
   const args = ['--binding', '/private/binding', '--binding-sha256', 'a'.repeat(64),
     '--publication', '/private/publication', '--publication-sha256', 'b'.repeat(64)];
   assert.equal(parseArguments(args).mode, 'plan');

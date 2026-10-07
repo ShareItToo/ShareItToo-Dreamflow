@@ -1,7 +1,8 @@
 # Green Staging 106 → 106 successor: isolated rehearsal
 
 Status: **read-only collector/CLI, binding, execution preflight, isolated rehearsal and
-separate canonical promotion function implemented; promotion CLI/owner-smoke closure pending**.
+separate canonical promotion function and protected promotion CLI implemented;
+operational verification/owner-smoke closure pending**.
 Tests are synthetic/local PG16; no live
 collection, publication or deployment verification is claimed. Existing 98→106 source and evidence remain
 unchanged. The successor must be independently reviewed and gated before use.
@@ -22,7 +23,7 @@ and explicitly returns all execution/readiness flags false (`collectionImplement
 is true, but does not claim a collection happened). It rejects
 `collect`, `preflight`, `rehearse`, `promote` and `execute`, even with valid
 confirmation text. The separate CLI rehearsal requires the current preflight
-receipt content hash as well; promotion CLI wiring remains unimplemented:
+receipt content hash as well; promotion uses the separate receipt-byte binding:
 
 - `rehearse:RUNTIME_COMMIT:OPS_COMMIT:TARGET_CONTENT_SHA256:PREFLIGHT_CONTENT_SHA256`
 - `promote:RUNTIME_COMMIT:OPS_COMMIT:REHEARSAL_BYTE_SHA256`
@@ -87,7 +88,7 @@ Independent target review/binding is still required before later execution.
 Explicit `--mode preflight` additionally requires protected `--target`,
 `--execution-config` and `--runtime-manifest`, each with its own `-sha256`
 raw-byte argument. Default remains `plan`; mutation requires the separate explicit
-`rehearse` mode described below. `promote` and `execute` remain rejected.
+`rehearse` or `promote` mode described below. Generic `execute` remains rejected.
 The source closure includes preflight, image reader and rehearsal dependencies.
 
 `green_staging_106_106_preflight.mjs` defines separate version-1 kinds
@@ -189,8 +190,24 @@ Neither establishes execution against an actual candidate image or staging host.
 ## Canonical promotion adapter (local deterministic proof only)
 
 `green_staging_106_106_promotion.mjs` exposes `runSuccessorPromotion` separately;
-its default is a read-only plan. It has no promotion CLI wiring. Explicit execution
-requires `execute=true`, exact rehearsal byte hash and distinct promotion consent.
+its default is a read-only plan. The CLI invokes execution only for explicitly
+selected `--mode promote`, passing `execute=true`, exact rehearsal byte hash and
+distinct promotion consent. Omitting the mode never implies execution, even if
+promotion-specific arguments are present.
+Promotion requires all five protected input files (`--binding`, `--publication`,
+`--target`, `--execution-config`, `--runtime-manifest`) and their raw-byte
+`-sha256` arguments, plus `--rehearsal`, `--rehearsal-sha256`,
+`--evidence-directory` and `--confirm`. The rehearsal path must exactly equal
+the approved run-derived `RUN_ID.rehearsal.json` inside that same owner-only
+0700 evidence directory. The CLI checks its owner-only 0600 stable bytes; the
+adapter independently reopens/reverifies the receipt and protected backup.
+Missing/duplicate arguments, byte drift, wrong permissions, alternate receipt
+paths and wrong consent fail closed. Dynamic errors never appear in CLI output.
+Successful `promoted_owner_smoke_pending` returns exit 0. A safe
+`preflight_rejected` result is retained on stdout with a fixed stderr label and
+exit 2; `forward_recovery_required` similarly returns exit 3. Neither can be
+reported as CLI success or trigger a retry. Other errors return exit 1 with the
+fixed mode-specific error label, without rejected data.
 The protected receipt and backup are derived from the approved run ID, opened
 through stable descriptors and reverified. The complete promotion source enters
 the independent Ops/reviewed source closure; older receipts cannot authorize a
@@ -239,9 +256,9 @@ Deterministic fixtures model container names plus active endpoint aliases and
 reject canonical alias leakage, foreign-name collisions, rename ambiguity and
 gateway drift. They are not live Docker/DNS or public-route evidence.
 
-## Remaining integration and owner gate
+## Remaining operational and owner gate
 
-1. Sol review and protected invocation/CLI integration, followed by separately
+1. Sol review of the protected invocation, followed by separately
    authorized operational verification and final owner smoke. Preserve the
    sealed original and lock until that gate; any release/removal action needs
    its own reviewed authority and evidence. A synthetic adapter PASS does not
