@@ -4,7 +4,8 @@ import { execFileSync } from 'node:child_process';
 import { assertLedger, digest, equal, repositoryRoot } from './green_staging_98_106_contract.mjs';
 
 export function requireBinding(ok, code) { if (!ok) throw new Error(`green_106_106_${code}`); }
-const entrypoints = ['backend/ops/green_staging_106_106_collector.mjs', 'tool/validate_green_staging_106_106_runtime.mjs'];
+const entrypoints = ['backend/ops/green_staging_106_106_collector.mjs', 'tool/validate_green_staging_106_106_runtime.mjs',
+  'backend/ops/green_staging_106_106_promotion.mjs'];
 export function successorSourcePaths(root = repositoryRoot) {
   const found = new Set(['backend/package.json', 'backend/pnpm-lock.yaml']);
   const visit = relative => {

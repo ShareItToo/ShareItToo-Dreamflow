@@ -1,7 +1,8 @@
 # Green Staging 106 → 106 successor: isolated rehearsal
 
-Status: **read-only collector/CLI, binding, execution preflight and isolated rehearsal implemented;
-no canonical promotion adapter implemented**. Tests are synthetic/local PG16; no live
+Status: **read-only collector/CLI, binding, execution preflight, isolated rehearsal and
+separate canonical promotion function implemented; promotion CLI/owner-smoke closure pending**.
+Tests are synthetic/local PG16; no live
 collection, publication or deployment verification is claimed. Existing 98→106 source and evidence remain
 unchanged. The successor must be independently reviewed and gated before use.
 
@@ -21,7 +22,7 @@ and explicitly returns all execution/readiness flags false (`collectionImplement
 is true, but does not claim a collection happened). It rejects
 `collect`, `preflight`, `rehearse`, `promote` and `execute`, even with valid
 confirmation text. The separate CLI rehearsal requires the current preflight
-receipt content hash as well; promotion remains unimplemented:
+receipt content hash as well; promotion CLI wiring remains unimplemented:
 
 - `rehearse:RUNTIME_COMMIT:OPS_COMMIT:TARGET_CONTENT_SHA256:PREFLIGHT_CONTENT_SHA256`
 - `promote:RUNTIME_COMMIT:OPS_COMMIT:REHEARSAL_BYTE_SHA256`
@@ -185,20 +186,66 @@ The stateful Docker model covers response loss, foreign joins and cleanup failur
 native PG16 tests verify actual custom dump/restore and catalog/data invariants.
 Neither establishes execution against an actual candidate image or staging host.
 
-## Exact remaining module
+## Canonical promotion adapter (local deterministic proof only)
 
-1. **Separately confirmed canonical swap and evidence**:
-   extend the same new executor, never the old 98→106 runner. Require a fresh
-   successful receipt (maximum one hour), exact backup/material/source bindings
-   and distinct promotion consent. Recheck sealed source and the complete
-   baseline network/router membership minus the stopped source. Write an
-   exclusive canonical-started receipt before candidate start. Bind the new
-   container's ID/config/image/UID/mounts; confirm unchanged DB/ledger/data and
-   exact source/readiness before the final public attachment. Membership after
-   swap equals the bound baseline minus old API plus the exact successor ID/name.
-   Any failure after the boundary isolates the exact successor and requires
-   reviewed forward recovery; never restart the old image, down-migrate or
-   restore canonical data automatically. Preserve sealed originals and evidence.
+`green_staging_106_106_promotion.mjs` exposes `runSuccessorPromotion` separately;
+its default is a read-only plan. It has no promotion CLI wiring. Explicit execution
+requires `execute=true`, exact rehearsal byte hash and distinct promotion consent.
+The protected receipt and backup are derived from the approved run ID, opened
+through stable descriptors and reverified. The complete promotion source enters
+the independent Ops/reviewed source closure; older receipts cannot authorize a
+different Ops implementation.
+
+Only a successfully rehearsed, already sealed source is accepted. A retained,
+exclusive lock precedes create. The successor is created under the run-scoped
+`sit-106-106-RUN_ID-promote` name, never the router's canonical upstream name.
+Both exact networks are attached and the candidate starts under that temporary
+name. Endpoint aliases/DNS names cannot contain the canonical name before the
+boundary. The schema-2 canonical-boundary artifact is written immediately before
+the captured-ID rename to the exact source name, after all local checks pass.
+Candidate image/version, full mounts, supplemental groups, source host/config
+preservation, canonical database routing/identity, witnesses, complete network
+membership, schema106/data/readiness and the one-heartbeat rule are checked.
+Candidate labels must exactly equal new-image OCI labels plus every source
+non-OCI label plus the run ownership label. The complete Green-label container
+inventory must equal the target IDs before create and target IDs plus the captured
+successor afterward, including immediately before rename and after gateway proof.
+Unsupported source settings fail closed, never silently disappear. Only local
+health/version/SQL readbacks run; no auth/provider or product-flow probe is made.
+MFA/identity acceptance is required from the exact fresh isolated rehearsal
+receipt; synthetic accounts are never written to the canonical database.
+Firebase and provider-network configuration remain preserved. Evidence states
+`intentionalProviderCalls=0`, not that provider egress is impossible or non-use proven.
+
+Create/start/attach response loss is not retried and cannot yield PASS. A lost
+rename reply is reconciled through bounded exact-ID/name/membership reads,
+without replaying rename. After rename, bounded public readbacks must match the
+exact version tuple and successful readiness at `/api/version` and
+`/api/health/ready` on the staging gateway. Both HTTP reads run concurrently;
+convergence allows at most ten five-second attempts and nine one-second pauses,
+with an additional absolute sixty-second deadline. Success evidence retains the
+version and complete gateway-readback content hashes. Unvalidated constraints
+must still be zero after public gateway proof. Failure
+isolates only a captured successor whose ownership/config can still be verified;
+otherwise isolation remains explicitly unverified. Source, backup, env, lock and
+evidence remain retained; there is no old-image restart, down migration, automatic
+restore or deletion. Success is `promoted_owner_smoke_pending`, never pilot/public
+release completion. The adapter does not release the lock or remove the original.
+
+The routing contract uses the verified Caddy upstream
+`shareittoo-staging-api:8080` on the internal Green network. Network attachment
+is not the public-visibility boundary: only the final exact-ID rename is.
+Deterministic fixtures model container names plus active endpoint aliases and
+reject canonical alias leakage, foreign-name collisions, rename ambiguity and
+gateway drift. They are not live Docker/DNS or public-route evidence.
+
+## Remaining integration and owner gate
+
+1. Sol review and protected invocation/CLI integration, followed by separately
+   authorized operational verification and final owner smoke. Preserve the
+   sealed original and lock until that gate; any release/removal action needs
+   its own reviewed authority and evidence. A synthetic adapter PASS does not
+   establish current host compatibility or live promotion.
 
 ## Reuse boundary
 
