@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { collectGoogleWebReattestation, bindGoogleWebReattestationDecision,
-  googleWebReattestationReadSources, loadGoogleWebReattestation,
+  googleWebReattestationReadSources, googleWebReattestationSourcePaths, loadGoogleWebReattestation,
   googleWebReattestationDigest as digest } from '../ops/staging_google_web_reattestation.mjs';
 import { bindGoogleWebReadiness } from '../../tool/staging_google_web_readiness.mjs';
 
@@ -17,7 +17,7 @@ const hash = (value) => createHash('sha256').update(value).digest('hex');
 function fixture(t) {
   const repositoryRoot = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sit-google-reattest-')));
   t.after(() => fs.rmSync(repositoryRoot, { recursive: true, force: true }));
-  for (const relative of ['backend/ops/staging_google_web_reattestation.mjs', 'tool/staging_google_web_readiness.mjs']) {
+  for (const relative of googleWebReattestationSourcePaths) {
     fs.mkdirSync(path.dirname(path.join(repositoryRoot, relative)), { recursive: true });
     fs.copyFileSync(path.join(root, relative), path.join(repositoryRoot, relative));
   }
@@ -79,7 +79,7 @@ test('fresh preserved observations produce pending schema-2 inputs and an exact 
   const journal = JSON.parse(journalBytes); const record = journal.records[0];
   assert.equal(candidate.readiness.prerequisiteJournalSha256, hash(journalBytes));
   assert.equal(candidate.readiness.prerequisiteFinalRecordSha256, digest(record));
-  assert.equal(record.sourceRegister.length, 2); assert.equal(record.readRegister.length, 6);
+  assert.equal(record.sourceRegister.length, googleWebReattestationSourcePaths.length); assert.equal(record.readRegister.length, 6);
   assert.deepEqual(f.calls, ['readAccountIdentity', 'readSnapshot', 'readWebApp', 'readSdkConfig', 'readSnapshot', 'readAccountIdentity']);
   assert.equal(record.providerMutationCount, 0); assert.equal(f.git('status', '--porcelain'), before);
   assert.equal(journalBytes.includes(f.sdk.apiKey), false);

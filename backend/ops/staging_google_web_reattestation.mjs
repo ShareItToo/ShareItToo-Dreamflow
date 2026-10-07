@@ -1,12 +1,9 @@
 // Read-only successor. This module has no network client, CLI, credential
 // reader, filesystem writer or provider mutation capability. The caller owns
 // authenticated, bounded readers; injected observations are not live proof.
-// OPERATIONAL HOLD: no executable command is supplied. A separately reviewed
-// adapter must wrap the existing live adapter's three read methods with genuine
-// timestamp/source receipts and supply a fresh authenticated operator/project
-// reader. Service-account possession alone cannot supply that operator proof.
-// A separate protected writer must persist JSON.stringify(candidate) and the
-// unchanged journalBytes outside Git, then independently record both byte hashes.
+// The operational adapter/CLI supply fresh authenticated operator/project reads
+// and exclusive protected persistence. Service-account possession alone cannot
+// supply operator proof. A command existing is not current provider evidence.
 // After review (including a process restart), loadGoogleWebReattestation accepts
 // those protected files/hashes; bindGoogleWebReattestationDecision then checks
 // the separately returned canonical decision bytes and their independent hash.
@@ -21,7 +18,17 @@ import { bindGoogleWebReadiness, googleWebReadinessDigest } from '../../tool/sta
 const ownPath = 'backend/ops/staging_google_web_reattestation.mjs';
 const ownFile = fileURLToPath(import.meta.url);
 const defaultRoot = path.resolve(path.dirname(ownFile), '../..');
-const sourcePaths = [ownPath, 'tool/staging_google_web_readiness.mjs'];
+export const googleWebReattestationSourcePaths = Object.freeze([ownPath,
+  'backend/ops/staging_google_web_reattestation_adapter.mjs',
+  'backend/ops/staging_google_web_reattestation_writer.mjs',
+  'backend/ops/staging_google_web_reattestation_cli.mjs',
+  'backend/ops/staging_google_web_live_adapter.mjs',
+  'backend/ops/staging_google_web_read_adapter.mjs',
+  'backend/ops/staging_google_web_prerequisites.mjs',
+  'tool/staging_web_contract.mjs', 'tool/staging_google_web_readiness.mjs',
+  'tool/staging_apple_web_readiness.mjs', 'tool/staging_facebook_web_readiness.mjs',
+  'tool/staging_password_enrollment_web_readiness.mjs']);
+const sourcePaths = googleWebReattestationSourcePaths;
 const loadedSourceBytes = new Map(sourcePaths.map((locator) => [locator, fs.readFileSync(path.resolve(defaultRoot, locator))]));
 const digestPattern = /^[a-f0-9]{64}$/u;
 const sourcePattern = /^[a-f0-9]{40}$/u;
@@ -35,7 +42,10 @@ const candidates = new WeakMap();
 export function googleWebReattestationReadSources(method, binding) {
   const project = binding.projectId; const number = binding.projectNumber;
   const app = `https://firebase.googleapis.com/v1beta1/projects/${number}/webApps/${binding.webAppId}`;
-  if (method === 'readAccountIdentity') return [`authenticated-session:sha256:${binding.firebaseAccountEmailSha256}`];
+  if (method === 'readAccountIdentity') return [`authenticated-session:sha256:${binding.firebaseAccountEmailSha256}`,
+    'https://accounts.google.com/.well-known/openid-configuration',
+    'https://openidconnect.googleapis.com/v1/userinfo',
+    `https://cloudresourcemanager.googleapis.com/v1/projects/${project}`];
   if (method === 'readWebApp') return [app];
   if (method === 'readSdkConfig') return [app, `${app}/config`];
   check(method === 'readSnapshot');
@@ -143,7 +153,7 @@ function pendingCandidate(record, journalBytes, configuration) {
  * readAccountIdentity independently binds the current authenticated operator
  * and project and returns its observation time and sanitized proof digest.
  * This explicit caller boundary is intentionally not a service-account-to-owner
- * inference. No operational adapter for that account reader is supplied here.
+ * inference. The operational adapter supplies this independent user-token read.
  */
 function validateBinding(binding) {
     check(exact(binding, ['schemaVersion', 'sourceCommit', 'projectId', 'projectNumber', 'webAppId',
@@ -162,6 +172,11 @@ function validateBinding(binding) {
       && digestPattern.test(binding.apiKey.keyFingerprint) && digestPattern.test(binding.apiKey.restrictionsDigest));
     check(new RegExp(`^projects/${binding.projectNumber}/locations/global/keys/[A-Za-z0-9_-]{1,200}$`, 'u').test(binding.apiKeyResourceName)
       && digestPattern.test(binding.runtimeContainerId) && sourcePattern.test(binding.runtimeCommit));
+}
+
+export function preflightGoogleWebReattestation(binding, repositoryRoot = defaultRoot) {
+  try { validateBinding(binding); sourceRegister(repositoryRoot, binding.sourceCommit); }
+  catch { throw new Error('google_web_reattestation_preflight_denied'); }
 }
 
 export async function collectGoogleWebReattestation({ binding, readers, repositoryRoot = defaultRoot, now = Date.now } = {}) {
@@ -241,7 +256,7 @@ export async function collectGoogleWebReattestation({ binding, readers, reposito
   } catch { throw new Error('google_web_reattestation_denied'); }
 }
 
-function protectedBytes(file, repositoryRoot, limit) {
+export function readProtectedGoogleWebBytes(file, repositoryRoot = defaultRoot, limit = 131072) {
   const descriptors = []; const chain = []; let bytes;
   const metadataEqual = (a, b, directory = false) => (directory
     ? ['dev', 'ino', 'mode', 'uid', 'gid']
@@ -288,8 +303,8 @@ export function loadGoogleWebReattestation({ candidateFile, expectedCandidateSha
   try {
     check(candidateFile !== journalFile && digestPattern.test(expectedCandidateSha256)
       && digestPattern.test(expectedJournalSha256));
-    candidateBytes = protectedBytes(candidateFile, repositoryRoot, 32768);
-    journalBytes = protectedBytes(journalFile, repositoryRoot, 131072);
+    candidateBytes = readProtectedGoogleWebBytes(candidateFile, repositoryRoot, 32768);
+    journalBytes = readProtectedGoogleWebBytes(journalFile, repositoryRoot, 131072);
     check(hash(candidateBytes) === expectedCandidateSha256 && hash(journalBytes) === expectedJournalSha256);
     const candidateText = new TextDecoder('utf-8', { fatal: true }).decode(candidateBytes);
     const journalText = new TextDecoder('utf-8', { fatal: true }).decode(journalBytes);
