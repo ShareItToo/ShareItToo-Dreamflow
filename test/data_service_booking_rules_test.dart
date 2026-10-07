@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lendify/models/message.dart';
@@ -11,9 +12,21 @@ import 'support/test_builders.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  String authSessionFor(User user) => jsonEncode(<String, Object>{
+        'userId': user.id,
+        'email': user.email,
+        'createdAt': '2026-08-25T04:00:00.000Z',
+      });
+
+  Future<void> setAuthenticatedUser(User user) async {
+    await DataService.setCurrentUser(user);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('auth_session_v1', authSessionFor(user));
+  }
+
   group('DataService refund policy', () {
     test(
-      'unified cancellation policy returns 100 percent until two calendar days before start',
+      'V5.1 cancellation policy uses exact 24-hour instants',
       () {
         final start = DateTime(2026, 7, 29, 12);
 
@@ -29,7 +42,15 @@ void main() {
           DataService.refundRatio(
             policy: 'unified',
             start: start,
-            cancelAt: DateTime(2026, 7, 28, 0, 0),
+            cancelAt: DateTime(2026, 7, 28, 12, 0),
+          ),
+          1.0,
+        );
+        expect(
+          DataService.refundRatio(
+            policy: 'unified',
+            start: start,
+            cancelAt: DateTime(2026, 7, 28, 13, 0),
           ),
           0.5,
         );
@@ -37,9 +58,9 @@ void main() {
           DataService.refundRatio(
             policy: 'unified',
             start: start,
-            cancelAt: DateTime(2026, 7, 29, 0, 0),
+            cancelAt: DateTime(2026, 7, 29, 12, 0),
           ),
-          0.0,
+          isNull,
         );
       },
     );
@@ -103,7 +124,39 @@ void main() {
         }),
         if (currentUser != null)
           'currentUser': jsonEncode(currentUser.toJson()),
+        if (currentUser != null) 'auth_session_v1': authSessionFor(currentUser),
       });
+    }
+
+    Future<void> seedConditionEvidence({
+      required String requestId,
+      required String segment,
+    }) async {
+      final presenter = segment == 'pickup' ? owner : renter;
+      final verifier = segment == 'pickup' ? renter : owner;
+      await setAuthenticatedUser(presenter);
+      for (var index = 0; index < DataService.minimumRequiredPhotos; index++) {
+        await DataService.addConditionEvidencePhoto(
+          requestId: requestId,
+          bytes: Uint8List.fromList([1, 2, 3, index]),
+          filename: '$segment-$index.jpg',
+          segment: segment,
+          kind: 'presenter_photo',
+          source: 'camera',
+          semanticSlot: const [
+            'overview',
+            'detail',
+            'accessories',
+            'critical'
+          ][index],
+        );
+      }
+      await setAuthenticatedUser(verifier);
+      await DataService.recordConditionConfirmation(
+        requestId: requestId,
+        segment: segment,
+        decision: 'confirmed',
+      );
     }
 
     setUp(() async {
@@ -235,6 +288,7 @@ void main() {
     });
 
     test('handover start rejects an unconfirmed handover time', () async {
+      await setAuthenticatedUser(renter);
       await DataService.requestFlowTime(
         requestId: 'req-pickup',
         isReturn: false,
@@ -242,6 +296,7 @@ void main() {
         time: DateTime(2026, 7, 29, 10),
         requestedByUserId: renter.id,
       );
+      await setAuthenticatedUser(owner);
       final before = await DataService.getHandoverReturnState('req-pickup');
 
       final result = await DataService.setHandoverActive(
@@ -253,6 +308,29 @@ void main() {
       expect(result, isFalse);
       expect(after, before);
       expect(after['handoverActive'], isFalse);
+    });
+
+    test('flow time stays on the canonical rental day after caller date drift',
+        () async {
+      await seedBookingState(currentUser: owner);
+      final request = await DataService.getRentalRequestById('req-pickup');
+
+      await DataService.requestFlowTime(
+        requestId: 'req-pickup',
+        isReturn: false,
+        label: 'untrusted weekday, 10:15',
+        time: DateTime(2026, 7, 28, 10, 15),
+        requestedByUserId: owner.id,
+      );
+
+      final state = await DataService.getHandoverReturnState('req-pickup');
+      final expected = request!.flowTimeAt(
+        isReturn: false,
+        hour: 10,
+        minute: 15,
+      );
+      expect(state['handoverTimeIso'], expected.toIso8601String());
+      expect(state['handoverTimeRequested'], 'Mi, 10:15');
     });
 
     test(
@@ -474,6 +552,7 @@ void main() {
 
     test('return start rejects an unconfirmed return time', () async {
       await seedBookingState(currentUser: renter);
+      await setAuthenticatedUser(owner);
       await DataService.requestFlowTime(
         requestId: 'req-return',
         isReturn: true,
@@ -481,6 +560,7 @@ void main() {
         time: DateTime(2026, 7, 31, 18),
         requestedByUserId: owner.id,
       );
+      await setAuthenticatedUser(renter);
       final before = await DataService.getHandoverReturnState('req-return');
 
       final result = await DataService.setReturnActive(
@@ -618,6 +698,7 @@ void main() {
         for (var i = 0; i < DataService.minimumRequiredPhotos; i++) {
           await DataService.incrementHandoverPhotos('req-pickup');
         }
+        await setAuthenticatedUser(renter);
 
         final result = await DataService.confirmPickupTransition(
           requestId: 'req-pickup',
@@ -640,7 +721,7 @@ void main() {
     );
 
     test(
-      'pickup transition rejects wrong renter role even when status is accepted',
+      'pickup transition rejects owner because renter verifies the owner code',
       () async {
         await DataService.setHandoverActive('req-pickup', active: true);
         for (var i = 0; i < DataService.minimumRequiredPhotos; i++) {
@@ -665,11 +746,39 @@ void main() {
     );
 
     test(
+      'pickup transition rejects a forged participant id from another session',
+      () async {
+        await DataService.setHandoverActive('req-pickup', active: true);
+        for (var i = 0; i < DataService.minimumRequiredPhotos; i++) {
+          await DataService.incrementHandoverPhotos('req-pickup');
+        }
+        await setAuthenticatedUser(outsider);
+
+        final result = await DataService.confirmPickupTransition(
+          requestId: 'req-pickup',
+          confirmedByUserId: renter.id,
+          method: 'manual',
+          confirmationContextVerified: true,
+          galleryAcknowledged: true,
+        );
+
+        await setAuthenticatedUser(owner);
+        final request = await DataService.getRentalRequestById('req-pickup');
+
+        expect(result.success, isFalse);
+        expect(result.errorMessage, contains('bestätigenden Konto'));
+        expect(request!.status, 'accepted');
+        expect(request.handoverConfirmation, isNull);
+      },
+    );
+
+    test(
       'pickup transition rejects accepted request without active handover flow',
       () async {
         for (var i = 0; i < DataService.minimumRequiredPhotos; i++) {
           await DataService.incrementHandoverPhotos('req-pickup');
         }
+        await setAuthenticatedUser(renter);
 
         final result = await DataService.confirmPickupTransition(
           requestId: 'req-pickup',
@@ -692,12 +801,13 @@ void main() {
     );
 
     test(
-      'pickup transition requires active flow and at least four handover photos',
+      'ordinary local photo counters cannot replace four role-bound presenter photos',
       () async {
         await DataService.setHandoverActive('req-pickup', active: true);
-        await DataService.incrementHandoverPhotos('req-pickup');
-        await DataService.incrementHandoverPhotos('req-pickup');
-        await DataService.incrementHandoverPhotos('req-pickup');
+        for (var i = 0; i < DataService.minimumRequiredPhotos; i++) {
+          await DataService.incrementHandoverPhotos('req-pickup');
+        }
+        await setAuthenticatedUser(renter);
 
         final result = await DataService.confirmPickupTransition(
           requestId: 'req-pickup',
@@ -719,9 +829,10 @@ void main() {
       'pickup transition moves accepted booking to running after verified renter confirmation',
       () async {
         await DataService.setHandoverActive('req-pickup', active: true);
-        for (var i = 0; i < DataService.minimumRequiredPhotos; i++) {
-          await DataService.incrementHandoverPhotos('req-pickup');
-        }
+        await seedConditionEvidence(
+          requestId: 'req-pickup',
+          segment: 'pickup',
+        );
 
         final result = await DataService.confirmPickupTransition(
           requestId: 'req-pickup',
@@ -746,9 +857,10 @@ void main() {
       'pickup transition rejects repeated confirmation after booking is already running',
       () async {
         await DataService.setHandoverActive('req-pickup', active: true);
-        for (var i = 0; i < DataService.minimumRequiredPhotos; i++) {
-          await DataService.incrementHandoverPhotos('req-pickup');
-        }
+        await seedConditionEvidence(
+          requestId: 'req-pickup',
+          segment: 'pickup',
+        );
 
         final first = await DataService.confirmPickupTransition(
           requestId: 'req-pickup',
@@ -795,6 +907,7 @@ void main() {
         for (var i = 0; i < DataService.minimumRequiredPhotos; i++) {
           await DataService.incrementReturnPhotos('req-return');
         }
+        await setAuthenticatedUser(owner);
 
         final result = await DataService.confirmReturnTransition(
           requestId: 'req-return',
@@ -851,6 +964,7 @@ void main() {
         for (var i = 0; i < DataService.minimumRequiredPhotos; i++) {
           await DataService.incrementReturnPhotos('req-return');
         }
+        await setAuthenticatedUser(owner);
 
         final result = await DataService.confirmReturnTransition(
           requestId: 'req-return',
@@ -878,9 +992,10 @@ void main() {
       () async {
         await seedBookingState(currentUser: renter);
         await DataService.setReturnActive('req-review', active: true);
-        for (var i = 0; i < DataService.minimumRequiredPhotos; i++) {
-          await DataService.incrementReturnPhotos('req-review');
-        }
+        await seedConditionEvidence(
+          requestId: 'req-review',
+          segment: 'return',
+        );
 
         final result = await DataService.confirmReturnTransition(
           requestId: 'req-review',
@@ -907,9 +1022,10 @@ void main() {
       () async {
         await seedBookingState(currentUser: renter);
         await DataService.setReturnActive('req-return', active: true);
-        for (var i = 0; i < DataService.minimumRequiredPhotos; i++) {
-          await DataService.incrementReturnPhotos('req-return');
-        }
+        await seedConditionEvidence(
+          requestId: 'req-return',
+          segment: 'return',
+        );
 
         final result = await DataService.confirmReturnTransition(
           requestId: 'req-return',
@@ -937,9 +1053,10 @@ void main() {
       () async {
         await seedBookingState(currentUser: renter);
         await DataService.setReturnActive('req-return', active: true);
-        for (var i = 0; i < DataService.minimumRequiredPhotos; i++) {
-          await DataService.incrementReturnPhotos('req-return');
-        }
+        await seedConditionEvidence(
+          requestId: 'req-return',
+          segment: 'return',
+        );
 
         final first = await DataService.confirmReturnTransition(
           requestId: 'req-return',
@@ -1001,6 +1118,8 @@ void main() {
           ).toJson(),
         ]),
         'review_reminders_v1': '[]',
+        'currentUser': jsonEncode(renter.toJson()),
+        'auth_session_v1': authSessionFor(renter),
       });
     }
 
@@ -1081,7 +1200,7 @@ void main() {
 
   group('DataService price breakdown', () {
     test(
-      'delivery return and express fees affect renter total and owner payout as implemented',
+      'Privat-Pilot ignores delivery return and express selections',
       () {
         final item = buildTestItem(
           id: 'item-priced',
@@ -1114,12 +1233,12 @@ void main() {
           },
         );
 
-        expect(breakdown.dropoffFee, 3.0);
-        expect(breakdown.returnFee, 3.0);
-        expect(breakdown.expressApplied, 5.0);
+        expect(breakdown.dropoffFee, 0.0);
+        expect(breakdown.returnFee, 0.0);
+        expect(breakdown.expressApplied, 0.0);
         expect(breakdown.platformFee, 4.0);
-        expect(breakdown.totalRenter, 55.5);
-        expect(breakdown.payoutOwner, 51.0);
+        expect(breakdown.totalRenter, 44.0);
+        expect(breakdown.payoutOwner, 40.0);
       },
     );
   });

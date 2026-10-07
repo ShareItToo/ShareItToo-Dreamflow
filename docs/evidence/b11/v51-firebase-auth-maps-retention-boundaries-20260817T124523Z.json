@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "kind": "v51-firebase-auth-maps-retention-boundaries",
+  "status": "implemented-full-regression-passed-owner-contract-and-deletion-approval-open",
+  "capturedAt": "2026-08-17T12:45:23Z",
+  "sourceBaseCommit": "5ca9215cfd0f908e61654d1626856c4878f8c4e6",
+  "scope": {
+    "firebaseAuthenticationReadinessStructured": true,
+    "googleMapsPlatformReadinessStructured": true,
+    "allFourGoogleServiceReadinessRefsDistinct": true,
+    "retentionSourceInventoryExpanded": true,
+    "runtimeCodeChanged": false,
+    "retentionDecisionClosed": false
+  },
+  "firebaseAuthenticationBoundary": {
+    "retainedForLaunch": true,
+    "phoneVerificationInLaunchScope": true,
+    "temporaryPhoneIdentityDeletedAfterSafeVerification": true,
+    "persistentSocialIdentityDeletionOnAccountErasureImplemented": false,
+    "googleAppleFacebookLoginActivationApproved": false,
+    "socialLoginBlockedUntilDeletionGapAndApprovalsClose": true,
+    "providerLoggedIpRetention": "a-few-weeks",
+    "otherProviderAuthDataRemoval": "within-180-days-after-customer-initiated-user-deletion"
+  },
+  "googleMapsPlatformBoundary": {
+    "retainedForLaunch": true,
+    "addressAutocompleteAndPlaceDetailsInLaunchScope": true,
+    "serverSideProxyImplemented": true,
+    "clientCredentialEmbedded": false,
+    "authenticatedAndRateLimited": true,
+    "backgroundOrLiveTrackingAllowed": false,
+    "singleFixedProviderRetentionPeriodAvailable": false,
+    "accountScopedProviderDeletionImplemented": false
+  },
+  "pushAndCrashDecision": {
+    "firebaseCloudMessagingRetained": true,
+    "firebaseCrashlyticsRetained": true,
+    "separateVoluntaryChoices": true,
+    "nextCandidateDefaultOff": true,
+    "pushCannotEnableCrashlytics": true
+  },
+  "sourceBindings": {
+    "firebaseAuthenticationReadinessSha256": "7dbab88404cd2c5f4c131302bbab8c682cb2ac1a156a00aa2806eaf9c29f66dc",
+    "googleMapsReadinessSha256": "49e21dae826afe4140c5284d8f9529bb2d41105491ca392ece4c4b0446557608",
+    "retentionManifestSha256": "6d02d68f9f6124e2eaa33a7eb2883bcfaf61d0315e2ff60aba582ca6c47273b5",
+    "validatorSha256": "064bf009240a7508d3430003f852541b2522f339ba22d8068bc141106c25ca06",
+    "validatorTestsSha256": "8abfe797022244063db9bbbb7aa212eb246b03da3c455313c35e49cad0c07b26",
+    "decisionMatrixSha256": "5b2c33c7f4d4dcb177437fd0aa1bc25c10c63b3e905341e26feca4b37ed772f4"
+  },
+  "verification": {
+    "targetedRetentionTests": "passed-39",
+    "retentionValidator": "passed-draft-open-nine-decisions-execution-blocked-20",
+    "privacyValidator": "passed-draft-fail-closed",
+    "fullFlutterTests": "passed-282-with-1-intentional-skip",
+    "flutterAnalyzer": "224-findings-0-errors-baseline-accepted",
+    "googleOnlySocialProfile": "passed",
+    "webDebugBuild": "passed-existing-wasm-dry-run-warnings-only",
+    "androidDebugBuild": "passed",
+    "diffCheck": "passed"
+  },
+  "openGates": {
+    "ownerContractAcceptance": true,
+    "currentEnabledApisAndProcessingLocations": true,
+    "internationalTransferApproval": true,
+    "externalProcessorRetentionDecision": true,
+    "firebasePersistentSocialIdentityDeletion": true,
+    "mapsAccountScopedProviderDeletionReality": true,
+    "mapsServerCredentialRestrictionVerification": true,
+    "storeDisclosureApproval": true
+  },
+  "boundaries": {
+    "providerConsoleChanged": false,
+    "productionChanged": false,
+    "deploymentOrUploadPerformed": false,
+    "storeSubmissionChanged": false,
+    "candidateBuiltOrRelabeled": false,
+    "realPaymentPerformed": false,
+    "containsSecrets": false,
+    "containsAccountData": false
+  },
+  "officialSources": [
+    "https://firebase.google.com/support/privacy/",
+    "https://firebase.google.com/docs/auth/admin/manage-users",
+    "https://firebase.google.com/terms/data-processing-terms/",
+    "https://developers.google.com/maps/security/compliance/security-compliance",
+    "https://cloud.google.com/maps-platform/terms?sign=1"
+  ]
+}

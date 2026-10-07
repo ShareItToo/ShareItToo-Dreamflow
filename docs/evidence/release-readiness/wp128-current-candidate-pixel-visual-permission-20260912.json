@@ -1,0 +1,165 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp128-current-candidate-pixel-visual-permission",
+  "status": "partial-visual-text-complete-permission-settlement-open",
+  "capturedOn": "2026-09-12",
+  "workPackage": "WP128",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "wp127BaseHead": "66df6b1f3501f3920192c6e73609d441070f65b0",
+    "candidateSourceHead": "1546812f625b4e8f1e700bf976410097cd45ac2f",
+    "applicationRuntimePathsChangedAfterCandidateSource": []
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091201",
+    "releaseChannel": "internal",
+    "environment": "staging",
+    "delivery": "direct-apk",
+    "apkSha256": "a8bfda4c1a0e7302b2528db8edfbe1318e88322023f65588da032220a24badd4",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "physicalPixelPackageMatched": true
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "17",
+    "apiLevel": 37,
+    "securityPatch": "2026-07-05",
+    "containsRawDeviceIdentifier": false
+  },
+  "largeTextAndRestart": {
+    "fontScaleBefore": 0.85,
+    "fontScaleDuring": 2,
+    "fontScaleAfter": 0.85,
+    "exactFontScaleRestored": true,
+    "destinations": [
+      "Entdecken",
+      "Mietkorb",
+      "Buchungen",
+      "Nachrichten",
+      "Mein SIT"
+    ],
+    "allDestinationsReachableAt200Percent": true,
+    "boundedColdStartsRequested": 3,
+    "boundedColdStartsPassed": 3,
+    "manualTalkBackTraversalPassed": false
+  },
+  "visualTheme": {
+    "systemModes": {
+      "dark": {
+        "authenticatedMainNavigationVisible": true,
+        "privateCaptureSha256": "e1857654cb15a64281cacd9dfa1a3854d21c6c90c3724a8be2031ab934272260",
+        "exactOriginalModeRestored": true
+      },
+      "light": {
+        "authenticatedMainNavigationVisible": true,
+        "privateCaptureSha256": "fc40ab569f0643179b39babe7efafda7782e9ae046902bd4a17fcc9fe802aea6",
+        "exactOriginalModeRestored": true
+      }
+    },
+    "originalBackgroundChoice": "dark-1",
+    "backgroundChoices": {
+      "system": "f8dc9650ced0987e03a50366e5ba26e81d5667b525913d45ead50d0caa50f9e8",
+      "dark-1": "c08a3878d84340c3af6245baf984906351e27c713072e757f37540e895292302",
+      "dark-2": "5301a07a286cfd907e965371a9bb95364b31b1607ce9c4b9961b73a467b044de",
+      "light-1": "aa773ea1fdd153c3463a79b8a23fb3bdb7d27aed242cb0cb8ec5393686921ec5",
+      "light-2": "153bdfea0b3c1588dd0c9bea7044ea73ca3b21de29eb3ce1d58b38390cc80520"
+    },
+    "selectedSemanticsAuthoritative": true,
+    "eachChoiceRestoredBeforeNextPhase": true,
+    "normalExploreRestored": true,
+    "privateCapturesVisuallyInspected": true,
+    "ownerManualVisualSignoffClaimed": false,
+    "privateCapturesCommitted": false
+  },
+  "permissionLifecycle": {
+    "declaredPermissionCount": 14,
+    "activeRuntimePermissionCount": 4,
+    "groups": {
+      "camera": "deny-allow-authenticated-restarts-passed",
+      "location": "deny-allow-authenticated-restarts-passed",
+      "notifications": "deny-allow-authenticated-restarts-passed"
+    },
+    "readOnlyAndroidPermissionSettingsPassed": true,
+    "exactPermissionStateRestored": true,
+    "ownerOnlyJournalMode": "0600",
+    "recoveryRequired": false,
+    "finalLifecycleAccepted": false,
+    "lastAcceptedCheckpoint": "restored-before-platform-settlement",
+    "observedTerminationReason": "permissions-revoked",
+    "observedDelayedTerminationCount": 3,
+    "applicationCrashClaimed": false,
+    "packageManagerHandlerBarrierAdded": true,
+    "broadcastBarrierConfirmedDuringLifecycle": false,
+    "elapsedTimeOrRetryWorkaroundAdded": false,
+    "furtherPhysicalReplayPerformed": false,
+    "remaining": "Establish a deterministic Android permission-controller settlement signal before one future exact-candidate final-restart proof."
+  },
+  "diagnosticCorrection": {
+    "explicitShareItTooActivityLaunchRequired": true,
+    "foregroundOwnerUsesCurrentAndroidWindowInventory": true,
+    "packageManagerHandlerCompletionRequired": true,
+    "broadcastBarrierRequired": true,
+    "runtimeOrProductBehaviorChanged": false,
+    "rootCauseClass": "android-permission-revocation-callbacks-outlive-the-synchronous-restore-commands"
+  },
+  "portfolioEffect": {
+    "promotedRequirement": "themes-backgrounds-large-text-and-restart",
+    "retainedPartialRequirement": "android-permission-lifecycle",
+    "passCount": 13,
+    "partialCount": 11,
+    "openCount": 8,
+    "totalCount": 32,
+    "releaseDecision": "hold-not-production-ready"
+  },
+  "verification": {
+    "focusedTestsPassed": 32,
+    "fullLocalRegression": "success",
+    "fullLocalRegressionBeforeFreeKiB": 5514620,
+    "fullLocalRegressionAfterFreeKiB": 1885416,
+    "fullLocalRegressionGeneratedGrowthKiB": 3623860,
+    "webWasmLoopbackAndroidBuildPassed": true,
+    "exactHeadGithubRegressionRequired": true,
+    "exactHeadCodeqlRequired": true
+  },
+  "sourceInventory": [
+    {
+      "path": "tool/diagnose_current_head_android_main_navigation.mjs",
+      "sha256": "fea4a96075243925be470196f6611e3e812723538e49f493c4b2ba4c1bace528"
+    },
+    {
+      "path": "tool/diagnose_current_candidate_android_permission_lifecycle.mjs",
+      "sha256": "9a09e30117e6d7c34c3566ae4ff5e94ccf9e65022a7cff8b8b5dd24b86edb841"
+    },
+    {
+      "path": "test/tool/diagnose_current_head_android_main_navigation.test.mjs",
+      "sha256": "ce7d1d067c373c1d61ce4491546d1aadac63a58355f4de099069bd90fa4d7039"
+    },
+    {
+      "path": "test/tool/diagnose_current_candidate_android_permission_lifecycle.test.mjs",
+      "sha256": "dd74514c75f50c2312500ab518addda1fbfd27d1b066d1d800ce8286b39a59e1"
+    }
+  ],
+  "boundaries": {
+    "applicationRuntimeChanged": false,
+    "backendChanged": false,
+    "accountMutated": false,
+    "listingMutated": false,
+    "bookingMutated": false,
+    "messageSent": false,
+    "paymentEndpointCalled": false,
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "firebaseProjectChanged": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false,
+    "privateCaptureCommitted": false,
+    "credentialRead": false,
+    "accountIdentityRecorded": false,
+    "rawDeviceIdentifierRecorded": false
+  }
+}

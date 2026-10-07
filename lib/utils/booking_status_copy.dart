@@ -5,6 +5,9 @@ String bookingCardStatusLabel({
   Map<String, dynamic>? booking,
   DateTime? now,
 }) {
+  if (booking?['simulationOnly'] == true) {
+    return 'Pilot-Simulation';
+  }
   final current = now ?? DateTime.now();
   switch (category) {
     case 'upcoming':

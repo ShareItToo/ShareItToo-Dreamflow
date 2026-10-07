@@ -1,0 +1,40 @@
+{
+  "kind": "sit-green-staging-98-106-runtime",
+  "schemaVersion": 1,
+  "runtimeCommit": "690f28ef0b314a39601bd94b27be9ad324870db9",
+  "image": "ghcr.io/shareittoo/shareittoo-api@sha256:abaf153e6918af696bce88ecccfe40ce4877e0d551f24972baeccc69cf29cf3e",
+  "ociRevision": "690f28ef0b314a39601bd94b27be9ad324870db9",
+  "publication": {
+    "schemaVersion": 2,
+    "commit": "690f28ef0b314a39601bd94b27be9ad324870db9",
+    "tag": "ghcr.io/shareittoo/shareittoo-api:690f28ef0b314a39601bd94b27be9ad324870db9",
+    "digest": "sha256:abaf153e6918af696bce88ecccfe40ce4877e0d551f24972baeccc69cf29cf3e",
+    "workflow": "regression",
+    "runId": "37191503997",
+    "runAttempt": "1",
+    "repository": "ShareItToo/ShareItToo-Dreamflow",
+    "eventName": "workflow_dispatch",
+    "observedTagDigest": "sha256:abaf153e6918af696bce88ecccfe40ce4877e0d551f24972baeccc69cf29cf3e",
+    "observedOciRevision": "690f28ef0b314a39601bd94b27be9ad324870db9"
+  },
+  "publicationSha256": "ea54e3480bc074da87cff3f8943ddfefcf08273760f720d7f5780e6e2982d9ac",
+  "sourceLedger": "796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196",
+  "targetLedger": "eec24891ff91f95b34e924425895591f9b9d11302d713f1c9c5b947905538d13",
+  "sourceInventory": {
+    "backend/ops/green_staging_98_106_contract.mjs": "2f57e16a39b29c0bdbb7ca5e4e2fd9d9d01e22eeb65ef58636b0c73f927fa365",
+    "backend/ops/green_staging_98_106_promotion.mjs": "8fffbce2d9476ea892c56112f887e0473f48fdc213b78d8b39bfd32182753cb7",
+    "backend/ops/green_staging_98_106_collector.mjs": "830d254c4ca0394cd8c63bbd2b2efc0d7c046a624d375a802476d4bc8743a9a5",
+    "backend/ops/green_staging_98_106_database.mjs": "0c0f3a0acd2593b8ce05d63cf233c6beed3802216fead0a268a65fd25b00c5fb",
+    "backend/ops/green_staging_98_106_evidence.mjs": "033238cbf20f3c51c48ec83f7ab61e215f0826c3bbd5489292ec0d3d55f150b4",
+    "backend/ops/green_staging_98_106_execution.mjs": "fc99bd3d2a5b24be64a8368437367566cda80dd26c6d39dac58b9e6c8468c721",
+    "backend/ops/green_staging_98_106_resources.mjs": "72a7f0120d65aadeb0c637489f2fefee6ce0349255664938818b81276783ded1",
+    "backend/ops/green_staging_promotion.mjs": "a78ec39d064efc0acfff9c4c72afe3801e86cb01fa3cb60a09ce9125a805b5fd",
+    "backend/ops/green_auth_profile.mjs": "1fa8df6716b0cc38862ec9ce202a09ee356dd0dc17b7baa229d304e8a95e7c14",
+    "backend/ops/stable_private_file.mjs": "23bcff24a371f41ba4ec35460fd91805276d2713912b5c5c55120d43863aa787",
+    "backend/ops/staging_forward_migration_rehearsal.mjs": "e56ee78a437562143b614d9928b5046ad52ef6fd6243e3da10db53019db3b8f5",
+    "backend/ops/staging_controlled_acceptance.mjs": "491974fa391918e2a3bab80dd0a23fee2e1453db8aa177fa94ad1b30c613f72d",
+    "backend/ops/check_foreign_key_integrity.sql": "6c99d5a340e8f7f5964b886ff2b28a3c4f3f92d9da9f06239b9fe710263e1a0a",
+    "backend/src/technical_sandbox_config.js": "e81c0393b30b6f86defa4ad3ba530bdcaf79f633848dfe9735e39c06fbe32268",
+    "tool/validate_green_staging_98_106_runtime.mjs": "4ad4f69e93200333697d689a293f4ea62b9b83399ee7b3e0ca793e2f17b9b65a"
+  }
+}

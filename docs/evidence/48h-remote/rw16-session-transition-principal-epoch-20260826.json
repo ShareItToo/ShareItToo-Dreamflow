@@ -1,0 +1,387 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-rw16-session-transition-principal-epoch",
+  "status": "verified-regression-and-codeql-passed",
+  "implementationBaseHead": "39fc576627e3fefed019efe8ff1787b3b16eec2a",
+  "implementationHead": "4e307afa7f17cb0ac710ab19cea8f963c12b6dd4",
+  "architecture": "docs/architecture/rw16-session-transition-principal-epoch-invariant-2026-08-26.md",
+  "report": "docs/operations/RW16_SESSION_TRANSITION_PRINCIPAL_EPOCH_CLOSURE_2026-08-26.md",
+  "predecessor": {
+    "package": "RW15",
+    "evidence": "docs/evidence/48h-remote/rw15-security-interaction-owner-route-invariant-20260825.json",
+    "verifiedImplementationHead": "9db0b98981e3f8f7ae7f654193cfc00532799177",
+    "closureCommit": "39fc576627e3fefed019efe8ff1787b3b16eec2a"
+  },
+  "scope": {
+    "allowed": [
+      "profile-session-logout-owner-and-epoch-closure",
+      "login-session-clear-and-confirmed-empty-epoch-closure",
+      "serialized-session-mutation-and-exact-owner-compare-and-clear",
+      "conditional-current-profile-clear",
+      "identity-bound-profile-logout-dialog-dismissal",
+      "red-first-account-a-to-account-b-transition-regressions",
+      "security-action-inventory-refresh",
+      "mechanical-predecessor-hash-refresh",
+      "deterministic-local-and-ci-regression-evidence"
+    ],
+    "excluded": [
+      "account-deletion-transaction-rw17",
+      "contact-and-email-verification-actions-rw18",
+      "backend-route-schema-and-auth-provider-change",
+      "timing-retry-parallelism-reduction-and-test-exclusion",
+      "production-vps-dns-cloud-firebase-store-and-play",
+      "payment-provider-ai-pilot-real-money-and-live-traffic",
+      "legal-owner-gitguardian-pr-merge-and-history-rewrite"
+    ],
+    "syntheticOnly": true,
+    "localOnly": true,
+    "timingWorkaroundAllowed": false,
+    "testParallelismReductionAllowed": false,
+    "liveAuthTrafficAllowed": false
+  },
+  "findings": [
+    {
+      "id": "RW16-P0-PROFILE-LOGOUT-OWNER-RACE-001",
+      "state": "resolved-and-tested",
+      "resolution": "Profile logout captures the exact A session/profile owner before the confirmation await, revalidates it before cleanup, and requires a current completion before preview mutation or navigation."
+    },
+    {
+      "id": "RW16-P0-LOGIN-STALE-SESSION-CLEAR-RACE-002",
+      "state": "resolved-and-tested",
+      "resolution": "Login bootstrap and guest continuation now bind an owner or confirmed-empty epoch; a delayed A result cannot clear or navigate under B."
+    },
+    {
+      "id": "RW16-P0-SESSION-MUTATION-TOCTOU-003",
+      "state": "resolved-and-tested",
+      "resolution": "Every app-owned session write/removal is serialized; exact owner comparison occurs inside the queue and every successful mutation ratchets the epoch."
+    },
+    {
+      "id": "RW16-P0-CURRENT-PROFILE-BROAD-CLEAR-004",
+      "state": "resolved-and-tested",
+      "resolution": "Session transitions remove current profile data only after an id-plus-email comparison in the profile mutation queue, preserving B and malformed unknown state."
+    },
+    {
+      "id": "RW16-P0-A-DIALOG-B-NAVIGATOR-RACE-005",
+      "state": "resolved-and-tested",
+      "resolution": "The A logout confirmation is removed by its exact tracked route identity after A to B; a newer B-owned dialog remains visible in the deterministic widget test."
+    }
+  ],
+  "transitionInvariant": {
+    "owner": "exact-user-session-email-created-at-plus-monotonic-auth-epoch-no-tokens",
+    "capture": "known-principal-or-confirmed-empty-epoch-before-first-await",
+    "mutation": "single-fifo-session-mutation-queue-with-epoch-increment",
+    "sessionClear": "compare-exact-owner-inside-queue-preserve-successor",
+    "profileClear": "compare-user-id-and-email-inside-profile-queue",
+    "presentation": "stable-completion-epoch-and-definite-session-absence-before-and-after-preview",
+    "navigation": "stable-completion-epoch-and-definite-session-absence-immediately-before-navigation",
+    "dialogDismissal": "remove-exact-a-owned-route-never-pop-current-route",
+    "unknownState": "no-guest-success-preview-cleanup-or-navigation"
+  },
+  "securityActionInventory": [
+    {
+      "id": "security.password.change",
+      "file": "lib/screens/security_screen.dart",
+      "status": "guarded-rw15"
+    },
+    {
+      "id": "security.remote-session.revoke",
+      "file": "lib/screens/security_screen.dart",
+      "status": "guarded-rw15"
+    },
+    {
+      "id": "security.sessions.logout-all",
+      "file": "lib/screens/security_screen.dart",
+      "status": "guarded-rw15"
+    },
+    {
+      "id": "profile.session.logout",
+      "file": "lib/screens/profile_screen.dart",
+      "status": "guarded-rw16"
+    },
+    {
+      "id": "account.deletion",
+      "file": "lib/screens/account_settings_screen.dart",
+      "status": "guarded-rw17"
+    },
+    {
+      "id": "contact.email-change",
+      "file": "lib/screens/contact_data_screen.dart",
+      "status": "guarded-rw18"
+    },
+    {
+      "id": "contact.phone-verification",
+      "file": "lib/screens/contact_data_screen.dart",
+      "status": "guarded-rw18"
+    },
+    {
+      "id": "contact.email-verification",
+      "file": "lib/screens/contact_data_screen.dart",
+      "status": "guarded-rw18"
+    },
+    {
+      "id": "login.session-clear",
+      "file": "lib/screens/login_screen.dart",
+      "status": "guarded-rw16"
+    },
+    {
+      "id": "login.email-verification",
+      "file": "lib/screens/login_screen.dart",
+      "status": "guarded-rw18"
+    },
+    {
+      "id": "legacy.change-password-placeholder",
+      "file": "lib/screens/change_password_screen.dart",
+      "status": "unreachable-b10-guarded"
+    },
+    {
+      "id": "data-service.test-session-clear-hook",
+      "file": "lib/services/data_service.dart",
+      "status": "test-only"
+    }
+  ],
+  "callSiteInventory": [
+    {
+      "symbol": "AuthService.clearSession",
+      "paths": {
+        "lib/services/data_service.dart": 2
+      }
+    },
+    {
+      "symbol": "_sessionTransitions.signOut",
+      "paths": {
+        "lib/screens/login_screen.dart": 1,
+        "lib/screens/profile_screen.dart": 1,
+        "lib/services/account_deletion_service.dart": 1
+      }
+    },
+    {
+      "symbol": "_sessionTransitions.clearStaleSession",
+      "paths": {
+        "lib/screens/login_screen.dart": 1
+      }
+    },
+    {
+      "symbol": "AuthService.requestEmailChange",
+      "paths": {}
+    },
+    {
+      "symbol": "AuthService.requestPhoneVerification",
+      "paths": {
+        "lib/services/contact_verification_service.dart": 1
+      }
+    },
+    {
+      "symbol": "AuthService.confirmPhoneVerification",
+      "paths": {
+        "lib/services/contact_verification_service.dart": 1
+      }
+    },
+    {
+      "symbol": "AuthService.requestEmailVerification",
+      "paths": {}
+    },
+    {
+      "symbol": "_accountDeletionService.deleteAccount",
+      "paths": {
+        "lib/screens/account_settings_screen.dart": 1
+      }
+    }
+  ],
+  "verification": {
+    "redFirst": "failed-missing-owner-transition-contract-before-fix",
+    "focusedRw16Flutter": "passed-9",
+    "rw10Rw12Rw13Rw14Rw15CompatibilityFlutter": "passed-60",
+    "changedFileAnalyze": "passed-zero-issues",
+    "rw16WiringTests": "passed-5",
+    "rw16ValidatorTests": "passed-3",
+    "completeToolInventory": "passed-1915",
+    "completeToolInventorySkipped": 0,
+    "fullTechnicalRegression": "passed",
+    "githubRegression": "passed",
+    "githubCodeql": "passed-no-new-alerts"
+  },
+  "inventoryAudit": {
+    "predecessorRepositoryOwnedFiles": 332,
+    "closureRepositoryOwnedFiles": 334,
+    "predecessorPassedTests": 1907,
+    "closurePassedTests": 1915,
+    "skippedTests": 0,
+    "executionPattern": "node --test test/tool/*.test.mjs",
+    "standardNodeParallelism": true
+  },
+  "localRegression": {
+    "head": "4e307afa7f17cb0ac710ab19cea8f963c12b6dd4",
+    "standardParallelism": true,
+    "timingWorkaroundUsed": false,
+    "parallelismReductionUsed": false,
+    "completeToolInventoryPassed": 1915,
+    "completeToolInventorySkipped": 0,
+    "flutterPassed": 572,
+    "documentedProfileSkips": 3,
+    "analyzerIssues": 0,
+    "webDebugBuild": "passed-with-wasm-dry-run",
+    "loopbackSmoke": "passed",
+    "androidDebugTasks": 448,
+    "androidMinSdk": 24,
+    "cleanCheckoutMigrations": 112,
+    "cleanCheckoutAssets": 84,
+    "cleanCheckoutFinallyClean": true,
+    "privateReleaseArtifact": "unavailable-ci-metadata-validated",
+    "storeOrDeviceGateClaimed": false
+  },
+  "githubVerification": {
+    "head": "4e307afa7f17cb0ac710ab19cea8f963c12b6dd4",
+    "regressionRunId": 32940506007,
+    "codeqlRunId": 32940506056,
+    "regressionConclusion": "success",
+    "codeqlConclusion": "success",
+    "openCodeScanningAlerts": 0
+  },
+  "ratchetAudit": {
+    "cause": "RW16 adds a serialized exact-owner auth-session mutation boundary, conditional profile cleanup, confirmed-empty epoch semantics, owner-bound ProfileScreen logout and guarded LoginScreen cleanup; the supported regression gains the deterministic RW16 matrix.",
+    "privacyDisclosureSemanticsChanged": false,
+    "retentionSemanticsChanged": false,
+    "providerDecisionChanged": false,
+    "providerGateChanged": false,
+    "rw15VerifiedHeadChanged": false,
+    "timingWorkaroundIntroduced": false,
+    "mechanicalRefreshes": [
+      "RW0 through RW15 source inventories were re-hashed only for the changed shared auth, profile, data and supported-regression sources.",
+      "RW15 call-site counts were mechanically refreshed after broad LoginScreen and ProfileScreen AuthService.clearSession calls were removed; its historical action status and verified head remain unchanged.",
+      "Privacy, retention and active-provider artifacts were revalidated without semantic or decision changes."
+    ]
+  },
+  "ratchets": {
+    "privacyManifestSha256": "35c3a08e20e4f55183649af934e9415ea8cfd0c2d3327483a518cf477daee449",
+    "retentionManifestSha256": "955a901bbaec6511d119558b953274c3e5059a97c657fdcf93f2a939523315c8",
+    "activeProviderEvidenceSha256": "364037cefb30cfd55da5f19a8e3394e0308dae7e15b3760e159f9f28e5d17f7d",
+    "activeProviderState": "prepared-hold",
+    "completedOwnerDecisions": 0,
+    "requiredOwnerDecisions": 10,
+    "externalReadiness": false
+  },
+  "gates": {
+    "BUILD_READY": "not-granted",
+    "PLAY_UPLOAD_APPROVED": "not-granted",
+    "HUMAN_PILOT_ACTIVATED": "not-granted",
+    "PR7_MERGE_APPROVED": "not-granted",
+    "R17_GITGUARDIAN_HISTORY_REVIEW_COMPLETE": "not-granted"
+  },
+  "boundaries": {
+    "backendRuntimeChanged": false,
+    "productionChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "cloudChanged": false,
+    "firebaseChanged": false,
+    "storeChanged": false,
+    "paymentChanged": false,
+    "realMoneyUsed": false,
+    "realAuthTrafficSent": false,
+    "realProviderTrafficSent": false,
+    "realSupportTrafficSent": false,
+    "externalAiRuntimeEnabled": false,
+    "realTesterEnrolled": false,
+    "candidateCreated": false,
+    "deviceGateClaimed": false,
+    "legalApprovalChanged": false,
+    "gitHistoryRewritten": false,
+    "prMerged": false
+  },
+  "residualRisks": [
+    "Account deletion still spans remote mutation, dependent local cleanup and navigation without one exact-owner transaction and remains RW17 P0.",
+    "Contact email change and phone verification still need exact owner, typed outcome and dialog or sheet route binding in RW18 P0.",
+    "Contact and login email verification remain RW18 P1 follow-ups.",
+    "No live backend, process-termination, release artifact, Store or device proof is claimed."
+  ],
+  "sourceInventory": [
+    {
+      "path": "lib/screens/security_screen.dart",
+      "sha256": "86107d2852d5363cec8cf5554de0ca5eef70a6b69cb21e1a042441d9dcf1c629"
+    },
+    {
+      "path": "lib/screens/profile_screen.dart",
+      "sha256": "58976f8fa92a3706fcca48cafd30daf56cd4550f100615b2df745af6a192cdb2"
+    },
+    {
+      "path": "lib/screens/account_settings_screen.dart",
+      "sha256": "834bbac55e6e07ac9d69bace94bb5ad7072eb420dbe7d2ee940099b6d25aef68"
+    },
+    {
+      "path": "lib/screens/contact_data_screen.dart",
+      "sha256": "c8fb9ccc3413976b92f07eac264250176f39732eb3feb4f8fab33994eef9b5cc"
+    },
+    {
+      "path": "lib/screens/login_screen.dart",
+      "sha256": "c53f2fb6e0612503869ffc0e81a6bdd8789730a191e06eacf97aa3315de8126a"
+    },
+    {
+      "path": "lib/services/account_deletion_service.dart",
+      "sha256": "c4f4da84e907f6007e61a04b54654c4386ad93ed7b16657c517ad99bd8599c3a"
+    },
+    {
+      "path": "lib/services/auth_service.dart",
+      "sha256": "1607dfd6d0b7907aa9040d7ec10f649fcaab12b6fef872accc66b4b4602b2687"
+    },
+    {
+      "path": "lib/services/data_service.dart",
+      "sha256": "f23002e697a484a16e392e8fcf5dd9de527ecc55eb791dde7fab98386e37375f"
+    },
+    {
+      "path": "lib/services/session_transition_service.dart",
+      "sha256": "f7ff42ca7649ac1681d772e707d87d8a805c63e2962f71707a0490f321389804"
+    },
+    {
+      "path": "lib/services/shared_persistence_sync.dart",
+      "sha256": "b4294550220badf563c3a2fb0ea1929e15b0026483fb3dd3633370c6b486adb2"
+    },
+    {
+      "path": "lib/widgets/tracked_dialog_route.dart",
+      "sha256": "e01ac3c1006f4098e6d5b289fa499272c44e2a314da93351f088879d43012454"
+    },
+    {
+      "path": "store/privacy-disclosures.json",
+      "sha256": "35c3a08e20e4f55183649af934e9415ea8cfd0c2d3327483a518cf477daee449"
+    },
+    {
+      "path": "store/retention-deletion-readiness.json",
+      "sha256": "955a901bbaec6511d119558b953274c3e5059a97c657fdcf93f2a939523315c8"
+    },
+    {
+      "path": "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
+      "sha256": "364037cefb30cfd55da5f19a8e3394e0308dae7e15b3760e159f9f28e5d17f7d"
+    },
+    {
+      "path": "docs/evidence/48h-remote/rw15-security-interaction-owner-route-invariant-20260825.json",
+      "sha256": "3de1155ecad0c05fafd3f125ade32f6a0ac63874650ffbb7847277811f1c7ea1"
+    },
+    {
+      "path": "scripts/technical_regression_check.sh",
+      "sha256": "61e7a485cf99f041394995b49355e2b283f6e36a04977589e2ba228e22137fb2"
+    },
+    {
+      "path": "test/rw16_session_transition_principal_epoch_test.dart",
+      "sha256": "639b3cfe0c202f4a9e904cd841c8e9ee9403f2084d72bf78b232db4e35285c99"
+    },
+    {
+      "path": "test/tool/rw16_session_transition_principal_epoch_wiring.test.mjs",
+      "sha256": "c8fa98752e3c0ca2f663eef48b0b3c152ca87eebec5da1cd98d1389002669f9a"
+    },
+    {
+      "path": "test/tool/validate_rw16_session_transition_principal_epoch.test.mjs",
+      "sha256": "cf61e6c8809fa3ac1a3def1298014719cb6ab0d6aa35a25182a36b4dc4e571bd"
+    },
+    {
+      "path": "tool/validate_rw16_session_transition_principal_epoch.mjs",
+      "sha256": "1b916ca2a03753322c489a0c1434523716dba2f0bcf9827ccc7151ea583aa351"
+    },
+    {
+      "path": "docs/architecture/rw16-session-transition-principal-epoch-invariant-2026-08-26.md",
+      "sha256": "0833d1ffa2fdbec023cf6ca8e790b5464542cf0c4ebc85e9dcde34059bc5adf1"
+    },
+    {
+      "path": "docs/operations/RW16_SESSION_TRANSITION_PRINCIPAL_EPOCH_CLOSURE_2026-08-26.md",
+      "sha256": "4500975aa6ed7d3d4df286194df1ed8c27c5a496dc16e164d1735ceb435568a4"
+    }
+  ]
+}

@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-stage-a-blue-ocean-n4-image-privacy-pipeline",
+  "status": "verified-ready-for-n5",
+  "capturedAt": "2026-08-23T22:01:46Z",
+  "implementationBaseHead": "5e44890d81aa7a546c806195f13776e0253517be",
+  "exactGitHubVerification": {
+    "headSha": "129177003447084c1b24bc9ad36d9289a2803535",
+    "regressionRunId": 32668969157,
+    "regressionConclusion": "success",
+    "codeqlRunId": 32668969147,
+    "codeqlConclusion": "success"
+  },
+  "pipeline": {
+    "version": "N4-2026-08-23.1",
+    "minimumImageCount": 1,
+    "maximumImageCount": 4,
+    "maximumInputBytes": 8388608,
+    "maximumInputPixels": 40000000,
+    "maximumSourceDimension": 12000,
+    "maximumAnalysisDimension": 1280,
+    "analysisMimeType": "image/webp",
+    "analysisWebpQuality": 80,
+    "maximumCleanupTimeoutMs": 10000,
+    "safeNamePattern": "analysis-<opaque-uuid>.webp",
+    "memoryOnly": true,
+    "automaticRetryAllowed": false
+  },
+  "sensitiveContentPreflight": {
+    "visualSignalTypes": [
+      "face",
+      "document",
+      "address",
+      "financial_data",
+      "credentials",
+      "unrelated_sensitive_material"
+    ],
+    "highConfidenceAction": "block-replace",
+    "uncertainAction": "review-crop-or-replace",
+    "incompleteVisualScanProviderEligible": false,
+    "maximumLocalOcrCharacters": 2000,
+    "rawOcrRetained": false,
+    "externalScannerUsed": false,
+    "trustedLocalAdapterRequiredBeforeRoute": true
+  },
+  "privacyAndLifecycle": {
+    "orientationNormalized": true,
+    "exifGpsIccIptcXmpRetained": false,
+    "originalFilenameRetained": false,
+    "originalBufferModified": false,
+    "derivativeBytesLogged": false,
+    "consumerOutputLogged": false,
+    "cleanupOnSuccess": true,
+    "cleanupOnBlock": true,
+    "cleanupOnFailure": true,
+    "cleanupOnTimeout": true,
+    "derivativeTerminalState": "purged",
+    "normalListingImageRetentionChanged": false
+  },
+  "consent": {
+    "version": "listing-ai-image-disclosure-v1",
+    "text": "SIT analysiert deine ausgewählten Bilder mit einem externen KI-Dienst, um einen bearbeitbaren Anzeigenentwurf zu erstellen. Es wird nichts automatisch veröffentlicht.",
+    "explicitInitiationRequired": true,
+    "acceptanceRequired": true,
+    "automaticPublicationAllowed": false
+  },
+  "targetedVerification": {
+    "pipelineSyntax": "passed",
+    "pipelineTests": "passed-10",
+    "artifactValidatorTests": "passed-7",
+    "artifactValidator": "passed",
+    "backendSuite": "passed-639-one-documented-skip",
+    "postgres16MigrationIntegration": "passed",
+    "fullTechnicalRegression": "passed-candidate-rollover-mode",
+    "githubRegression": "passed",
+    "githubCodeql": "passed"
+  },
+  "nextPackage": "N5",
+  "boundaries": {
+    "applicationRouteAdded": false,
+    "providerCallPerformed": false,
+    "paidScannerCallPerformed": false,
+    "billingActivated": false,
+    "secretStored": false,
+    "realPersonDataUsed": false,
+    "productionChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "cloudChanged": false,
+    "firebaseChanged": false,
+    "storeChanged": false,
+    "appleChanged": false,
+    "realMoneyEnabled": false,
+    "publicReleasePerformed": false,
+    "listingAutoPublished": false,
+    "pullRequestMerged": false,
+    "historyRewritten": false
+  }
+}

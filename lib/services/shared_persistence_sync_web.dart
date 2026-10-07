@@ -2,17 +2,16 @@ import 'dart:async';
 // This file is loaded only by the web conditional import above it.
 // ignore: deprecated_member_use, avoid_web_libraries_in_flutter
 import 'dart:html' as html;
+import 'shared_persistence_keys.dart';
 
 final StreamController<String> _controller =
     StreamController<String>.broadcast(sync: true);
 bool _initialized = false;
 html.BroadcastChannel? _channel;
 
-const Set<String> _watchedKeys = {
-  'rental_requests',
-  'message_threads_v1',
-  'handover_return_state_v1',
-};
+const Set<String> _watchedKeys = SharedPersistenceKeys.sharedKeys;
+
+String _canonicalKey(String key) => SharedPersistenceKeys.canonicalKey(key);
 
 Stream<String> get sharedPersistenceChanges {
   _ensureInitialized();
@@ -22,7 +21,7 @@ Stream<String> get sharedPersistenceChanges {
 void notifySharedPersistenceChange(String key) {
   if (!_watchedKeys.contains(key)) return;
   _ensureInitialized();
-  _controller.add(key);
+  _controller.add(_canonicalKey(key));
   _channel?.postMessage(key);
 }
 
@@ -35,7 +34,7 @@ void _ensureInitialized() {
     _channel!.onMessage.listen((event) {
       final key = event.data?.toString().trim() ?? '';
       if (_watchedKeys.contains(key)) {
-        _controller.add(key);
+        _controller.add(_canonicalKey(key));
       }
     });
   } catch (_) {
@@ -51,7 +50,7 @@ void _ensureInitialized() {
         ? rawKey.substring('flutter.'.length)
         : rawKey;
     if (_watchedKeys.contains(logicalKey)) {
-      _controller.add(logicalKey);
+      _controller.add(_canonicalKey(logicalKey));
     }
   });
 }

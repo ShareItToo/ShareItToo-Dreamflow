@@ -109,7 +109,7 @@ class DeveloperPreviewScreen extends StatelessWidget {
             child: FilledButton.tonalIcon(
               onPressed: () => _backToExplore(context),
               icon: const Icon(Icons.explore_outlined, size: 18),
-              label: const Text('Erkunden'),
+              label: const Text('Entdecken'),
             ),
           ),
         ],
@@ -119,33 +119,33 @@ class DeveloperPreviewScreen extends StatelessWidget {
         children: [
           _SectionCard(
             title: 'User State',
-            child: Column(children: [
-              for (final s in DeveloperUserState.values)
-                RadioListTile<DeveloperUserState>(
-                  value: s,
-                  groupValue: ctrl.state,
-                  onChanged: (v) async {
-                    if (v == null) return;
-                    await context
-                        .read<DeveloperPreviewController>()
-                        .setState(v);
-                    if (context.mounted) {
-                      AppPopup.toast(context,
-                          icon: Icons.check_circle_outline,
-                          title: 'State gesetzt: ${_labelForState(v)}',
-                          duration: const Duration(seconds: 1));
-                    }
-                  },
-                  activeColor: BrandColors.primary,
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(_labelForState(s),
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                          color: Colors.white, fontWeight: FontWeight.w700)),
-                  subtitle: Text(_subtitleForState(s),
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: Colors.white70, height: 1.3)),
-                ),
-            ]),
+            child: RadioGroup<DeveloperUserState>(
+              groupValue: ctrl.state,
+              onChanged: (v) async {
+                if (v == null) return;
+                await context.read<DeveloperPreviewController>().setState(v);
+                if (context.mounted) {
+                  AppPopup.toast(context,
+                      icon: Icons.check_circle_outline,
+                      title: 'State gesetzt: ${_labelForState(v)}',
+                      duration: const Duration(seconds: 1));
+                }
+              },
+              child: Column(children: [
+                for (final s in DeveloperUserState.values)
+                  RadioListTile<DeveloperUserState>(
+                    value: s,
+                    activeColor: BrandColors.primary,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(_labelForState(s),
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                            color: Colors.white, fontWeight: FontWeight.w700)),
+                    subtitle: Text(_subtitleForState(s),
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: Colors.white70, height: 1.3)),
+                  ),
+              ]),
+            ),
           ),
           const SizedBox(height: 14),
           _SectionCard(
@@ -246,7 +246,7 @@ String _subtitleForState(DeveloperUserState s) {
     case DeveloperUserState.loggedOut:
       return 'Gastmodus: Anzeigen/Profile ansehen, aber keine Aktionen.';
     case DeveloperUserState.loggedIn:
-      return 'Normaler Flow: Erkunden, Wunschlisten, Buchungen, Nachrichten, Profil.';
+      return 'Normaler Flow: Entdecken, Mietkorb, Buchungen, Nachrichten, Mein SIT.';
     case DeveloperUserState.verifiedUser:
       return 'Wie Logged In, aber Profil zeigt ✓ Verifiziert und alles ist freigeschaltet.';
   }

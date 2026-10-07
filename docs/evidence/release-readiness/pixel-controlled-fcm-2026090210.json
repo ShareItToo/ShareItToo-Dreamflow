@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-pixel-controlled-fcm",
+  "status": "passed",
+  "observedAt": "2026-09-03",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026090210",
+    "artifactSourceCommit": "79f39cb11c47ea96cb7c468e57d211605989d439",
+    "channel": "internal",
+    "environment": "staging",
+    "apkSha256": "a7f48b7fee0aeb68ff0e65e47db545833f3c03bee3ee05e78bd470bafb103496",
+    "aabSha256": "b937b520372ec043d93c0c2292c7897edb5331e02d6363829c11d65cb1c2f86e",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "binaryPrivacyScan": "passed"
+  },
+  "staging": {
+    "deployedCommit": "576c1a22af75ec9d56b710158604452642996436",
+    "deploymentEvidenceRef": "/docker/shareittoo/releases/staging-20260902T220318Z-576c1a22af75.json",
+    "health": "passed",
+    "pushTransport": "fcm",
+    "mailTransport": "memory",
+    "paymentTransport": "memory",
+    "stripeLivemode": false,
+    "listingAiProvider": "mock",
+    "listingAiBudgetCents": 0
+  },
+  "diagnostic": {
+    "toolCorrectionCommit": "3ae7806f3f97f5e9d7ec0981b07d5faf3d23fbcc",
+    "falseNegativeCause": "probe expected superseded message-specific copy instead of the neutral V5.2 push contract",
+    "currentContractTitle": "Neue ShareItToo-Aktualisierung",
+    "currentContractBody": "In der App ansehen.",
+    "foregroundPushDelivery": "passed-popup-visible",
+    "backgroundPushDelivery": "passed-android-notification-visible",
+    "terminatedProcessPushDelivery": "passed-android-notification-visible",
+    "notificationIconVisual": "passed",
+    "privateScreenshotSha256": "224bd2affa7e851b1ff0fff801d899f65f86d44c69d80ca46481bcf15843d66c",
+    "privateScreenshotCommitted": false,
+    "installedApkHashMatchesArchive": true,
+    "installedDelivery": "direct-apk",
+    "focusedToolTests": 5,
+    "focusedToolTestsPassed": 5
+  },
+  "device": {
+    "model": "Pixel 7 Pro",
+    "physical": true,
+    "androidVersion": "17",
+    "apiLevel": 37,
+    "securityPatch": "2026-07-05",
+    "notificationPermissionGranted": true
+  },
+  "boundaries": {
+    "syntheticAccountsOnly": true,
+    "onePlusContacted": false,
+    "storeInstallationClaimed": false,
+    "paymentEndpointCalled": false,
+    "stripeLivemode": false,
+    "productionPushSent": false,
+    "productionChanged": false,
+    "testerListChanged": false,
+    "containsSecrets": false,
+    "containsAccountIdentity": false,
+    "containsDeviceSerial": false,
+    "containsNetworkIdentifier": false
+  }
+}

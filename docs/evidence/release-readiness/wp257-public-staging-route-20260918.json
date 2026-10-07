@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "package": "WP257-C",
+  "status": "TECHNICAL_COMPLETE",
+  "verifiedAt": "2026-09-18",
+  "sourceHead": "7887c7c754b6e43434caf44ea3fbeed6e8a902ce",
+  "branch": "codex/master-workflow-20260808",
+  "runtimeImage": {
+    "tag": "shareittoo-api-wp257:7887c7c754b6e43434caf44ea3fbeed6e8a902ce",
+    "digest": "sha256:9d90eb91166770e0803bad40058233cfc086d8d2b50f9d4622c4fc4f39a7fcf6"
+  },
+  "route": {
+    "host": "staging.shareittoo.com",
+    "publicPrefix": "/api",
+    "healthPaths": "/api/health/live, /api/health/ready, /api/version",
+    "apiPaths": "/api/v1/*",
+    "upstream": "shareittoo-staging-api:8080 on internal Green network",
+    "caddyfileChanged": false,
+    "caddyfileSha256": "6e5bf590292e7a28fc38ac1d43a68b1d4697831db33d6b49c0b9d1f21c0aca5b",
+    "reversibleBackup": "/docker/shareittoo/backups/caddy/Caddyfile-before-wp257c-20260918T0405Z",
+    "tls": "HTTPS 200; staging hostname certificate path served by Caddy",
+    "hostPorts": false,
+    "publicRouteBefore": 502,
+    "publicRouteAfter": "active only for staging host"
+  },
+  "externalMatrix": {
+    "tls": 200,
+    "live": 200,
+    "ready": 200,
+    "version": 200,
+    "anonymousPrivateAuth": 401,
+    "anonymousCatalogExactConfiguredListing": "200; exactly one configured listing",
+    "anonymousApprovedImageGet": 200,
+    "anonymousApprovedImageHead": 200,
+    "anonymousUnapprovedImage": 404,
+    "allowlistedOwner": "auth/me and listings/mine 200",
+    "foreignPrincipal": 403,
+    "expiredJwt": 401,
+    "revokedOwnerSession": 401,
+    "proxySpoof": 401,
+    "anonymousUploadMutation": 401,
+    "unknownRegistration": 403,
+    "invalidSocial": "503 provider/mail hold; no account created"
+  },
+  "externalActionTokens": {
+    "ownerLiveGet": 200,
+    "ownerLivePost": 200,
+    "foreign": 403,
+    "expired": 400,
+    "consumed": 400,
+    "invalid": 400,
+    "cleanup": "all synthetic rows removed"
+  },
+  "persistence": {
+    "apiRestartReady": 200,
+    "proxyReload": "passed",
+    "dbCounts": "2|1|1|2|0 before and after",
+    "rollbackContainer": "absent",
+    "caddyGreenNetworkAttached": true
+  },
+  "holds": {
+    "payment": "memory",
+    "mail": "disabled",
+    "push": "memory",
+    "identity": "disabled",
+    "listingAiExternal": false,
+    "stripeLiveMode": false,
+    "providerEgress": "none"
+  },
+  "externalState": {
+    "production": false,
+    "storePlay": "unchanged",
+    "device": "untouched",
+    "dns": "unchanged; existing staging DNS only",
+    "prMerge": false
+  },
+  "nextGate": "Sol review; stop before device/Play artifact test"
+}

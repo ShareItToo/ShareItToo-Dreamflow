@@ -1,0 +1,290 @@
+{
+  "schemaVersion": 1,
+  "kind": "google-play-data-safety-answer-matrix",
+  "capturedAt": "2026-08-13T07:15:00Z",
+  "status": "all-data-type-answers-prepared-console-save-blocked",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081501",
+    "commit": "804670b781e7dc489bb5133a4a84d7f32e52be2a",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1"
+  },
+  "consoleBaseline": {
+    "collectsOrSharesRequiredDataSaved": true,
+    "encryptedInTransitSaved": true,
+    "accountCreationMethodsSaved": [
+      "username-and-password"
+    ],
+    "deleteAccountUrlSaved": false,
+    "partialDataDeletionAnswerSaved": false,
+    "dataTypeAnswersSaved": false
+  },
+  "preparedGlobalAnswers": {
+    "collectsOrTransmitsUserData": true,
+    "encryptedInTransit": true,
+    "sellsData": false,
+    "advertisingOrCrossAppTracking": false,
+    "dataSharingOverall": "pending-service-provider-contract-classification",
+    "preparedDeleteAccountUrl": "https://shareittoo.com/account-deletion",
+    "preparedPartialDataDeletionAnswer": false,
+    "oauthAccountCreationPreparedButUnavailable": true
+  },
+  "dataTypes": [
+    {
+      "id": "name",
+      "google": "Personal info / Name",
+      "selected": true,
+      "collected": true,
+      "shared": "pending-service-provider-contract-classification",
+      "ephemeral": false,
+      "required": true,
+      "purposes": [
+        "accountManagement",
+        "appFunctionality"
+      ]
+    },
+    {
+      "id": "emailAddress",
+      "google": "Personal info / Email address",
+      "selected": true,
+      "collected": true,
+      "shared": "pending-service-provider-contract-classification",
+      "ephemeral": false,
+      "required": true,
+      "purposes": [
+        "accountManagement",
+        "developerCommunications",
+        "fraudPreventionSecurityCompliance"
+      ]
+    },
+    {
+      "id": "phoneNumber",
+      "google": "Personal info / Phone number",
+      "selected": true,
+      "collected": true,
+      "shared": "pending-service-provider-contract-classification",
+      "ephemeral": false,
+      "required": false,
+      "purposes": [
+        "accountManagement",
+        "fraudPreventionSecurityCompliance"
+      ]
+    },
+    {
+      "id": "physicalAddress",
+      "google": "Personal info / Address",
+      "selected": true,
+      "collected": true,
+      "shared": "pending-service-provider-contract-classification",
+      "ephemeral": false,
+      "required": false,
+      "purposes": [
+        "appFunctionality"
+      ]
+    },
+    {
+      "id": "userId",
+      "google": "Personal info / User IDs",
+      "selected": true,
+      "collected": true,
+      "shared": "pending-service-provider-contract-classification",
+      "ephemeral": false,
+      "required": true,
+      "purposes": [
+        "accountManagement",
+        "appFunctionality",
+        "fraudPreventionSecurityCompliance"
+      ]
+    },
+    {
+      "id": "approximateLocation",
+      "google": "Location / Approximate location",
+      "selected": true,
+      "collected": true,
+      "shared": "pending-service-provider-contract-classification",
+      "ephemeral": false,
+      "required": false,
+      "purposes": [
+        "appFunctionality",
+        "personalization"
+      ]
+    },
+    {
+      "id": "preciseLocation",
+      "google": "Location / Precise location",
+      "selected": true,
+      "collected": true,
+      "shared": "pending-service-provider-contract-classification",
+      "ephemeral": false,
+      "required": false,
+      "purposes": [
+        "appFunctionality"
+      ]
+    },
+    {
+      "id": "photos",
+      "google": "Photos and videos / Photos",
+      "selected": true,
+      "collected": true,
+      "shared": "pending-service-provider-contract-classification",
+      "ephemeral": false,
+      "required": false,
+      "purposes": [
+        "appFunctionality",
+        "fraudPreventionSecurityCompliance"
+      ]
+    },
+    {
+      "id": "inAppMessages",
+      "google": "Messages / Other in-app messages",
+      "selected": true,
+      "collected": true,
+      "shared": "pending-service-provider-contract-classification",
+      "ephemeral": false,
+      "required": false,
+      "purposes": [
+        "appFunctionality",
+        "fraudPreventionSecurityCompliance"
+      ]
+    },
+    {
+      "id": "otherUserContent",
+      "google": "Other / Other user-generated content",
+      "selected": true,
+      "collected": true,
+      "shared": "pending-service-provider-contract-classification",
+      "ephemeral": false,
+      "required": false,
+      "purposes": [
+        "appFunctionality",
+        "fraudPreventionSecurityCompliance"
+      ]
+    },
+    {
+      "id": "purchaseHistory",
+      "google": "Financial info / Purchase history",
+      "selected": true,
+      "collected": true,
+      "shared": "pending-service-provider-contract-classification",
+      "ephemeral": false,
+      "required": false,
+      "purposes": [
+        "appFunctionality",
+        "fraudPreventionSecurityCompliance"
+      ]
+    },
+    {
+      "id": "paymentInfo",
+      "google": "Financial info / User payment info",
+      "selected": false,
+      "collected": false,
+      "shared": "not-applicable-not-collected",
+      "ephemeral": false,
+      "required": false,
+      "purposes": []
+    },
+    {
+      "id": "otherFinancialInfo",
+      "google": "Financial info / Other financial info",
+      "selected": true,
+      "collected": true,
+      "shared": "pending-service-provider-contract-classification",
+      "ephemeral": false,
+      "required": false,
+      "purposes": [
+        "appFunctionality",
+        "fraudPreventionSecurityCompliance"
+      ]
+    },
+    {
+      "id": "deviceOrOtherIds",
+      "google": "Device or other IDs / Device or other IDs",
+      "selected": true,
+      "collected": true,
+      "shared": "pending-service-provider-contract-classification",
+      "ephemeral": false,
+      "required": true,
+      "purposes": [
+        "appFunctionality"
+      ]
+    },
+    {
+      "id": "crashData",
+      "google": "App info and performance / Crash logs",
+      "selected": true,
+      "collected": true,
+      "shared": "pending-service-provider-contract-classification",
+      "ephemeral": false,
+      "required": true,
+      "purposes": [
+        "analytics"
+      ]
+    },
+    {
+      "id": "otherDiagnostics",
+      "google": "App info and performance / Other app performance data",
+      "selected": true,
+      "collected": true,
+      "shared": "pending-service-provider-contract-classification",
+      "ephemeral": false,
+      "required": true,
+      "purposes": [
+        "analytics"
+      ]
+    },
+    {
+      "id": "appInteractions",
+      "google": "App activity / App interactions",
+      "selected": true,
+      "collected": true,
+      "shared": "pending-service-provider-contract-classification",
+      "ephemeral": false,
+      "required": true,
+      "purposes": [
+        "analytics"
+      ]
+    }
+  ],
+  "officialGuidance": [
+    {
+      "url": "https://support.google.com/googleplay/android-developer/answer/10787469?hl=en",
+      "finding": "Off-device collection must be disclosed; service-provider transfers can qualify for a sharing exception only when the provider processes data on the developer's behalf."
+    },
+    {
+      "url": "https://firebase.google.com/docs/android/play-data-disclosure",
+      "finding": "Firebase SDK data handling depends on the enabled products and app configuration, and the developer remains responsible for the final disclosure."
+    },
+    {
+      "url": "https://support.google.com/googleplay/android-developer/answer/13327111?hl=en",
+      "finding": "Apps with account creation require an in-app deletion path and a functional public account-deletion web resource."
+    }
+  ],
+  "evidenceRefs": [
+    "store/privacy-disclosures.json",
+    "docs/evidence/b11/android-binary-privacy-release-check-2026081501.json",
+    "docs/evidence/b11/google-play-data-safety-step2-20260812.json",
+    "docs/evidence/b11/google-play-data-safety-datatypes-20260812.json",
+    "docs/evidence/b11/privacy-provider-retention-sources-20260812.json",
+    "docs/evidence/b11/google-play-service-provider-sharing-classification-20260813.json"
+  ],
+  "blockingGates": {
+    "serviceProviderContractClassificationComplete": false,
+    "retentionAndDeletionScheduleApproved": false,
+    "publicAccountDeletionRouteOperationalAndApproved": false,
+    "legalApproval": false,
+    "consoleDraftSaveAllowed": false,
+    "submissionAllowed": false
+  },
+  "boundaries": {
+    "consoleAnswersChanged": false,
+    "draftSaved": false,
+    "formSubmitted": false,
+    "publicRoutesChanged": false,
+    "productionChanged": false,
+    "containsSecrets": false,
+    "containsEmailAddresses": false,
+    "containsAccountIdentifiers": false
+  }
+}

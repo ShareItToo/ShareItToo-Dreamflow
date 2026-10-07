@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-release-candidate",
+  "status": "built-scanned-installed-android-functional-diagnostics-passed",
+  "generatedAt": "2026-08-12T20:14:25Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081202",
+    "commit": "72dd8f13b5d3be0e82392a8b28c31292bdc23b53",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "android": {
+    "delivery": "pending",
+    "aabSha256": "aaee3f1193e1a16ed29fa686af8017c3f0f244676f6a75b3fae2036efbe6ffc6",
+    "apkSha256": "4445ff773ae728ef0959b4063e9f687ab86777ca9847d2a3605766de55afafec",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "packageIdentityVerified": true,
+    "privateArchivePermissionsVerified": true
+  },
+  "privacyAndNetwork": {
+    "binaryScan": "passed",
+    "binaryScanReportSha256": "c6491c2217fa5c1906de4f6edbac1369f9642a8333a0940ff94222e5d9464599",
+    "targetSdkVersion": 35,
+    "backupDisabled": true,
+    "cleartextTrafficDisabled": true,
+    "analyticsSdkPresent": false,
+    "advertisingSdkPresent": false,
+    "permissionInventoryStatus": "passed",
+    "permissionInventoryEvidenceRef": "docs/evidence/b11/android-release-permissions-2026081202.json",
+    "disclosedSdks": [
+      "Firebase Cloud Messaging",
+      "Firebase Crashlytics",
+      "Firebase Authentication",
+      "Facebook Login",
+      "Google Maps Platform"
+    ],
+    "findings": []
+  },
+  "exactCandidateDiagnostics": {
+    "directInstallAndLaunch": "passed",
+    "listingSignalTruthfulness": "passed-bounded-feed-observation",
+    "guestAppLinks": "passed",
+    "authenticatedSessionRestore": "passed",
+    "syntheticRoleBooking": "passed",
+    "authenticatedDeepLinks": "passed",
+    "foregroundFcm": "passed",
+    "backgroundFcm": "passed",
+    "terminatedProcessFcm": "passed",
+    "notificationIconVisualFit": "passed",
+    "logoutColdStartGuestPersistence": "passed",
+    "postLogoutPushSuppression": "passed",
+    "offlineRealtimeRecovery": "passed"
+  },
+  "controlledFcm": {
+    "status": "passed",
+    "evidenceRef": "docs/evidence/b11/android-controlled-fcm-2026081202-20260812T203436Z.json"
+  },
+  "syntheticRoleBooking": {
+    "status": "passed",
+    "evidenceRef": "docs/evidence/b11/android-synthetic-role-booking-2026081202-20260812T202947Z.json",
+    "protectedReviewFixtureUnchanged": true
+  },
+  "authenticatedDeepLinks": {
+    "status": "passed",
+    "evidenceRef": "docs/evidence/b11/android-authenticated-deep-links-2026081202-20260812T203105Z.json",
+    "protectedReviewFixtureUnchanged": true,
+    "protectedReviewSessionRestored": true
+  },
+  "logoutLifecycle": {
+    "status": "passed",
+    "evidenceRef": "docs/evidence/b11/android-logout-lifecycle-2026081202-20260812T203621Z.json",
+    "syntheticSessionRestoredAfterProbe": true
+  },
+  "offlineRealtime": {
+    "status": "passed",
+    "evidenceRef": "docs/evidence/b11/android-offline-realtime-2026081202-20260812T203820Z.json",
+    "networkRestoredAfterProbe": true,
+    "sameProcessRecovery": true
+  },
+  "staging": {
+    "serverCommit": "72dd8f13b5d3be0e82392a8b28c31292bdc23b53",
+    "liveHttpStatus": 200,
+    "readyHttpStatus": 200,
+    "fcmEnabled": true,
+    "googleCredentialValidation": "passed-prior-config-unchanged",
+    "productionInvariant": "passed",
+    "productionLiveHttpStatus": 200,
+    "productionReadyHttpStatus": 200
+  },
+  "boundaries": {
+    "uploadedToStore": false,
+    "installedOnPhysicalDevice": true,
+    "controlledFcmSentToSyntheticAccount": true,
+    "controlledCrashDiagnosticSent": false,
+    "productionPushSent": false,
+    "productionCrashGenerated": false,
+    "iosValidated": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

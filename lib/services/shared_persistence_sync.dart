@@ -2,13 +2,34 @@ import 'dart:async';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'shared_persistence_keys.dart';
+
 import 'shared_persistence_sync_stub.dart'
     if (dart.library.html) 'shared_persistence_sync_web.dart';
 
 class SharedPersistenceSync {
-  static const String rentalRequestsKey = 'rental_requests';
-  static const String messageThreadsKey = 'message_threads_v1';
-  static const String handoverReturnStateKey = 'handover_return_state_v1';
+  static const String rentalRequestsKey =
+      SharedPersistenceKeys.rentalRequestsKey;
+  static const String messageThreadsKey =
+      SharedPersistenceKeys.messageThreadsKey;
+  static const String handoverReturnStateKey =
+      SharedPersistenceKeys.handoverReturnStateKey;
+  static const String savedItemsKey = SharedPersistenceKeys.savedItemsKey;
+  static const String wishlistStateKey = SharedPersistenceKeys.wishlistStateKey;
+  static const String rentalCartKey = SharedPersistenceKeys.rentalCartKey;
+  static const String localSafetyPrivacyStateKey =
+      SharedPersistenceKeys.localSafetyPrivacyStateKey;
+  static const String listingCatalogKey =
+      SharedPersistenceKeys.listingCatalogKey;
+  static const String reviewReputationKey =
+      SharedPersistenceKeys.reviewReputationKey;
+  static const String accountSecurityStateKey =
+      SharedPersistenceKeys.accountSecurityStateKey;
+  static const String profileStateKey = SharedPersistenceKeys.profileStateKey;
+  static const String legacyWishlistStateKey =
+      SharedPersistenceKeys.legacyWishlistStateKey;
+  static const String legacyRentalCartKey =
+      SharedPersistenceKeys.legacyRentalCartKey;
 
   static const Set<String> _bookingKeys = {
     rentalRequestsKey,
@@ -16,28 +37,73 @@ class SharedPersistenceSync {
     handoverReturnStateKey,
   };
 
+  static const Set<String> _sharedKeys = SharedPersistenceKeys.sharedKeys;
+
+  static final Map<String, Timer> _catchUpRetryTimers = <String, Timer>{};
+
   static Stream<String> get changes => sharedPersistenceChanges;
 
   static void notify(String key) {
-    if (affectsBookingSync(key)) {
+    if (isSharedPersistenceKey(key)) {
       notifySharedPersistenceChange(key);
     }
   }
 
+  /// Emits a refresh immediately and once more after a short recovery window.
+  ///
+  /// A phone can report that a transport is back before authenticated HTTP is
+  /// fully usable. Screens serialize and coalesce these notifications, so the
+  /// delayed pulse becomes one bounded retry instead of concurrent reloads.
+  static void notifyWithCatchUpRetry(
+    String key, {
+    Duration retryDelay = const Duration(seconds: 4),
+  }) {
+    notify(key);
+    if (!affectsBookingSync(key)) return;
+    _catchUpRetryTimers.remove(key)?.cancel();
+    _catchUpRetryTimers[key] = Timer(retryDelay, () {
+      _catchUpRetryTimers.remove(key);
+      notify(key);
+    });
+  }
+
+  static void cancelCatchUpRetries() {
+    for (final timer in _catchUpRetryTimers.values) {
+      timer.cancel();
+    }
+    _catchUpRetryTimers.clear();
+  }
+
   static bool affectsBookingSync(String key) => _bookingKeys.contains(key);
+
+  static bool affectsCommunicationSync(String key) =>
+      affectsBookingSync(key) ||
+      key == localSafetyPrivacyStateKey ||
+      key == accountSecurityStateKey ||
+      key == profileStateKey;
+
+  static bool affectsProfileSync(String key) =>
+      key == accountSecurityStateKey || key == profileStateKey;
+
+  static bool isSharedPersistenceKey(String key) => _sharedKeys.contains(key);
 
   /// Converts the browser storage key used by shared_preferences_web back to
   /// the logical SharedPreferences key consumed by the app.
   static String? logicalKeyFromStorageKey(String? storageKey) {
     final value = storageKey?.trim() ?? '';
     if (value.isEmpty) return null;
-    if (_bookingKeys.contains(value)) return value;
+    if (_sharedKeys.contains(value)) return _canonicalLogicalKey(value);
 
     const prefix = 'flutter.';
     if (!value.startsWith(prefix)) return null;
     final logicalKey = value.substring(prefix.length);
-    return _bookingKeys.contains(logicalKey) ? logicalKey : null;
+    return _sharedKeys.contains(logicalKey)
+        ? _canonicalLogicalKey(logicalKey)
+        : null;
   }
+
+  static String _canonicalLogicalKey(String key) =>
+      SharedPersistenceKeys.canonicalKey(key);
 
   /// SharedPreferences keeps an in-memory cache. A storage event from another
   /// browser tab must refresh that cache before screens read the new values.

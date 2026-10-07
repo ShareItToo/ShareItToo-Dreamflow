@@ -85,7 +85,7 @@ class ProfileEcosystemService {
     if (isOwnItemForUser(item: item, userId: currentUserId)) {
       return const ActionGuardResult.blocked(
         reason:
-            'Deine eigene Anzeige kann nicht neu über Wunschlisten verwaltet werden.',
+            'Deine eigene Anzeige kann nicht unter Gemerkt verwaltet werden.',
         actionLabel: 'Verwalte die Anzeige über „Meine Anzeigen“',
       );
     }
@@ -96,17 +96,29 @@ class ProfileEcosystemService {
     required String? profileUserId,
     required String? currentUserId,
   }) async {
+    final blockedUserIds =
+        (await BlockedUsersService.getBlockedUserIds()).toSet();
+    return canViewPublicProfileFromBlockedUsers(
+      profileUserId: profileUserId,
+      currentUserId: currentUserId,
+      blockedUserIds: blockedUserIds,
+    );
+  }
+
+  static ActionGuardResult canViewPublicProfileFromBlockedUsers({
+    required String? profileUserId,
+    required String? currentUserId,
+    required Set<String> blockedUserIds,
+  }) {
     final targetId = (profileUserId ?? '').trim();
     if (targetId.isEmpty || targetId == currentUserId) {
       return const ActionGuardResult.allowed();
     }
-    final blockedUserIds =
-        (await BlockedUsersService.getBlockedUserIds()).toSet();
     if (blockedUserIds.contains(targetId)) {
       return const ActionGuardResult.blocked(
         reason:
             'Dieses Profil ist blockiert und deshalb nicht mehr öffentlich erreichbar.',
-        actionLabel: 'Zu Erkunden',
+        actionLabel: 'Zu Entdecken',
       );
     }
     return const ActionGuardResult.allowed();
@@ -164,7 +176,7 @@ class ProfileEcosystemService {
     if (blockedUserIds.contains(item.ownerId)) {
       return const ActionGuardResult.blocked(
         reason:
-            'Dieser Nutzer ist blockiert. Neue Anfragen und Wunschlisten-Aktionen sind deshalb deaktiviert.',
+            'Dieser Nutzer ist blockiert. Neue Anfragen und Merken-Aktionen sind deshalb deaktiviert.',
         actionLabel: 'Nutzer zuerst entblockieren',
       );
     }
@@ -189,6 +201,16 @@ class ProfileEcosystemService {
   static Future<List<Item>> filterVisiblePublicItems(List<Item> items) async {
     final blockedUserIds =
         (await BlockedUsersService.getBlockedUserIds()).toSet();
+    return filterVisiblePublicItemsFromBlockedUsers(
+      items,
+      blockedUserIds: blockedUserIds,
+    );
+  }
+
+  static List<Item> filterVisiblePublicItemsFromBlockedUsers(
+    List<Item> items, {
+    required Set<String> blockedUserIds,
+  }) {
     return items
         .where((item) => isPubliclyVisibleItem(item))
         .where((item) => !blockedUserIds.contains(item.ownerId))

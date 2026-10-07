@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "kind": "rw20e-current-play-candidate-external-gate-reconciliation",
+  "status": "reconciled-current-draft-and-historical-device-evidence-release-gated",
+  "recordedOn": "2026-08-27",
+  "currentCandidate": {
+    "versionCode": "2026082601",
+    "artifactSourceHead": "a1aa3f2528f1923c092a1fb15bdd3dc083673890",
+    "playState": "uploaded-inactive-internal-draft",
+    "activeInternalVersionCode": "2026081509",
+    "candidateExpectedInstalledOnOnePlus": false,
+    "candidateDeviceResults": "NOT_RUN",
+    "nextRequiredGate": "GOOGLE_PLAY_INTERNAL_RELEASE_GO",
+    "ownerWindowGate": "ONEPLUS_PERSONAL_DEVICE_NONDESTRUCTIVE_TEST_GO"
+  },
+  "historicalPhysicalCandidate": {
+    "versionCode": "2026082302",
+    "reasonEvidenceIsHistorical": "application-source-changed-before-current-candidate",
+    "evidenceTransfersToCurrentCandidate": false,
+    "evidenceRefs": [
+      "docs/evidence/external-gates/current-head-android-touch-target-remediation-2026082302.json",
+      "docs/evidence/external-gates/current-candidate-read-only-regression-2026082302.json",
+      "docs/evidence/external-gates/current-candidate-authenticated-safe-links-2026082302.json",
+      "docs/evidence/external-gates/current-candidate-talkback-preflight-2026082302.json",
+      "docs/evidence/external-gates/current-candidate-firebase-device-services-opt-in-2026082302.json",
+      "docs/evidence/external-gates/current-candidate-talkback-settings-preflight-2026082302.json"
+    ]
+  },
+  "reconciledConsumers": {
+    "technicalSetup": "docs/evidence/external-gates/technical-setup-manifest.json",
+    "executionBoard": "docs/evidence/external-gates/external-gate-execution-board.json",
+    "humanExecutionBoard": "docs/operations/EXTERNAL_GATE_EXECUTION_BOARD.md",
+    "walidActionPack": "docs/operations/WALID_EXTERNAL_GATE_ACTION_PACK.md"
+  },
+  "references": {
+    "candidateManifest": "store/google-play/rw20-current-internal-candidate-manifest.json",
+    "uploadHandoff": "store/google-play/rw20-current-internal-upload-handoff.json",
+    "remoteTestPlan": "store/google-play/rw20b-oneplus-remote-test-plan.json",
+    "ownerSmokeReadiness": "store/google-play/rw20c-oneplus-owner-smoke-readiness.json",
+    "draftTruthReconciliation": "store/google-play/rw20d-play-draft-truth-reconciliation.json",
+    "operation": "docs/operations/RW20E_CURRENT_PLAY_CANDIDATE_EXTERNAL_GATE_RECONCILIATION_2026-08-27.md"
+  },
+  "assertions": {
+    "currentFirebaseDeviceDefaultOffPassClaimed": false,
+    "currentAccessibilityPassClaimed": false,
+    "currentLifecyclePassClaimed": false,
+    "currentAuthenticatedPassClaimed": false,
+    "currentReleaseOrReviewClaimed": false
+  },
+  "boundaries": {
+    "consoleAccessed": false,
+    "storeChanged": false,
+    "releaseActivated": false,
+    "reviewSubmissionPerformed": false,
+    "testerListChanged": false,
+    "deviceAccessed": false,
+    "productionChanged": false,
+    "paymentChanged": false,
+    "providerChanged": false,
+    "firebaseChanged": false,
+    "cloudVpsDnsChanged": false,
+    "pullRequestMerged": false
+  },
+  "verification": {
+    "state": "verified-exact-sha",
+    "implementationHead": "028cb20ecf7a5775a534ee3bff8e4893204a2301",
+    "localTechnicalRegression": "passed-standard-parallelism-no-workaround",
+    "githubRegression": {
+      "runId": 33036420665,
+      "headSha": "028cb20ecf7a5775a534ee3bff8e4893204a2301",
+      "conclusion": "success",
+      "publishApiImage": "skipped"
+    },
+    "githubCodeql": {
+      "runId": 33036420668,
+      "headSha": "028cb20ecf7a5775a534ee3bff8e4893204a2301",
+      "conclusion": "success"
+    },
+    "openCodeScanningAlerts": 0,
+    "workaroundIntroduced": false
+  },
+  "containsSecrets": false,
+  "containsTesterIdentity": false,
+  "containsOptInUrl": false,
+  "containsRawDeviceIdentifier": false,
+  "containsNetworkAddress": false
+}

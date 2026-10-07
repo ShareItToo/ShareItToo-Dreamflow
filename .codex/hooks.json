@@ -1,0 +1,43 @@
+{
+  "description": "Optional local SIT guardrails. These hooks are defense in depth and are never a product or production dependency.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/sit_guardrail.py\" session-start",
+            "timeout": 5,
+            "statusMessage": "Loading SIT local guardrails"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/sit_guardrail.py\" pre-tool",
+            "timeout": 60,
+            "statusMessage": "Checking SIT local command policy"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/sit_guardrail.py\" stop",
+            "timeout": 5,
+            "statusMessage": "Checking SIT completion or recording a pending gate"
+          }
+        ]
+      }
+    ]
+  }
+}

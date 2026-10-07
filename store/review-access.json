@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "state": "testing",
+  "readyForStore": false,
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081509",
+    "commit": "3fa045b98897f9551f91da932136c2b100b2d700"
+  },
+  "environment": {
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "roles": [
+    {
+      "role": "owner",
+      "credentialStorage": "owner-only-vault",
+      "status": "verified"
+    },
+    {
+      "role": "renter",
+      "credentialStorage": "owner-only-vault",
+      "status": "verified"
+    }
+  ],
+  "technicalAccess": {
+    "status": "passed",
+    "evidenceRef": "docs/evidence/b11/store-review-access-refresh-2026081509-20260815T142057Z.json"
+  },
+  "reviewScenarios": {
+    "ownerLogin": "passed",
+    "renterLogin": "passed",
+    "activeListing": "passed",
+    "acceptedBooking": "passed",
+    "sharedChat": "passed",
+    "freshInstall": "pending",
+    "secondNetwork": "pending",
+    "reportAndBlock": "passed",
+    "accountExport": "passed",
+    "accountDeletion": "passed"
+  },
+  "scenarioEvidence": {
+    "freshInstall": {
+      "status": "pending",
+      "evidenceRef": null
+    },
+    "safetyActions": {
+      "status": "passed",
+      "evidenceRef": "docs/evidence/b11/store-review-safety-actions-2026081509-20260815T142110Z.json"
+    },
+    "accountDeletion": {
+      "status": "passed",
+      "evidenceRef": "docs/evidence/b11/store-review-disposable-deletion-20260811.json"
+    }
+  },
+  "protectedStoreFields": {
+    "googlePlay": "pending",
+    "appStoreConnect": "pending",
+    "credentialsEmbedded": false
+  },
+  "instructions": {
+    "apple": "store/apple/review_notes_template_en.txt",
+    "googlePlay": "docs/operations/B11_STORE_SUBMISSION_PACKET_2026-08-09.md"
+  },
+  "storeGate": {
+    "field": "blockingGates.reviewAccounts",
+    "status": "open"
+  },
+  "boundaries": {
+    "containsSecrets": false,
+    "containsEmailAddresses": false,
+    "containsTokens": false,
+    "containsAccountIdentifiers": false,
+    "publicStoreChanged": false,
+    "productionChanged": false
+  }
+}

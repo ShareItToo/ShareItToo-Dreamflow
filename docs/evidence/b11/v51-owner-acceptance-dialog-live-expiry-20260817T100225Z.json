@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "kind": "v51-owner-acceptance-dialog-live-expiry",
+  "status": "passed-source-and-regression",
+  "capturedAt": "2026-08-17T10:02:25Z",
+  "sourceCommit": "0b9b8e6decd92bbc37f26c19666c794173383a3d",
+  "checks": {
+    "sharedAcceptanceDialogIsStateful": true,
+    "openDialogSchedulesExactDeadlineTimer": true,
+    "confirmationClearsAtDeadline": true,
+    "checkboxDisablesAtDeadline": true,
+    "acceptButtonDisablesAtDeadline": true,
+    "expiredCopyBecomesVisible": true,
+    "deadlineTimerCancelsOnDispose": true,
+    "tapTimeDeadlineRecheckPreserved": true,
+    "backendExpiryGatePreserved": true
+  },
+  "verification": {
+    "targetedNodeTestsPassed": 10,
+    "targetedFlutterTestsPassed": 52,
+    "targetedAnalyzerFindings": 0,
+    "targetedAnalyzerNewFindings": 0,
+    "fullFlutterTestsPassed": 282,
+    "intentionalFlutterTestsSkipped": 1,
+    "fullAnalyzerFindings": 229,
+    "fullAnalyzerErrors": 0,
+    "webDebugBuild": "passed",
+    "androidDebugBuild": "passed",
+    "technicalRegression": "passed-with-documented-candidate-rollover-boundary"
+  },
+  "privacy": {
+    "dataCollectionChanged": false,
+    "dataStorageChanged": false,
+    "dataTransportChanged": false,
+    "providerChanged": false,
+    "permissionChanged": false,
+    "privacyInventoryChangeRequired": false
+  },
+  "boundaries": {
+    "backendDeployed": false,
+    "stagingChanged": false,
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "storeSubmissionPerformed": false,
+    "realPaymentPerformed": false,
+    "candidateBuiltOrRelabeled": false,
+    "pushRetainedDefaultOff": true,
+    "crashRetainedDefaultOff": true,
+    "pushEnablesCrash": false,
+    "crashDataTransferred": false
+  },
+  "conclusion": {
+    "openAcceptanceDialogAtDeadline": "self-expires-clears-confirmation-and-disables-submit",
+    "serverAuthority": "booking_request_expired-preserved",
+    "officialPlayInternalCandidate": "1.0.0+2026081509",
+    "localSignedCandidate": "1.0.0+2026081510-built-local-not-uploaded"
+  }
+}

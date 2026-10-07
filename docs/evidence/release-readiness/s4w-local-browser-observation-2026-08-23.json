@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "kind": "s4w-controlled-local-browser-observation",
+  "observedAt": "2026-08-23T01:07:58Z",
+  "sourceCommit": "891ecdc414df1d1a6097608cb8dd05b8221361c3",
+  "origin": "http://127.0.0.1:8123/",
+  "dedicatedTemporaryProfile": true,
+  "normalProfileUsed": false,
+  "apply": true,
+  "noReload": false,
+  "readyState": "complete",
+  "verifiedKeys": 9,
+  "storedValuesRecorded": false,
+  "credentialsRecorded": false,
+  "profilePathRecorded": false,
+  "productionChanged": false,
+  "paymentChanged": false,
+  "storeChanged": false,
+  "cloudChanged": false,
+  "pilotChanged": false,
+  "temporaryArtifactsMovedToTrash": true
+}

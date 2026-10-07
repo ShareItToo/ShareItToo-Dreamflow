@@ -2,10 +2,13 @@
 Description=ShareItToo daily database and upload backup
 Requires=docker.service
 After=docker.service
+OnFailure=shareittoo-alert@%n.service
 
 [Service]
 Type=oneshot
 ExecStart=/docker/shareittoo/backend/ops/backup.sh
+Environment=ALERT_NOTIFICATION_POLICY=transitions-only
+# Recovery runs only at the script's completed-work branch, never on lock-busy skip.
 User=root
 Group=root
 Nice=10

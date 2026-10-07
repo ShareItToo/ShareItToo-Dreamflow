@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "kind": "rw20-current-google-play-internal-build-ready-evidence",
+  "status": "passed-build-ready-local-only",
+  "generatedAt": "2026-08-26T20:12:16Z",
+  "evidenceScope": "artifact-build-time-snapshot",
+  "postBuildPlayStateRef": "store/google-play/rw20a-internal-draft-oneplus-handoff.json",
+  "provenance": {
+    "worktree": "/Users/walidchraibi/Worktrees/SIT-master-workflow-20260808",
+    "gitTopLevel": "/Users/walidchraibi/Worktrees/SIT-master-workflow-20260808",
+    "branch": "codex/master-workflow-20260808",
+    "rw20ExpectedClosureHead": "088f6a2f7eac962f0bf1b6aa5ba9815364ac23eb",
+    "rw20ExpectedClosureMatchedBeforeWork": true,
+    "artifactSourceHead": "a1aa3f2528f1923c092a1fb15bdd3dc083673890",
+    "sourceCleanAtBuild": true,
+    "sourceRemoteAhead": 0,
+    "sourceRemoteBehind": 0
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026082601",
+    "highestObservedPlayVersionCode": "2026081509",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "compileSdkVersion": 35,
+    "minSdkVersion": 24,
+    "targetSdkVersion": 35,
+    "firebaseAndroidConfigured": true
+  },
+  "artifact": {
+    "archiveDirectoryName": "2026082601-a1aa3f2528f1923c092a1fb15bdd3dc083673890",
+    "aabFileName": "shareittoo-1.0.0-2026082601-a1aa3f2528f1923c092a1fb15bdd3dc083673890.aab",
+    "aabSha256": "8cf36552f39fe9558411809518b374c437125cbd6ef123258ad9df7061acd873",
+    "apkSha256": "e8d3664371565bbdda2b91b1dae032037767c935dfdb9af71112c30f3e3558df",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "jarsigner": "passed-jar-verified",
+    "bundletoolValidate": "passed",
+    "zipIntegrity": "passed",
+    "aaptIdentity": "passed",
+    "privacyScan": "passed",
+    "ownerOnlyArchivePermissions": "passed-mode-0600"
+  },
+  "localVerification": {
+    "fullTechnicalRegression": {
+      "status": "passed",
+      "command": "CI=true SIT_ALLOW_CANDIDATE_ROLLOVER=1 bash scripts/technical_regression_check.sh",
+      "includes": [
+        "complete repository-owned Node test inventory",
+        "Flutter tests",
+        "flutter analyze with zero forbidden findings",
+        "Web and Wasm build checks",
+        "loopback web smoke",
+        "Android debug build and SDK floor",
+        "release-host capacity guard"
+      ]
+    },
+    "cleanCheckoutReproducibility": {
+      "status": "passed",
+      "implementationHead": "a1aa3f2528f1923c092a1fb15bdd3dc083673890",
+      "fullTechnicalRegressionSeconds": 602,
+      "secondAndroidBuildSeconds": 34,
+      "sourceBeforeAfterInventoriesExact": true,
+      "initialAndFinalCheckoutClean": true,
+      "unexplainedAndroidPayloadDrift": false,
+      "knownAndroidDifferenceClassification": "d8-synthetic-checksum-metadata-only"
+    },
+    "signedReleaseBuild": "passed-single-attempt",
+    "independentArchiveValidator": "passed",
+    "independentHashSignatureAaptBundletoolAndZipChecks": "passed"
+  },
+  "githubVerification": {
+    "headSha": "a1aa3f2528f1923c092a1fb15bdd3dc083673890",
+    "regression": {
+      "runId": 33005457961,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/walidwalidchraibi-dot/ShareItToo-Dreamflow/actions/runs/33005457961",
+      "flutterRegression": "success",
+      "backendRegression": "success",
+      "postgresRunnerProof": "success",
+      "cleanReproducibility": "success",
+      "publishApiImage": "skipped"
+    },
+    "codeql": {
+      "runId": 33005457876,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/walidwalidchraibi-dot/ShareItToo-Dreamflow/actions/runs/33005457876",
+      "openAlertsOnBranch": 0
+    },
+    "pullRequest": {
+      "number": 7,
+      "state": "OPEN",
+      "draft": true,
+      "mergeState": "CLEAN",
+      "merged": false
+    }
+  },
+  "closedGates": {
+    "PLAY_UPLOAD_APPROVED": "not-granted",
+    "googlePlayUpload": "not-performed",
+    "googlePlayTesterListChange": "not-performed",
+    "googlePlayInternalReleaseActivation": "not-performed",
+    "physicalDeviceAccess": "not-performed",
+    "production": "not-changed",
+    "payment": "not-activated",
+    "externalProvider": "not-activated",
+    "firebaseProject": "not-changed",
+    "cloudVpsDns": "not-changed",
+    "pullRequestMerge": "not-performed"
+  },
+  "remainingExternalWork": [
+    "owner grants PLAY_UPLOAD_APPROVED for this exact AAB hash",
+    "owner uploads exact AAB to Google Play Internal only and reviews warnings",
+    "owner separately authorizes Internal release activation and private tester-list change",
+    "second Android phone joins through private opt-in and executes the prepared matrix"
+  ],
+  "candidateManifestRef": "store/google-play/rw20-current-internal-candidate-manifest.json",
+  "playInternalHandoffRef": "store/google-play/rw20-current-internal-upload-handoff.json",
+  "containsSecrets": false,
+  "containsTesterAccount": false,
+  "containsOptInUrl": false
+}

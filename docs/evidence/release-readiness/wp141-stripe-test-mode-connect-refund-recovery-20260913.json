@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp141-stripe-test-mode-connect-refund-recovery",
+  "status": "passed-local-refund-recovery-architecture",
+  "capturedAt": "2026-09-13T17:18:41Z",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "implementationHead": "d2f88f704484efbd564038bd98d6f6a28e4d1c76",
+    "sourceInventory": {
+      "backend/sql/migrations/075_refund_transfer_reversal_recovery.down.sql": "f6794f6bc002d1d1c83e7129c09cdaa2cf681e570afea3ad12b4e5fef29e3743",
+      "backend/sql/migrations/075_refund_transfer_reversal_recovery.up.sql": "ee29e73f54ae55480a756d9e38ceb16f12f6bd88733c47a6c3309dad6e6e59b0",
+      "backend/src/app.js": "fe564fc03c7498e5054086c39fb3b428a7b3c575050457690bf4aa59ad9e90cd",
+      "backend/src/payment_domain.js": "c073081fa827c0d6cf833bc56ef472d284e9c6167887d56dc46df5c1282b14f3",
+      "backend/src/payment_workflow.js": "5790a1cb2d181ad5775cb9c58d95b17b7ec62a431f4dcaa2995fac9d19a6ba6a",
+      "backend/src/privacy_export.js": "f3d504d7650f8b94cc51db3483705ce4d381d9e5cf0c58021b9cc2e2779233b3",
+      "backend/src/retention_inventory.js": "5710a397d81aa34306608b2971e83fe7e3027bc164ac397ac44400dc7a503e50",
+      "backend/src/stripe_provider.js": "98d09f43c6b3f4cbee9f0e226cc146282d33e77eebb65dd4b3025522e7c468a7",
+      "backend/test/payment_domain.test.js": "d40f1354ec1d04bcc59f26c4c9cd03b6736e8126ccc64b052817d5e5276003c0",
+      "backend/test/postgres_foundation.integration.test.js": "161e2c6a8c83c9d7effd4e40b87de4653b80280abfdc99bfb58a758a7061e739",
+      "backend/test/retention_inventory.test.js": "bd15e76866c39d330614295e680f32cf63f8a8970f4cdbd0ffa4e4b834bcab40",
+      "test/tool/payment_provider_truthfulness_wiring.test.mjs": "bb492017ad287a25c5b3c95bb3725866c9fd77a6397656ec4cabf29d4c0a9ace",
+      "test/tool/run_r9_database_recovery.test.mjs": "5bd73dda940cce2cfbf7f11f4861609a9d06795fc40c14a920d0bf6a70015863",
+      "store/privacy-disclosures.json": "10fb283fe18cfde9ff5a16ebe3f70f7f39600dfb7f476b96232bf587e8c18a4f",
+      "store/retention-deletion-readiness.json": "2728e9ed29cd51867e9cd3f5e6b5374b608ec1ab78244ca7c3ecde2f90e6080c",
+      "tool/run_r9_database_recovery.mjs": "e01d1813c1fc9f1cefd20f516d1dd750a744a1d3194288b6386ecabb53395dcc"
+    }
+  },
+  "providerModel": {
+    "accountConfiguration": "accounts-v2-recipient-express",
+    "paymentPattern": "separate-charges-and-transfers",
+    "feesCollector": "application",
+    "lossesCollector": "application",
+    "destinationRefundFlagsUsed": false,
+    "productionEntitlementClaimed": false
+  },
+  "refundIntegrity": {
+    "multiPayoutAllocation": "immutable-newest-first",
+    "payoutPaymentCompositeBinding": true,
+    "stableProviderIdempotencyPerReversal": true,
+    "providerRefundMetadataBinding": true,
+    "providerRefundChargeAmountCurrencyModeBinding": true,
+    "lostTransferReversalResponseRecovered": true,
+    "lostProviderRefundResponseRecovered": true,
+    "duplicateProviderRefundPrevented": true,
+    "refundDisputeTransferRaceSerialized": true,
+    "localFinalizationSerialized": true,
+    "unstructuredFourHundredRejectedAsDefinite": false,
+    "providerStatusFourHundredEightRejectedAsDefinite": false
+  },
+  "dataLifecycle": {
+    "accountDeletionBlocksOpenRecovery": true,
+    "accountExportIncludesMinimizedRecovery": true,
+    "providerIdentifiersExcludedFromAccountExport": true,
+    "retentionInventoryIncludesRecovery": true,
+    "destructiveRollbackWithRecoveryDataRefused": true
+  },
+  "ratchetCorrection": {
+    "initialBaselineFailureObserved": true,
+    "cause": "three-legitimate-wp141-source-changes-left-two-source-inventories-stale",
+    "reboundSources": [
+      "backend/src/app.js",
+      "backend/src/privacy_export.js",
+      "backend/src/retention_inventory.js"
+    ],
+    "affectedInventories": [
+      "store/privacy-disclosures.json",
+      "store/retention-deletion-readiness.json"
+    ],
+    "privacyOrRetentionMeaningChangedByRebind": false,
+    "currentSourceHashesRecomputed": true,
+    "focusedRatchetTests": "passed-68-of-68",
+    "workaroundRetained": false
+  },
+  "database": {
+    "postgresMajor": 16,
+    "migrationCount": 75,
+    "lastMigration": "075_refund_transfer_reversal_recovery.up.sql",
+    "integrationTests": "passed-2-of-2-and-cleaned",
+    "recoveryProof": "passed-and-cleaned",
+    "schemaFingerprintSha256": "f3e81c9d7493e12e853f7c5ef3e36134205d3c07e6d6797c5a41153e141e9269"
+  },
+  "verification": {
+    "focusedTests": "passed-35-of-35",
+    "backendTests": "passed-878-skipped-2-failed-0",
+    "fullLocalTechnicalRegression": "passed-ci-metadata-and-candidate-rollover-mode",
+    "githubRegressionRunId": 34770241597,
+    "githubRegressionConclusion": "success",
+    "githubCodeqlRunId": 34770241626,
+    "githubCodeqlConclusion": "success",
+    "githubCodeScanningOpenAlerts": 0,
+    "portfolioBefore": { "pass": 21, "partial": 4, "open": 7 },
+    "portfolioAfter": { "pass": 21, "partial": 4, "open": 7 }
+  },
+  "boundaries": {
+    "stripeApiCalled": false,
+    "stripeDashboardChanged": false,
+    "stripeCredentialRead": false,
+    "stripeAccountCreated": false,
+    "stagingPaymentTransportChanged": false,
+    "testMoneyUsed": false,
+    "realMoneyUsed": false,
+    "productionChanged": false,
+    "vpsChanged": false,
+    "cloudChanged": false,
+    "firebaseChanged": false,
+    "googlePlayChanged": false,
+    "appCandidateChanged": false,
+    "pixelContacted": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false,
+    "containsAccountIdentity": false,
+    "containsCredential": false,
+    "containsToken": false,
+    "containsPrivateFilesystemPath": false
+  },
+  "remaining": {
+    "stripeSandboxRuntime": "open-not-configured-staging-remains-memory-only",
+    "stripeAccountProfileAndTerms": "open-owner-authenticated-provider-proof-required",
+    "testPaymentRefundPayoutE2e": "open-no-stripe-network-call-performed",
+    "productionProviderSelection": "separate-later-decision"
+  }
+}

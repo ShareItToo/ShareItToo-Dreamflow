@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "kind": "store-links-signing-readiness",
+  "status": "technical-prechecks-passed-public-routes-and-store-console-pending",
+  "capturedAt": "2026-08-11T08:50:20Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081104",
+    "commit": "d4511175a03a9eb574db55b5efcb140f60364765",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "artifacts": {
+    "aabSha256": "4e0ca39cc393cdb1ef52a03838a0c30dd6d588fad54e83b889d9c70f80647c7a",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4"
+  },
+  "sources": {
+    "candidateEvidenceRef": "docs/evidence/b11/android-candidate-2026081104.json",
+    "publicRouteReadinessRef": "docs/evidence/b11/public-store-route-rollout-readiness-20260811.json",
+    "platformAccountReadinessRef": "docs/evidence/b11/store-platform-account-readiness-20260811.json"
+  },
+  "verifications": {
+    "canonicalUploadCertificate": "passed",
+    "localStoreMetadata": "passed",
+    "publicRouteContract": "passed",
+    "deployedPublicRoutes": "out-of-date",
+    "publicSupportPrivacyDeletionRoutes": "pending",
+    "playConsoleWarnings": "pending",
+    "playAppSigningFingerprint": "pending",
+    "assetLinksWithPlayAppSigning": "pending",
+    "appleSigningAndAssociatedDomains": "pending"
+  },
+  "counts": {
+    "draftPublicUrls": 3,
+    "openStoreGates": 11
+  },
+  "boundaries": {
+    "uploadedToStore": false,
+    "caddyReloaded": false,
+    "productionChanged": false,
+    "publicRoutesApproved": false,
+    "storeWarningsReviewed": false,
+    "playAppSigningObserved": false,
+    "appleSigningTeamAvailable": false,
+    "purchaseMade": false,
+    "agreementAccepted": false,
+    "legalContentApproved": false,
+    "containsPersonalAccountData": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

@@ -1,11 +1,104 @@
+import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../config/private_pilot_config.dart';
+import '../models/mfa.dart';
+import '../utils/registration_consent_bundle.dart';
+import 'apple_web_v2_client.dart';
 import 'backend_config.dart';
 import 'backend_http.dart';
 import 'backend_realtime_service.dart';
+import 'blue_ocean_draft_recovery_service.dart';
+import 'firebase_runtime.dart';
+import 'remote_auth_attempt_transaction.dart';
+import 'shared_persistence_sync.dart';
+import 'web_apple_auth.dart';
+import 'web_google_auth.dart';
+import 'web_facebook_auth.dart';
+import 'staging_password_enrollment_client.dart';
+
+class _SocialSdkAcquisition {
+  String? firebaseUid;
+  String? appleAuthorizationCode;
+  bool googleAcquired = false;
+  bool facebookAcquired = false;
+}
+
+class _QueuedAuthSessionMutation {
+  final Future<Object?> Function() operation;
+  final void Function(Object? value) complete;
+  final void Function(Object error, StackTrace stackTrace) completeError;
+
+  const _QueuedAuthSessionMutation({
+    required this.operation,
+    required this.complete,
+    required this.completeError,
+  });
+}
+
+/// Serializes every app-owned write or removal of the persisted session.
+///
+/// This makes the owner comparison and mutation one atomic logical operation
+/// within the Dart process. A successor sign-in therefore waits until an A
+/// cleanup finishes, while an already-persisted B session makes the A clear a
+/// no-op.
+class _AuthSessionMutationQueue {
+  final Queue<_QueuedAuthSessionMutation> _pending =
+      Queue<_QueuedAuthSessionMutation>();
+  bool _running = false;
+
+  Future<T> run<T>(Future<T> Function() operation) {
+    final result = Completer<T>();
+    _pending.add(_QueuedAuthSessionMutation(
+      operation: () async => operation(),
+      complete: (value) => result.complete(value as T),
+      completeError: result.completeError,
+    ));
+    _startIfIdle();
+    return result.future;
+  }
+
+  void _startIfIdle() {
+    if (_running) return;
+    _running = true;
+    unawaited(_drain());
+  }
+
+  Future<void> _drain() async {
+    while (_pending.isNotEmpty) {
+      final queued = _pending.removeFirst();
+      Object? value;
+      Object? failure;
+      StackTrace? failureStack;
+      try {
+        value = await queued.operation();
+      } catch (error, stackTrace) {
+        failure = error;
+        failureStack = stackTrace;
+      }
+      final becameIdle = _pending.isEmpty;
+      if (becameIdle) _running = false;
+      if (failure != null) {
+        queued.completeError(failure, failureStack!);
+      } else {
+        queued.complete(value);
+      }
+      if (becameIdle) {
+        if (_pending.isNotEmpty) _startIfIdle();
+        return;
+      }
+    }
+    _running = false;
+  }
+}
 
 /// Authentication facade.
 ///
@@ -23,6 +116,97 @@ class AuthService {
   static const demoEmail = 'demo@shareittoo.app';
   static const demoPassword = 'shareittoo';
   static Future<String?>? _refreshInFlight;
+  static final _AuthSessionMutationQueue _sessionMutationQueue =
+      _AuthSessionMutationQueue();
+  // Independent from persisted SIT sessions: provider acquisition and its
+  // awaited cleanup must finish before another social/phone SDK operation.
+  // Never release this queue on an observation timeout while native work runs.
+  static final _AuthSessionMutationQueue _providerSdkMutationQueue =
+      _AuthSessionMutationQueue();
+  static int _providerSdkOperationGeneration = 0;
+  static int _sessionGeneration = 0;
+  static int _phoneVerificationAttemptGeneration = 0;
+  static bool _sessionClearing = false;
+  static Future<void>? _googleInitialization;
+  static const bool _googleSocialAuthEnabled = bool.fromEnvironment(
+    'SIT_SOCIAL_GOOGLE_ENABLED',
+    defaultValue: false,
+  );
+  static const bool _appleSocialAuthEnabled = bool.fromEnvironment(
+    'SIT_SOCIAL_APPLE_ENABLED',
+    defaultValue: false,
+  );
+  static const bool _facebookSocialAuthEnabled = bool.fromEnvironment(
+    'SIT_SOCIAL_FACEBOOK_ENABLED',
+    defaultValue: false,
+  );
+  // Product builds must carry the explicit result of the sanitized release
+  // preflight before an external provider can be activated. Debug/profile
+  // tests retain their direct provider defines for deterministic SDK tests.
+  static const bool _socialProviderActivationValidated = bool.fromEnvironment(
+    'SIT_SOCIAL_PROVIDER_ACTIVATION_VALIDATED',
+    defaultValue: false,
+  );
+  static const bool _productBuild = bool.fromEnvironment(
+    'dart.vm.product',
+    defaultValue: false,
+  );
+
+  static void _notifyLocalPrincipalChanged() {
+    SharedPersistenceSync.notify(SharedPersistenceSync.wishlistStateKey);
+    SharedPersistenceSync.notify(SharedPersistenceSync.savedItemsKey);
+    SharedPersistenceSync.notify(SharedPersistenceSync.rentalCartKey);
+    SharedPersistenceSync.notify(
+      SharedPersistenceSync.localSafetyPrivacyStateKey,
+    );
+    SharedPersistenceSync.notify(
+      SharedPersistenceSync.accountSecurityStateKey,
+    );
+  }
+
+  /// Provider-owned startup callback; Web auth never persists Firebase users.
+  static Future<void> prepareWebGoogleAuthMemoryPersistence() async {
+    if (!kIsWeb || FirebaseRuntimeConfig.currentOptions == null) {
+      throw StateError('web_google_auth_configuration_unavailable');
+    }
+    await _providerSdkMutationQueue.run(
+      () => FirebaseAuth.instance.setPersistence(Persistence.NONE),
+    );
+  }
+
+  /// Returns whether [provider] was explicitly enabled for this candidate.
+  /// The UI and token acquisition enforce this gate before any SDK call.
+  static bool socialProviderEnabled(AuthSocialProvider provider) {
+    if (kIsWeb) {
+      if (provider == AuthSocialProvider.apple) {
+        return _appleSocialAuthEnabled &&
+            _socialProviderActivationValidated &&
+            FirebaseRuntime.webAppleReady;
+      }
+      if (provider == AuthSocialProvider.facebook) {
+        return webFacebookControlAvailable(
+          isWeb: kIsWeb,
+          facebookEnabled: _facebookSocialAuthEnabled,
+          configurationReady: FirebaseRuntime.webFacebookConfigurationReady,
+        );
+      }
+      return provider == AuthSocialProvider.google &&
+          _googleSocialAuthEnabled &&
+          FirebaseRuntime.webGoogleReady;
+    }
+    return switch (provider) {
+      AuthSocialProvider.google => _googleSocialAuthEnabled,
+      AuthSocialProvider.apple => _appleSocialAuthEnabled &&
+          (!_productBuild || _socialProviderActivationValidated),
+      AuthSocialProvider.facebook => _facebookSocialAuthEnabled &&
+          (!_productBuild || _socialProviderActivationValidated),
+    };
+  }
+
+  /// Facebook can authenticate an enrolled identity but cannot create/link one.
+  static bool socialRegistrationProviderEnabled(AuthSocialProvider provider) =>
+      provider != AuthSocialProvider.facebook &&
+      socialProviderEnabled(provider);
 
   static Future<void> ensureSeeded() async {
     if (BackendConfig.enabled) return;
@@ -59,7 +243,7 @@ class AuthService {
       if (email is! String || email.isEmpty) return null;
       final normalizedEmail = email.trim().toLowerCase();
       if (_legacySyntheticSocialEmails.contains(normalizedEmail)) {
-        await prefs.remove(_sessionKey);
+        await _removeStoredSessionIfRawMatches(raw);
         return null;
       }
       final session = AuthSession(
@@ -68,6 +252,7 @@ class AuthService {
         createdAt: DateTime.tryParse(map['createdAt']?.toString() ?? ''),
         accessToken: map['accessToken']?.toString(),
         refreshToken: map['refreshToken']?.toString(),
+        sessionId: map['sessionId']?.toString(),
         accessTokenExpiresAt: DateTime.tryParse(
           map['accessTokenExpiresAt']?.toString() ?? '',
         ),
@@ -75,8 +260,9 @@ class AuthService {
       if (BackendConfig.enabled &&
           ((session.userId ?? '').isEmpty ||
               (session.accessToken ?? '').isEmpty ||
-              (session.refreshToken ?? '').isEmpty)) {
-        await prefs.remove(_sessionKey);
+              (session.refreshToken ?? '').isEmpty ||
+              (session.sessionId ?? '').isEmpty)) {
+        await _removeStoredSessionIfRawMatches(raw);
         return null;
       }
       return session;
@@ -86,59 +272,347 @@ class AuthService {
     }
   }
 
-  static Future<void> clearSession() async {
+  /// Returns true only when the persisted auth-session key is definitely
+  /// absent. A malformed value or a storage read failure is not equivalent to
+  /// a confirmed sign-out and therefore fails closed as false.
+  static Future<bool> isStoredSessionDefinitelyAbsent() async {
     try {
-      final session = await readSession();
-      if (BackendConfig.enabled && (session?.refreshToken ?? '').isNotEmpty) {
-        try {
-          await BackendHttp.requestJson(
-            method: 'POST',
-            path: '/auth/logout',
-            body: {'refreshToken': session!.refreshToken},
-          );
-        } catch (_) {
-          // Local logout must still succeed while offline.
-        }
-      }
-      await BackendRealtimeService.disconnect();
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_sessionKey);
+      return !prefs.containsKey(_sessionKey);
     } catch (error) {
-      debugPrint('[AuthService] clearSession failed: $error');
+      debugPrint(
+        '[AuthService] stored session absence check failed: '
+        '${error.runtimeType}',
+      );
+      return false;
+    }
+  }
+
+  /// Monotonic in-process epoch for every successful app-owned session write
+  /// or removal. UI actions capture this synchronously with their principal.
+  static int get sessionEpoch => _sessionGeneration;
+
+  static AuthSessionOwner captureSessionOwner(AuthSession session) =>
+      AuthSessionOwner(
+        userId: session.userId,
+        sessionId: session.sessionId,
+        email: session.email,
+        createdAt: session.createdAt,
+        epoch: _sessionGeneration,
+      );
+
+  static Future<bool> isSessionOwnerDefinitelyCurrent(
+    AuthSessionOwner owner,
+  ) async {
+    final observedEpoch = _sessionGeneration;
+    if (owner.epoch != observedEpoch) return false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final matches = _storedSessionMatchesOwner(
+        prefs.getString(_sessionKey),
+        owner,
+      );
+      return matches &&
+          owner.epoch == _sessionGeneration &&
+          observedEpoch == _sessionGeneration;
+    } catch (error) {
+      debugPrint(
+        '[AuthService] session owner check failed: ${error.runtimeType}',
+      );
+      return false;
+    }
+  }
+
+  static Future<bool> isSessionClearReceiptCurrent(
+    AuthSessionClearReceipt receipt,
+  ) async {
+    if (receipt.completionEpoch != _sessionGeneration) return false;
+    final absent = await isStoredSessionDefinitelyAbsent();
+    return absent && receipt.completionEpoch == _sessionGeneration;
+  }
+
+  static Future<void> clearSession() async {
+    final session = await readSession();
+    if (session == null) return;
+    await clearSessionOwnerIfMatches(captureSessionOwner(session));
+  }
+
+  /// Clears only the exact captured session owner. The comparison, local
+  /// account cleanup and session mutation remain serialized against successor
+  /// sign-ins and token refresh persistence.
+  static Future<AuthSessionClearReceipt?> clearSessionOwnerIfMatches(
+    AuthSessionOwner owner, {
+    bool runLogoutCleanup = true,
+  }) {
+    return _sessionMutationQueue.run(() async {
+      if (owner.epoch != _sessionGeneration) return null;
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_sessionKey);
+      if (!_storedSessionMatchesOwner(raw, owner)) return null;
+      final capturedSession = _decodeStoredSession(raw!);
+      if (capturedSession == null) return null;
+
+      _sessionClearing = true;
+      _refreshInFlight = null;
+      try {
+        if (runLogoutCleanup) {
+          // Close account-bound foreground presentation before the first
+          // awaited provider or network cleanup. Native FCM token work is
+          // installation scoped and must never block exact local sign-out.
+          FirebaseRuntime.closeAuthenticatedPushSessionForLogout();
+        }
+
+        final removed = await prefs.remove(_sessionKey);
+        if (!removed || prefs.containsKey(_sessionKey)) return null;
+        _sessionGeneration += 1;
+        final receipt = AuthSessionClearReceipt(
+          owner: owner,
+          completionEpoch: _sessionGeneration,
+        );
+        _notifyLocalPrincipalChanged();
+
+        if (runLogoutCleanup) {
+          try {
+            await BlueOceanDraftRecoveryService().clear();
+          } catch (_) {
+            // Account-bound draft cleanup is best effort after exact removal.
+          }
+          try {
+            // A successor realtime connection cannot start until this exact A
+            // disconnect completes because session persistence shares the
+            // mutation queue. Do not use a non-cancelling timeout here.
+            await BackendRealtimeService.disconnect();
+          } catch (_) {
+            // Local session removal remains authoritative while disconnected.
+          }
+          await runBestEffortLogoutCleanup(
+            remoteLogout: () async {
+              if (BackendConfig.enabled &&
+                  (capturedSession.refreshToken ?? '').isNotEmpty) {
+                await BackendHttp.requestJson(
+                  method: 'POST',
+                  path: '/auth/logout',
+                  body: {'refreshToken': capturedSession.refreshToken},
+                );
+              }
+            },
+            disconnectRealtime: () async {},
+          );
+        }
+        return receipt;
+      } catch (error) {
+        debugPrint(
+          '[AuthService] exact session clear failed: ${error.runtimeType}',
+        );
+        return null;
+      } finally {
+        _sessionClearing = false;
+        _refreshInFlight = null;
+      }
+    });
+  }
+
+  /// Removes a backend session only when the exact expected principal is still
+  /// stored. The comparison and removal invocation are deliberately adjacent,
+  /// so a successor sign-in is never selected as the removal target.
+  ///
+  /// This narrow path is used after a server-authoritative password change or
+  /// logout-all response. It intentionally does not run the broader best-effort
+  /// logout cleanup, because that cleanup could act on a successor principal.
+  static Future<bool> clearSessionIfMatches({
+    required String userId,
+    required String sessionId,
+    required String email,
+  }) async {
+    final session = await readSession();
+    if (session == null ||
+        session.userId?.trim() != userId.trim() ||
+        session.sessionId?.trim() != sessionId.trim() ||
+        session.email.trim().toLowerCase() != email.trim().toLowerCase()) {
+      return false;
+    }
+    final receipt = await clearSessionOwnerIfMatches(
+      captureSessionOwner(session),
+      runLogoutCleanup: false,
+    );
+    return receipt != null && await isSessionClearReceiptCurrent(receipt);
+  }
+
+  static AuthSession? _decodeStoredSession(String raw) {
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return null;
+      final map = Map<String, dynamic>.from(decoded);
+      final email = map['email'];
+      if (email is! String || email.trim().isEmpty) return null;
+      return AuthSession(
+        userId: map['userId']?.toString(),
+        email: email.trim().toLowerCase(),
+        createdAt: DateTime.tryParse(map['createdAt']?.toString() ?? ''),
+        accessToken: map['accessToken']?.toString(),
+        refreshToken: map['refreshToken']?.toString(),
+        sessionId: map['sessionId']?.toString(),
+        accessTokenExpiresAt: DateTime.tryParse(
+          map['accessTokenExpiresAt']?.toString() ?? '',
+        ),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static bool _storedSessionMatchesOwner(
+    String? raw,
+    AuthSessionOwner owner,
+  ) {
+    if (raw == null || raw.isEmpty) return false;
+    final session = _decodeStoredSession(raw);
+    if (session == null ||
+        session.email.trim().toLowerCase() !=
+            owner.email.trim().toLowerCase()) {
+      return false;
+    }
+    // Compare every non-secret identity field, including deliberately empty
+    // legacy fields. Older device-local sessions can carry a userId without a
+    // backend sessionId; routing those through the remote-session matcher made
+    // an exact logout a no-op and allowed an in-flight profile write to finish
+    // after that logout request. Tokens remain excluded from the owner value.
+    return (session.userId ?? '').trim() == (owner.userId ?? '').trim() &&
+        (session.sessionId ?? '').trim() == (owner.sessionId ?? '').trim() &&
+        session.createdAt == owner.createdAt;
+  }
+
+  @visibleForTesting
+  static Future<void> runBestEffortLogoutCleanup({
+    required Future<void> Function() remoteLogout,
+    required Future<void> Function() disconnectRealtime,
+    Duration timeout = const Duration(seconds: 3),
+  }) async {
+    try {
+      await Future.wait<void>([
+        remoteLogout(),
+        disconnectRealtime(),
+      ]).timeout(timeout);
+    } catch (_) {
+      // Local session removal is authoritative even while offline or when a
+      // stale realtime socket cannot complete its closing handshake.
     }
   }
 
   static Future<AuthResult> signInWithEmailPassword({
     required String email,
     required String password,
+    int? expectedSessionEpoch,
+    bool Function()? isActionCurrent,
   }) async {
     if (BackendConfig.enabled) {
       try {
-        final response = await BackendHttp.requestJson(
-          method: 'POST',
-          path: '/auth/login',
-          body: {'email': email.trim(), 'password': password},
+        return await RemoteAuthAttemptTransaction<
+                ({String email, String password}),
+                Map<String, dynamic>,
+                AuthResult>()
+            .run(
+          preflightCurrent: () => _authAttemptPreflightCurrent(
+            expectedSessionEpoch,
+            isActionCurrent,
+          ),
+          actionCurrent: () => _authAttemptActionCurrent(isActionCurrent),
+          acquire: () async => (
+            email: email.trim(),
+            password: password,
+          ),
+          invokeRemote: (credentials) => BackendHttp.requestJson(
+            method: 'POST',
+            path: '/auth/login',
+            body: {
+              'email': credentials.email,
+              'password': credentials.password,
+            },
+          ),
+          persist: (response) async {
+            final challenge = _parseMfaChallenge(response);
+            if (response['mfaRequired'] == true) {
+              if (challenge == null) {
+                throw const BackendException(502, 'invalid_mfa_challenge');
+              }
+              return AuthResult.mfaRequired(challenge);
+            }
+            final session = await _saveRemoteSession(
+              response,
+              expectedGeneration: expectedSessionEpoch,
+            );
+            return AuthResult.success(
+              session: session,
+              verificationEmailSent: response['verificationEmailSent'] == true,
+              verificationPending: response['verificationPending'] == true ||
+                  (response['user'] is Map &&
+                      (response['user'] as Map)['emailVerified'] != true),
+            );
+          },
+          discardRemote: _discardIssuedRemoteSession,
+          persistedCurrent: _authResultSessionDefinitelyCurrent,
+          discardPersisted: _discardPersistedAuthResult,
         );
-        final session = await _saveRemoteSession(response);
-        return AuthResult.success(
-          session: session,
-          verificationEmailSent: response['verificationEmailSent'] == true,
+      } on RemoteAuthAttemptSuperseded {
+        return const AuthResult.failure(AuthFailure.principalChanged);
+      } on _DiscardedRefreshResult {
+        return AuthResult.failure(
+          _authAttemptPreflightCurrent(
+            expectedSessionEpoch,
+            isActionCurrent,
+          )
+              ? AuthFailure.network
+              : AuthFailure.principalChanged,
         );
       } on BackendException catch (error) {
+        if (!_authAttemptPreflightCurrent(
+          expectedSessionEpoch,
+          isActionCurrent,
+        )) {
+          return const AuthResult.failure(AuthFailure.principalChanged);
+        }
         if (error.statusCode == 401) {
           return const AuthResult.failure(AuthFailure.invalidCredentials);
+        }
+        if (error.code == 'email_verification_required') {
+          return const AuthResult.failure(
+              AuthFailure.emailVerificationRequired);
         }
         debugPrint('[AuthService] remote sign-in failed: $error');
         return const AuthResult.failure(AuthFailure.network);
       } catch (error) {
+        if (!_authAttemptPreflightCurrent(
+          expectedSessionEpoch,
+          isActionCurrent,
+        )) {
+          return const AuthResult.failure(AuthFailure.principalChanged);
+        }
         debugPrint('[AuthService] remote sign-in failed: $error');
         return const AuthResult.failure(AuthFailure.network);
       }
     }
 
+    if (!_authAttemptPreflightCurrent(
+      expectedSessionEpoch,
+      isActionCurrent,
+    )) {
+      return const AuthResult.failure(AuthFailure.principalChanged);
+    }
     await ensureSeeded();
     try {
+      if (!_authAttemptPreflightCurrent(
+        expectedSessionEpoch,
+        isActionCurrent,
+      )) {
+        return const AuthResult.failure(AuthFailure.principalChanged);
+      }
       final prefs = await SharedPreferences.getInstance();
+      if (!_authAttemptPreflightCurrent(
+        expectedSessionEpoch,
+        isActionCurrent,
+      )) {
+        return const AuthResult.failure(AuthFailure.principalChanged);
+      }
       final accounts = await _readAccounts(prefs);
       final normalizedEmail = email.trim().toLowerCase();
       final match = accounts.firstWhere(
@@ -158,38 +632,195 @@ class AuthService {
         'email': normalizedEmail,
         'createdAt': DateTime.now().toIso8601String(),
       };
-      await prefs.setString(_sessionKey, jsonEncode(sessionData));
-      return AuthResult.success(
+      if (!_authAttemptPreflightCurrent(
+        expectedSessionEpoch,
+        isActionCurrent,
+      )) {
+        return const AuthResult.failure(AuthFailure.principalChanged);
+      }
+      final persisted = await _persistSessionEncoded(
+        jsonEncode(sessionData),
+        expectedGeneration: expectedSessionEpoch,
+      );
+      if (!persisted) {
+        return AuthResult.failure(
+          _authAttemptActionCurrent(isActionCurrent)
+              ? AuthFailure.network
+              : AuthFailure.principalChanged,
+        );
+      }
+      final result = AuthResult.success(
         session: AuthSession(
           email: normalizedEmail,
           createdAt: DateTime.parse(sessionData['createdAt']!),
         ),
       );
+      if (!_authAttemptActionCurrent(isActionCurrent) ||
+          !await _authResultSessionDefinitelyCurrent(result)) {
+        await _discardPersistedAuthResult(result);
+        return const AuthResult.failure(AuthFailure.principalChanged);
+      }
+      return result;
     } catch (error) {
+      if (!_authAttemptActionCurrent(isActionCurrent)) {
+        return const AuthResult.failure(AuthFailure.principalChanged);
+      }
       debugPrint('[AuthService] signInWithEmailPassword failed: $error');
       return const AuthResult.failure(AuthFailure.network);
+    }
+  }
+
+  static AuthFailure classifyRegistrationBackendError(BackendException error) {
+    // Only the server's exact closed-pilot rejection proves this outcome.
+    // An arbitrary 403 or transport error must never imply no account write.
+    if (error.statusCode == 403 &&
+        (error.code == 'staging_registration_disabled' ||
+            error.code == 'staging_password_enrollment_unavailable')) {
+      return AuthFailure.pilotRegistrationClosed;
+    }
+    return switch (error.code) {
+      'password_too_short' ||
+      'password_too_long' ||
+      'password_too_weak' =>
+        AuthFailure.weakPassword,
+      'registration_consents_required' ||
+      'registration_action_label_required' ||
+      'registration_action_label_mismatch' =>
+        AuthFailure.consentRequired,
+      'verification_delivery_unavailable' =>
+        AuthFailure.verificationDeliveryUnavailable,
+      _ => AuthFailure.network,
+    };
+  }
+
+  static Future<AuthResult> registerInvitedStagingAccount({
+    required String email,
+    required String password,
+    required String displayName,
+    required String enrollmentToken,
+    required int expectedSessionEpoch,
+    required bool Function() isActionCurrent,
+    required bool termsAccepted,
+    required bool privacyAccepted,
+    required bool minimumAgeConfirmed,
+    required bool privateUseConfirmed,
+    required String registrationActionLabel,
+  }) async {
+    try {
+      if (!StagingPasswordEnrollmentEnvironment.current.available) {
+        return const AuthResult.failure(AuthFailure.pilotRegistrationClosed);
+      }
+      final signedOut = await isStoredSessionDefinitelyAbsent();
+      if (!signedOut ||
+          !_authAttemptPreflightCurrent(
+              expectedSessionEpoch, isActionCurrent)) {
+        return const AuthResult.failure(AuthFailure.principalChanged);
+      }
+      return await submitStagingPasswordEnrollment<AuthResult>(
+        available: StagingPasswordEnrollmentEnvironment.current.available,
+        enrollmentToken: enrollmentToken,
+        email: email,
+        password: password,
+        displayName: displayName,
+        termsAccepted: termsAccepted,
+        privacyAccepted: privacyAccepted,
+        minimumAgeConfirmed: minimumAgeConfirmed,
+        privateUseConfirmed: privateUseConfirmed,
+        registrationActionLabel: registrationActionLabel,
+        preflightCurrent: () =>
+            _authAttemptPreflightCurrent(expectedSessionEpoch, isActionCurrent),
+        actionCurrent: () => _authAttemptActionCurrent(isActionCurrent),
+        send: (body) => BackendHttp.requestJson(
+            method: 'POST', path: '/auth/register', body: body),
+        persist: (response) async {
+          if (response['accepted'] != true || response['session'] is! Map) {
+            throw const BackendException(502, 'invalid_enrollment_response');
+          }
+          final session = await _saveRemoteSession(
+            Map<String, dynamic>.from(response['session'] as Map),
+            expectedGeneration: expectedSessionEpoch,
+          );
+          return AuthResult.success(
+              session: session,
+              verificationPending: response['verificationPending'] == true,
+              verificationEmailSent: response['verificationEmailSent'] == true);
+        },
+        discardRemote: (response) async {
+          if (response['session'] is Map) {
+            await _discardIssuedRemoteSession(
+                Map<String, dynamic>.from(response['session'] as Map));
+          }
+        },
+        persistedCurrent: _authResultSessionDefinitelyCurrent,
+        discardPersisted: _discardPersistedAuthResult,
+      );
+    } on StagingPasswordEnrollmentUnavailable {
+      return const AuthResult.failure(AuthFailure.pilotRegistrationClosed);
+    } on RemoteAuthAttemptSuperseded {
+      return const AuthResult.failure(AuthFailure.principalChanged);
+    } on BackendException catch (error) {
+      return AuthResult.failure(classifyRegistrationBackendError(error));
+    } catch (_) {
+      return const AuthResult.failure(AuthFailure.network);
+    } finally {
+      enrollmentToken = '';
+      password = '';
     }
   }
 
   static Future<AuthResult> registerLocalAccount({
     required String email,
     required String password,
+    String? displayName,
+    required bool termsAccepted,
+    required bool privacyAccepted,
+    required bool minimumAgeConfirmed,
+    required bool privateUseConfirmed,
+    String registrationActionLabel = 'Kostenlos registrieren',
   }) async {
+    if (!termsAccepted ||
+        !privacyAccepted ||
+        !minimumAgeConfirmed ||
+        !privateUseConfirmed) {
+      return const AuthResult.failure(AuthFailure.consentRequired);
+    }
     if (BackendConfig.enabled) {
       try {
         final response = await BackendHttp.requestJson(
           method: 'POST',
           path: '/auth/register',
-          body: {'email': email.trim(), 'password': password},
+          body: {
+            'email': email.trim(),
+            'password': password,
+            'displayName': displayName?.trim(),
+            'termsAccepted': termsAccepted,
+            'privacyAccepted': privacyAccepted,
+            'minimumAgeConfirmed': minimumAgeConfirmed,
+            'privateUseConfirmed': privateUseConfirmed,
+            'registrationActionLabel': registrationActionLabel,
+          },
         );
-        final session = await _saveRemoteSession(response);
-        return AuthResult.success(session: session);
-      } on BackendException catch (error) {
-        if (error.statusCode == 409 || error.code == 'email_in_use') {
-          return const AuthResult.failure(AuthFailure.emailInUse);
+        if (response['accepted'] != true) {
+          return const AuthResult.failure(AuthFailure.network);
         }
-        debugPrint('[AuthService] remote registration failed: $error');
-        return const AuthResult.failure(AuthFailure.network);
+        AuthSession? session;
+        final rawSession = response['session'];
+        if (rawSession is Map) {
+          session = await _saveRemoteSession(
+            Map<String, dynamic>.from(rawSession),
+          );
+        }
+        return AuthResult.success(
+          session: session,
+          verificationEmailSent: response['verificationEmailSent'] == true,
+          verificationPending: response['verificationPending'] == true,
+        );
+      } on BackendException catch (error) {
+        final failure = classifyRegistrationBackendError(error);
+        if (failure == AuthFailure.network) {
+          debugPrint('[AuthService] remote registration failed: $error');
+        }
+        return AuthResult.failure(failure);
       } catch (error) {
         debugPrint('[AuthService] remote registration failed: $error');
         return const AuthResult.failure(AuthFailure.network);
@@ -206,17 +837,23 @@ class AuthService {
             (account['email'] as String?)?.toLowerCase() == normalizedEmail,
       );
       if (exists) return const AuthResult.failure(AuthFailure.emailInUse);
+      final createdAt = DateTime.now().toUtc().toIso8601String();
       accounts.add({
         'email': normalizedEmail,
         'password': password,
-        'createdAt': DateTime.now().toIso8601String(),
+        'createdAt': createdAt,
+        'registrationBundle': localRegistrationConsentBundle(
+          actionLabel: registrationActionLabel,
+          appVersion: PrivatePilotConfig.v52ClientBuild,
+          declaredAt: createdAt,
+        ),
       });
       await prefs.setString(_accountsKey, jsonEncode(accounts));
       final sessionData = {
         'email': normalizedEmail,
-        'createdAt': DateTime.now().toIso8601String(),
+        'createdAt': createdAt,
       };
-      await prefs.setString(_sessionKey, jsonEncode(sessionData));
+      await _persistSessionEncoded(jsonEncode(sessionData));
       return AuthResult.success(
         session: AuthSession(
           email: normalizedEmail,
@@ -241,6 +878,27 @@ class AuthService {
     return refreshAccessToken();
   }
 
+  /// Returns a credential only while the exact token-free owner remains the
+  /// persisted session on both sides of any refresh await.
+  static Future<String?> accessTokenForOwner(AuthSessionOwner owner) async {
+    if (!BackendConfig.enabled ||
+        !await isSessionOwnerDefinitelyCurrent(owner)) {
+      return null;
+    }
+    final session = await readSession();
+    if (session == null || !await isSessionOwnerDefinitelyCurrent(owner)) {
+      return null;
+    }
+    final expiresAt = session.accessTokenExpiresAt;
+    if ((session.accessToken ?? '').isNotEmpty &&
+        expiresAt != null &&
+        expiresAt.isAfter(DateTime.now().add(const Duration(seconds: 30)))) {
+      return session.accessToken;
+    }
+    final refreshed = await refreshAccessToken();
+    return await isSessionOwnerDefinitelyCurrent(owner) ? refreshed : null;
+  }
+
   static Future<bool> requestPasswordReset(String email) async {
     if (!BackendConfig.enabled) return true;
     try {
@@ -256,46 +914,411 @@ class AuthService {
     }
   }
 
-  static Future<bool> requestEmailVerification() async {
-    if (!BackendConfig.enabled) return true;
-    var token = await accessToken() ?? '';
-    if (token.isEmpty) return false;
-    try {
-      await BackendHttp.requestJson(
-        method: 'POST',
-        path: '/auth/email-verification/request',
-        accessToken: token,
+  static Future<PhoneVerificationChallenge> requestPhoneVerification({
+    required AuthSessionOwner owner,
+    required String phoneNumber,
+  }) async {
+    if (!BackendConfig.enabled || kIsWeb) {
+      throw const PhoneVerificationException(
+        PhoneVerificationFailure.unavailable,
       );
-      return true;
-    } on BackendException catch (error) {
-      if (error.statusCode != 401) {
-        debugPrint('[AuthService] verification request failed: $error');
-        return false;
-      }
-      token = await refreshAccessToken() ?? '';
-      if (token.isEmpty) return false;
-      try {
-        await BackendHttp.requestJson(
-          method: 'POST',
-          path: '/auth/email-verification/request',
-          accessToken: token,
-        );
-        return true;
-      } catch (retryError) {
-        debugPrint('[AuthService] verification retry failed: $retryError');
-        return false;
-      }
-    } catch (error) {
-      debugPrint('[AuthService] verification request failed: $error');
-      return false;
     }
+    await _requirePhoneVerificationOwner(owner);
+    final attemptEpoch = ++_phoneVerificationAttemptGeneration;
+    final normalized = normalizePhoneNumber(phoneNumber);
+    if (normalized == null) {
+      throw const PhoneVerificationException(
+        PhoneVerificationFailure.invalidPhone,
+      );
+    }
+    final access = await accessTokenForOwner(owner);
+    if (access == null || access.isEmpty) {
+      await _requirePhoneVerificationOwner(owner);
+      throw const PhoneVerificationException(
+        PhoneVerificationFailure.sessionExpired,
+      );
+    }
+    try {
+      await _requirePhoneVerificationOwner(owner);
+      final status = await BackendHttp.requestJson(
+        method: 'GET',
+        path: '/auth/phone-verification/status',
+        accessToken: access,
+      );
+      await _requirePhoneVerificationOwner(owner);
+      if (status['available'] != true ||
+          status['provider'] != 'firebase-phone') {
+        throw const PhoneVerificationException(
+          PhoneVerificationFailure.unavailable,
+        );
+      }
+    } on PhoneVerificationException {
+      rethrow;
+    } on BackendException catch (error) {
+      if (error.statusCode == 401) {
+        throw const PhoneVerificationException(
+          PhoneVerificationFailure.sessionExpired,
+        );
+      }
+      throw const PhoneVerificationException(
+        PhoneVerificationFailure.unavailable,
+      );
+    } catch (_) {
+      throw const PhoneVerificationException(
+        PhoneVerificationFailure.network,
+      );
+    }
+    try {
+      await _requirePhoneVerificationOwner(owner);
+      await FirebaseRuntime.ensureFirebaseApp();
+    } catch (_) {
+      throw const PhoneVerificationException(
+        PhoneVerificationFailure.unavailable,
+      );
+    }
+    if (Firebase.apps.isEmpty) {
+      throw const PhoneVerificationException(
+        PhoneVerificationFailure.unavailable,
+      );
+    }
+    final completer = Completer<PhoneVerificationChallenge>();
+    try {
+      await _requirePhoneVerificationOwner(owner);
+      await FirebaseAuth.instance.verifyPhoneNumber(
+        phoneNumber: normalized,
+        timeout: const Duration(seconds: 60),
+        verificationCompleted: (credential) async {
+          if (completer.isCompleted) return;
+          try {
+            await _confirmPhoneCredential(
+              owner: owner,
+              attemptEpoch: attemptEpoch,
+              phoneNumber: normalized,
+              credential: credential,
+            );
+            if (!completer.isCompleted) {
+              completer.complete(PhoneVerificationChallenge(
+                phoneNumber: normalized,
+                automaticallyVerified: true,
+                owner: owner,
+                attemptEpoch: attemptEpoch,
+              ));
+            }
+          } catch (error, stack) {
+            if (!completer.isCompleted) completer.completeError(error, stack);
+          }
+        },
+        verificationFailed: (error) {
+          if (completer.isCompleted) return;
+          completer.completeError(_phoneVerificationException(error));
+        },
+        codeSent: (verificationId, _) {
+          if (completer.isCompleted) return;
+          completer.complete(PhoneVerificationChallenge(
+            phoneNumber: normalized,
+            verificationId: verificationId,
+            owner: owner,
+            attemptEpoch: attemptEpoch,
+          ));
+        },
+        codeAutoRetrievalTimeout: (verificationId) {
+          if (completer.isCompleted) return;
+          completer.complete(PhoneVerificationChallenge(
+            phoneNumber: normalized,
+            verificationId: verificationId,
+            owner: owner,
+            attemptEpoch: attemptEpoch,
+          ));
+        },
+      );
+      final challenge = await completer.future.timeout(
+        const Duration(seconds: 75),
+        onTimeout: () => throw const PhoneVerificationException(
+          PhoneVerificationFailure.outcomeUnknown,
+        ),
+      );
+      await _requirePhoneVerificationOwner(owner);
+      if (attemptEpoch != _phoneVerificationAttemptGeneration) {
+        throw const PhoneVerificationException(
+          PhoneVerificationFailure.principalChanged,
+        );
+      }
+      return challenge;
+    } on PhoneVerificationException {
+      rethrow;
+    } on FirebaseAuthException catch (error) {
+      throw _phoneVerificationException(error);
+    } catch (error) {
+      debugPrint('[AuthService] phone verification request failed: $error');
+      throw const PhoneVerificationException(
+        PhoneVerificationFailure.network,
+      );
+    }
+  }
+
+  static Future<void> confirmPhoneVerification({
+    required AuthSessionOwner owner,
+    required PhoneVerificationChallenge challenge,
+    required String smsCode,
+  }) async {
+    if (!identical(challenge.owner, owner) ||
+        challenge.attemptEpoch != _phoneVerificationAttemptGeneration) {
+      throw const PhoneVerificationException(
+        PhoneVerificationFailure.principalChanged,
+      );
+    }
+    await _requirePhoneVerificationOwner(owner);
+    final verificationId = challenge.verificationId?.trim() ?? '';
+    final code = smsCode.trim();
+    if (challenge.automaticallyVerified) return;
+    if (verificationId.isEmpty || !RegExp(r'^\d{6}$').hasMatch(code)) {
+      throw const PhoneVerificationException(
+        PhoneVerificationFailure.invalidCode,
+      );
+    }
+    try {
+      await _confirmPhoneCredential(
+        owner: owner,
+        attemptEpoch: challenge.attemptEpoch,
+        phoneNumber: challenge.phoneNumber,
+        credential: PhoneAuthProvider.credential(
+          verificationId: verificationId,
+          smsCode: code,
+        ),
+      );
+    } on PhoneVerificationException {
+      rethrow;
+    } on FirebaseAuthException catch (error) {
+      throw _phoneVerificationException(error);
+    } catch (error) {
+      debugPrint('[AuthService] phone verification confirm failed: $error');
+      throw const PhoneVerificationException(
+        PhoneVerificationFailure.network,
+      );
+    }
+  }
+
+  static Future<void> _confirmPhoneCredential({
+    required AuthSessionOwner owner,
+    required int attemptEpoch,
+    required String phoneNumber,
+    required PhoneAuthCredential credential,
+  }) =>
+      _providerSdkMutationQueue.run(() => _confirmPhoneCredentialOwned(
+            owner: owner,
+            attemptEpoch: attemptEpoch,
+            phoneNumber: phoneNumber,
+            credential: credential,
+          ));
+
+  static Future<void> _confirmPhoneCredentialOwned({
+    required AuthSessionOwner owner,
+    required int attemptEpoch,
+    required String phoneNumber,
+    required PhoneAuthCredential credential,
+  }) async {
+    String? signedInUid;
+    int? sdkOperationEpoch;
+    var remoteConfirmed = false;
+    var localIdentityCleanupFailed = false;
+    try {
+      await _requirePhoneVerificationOwner(owner);
+      if (attemptEpoch != _phoneVerificationAttemptGeneration) {
+        throw const PhoneVerificationException(
+          PhoneVerificationFailure.principalChanged,
+        );
+      }
+      sdkOperationEpoch = ++_providerSdkOperationGeneration;
+      final signedIn = await FirebaseAuth.instance.signInWithCredential(
+        credential,
+      );
+      signedInUid = signedIn.user?.uid;
+      await _requirePhoneVerificationOwner(owner);
+      if (attemptEpoch != _phoneVerificationAttemptGeneration) {
+        throw const PhoneVerificationException(
+          PhoneVerificationFailure.principalChanged,
+        );
+      }
+      final firebaseIdToken = await signedIn.user?.getIdToken(true);
+      if (attemptEpoch != _phoneVerificationAttemptGeneration) {
+        throw const PhoneVerificationException(
+          PhoneVerificationFailure.principalChanged,
+        );
+      }
+      if (firebaseIdToken == null || firebaseIdToken.length < 100) {
+        throw const PhoneVerificationException(
+          PhoneVerificationFailure.invalidToken,
+        );
+      }
+      await _requirePhoneVerificationOwner(owner);
+      final access = await accessTokenForOwner(owner);
+      if (access == null || access.isEmpty) {
+        await _requirePhoneVerificationOwner(owner);
+        throw const PhoneVerificationException(
+          PhoneVerificationFailure.sessionExpired,
+        );
+      }
+      await _requirePhoneVerificationOwner(owner);
+      if (attemptEpoch != _phoneVerificationAttemptGeneration) {
+        throw const PhoneVerificationException(
+          PhoneVerificationFailure.principalChanged,
+        );
+      }
+      final response = await BackendHttp.requestJson(
+        method: 'POST',
+        path: '/auth/phone-verification/confirm',
+        accessToken: access,
+        body: {
+          'phoneNumber': phoneNumber,
+          'firebaseIdToken': firebaseIdToken,
+        },
+      );
+      if (response['verified'] != true) {
+        throw const PhoneVerificationException(
+          PhoneVerificationFailure.outcomeUnknown,
+        );
+      }
+      remoteConfirmed = true;
+      if (!await isSessionOwnerDefinitelyCurrent(owner) ||
+          attemptEpoch != _phoneVerificationAttemptGeneration) {
+        throw const PhoneVerificationException(
+          PhoneVerificationFailure.principalChanged,
+          remoteAcceptedOrConfirmed: true,
+        );
+      }
+    } on BackendException catch (error) {
+      final failure = classifyPhoneBackendFailure(error);
+      throw PhoneVerificationException(failure);
+    } finally {
+      try {
+        if (sdkOperationEpoch != null &&
+            signedInUid != null &&
+            shouldCleanUpPhoneIdentity(
+              // UI/SMS expiry does not transfer ownership of acquired SDK state.
+              // The independent SDK epoch is protected through awaited sign-out.
+              attemptEpoch: sdkOperationEpoch,
+              currentAttemptEpoch: _providerSdkOperationGeneration,
+              signedInUid: signedInUid,
+              currentUid: FirebaseAuth.instance.currentUser?.uid,
+            )) {
+          await FirebaseAuth.instance.signOut();
+          localIdentityCleanupFailed =
+              FirebaseAuth.instance.currentUser?.uid == signedInUid;
+        }
+      } catch (_) {
+        localIdentityCleanupFailed = true;
+      }
+      if (localIdentityCleanupFailed) {
+        throw PhoneVerificationException(
+          remoteConfirmed
+              ? PhoneVerificationFailure.confirmedLocalIdentityCleanupFailed
+              : PhoneVerificationFailure.localIdentityCleanupFailed,
+          remoteAcceptedOrConfirmed: remoteConfirmed,
+        );
+      }
+    }
+  }
+
+  static Future<void> _requirePhoneVerificationOwner(
+    AuthSessionOwner owner,
+  ) async {
+    if (!await isSessionOwnerDefinitelyCurrent(owner)) {
+      throw const PhoneVerificationException(
+        PhoneVerificationFailure.principalChanged,
+      );
+    }
+  }
+
+  @visibleForTesting
+  static PhoneVerificationFailure classifyPhoneBackendFailure(
+    BackendException error,
+  ) {
+    const allowed = <int, Map<String, PhoneVerificationFailure>>{
+      400: <String, PhoneVerificationFailure>{
+        'invalid_phone': PhoneVerificationFailure.invalidPhone,
+      },
+      401: <String, PhoneVerificationFailure>{
+        'invalid_phone_verification_token':
+            PhoneVerificationFailure.invalidToken,
+        'invalid_phone_verification_provider':
+            PhoneVerificationFailure.invalidToken,
+        'authentication_required': PhoneVerificationFailure.sessionExpired,
+        'invalid_or_expired_session': PhoneVerificationFailure.sessionExpired,
+        'account_not_active': PhoneVerificationFailure.sessionExpired,
+      },
+      404: <String, PhoneVerificationFailure>{
+        'user_not_found': PhoneVerificationFailure.sessionExpired,
+      },
+      409: <String, PhoneVerificationFailure>{
+        'phone_already_verified': PhoneVerificationFailure.phoneAlreadyVerified,
+        'phone_identity_cleanup_unsafe': PhoneVerificationFailure.unavailable,
+      },
+      422: <String, PhoneVerificationFailure>{
+        'phone_verification_mismatch': PhoneVerificationFailure.phoneMismatch,
+      },
+      429: <String, PhoneVerificationFailure>{
+        'rate_limit_exceeded': PhoneVerificationFailure.rateLimited,
+      },
+      503: <String, PhoneVerificationFailure>{
+        'phone_verification_unavailable': PhoneVerificationFailure.unavailable,
+      },
+      502: <String, PhoneVerificationFailure>{
+        'phone_identity_cleanup_failed': PhoneVerificationFailure.unavailable,
+      },
+    };
+    return allowed[error.statusCode]?[error.code] ??
+        PhoneVerificationFailure.outcomeUnknown;
+  }
+
+  @visibleForTesting
+  static bool shouldCleanUpPhoneIdentity({
+    required int attemptEpoch,
+    required int currentAttemptEpoch,
+    required String? signedInUid,
+    required String? currentUid,
+  }) =>
+      attemptEpoch == currentAttemptEpoch &&
+      signedInUid != null &&
+      signedInUid.isNotEmpty &&
+      currentUid == signedInUid;
+
+  static String? normalizePhoneNumber(String value) {
+    final compact = value
+        .trim()
+        .replaceAll(RegExp(r'[\s().-]'), '')
+        .replaceFirst(RegExp(r'^00'), '+');
+    return RegExp(r'^\+[1-9][0-9]{7,14}$').hasMatch(compact) ? compact : null;
+  }
+
+  static PhoneVerificationException _phoneVerificationException(
+    FirebaseAuthException error,
+  ) {
+    final failure = switch (error.code) {
+      'invalid-phone-number' => PhoneVerificationFailure.invalidPhone,
+      'invalid-verification-code' ||
+      'session-expired' ||
+      'missing-verification-code' =>
+        PhoneVerificationFailure.invalidCode,
+      'too-many-requests' ||
+      'quota-exceeded' =>
+        PhoneVerificationFailure.rateLimited,
+      'operation-not-allowed' ||
+      'app-not-authorized' ||
+      'missing-client-identifier' ||
+      'captcha-check-failed' =>
+        PhoneVerificationFailure.unavailable,
+      'network-request-failed' => PhoneVerificationFailure.network,
+      _ => PhoneVerificationFailure.network,
+    };
+    return PhoneVerificationException(failure);
   }
 
   static Future<String?> refreshAccessToken() async {
     if (!BackendConfig.enabled) return null;
+    if (_sessionClearing) return null;
     final inFlight = _refreshInFlight;
     if (inFlight != null) return inFlight;
-    final refresh = _performAccessTokenRefresh();
+    final refresh = _performAccessTokenRefresh(_sessionGeneration);
     _refreshInFlight = refresh;
     try {
       return await refresh;
@@ -304,44 +1327,818 @@ class AuthService {
     }
   }
 
-  static Future<String?> _performAccessTokenRefresh() async {
+  static Future<String?> _performAccessTokenRefresh(
+      int expectedGeneration) async {
+    if (_sessionClearing || expectedGeneration != _sessionGeneration) {
+      return null;
+    }
     final session = await readSession();
     final refreshToken = session?.refreshToken;
     if (refreshToken == null || refreshToken.isEmpty) return null;
+    final owner = captureSessionOwner(session!);
     try {
       final response = await BackendHttp.requestJson(
         method: 'POST',
         path: '/auth/refresh',
         body: {'refreshToken': refreshToken},
       );
-      final refreshed = await _saveRemoteSession(response);
+      final refreshed = await _saveRemoteSession(
+        response,
+        expectedGeneration: expectedGeneration,
+      );
       return refreshed.accessToken;
+    } on _DiscardedRefreshResult {
+      return null;
     } catch (error) {
       debugPrint('[AuthService] refresh failed: $error');
-      await BackendRealtimeService.disconnect();
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_sessionKey);
+      if (shouldClearStoredSessionAfterRefreshFailure(error)) {
+        await clearSessionOwnerIfMatches(owner);
+      } else if (await isSessionOwnerDefinitelyCurrent(owner)) {
+        await BackendRealtimeService.disconnect();
+      }
       return null;
     }
   }
 
+  @visibleForTesting
+  static bool shouldClearStoredSessionAfterRefreshFailure(Object error) {
+    return error is BackendException && error.statusCode == 401;
+  }
+
   static Future<AuthResult> signInWithSocialProvider(
-    AuthSocialProvider provider,
+    AuthSocialProvider provider, {
+    bool termsAccepted = false,
+    bool privacyAccepted = false,
+    bool minimumAgeConfirmed = false,
+    bool privateUseConfirmed = false,
+    String? registrationActionLabel,
+    int? expectedSessionEpoch,
+    bool Function()? isActionCurrent,
+  }) {
+    final capturedEpoch = expectedSessionEpoch ?? _sessionGeneration;
+    if (!BackendConfig.enabled) {
+      return Future.value(
+          const AuthResult.failure(AuthFailure.providerUnavailable));
+    }
+    if (!_authAttemptPreflightCurrent(capturedEpoch, isActionCurrent)) {
+      return Future.value(
+          const AuthResult.failure(AuthFailure.principalChanged));
+    }
+    if (!socialProviderEnabled(provider)) {
+      return Future.value(
+          const AuthResult.failure(AuthFailure.providerUnavailable));
+    }
+    return _providerSdkMutationQueue.run(() => _signInWithSocialProviderOwned(
+          provider,
+          termsAccepted: termsAccepted,
+          privacyAccepted: privacyAccepted,
+          minimumAgeConfirmed: minimumAgeConfirmed,
+          privateUseConfirmed: privateUseConfirmed,
+          registrationActionLabel: registrationActionLabel,
+          expectedSessionEpoch: capturedEpoch,
+          isActionCurrent: isActionCurrent,
+        ));
+  }
+
+  static Future<AuthResult> _signInWithSocialProviderOwned(
+    AuthSocialProvider provider, {
+    required bool termsAccepted,
+    required bool privacyAccepted,
+    required bool minimumAgeConfirmed,
+    required bool privateUseConfirmed,
+    String? registrationActionLabel,
+    required int expectedSessionEpoch,
+    required bool Function()? isActionCurrent,
+  }) async {
+    if (!_authAttemptPreflightCurrent(expectedSessionEpoch, isActionCurrent)) {
+      return const AuthResult.failure(AuthFailure.principalChanged);
+    }
+    if (!socialProviderEnabled(provider)) {
+      return const AuthResult.failure(AuthFailure.providerUnavailable);
+    }
+    if (kIsWeb && provider == AuthSocialProvider.apple) {
+      return _signInWithWebAppleOwned(
+        expectedSessionEpoch: expectedSessionEpoch,
+        isActionCurrent: isActionCurrent,
+      );
+    }
+    final sdkOperationEpoch = ++_providerSdkOperationGeneration;
+    final acquisition = _SocialSdkAcquisition();
+    try {
+      return await RemoteAuthAttemptTransaction<String, Map<String, dynamic>,
+              AuthResult>()
+          .run(
+        preflightCurrent: () => _authAttemptPreflightCurrent(
+          expectedSessionEpoch,
+          isActionCurrent,
+        ),
+        actionCurrent: () => _authAttemptActionCurrent(isActionCurrent),
+        acquire: () => _firebaseSocialIdToken(
+          provider,
+          acquisition: acquisition,
+          requireCurrent: () {
+            if (!_authAttemptPreflightCurrent(
+                expectedSessionEpoch, isActionCurrent)) {
+              throw const RemoteAuthAttemptSuperseded();
+            }
+          },
+        ),
+        invokeRemote: (idToken) => BackendHttp.requestJson(
+          method: 'POST',
+          path: '/auth/social',
+          body: {
+            'idToken': idToken,
+            if (provider == AuthSocialProvider.apple &&
+                acquisition.appleAuthorizationCode != null)
+              'appleAuthorizationCode': acquisition.appleAuthorizationCode,
+            'termsAccepted': termsAccepted,
+            'privacyAccepted': privacyAccepted,
+            'minimumAgeConfirmed': minimumAgeConfirmed,
+            'privateUseConfirmed': privateUseConfirmed,
+            'registrationActionLabel': registrationActionLabel ??
+                (provider == AuthSocialProvider.facebook
+                    ? 'Mit Facebook anmelden'
+                    : 'Mit ${provider.name[0].toUpperCase()}${provider.name.substring(1)} registrieren'),
+          },
+        ),
+        persist: (response) async {
+          AuthSession? session;
+          final rawSession = response['session'];
+          if (rawSession is Map) {
+            session = await _saveRemoteSession(
+              Map<String, dynamic>.from(rawSession),
+              expectedGeneration: expectedSessionEpoch,
+            );
+          }
+          final challenge = _parseMfaChallenge(response);
+          if (response['mfaRequired'] == true) {
+            if (challenge == null) {
+              throw const BackendException(502, 'invalid_mfa_challenge');
+            }
+            return AuthResult.mfaRequired(challenge);
+          }
+          if (response['accepted'] == true &&
+              response['verificationEmailSent'] == true) {
+            return AuthResult.success(
+              session: session,
+              verificationEmailSent: true,
+              verificationPending: response['verificationPending'] == true,
+              pendingEmail: response['email']?.toString().trim().toLowerCase(),
+            );
+          }
+          return AuthResult.success(
+            session: session ??
+                await _saveRemoteSession(
+                  response,
+                  expectedGeneration: expectedSessionEpoch,
+                ),
+            verificationPending: response['verificationPending'] == true ||
+                (response['user'] is Map &&
+                    (response['user'] as Map)['emailVerified'] != true),
+          );
+        },
+        discardRemote: _discardIssuedRemoteSession,
+        persistedCurrent: _authResultSessionDefinitelyCurrent,
+        discardPersisted: _discardPersistedAuthResult,
+      );
+    } on RemoteAuthAttemptSuperseded {
+      return const AuthResult.failure(AuthFailure.principalChanged);
+    } on _DiscardedRefreshResult {
+      return AuthResult.failure(
+        _authAttemptPreflightCurrent(
+          expectedSessionEpoch,
+          isActionCurrent,
+        )
+            ? AuthFailure.network
+            : AuthFailure.principalChanged,
+      );
+    } on _SocialSignInCancelled {
+      return const AuthResult.failure(AuthFailure.socialCancelled);
+    } on _SocialProviderUnavailable catch (error) {
+      if (!_authAttemptPreflightCurrent(
+        expectedSessionEpoch,
+        isActionCurrent,
+      )) {
+        return const AuthResult.failure(AuthFailure.principalChanged);
+      }
+      debugPrint(
+          '[AuthService] social acquisition failed: ${error.failure.name}');
+      return AuthResult.failure(error.failure);
+    } on BackendException catch (error) {
+      if (!_authAttemptPreflightCurrent(
+        expectedSessionEpoch,
+        isActionCurrent,
+      )) {
+        return const AuthResult.failure(AuthFailure.principalChanged);
+      }
+      final failure = classifySocialBackendError(error.code);
+      debugPrint('[AuthService] social exchange failed: ${failure.name}');
+      return AuthResult.failure(failure);
+    } catch (_) {
+      if (!_authAttemptPreflightCurrent(
+        expectedSessionEpoch,
+        isActionCurrent,
+      )) {
+        return const AuthResult.failure(AuthFailure.principalChanged);
+      }
+      debugPrint('[AuthService] social sign-in failed');
+      return const AuthResult.failure(AuthFailure.network);
+    } finally {
+      try {
+        if (acquisition.firebaseUid != null &&
+            shouldCleanUpPhoneIdentity(
+              attemptEpoch: sdkOperationEpoch,
+              currentAttemptEpoch: _providerSdkOperationGeneration,
+              signedInUid: acquisition.firebaseUid,
+              currentUid: FirebaseAuth.instance.currentUser?.uid,
+            )) {
+          await FirebaseAuth.instance.signOut();
+        }
+      } catch (_) {}
+      try {
+        switch (provider) {
+          case AuthSocialProvider.google:
+            if (acquisition.googleAcquired) {
+              await GoogleSignIn.instance.signOut();
+            }
+          case AuthSocialProvider.facebook:
+            if (acquisition.facebookAcquired) {
+              await FacebookAuth.instance.logOut();
+            }
+          case AuthSocialProvider.apple:
+            break;
+        }
+      } catch (_) {
+        // The ShareItToo session is already authoritative. Provider cleanup
+        // is best effort so an SDK logout problem cannot undo a safe login.
+      }
+    }
+  }
+
+  static Future<AuthResult> _signInWithWebAppleOwned({
+    required int expectedSessionEpoch,
+    required bool Function()? isActionCurrent,
+  }) async {
+    final sdkOperationEpoch = ++_providerSdkOperationGeneration;
+    final acquisition = _SocialSdkAcquisition();
+    void requireCurrent() {
+      if (!_authAttemptPreflightCurrent(
+          expectedSessionEpoch, isActionCurrent)) {
+        throw const RemoteAuthAttemptSuperseded();
+      }
+    }
+
+    try {
+      await FirebaseRuntime.ensureFirebaseApp();
+      requireCurrent();
+      final direct = FirebaseRuntimeConfig.webAuthSelection.appleDirect;
+      if (!FirebaseRuntime.webAppleReady ||
+          direct == null ||
+          Firebase.apps.isEmpty) {
+        throw const _SocialProviderUnavailable();
+      }
+      return await RemoteAuthAttemptTransaction<AppleWebV2Material,
+              Map<String, dynamic>, AuthResult>()
+          .run(
+        preflightCurrent: () => _authAttemptPreflightCurrent(
+          expectedSessionEpoch,
+          isActionCurrent,
+        ),
+        actionCurrent: () => _authAttemptActionCurrent(isActionCurrent),
+        acquire: () => acquireWebAppleMaterial(
+          config: direct,
+          available: () => FirebaseRuntime.webAppleReady,
+          requireCurrent: requireCurrent,
+          popup: openConfiguredWebApplePopup,
+          signInToFirebase: (appleIdToken, rawNonce) async {
+            requireCurrent();
+            final credential = await FirebaseAuth.instance.signInWithCredential(
+              OAuthProvider('apple.com').credential(
+                idToken: appleIdToken,
+                rawNonce: rawNonce,
+              ),
+            );
+            final user = credential.user;
+            if (user == null) {
+              throw const WebAppleAuthFailure('missing_firebase_user');
+            }
+            return WebAppleFirebaseIdentity(
+              uid: user.uid,
+              readFreshToken: () async {
+                final result = await user.getIdTokenResult(true);
+                return WebAppleFirebaseToken(
+                  token: result.token,
+                  signInProvider: result.signInProvider,
+                );
+              },
+            );
+          },
+          currentFirebaseUid: () => FirebaseAuth.instance.currentUser?.uid,
+          acquired: (uid) => acquisition.firebaseUid = uid,
+        ),
+        invokeRemote: (material) => exchangeAppleWebV2(
+          material: material,
+          request: (body) => BackendHttp.requestJsonResponse(
+            method: 'POST',
+            path: '/auth/social',
+            body: body,
+          ),
+          createOpaqueId: createAppleWebOpaqueId,
+          requireCurrent: requireCurrent,
+        ),
+        persist: (response) async {
+          final rawSession = response['session'];
+          if (rawSession is Map) {
+            return AuthResult.success(
+              session: await _saveRemoteSession(
+                Map<String, dynamic>.from(rawSession),
+                expectedGeneration: expectedSessionEpoch,
+              ),
+            );
+          }
+          final challenge = _parseMfaChallenge(response);
+          if (response['mfaRequired'] == true && challenge != null) {
+            return AuthResult.mfaRequired(challenge);
+          }
+          throw const BackendException(502, 'invalid_apple_session_response');
+        },
+        discardRemote: _discardAppleIssuedRemoteSession,
+        persistedCurrent: _authResultSessionDefinitelyCurrent,
+        discardPersisted: _discardPersistedAuthResult,
+      );
+    } on RemoteAuthAttemptSuperseded {
+      return const AuthResult.failure(AuthFailure.principalChanged);
+    } on WebAppleAuthFailure catch (error) {
+      if (error.cancelled) {
+        return const AuthResult.failure(AuthFailure.socialCancelled);
+      }
+      if (error.code == 'popup_blocked') {
+        return const AuthResult.failure(AuthFailure.socialPopupBlocked);
+      }
+      return const AuthResult.failure(AuthFailure.providerUnavailable);
+    } on AppleWebV2Failure catch (error) {
+      return AuthResult.failure(classifySocialBackendError(error.code));
+    } on BackendException catch (error) {
+      return AuthResult.failure(classifySocialBackendError(error.code));
+    } on _DiscardedRefreshResult {
+      return const AuthResult.failure(AuthFailure.network);
+    } catch (_) {
+      return _authAttemptPreflightCurrent(expectedSessionEpoch, isActionCurrent)
+          ? const AuthResult.failure(AuthFailure.network)
+          : const AuthResult.failure(AuthFailure.principalChanged);
+    } finally {
+      try {
+        if (acquisition.firebaseUid != null &&
+            shouldCleanUpPhoneIdentity(
+              attemptEpoch: sdkOperationEpoch,
+              currentAttemptEpoch: _providerSdkOperationGeneration,
+              signedInUid: acquisition.firebaseUid,
+              currentUid: FirebaseAuth.instance.currentUser?.uid,
+            )) {
+          await FirebaseAuth.instance.signOut();
+        }
+      } catch (_) {}
+    }
+  }
+
+  @visibleForTesting
+  static AuthFailure classifySocialBackendError(String code) => switch (code) {
+        'staging_account_not_allowlisted' ||
+        'staging_google_identity_not_allowlisted' =>
+          AuthFailure.pilotAccountDenied,
+        'staging_registration_disabled' => AuthFailure.pilotRegistrationClosed,
+        'facebook_login_only' => AuthFailure.pilotAccountDenied,
+        'staging_google_identity_conflict' ||
+        'social_identity_conflict' ||
+        'social_identity_changed' =>
+          AuthFailure.socialIdentityConflict,
+        'invalid_social_token' ||
+        'staging_google_registration_replay' =>
+          AuthFailure.socialTokenInvalid,
+        'mfa_required' ||
+        'mfa_reauthentication_required' =>
+          AuthFailure.mfaRequired,
+        'mfa_code_invalid' => AuthFailure.mfaCodeRejected,
+        'mfa_temporarily_locked' => AuthFailure.mfaLocked,
+        'mfa_challenge_expired' => AuthFailure.mfaChallengeExpired,
+        'mfa_challenge_invalid' ||
+        'invalid_mfa_challenge' =>
+          AuthFailure.mfaChallengeInvalid,
+        'social_registration_consents_required' ||
+        'registration_action_label_required' ||
+        'registration_action_label_mismatch' =>
+          AuthFailure.consentRequired,
+        'social_email_required' => AuthFailure.socialEmailRequired,
+        'social_email_verification_required' =>
+          AuthFailure.socialEmailVerificationRequired,
+        'social_provider_already_linked' =>
+          AuthFailure.socialProviderAlreadyLinked,
+        'social_account_link_requires_reauthentication' =>
+          AuthFailure.socialAccountLinkRequiresReauthentication,
+        'unsupported_social_provider' ||
+        'social_auth_unavailable' ||
+        'apple_revocation_unavailable' ||
+        'apple_revocation_exchange_unavailable' ||
+        'apple_revocation_exchange_claim_lost' ||
+        'apple_ownership_unavailable' ||
+        'apple_ownership_paused' ||
+        'apple_ownership_provider_unavailable' ||
+        'apple_ownership_receipt_expired' ||
+        'apple_ownership_status_rate_limited' ||
+        'apple_ownership_binding_unavailable' ||
+        'apple_ownership_coordination_unavailable' ||
+        'apple_ownership_crypto_unavailable' ||
+        'apple_ownership_delivery_unavailable' ||
+        'apple_ownership_material_unreadable' ||
+        'apple_ownership_profile_unavailable' ||
+        'apple_ownership_upgrade_required' =>
+          AuthFailure.providerUnavailable,
+        'apple_ownership_not_eligible' => AuthFailure.pilotAccountDenied,
+        'apple_ownership_status_unavailable' ||
+        'apple_ownership_pending' ||
+        'apple_attempt_unavailable' ||
+        'apple_ownership_deadline_elapsed' ||
+        'apple_ownership_unresolved' ||
+        'apple_ownership_exchange_unresolved' ||
+        'apple_ownership_cleanup_required' ||
+        'apple_session_delivery_unavailable' ||
+        'apple_session_delivery_uncertain' =>
+          AuthFailure.appleOwnershipUnresolved,
+        'apple_ownership_principal_conflict' ||
+        'apple_ownership_closed' ||
+        'apple_ownership_request_conflict' ||
+        'apple_authorization_code_reused' ||
+        'apple_ownership_material_conflict' ||
+        'apple_ownership_late_material_conflict' ||
+        'apple_ownership_not_ready' ||
+        'apple_delivery_superseded' ||
+        'apple_session_delivery_exhausted' =>
+          AuthFailure.socialIdentityConflict,
+        'account_not_active' => AuthFailure.accountNotActive,
+        _ => AuthFailure.network,
+      };
+
+  /// Only typed SDK codes are evidence; descriptions/custom data are discarded.
+  @visibleForTesting
+  static AuthFailure classifySocialProviderError(Object error) {
+    if (error is WebGoogleAuthFailure) {
+      return switch (error.code) {
+        'popup_cancelled' => AuthFailure.socialCancelled,
+        'popup_blocked' => AuthFailure.socialPopupBlocked,
+        'network_request_failed' => AuthFailure.network,
+        _ => AuthFailure.providerUnavailable,
+      };
+    }
+    if (error is GoogleSignInException) {
+      return error.code == GoogleSignInExceptionCode.canceled
+          ? AuthFailure.socialCancelled
+          : AuthFailure.providerUnavailable;
+    }
+    if (error is FirebaseAuthException) {
+      return switch (error.code) {
+        'popup-closed-by-user' ||
+        'cancelled-popup-request' ||
+        'web-context-cancelled' ||
+        'canceled' =>
+          AuthFailure.socialCancelled,
+        'popup-blocked' => AuthFailure.socialPopupBlocked,
+        'network-request-failed' => AuthFailure.network,
+        _ => AuthFailure.providerUnavailable,
+      };
+    }
+    return AuthFailure.providerUnavailable;
+  }
+
+  static Future<String> _firebaseSocialIdToken(
+    AuthSocialProvider provider, {
+    required _SocialSdkAcquisition acquisition,
+    required void Function() requireCurrent,
+  }) async {
+    requireCurrent();
+    if (!socialProviderEnabled(provider)) {
+      throw const _SocialProviderUnavailable();
+    }
+    if (kIsWeb) {
+      if (provider == AuthSocialProvider.facebook) {
+        try {
+          return await acquireWebFacebookToken(
+            auth: FirebaseAuth.instance,
+            available: () => FirebaseRuntime.webFacebookConfigurationReady,
+            requireCurrent: requireCurrent,
+            acquired: (uid) => acquisition.firebaseUid = uid,
+          );
+        } on WebFacebookAuthFailure catch (error) {
+          if (error.cancelled) throw const _SocialSignInCancelled();
+          throw const _SocialProviderUnavailable();
+        } on RemoteAuthAttemptSuperseded {
+          rethrow;
+        } catch (_) {
+          // Includes SDK-instance acquisition failures before the adapter.
+          throw const _SocialProviderUnavailable();
+        }
+      }
+      try {
+        return await acquireWebGoogleToken(
+          available: provider == AuthSocialProvider.google &&
+              FirebaseRuntime.webGoogleReady,
+          requireCurrent: requireCurrent,
+          popup: () async {
+            final credential = await FirebaseAuth.instance.signInWithPopup(
+              GoogleAuthProvider()
+                ..setCustomParameters({'prompt': 'select_account'}),
+            );
+            final user = credential.user;
+            if (user == null) {
+              throw const WebGoogleAuthFailure('missing_firebase_user');
+            }
+            return WebGoogleIdentity(
+                uid: user.uid, readFreshIdToken: () => user.getIdToken(true));
+          },
+          currentFirebaseUid: () => FirebaseAuth.instance.currentUser?.uid,
+          acquired: (uid) => acquisition.firebaseUid = uid,
+          providerErrorCode: (error) =>
+              error is FirebaseAuthException ? error.code : null,
+        );
+      } on WebGoogleAuthFailure catch (error) {
+        if (error.cancelled) throw const _SocialSignInCancelled();
+        throw _SocialProviderUnavailable(classifySocialProviderError(error));
+      }
+    }
+    await FirebaseRuntime.ensureFirebaseApp();
+    requireCurrent();
+    if (Firebase.apps.isEmpty) throw const _SocialProviderUnavailable();
+    try {
+      UserCredential credential;
+      switch (provider) {
+        case AuthSocialProvider.google:
+          _googleInitialization ??= GoogleSignIn.instance.initialize();
+          await _googleInitialization;
+          requireCurrent();
+          final account = await GoogleSignIn.instance.authenticate();
+          acquisition.googleAcquired = true;
+          requireCurrent();
+          final providerCredential = GoogleAuthProvider.credential(
+            idToken: account.authentication.idToken,
+          );
+          credential = await FirebaseAuth.instance.signInWithCredential(
+            providerCredential,
+          );
+        case AuthSocialProvider.apple:
+          final appleProvider = AppleAuthProvider()
+            ..addScope('email')
+            ..addScope('name');
+          credential = await FirebaseAuth.instance.signInWithProvider(
+            appleProvider,
+          );
+        case AuthSocialProvider.facebook:
+          final login = await FacebookAuth.instance.login(
+            permissions: const ['email', 'public_profile'],
+          );
+          if (login.status == LoginStatus.cancelled) {
+            throw const _SocialSignInCancelled();
+          }
+          final facebookToken = login.accessToken;
+          if (login.status != LoginStatus.success || facebookToken == null) {
+            throw const _SocialProviderUnavailable();
+          }
+          acquisition.facebookAcquired = true;
+          requireCurrent();
+          final providerCredential = switch (facebookToken) {
+            LimitedToken() => OAuthProvider('facebook.com').credential(
+                idToken: facebookToken.tokenString,
+                rawNonce: facebookToken.nonce,
+                signInMethod: 'facebook.com',
+              ),
+            _ => FacebookAuthProvider.credential(facebookToken.tokenString),
+          };
+          credential = await FirebaseAuth.instance.signInWithCredential(
+            providerCredential,
+          );
+      }
+      acquisition.firebaseUid = credential.user?.uid;
+      requireCurrent();
+      if (provider == AuthSocialProvider.apple) {
+        final authorizationCode =
+            credential.additionalUserInfo?.authorizationCode?.trim();
+        if (authorizationCode == null || authorizationCode.isEmpty) {
+          throw const _SocialProviderUnavailable();
+        }
+        acquisition.appleAuthorizationCode = authorizationCode;
+        requireCurrent();
+      }
+      final token = await credential.user?.getIdToken(true);
+      if (token == null || token.isEmpty) {
+        throw const _SocialProviderUnavailable();
+      }
+      return token;
+    } on GoogleSignInException catch (error) {
+      throw _SocialProviderUnavailable(classifySocialProviderError(error));
+    } on FirebaseAuthException catch (error) {
+      throw _SocialProviderUnavailable(classifySocialProviderError(error));
+    } on UnsupportedError {
+      throw const _SocialProviderUnavailable();
+    }
+  }
+
+  static AuthMfaChallenge? _parseMfaChallenge(
+    Map<String, dynamic> response,
+  ) {
+    final raw = response['mfaChallenge']?.toString() ?? '';
+    final expiry = DateTime.tryParse(response['expiresAt']?.toString() ?? '');
+    if (raw.length < 32 ||
+        raw.length > 200 ||
+        expiry == null ||
+        !expiry.isAfter(DateTime.now())) {
+      return null;
+    }
+    return AuthMfaChallenge(challenge: raw, expiresAt: expiry);
+  }
+
+  /// Completes a server-issued login challenge without persisting the
+  /// challenge or factor code. The new session is persisted only after the
+  /// exact no-session epoch and UI action remain current.
+  static Future<AuthResult> completeMfaChallenge({
+    required AuthMfaChallenge challenge,
+    required String code,
+    required int expectedSessionEpoch,
+    bool Function()? isActionCurrent,
+  }) async {
+    if (!_authAttemptPreflightCurrent(expectedSessionEpoch, isActionCurrent)) {
+      return const AuthResult.failure(AuthFailure.principalChanged);
+    }
+    try {
+      final response = await BackendHttp.requestJson(
+        method: 'POST',
+        path: '/auth/mfa/challenge',
+        body: {'mfaChallenge': challenge.challenge, 'code': code},
+      );
+      if (!_authAttemptActionCurrent(isActionCurrent) ||
+          expectedSessionEpoch != _sessionGeneration) {
+        return const AuthResult.failure(AuthFailure.principalChanged);
+      }
+      final session = await _saveRemoteSession(
+        response,
+        expectedGeneration: expectedSessionEpoch,
+      );
+      final user = response['user'];
+      final result = AuthResult.success(
+        session: session,
+        verificationPending: user is Map && user['emailVerified'] != true,
+      );
+      if (!_authAttemptActionCurrent(isActionCurrent) ||
+          !await _authResultSessionDefinitelyCurrent(result)) {
+        await _discardPersistedAuthResult(result);
+        return const AuthResult.failure(AuthFailure.principalChanged);
+      }
+      return result;
+    } on BackendException catch (error) {
+      if (!_authAttemptPreflightCurrent(
+          expectedSessionEpoch, isActionCurrent)) {
+        return const AuthResult.failure(AuthFailure.principalChanged);
+      }
+      if (error.statusCode == 429 || error.code == 'mfa_temporarily_locked') {
+        return const AuthResult.failure(AuthFailure.mfaLocked);
+      }
+      if (error.statusCode == 401 && error.code == 'mfa_code_invalid') {
+        return const AuthResult.failure(AuthFailure.mfaCodeRejected);
+      }
+      if (error.code == 'mfa_challenge_expired') {
+        return const AuthResult.failure(AuthFailure.mfaChallengeExpired);
+      }
+      if (error.code == 'mfa_challenge_invalid') {
+        return const AuthResult.failure(AuthFailure.mfaChallengeInvalid);
+      }
+      return const AuthResult.failure(AuthFailure.network);
+    } catch (_) {
+      if (!_authAttemptPreflightCurrent(
+          expectedSessionEpoch, isActionCurrent)) {
+        return const AuthResult.failure(AuthFailure.principalChanged);
+      }
+      return const AuthResult.failure(AuthFailure.network);
+    }
+  }
+
+  /// Performs a fresh provider sign-in for MFA management and returns the
+  /// matching Firebase token only to the immediate caller. It is never stored
+  /// or logged and is cleaned up before returning.
+  static Future<String?> reauthenticateSocialProvider(
+    AuthSocialProvider provider, {
+    required AuthSessionOwner owner,
+  }) async {
+    if (!socialProviderEnabled(provider) ||
+        !await isSessionOwnerDefinitelyCurrent(owner)) {
+      return null;
+    }
+    return _providerSdkMutationQueue.run(() async {
+      final acquisition = _SocialSdkAcquisition();
+      final sdkEpoch = ++_providerSdkOperationGeneration;
+      try {
+        await _requireMfaOwner(owner);
+        final token = await _firebaseSocialIdToken(
+          provider,
+          acquisition: acquisition,
+          requireCurrent: () {
+            if (owner.epoch != _sessionGeneration) {
+              throw const RemoteAuthAttemptSuperseded();
+            }
+          },
+        );
+        await _requireMfaOwner(owner);
+        return token;
+      } finally {
+        try {
+          if (acquisition.firebaseUid != null &&
+              shouldCleanUpPhoneIdentity(
+                attemptEpoch: sdkEpoch,
+                currentAttemptEpoch: _providerSdkOperationGeneration,
+                signedInUid: acquisition.firebaseUid,
+                currentUid: FirebaseAuth.instance.currentUser?.uid,
+              )) {
+            await FirebaseAuth.instance.signOut();
+          }
+        } catch (_) {}
+        try {
+          if (acquisition.googleAcquired) await GoogleSignIn.instance.signOut();
+          if (acquisition.facebookAcquired) {
+            await FacebookAuth.instance.logOut();
+          }
+        } catch (_) {}
+      }
+    });
+  }
+
+  static Future<void> _requireMfaOwner(AuthSessionOwner owner) async {
+    if (!await isSessionOwnerDefinitelyCurrent(owner)) {
+      throw const RemoteAuthAttemptSuperseded();
+    }
+  }
+
+  static bool _authAttemptActionCurrent(bool Function()? check) {
+    if (check == null) return true;
+    try {
+      return check();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static bool _authAttemptPreflightCurrent(
+    int? expectedSessionEpoch,
+    bool Function()? isActionCurrent,
+  ) {
+    return (expectedSessionEpoch == null ||
+            expectedSessionEpoch == _sessionGeneration) &&
+        _authAttemptActionCurrent(isActionCurrent);
+  }
+
+  static Future<void> _discardIssuedRemoteSession(
+    Map<String, dynamic> response,
   ) async {
-    debugPrint(
-      '[AuthService] signInWithSocialProvider unavailable for ${provider.name}',
+    final refreshToken = response['refreshToken']?.toString() ?? '';
+    if (refreshToken.isEmpty || !BackendConfig.enabled) return;
+    await BackendHttp.requestJson(
+      method: 'POST',
+      path: '/auth/logout',
+      body: {'refreshToken': refreshToken},
     );
-    return const AuthResult.failure(AuthFailure.notImplemented);
+  }
+
+  static Future<void> _discardAppleIssuedRemoteSession(
+    Map<String, dynamic> response,
+  ) async {
+    final session = response['session'];
+    if (session is Map) {
+      await _discardIssuedRemoteSession(Map<String, dynamic>.from(session));
+    }
+  }
+
+  static Future<bool> _authResultSessionDefinitelyCurrent(
+    AuthResult result,
+  ) async {
+    final session = result.session;
+    if (session == null) return true;
+    return isSessionOwnerDefinitelyCurrent(captureSessionOwner(session));
+  }
+
+  static Future<void> _discardPersistedAuthResult(AuthResult result) async {
+    final session = result.session;
+    if (session == null) return;
+    await clearSessionOwnerIfMatches(
+      captureSessionOwner(session),
+      runLogoutCleanup: true,
+    );
   }
 
   static Future<AuthSession> _saveRemoteSession(
-    Map<String, dynamic> response,
-  ) async {
+    Map<String, dynamic> response, {
+    int? expectedGeneration,
+  }) async {
     final user = Map<String, dynamic>.from(response['user'] as Map);
     final accessToken = response['accessToken']?.toString() ?? '';
     final refreshToken = response['refreshToken']?.toString() ?? '';
+    final sessionId = response['sessionId']?.toString() ?? '';
     final expiresIn = (response['expiresIn'] as num?)?.toInt() ?? 900;
-    if (accessToken.isEmpty || refreshToken.isEmpty) {
+    if (accessToken.isEmpty || refreshToken.isEmpty || sessionId.isEmpty) {
       throw const BackendException(500, 'invalid_auth_response');
     }
     final now = DateTime.now();
@@ -351,22 +2148,160 @@ class AuthService {
       createdAt: DateTime.tryParse(user['createdAt']?.toString() ?? '') ?? now,
       accessToken: accessToken,
       refreshToken: refreshToken,
+      sessionId: sessionId,
       accessTokenExpiresAt: now.add(Duration(seconds: expiresIn)),
     );
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _sessionKey,
-      jsonEncode({
-        'userId': session.userId,
-        'email': session.email,
-        'createdAt': session.createdAt?.toIso8601String(),
-        'accessToken': session.accessToken,
-        'refreshToken': session.refreshToken,
-        'accessTokenExpiresAt': session.accessTokenExpiresAt?.toIso8601String(),
-      }),
+    final encoded = jsonEncode({
+      'userId': session.userId,
+      'email': session.email,
+      'createdAt': session.createdAt?.toIso8601String(),
+      'accessToken': session.accessToken,
+      'refreshToken': session.refreshToken,
+      'sessionId': session.sessionId,
+      'accessTokenExpiresAt': session.accessTokenExpiresAt?.toIso8601String(),
+    });
+    final persisted = await _persistSessionEncoded(
+      encoded,
+      expectedGeneration: expectedGeneration,
+      connectAccessToken: accessToken,
     );
-    await BackendRealtimeService.connect(accessToken);
+    if (!persisted) throw const _DiscardedRefreshResult();
     return session;
+  }
+
+  static Future<bool> _persistSessionEncoded(
+    String encoded, {
+    int? expectedGeneration,
+    String? connectAccessToken,
+  }) {
+    return _sessionMutationQueue.run(() async {
+      if (_sessionClearing ||
+          (expectedGeneration != null &&
+              expectedGeneration != _sessionGeneration)) {
+        return false;
+      }
+      final prefs = await SharedPreferences.getInstance();
+      final sameLogicalSession = _sameLogicalSessionIdentityEncoded(
+        prefs.getString(_sessionKey),
+        encoded,
+      );
+      final persisted = await prefs.setString(_sessionKey, encoded);
+      if (!persisted || prefs.getString(_sessionKey) != encoded) return false;
+      if (!sameLogicalSession) {
+        _sessionGeneration += 1;
+        _notifyLocalPrincipalChanged();
+      }
+      if (connectAccessToken != null && connectAccessToken.isNotEmpty) {
+        try {
+          await BackendRealtimeService.connect(connectAccessToken);
+        } catch (error) {
+          // The persisted authenticated session remains authoritative while
+          // realtime reconnects independently. A socket failure must never be
+          // reported as a failed login after durable session persistence.
+          debugPrint(
+            '[AuthService] realtime connect after session persistence failed: '
+            '${error.runtimeType}',
+          );
+        }
+      }
+      return true;
+    });
+  }
+
+  static bool _sameLogicalSessionIdentityEncoded(
+    String? previousEncoded,
+    String nextEncoded,
+  ) {
+    Map<String, dynamic>? decode(String? encoded) {
+      if (encoded == null || encoded.isEmpty) return null;
+      try {
+        final decoded = jsonDecode(encoded);
+        return decoded is Map<String, dynamic>
+            ? decoded
+            : decoded is Map
+                ? Map<String, dynamic>.from(decoded)
+                : null;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    return _sameLogicalSessionIdentity(
+      decode(previousEncoded),
+      decode(nextEncoded),
+    );
+  }
+
+  @visibleForTesting
+  static bool sameLogicalSessionIdentityForTesting(
+    Map<String, dynamic>? previous,
+    Map<String, dynamic>? next,
+  ) =>
+      _sameLogicalSessionIdentity(previous, next);
+
+  static bool _sameLogicalSessionIdentity(
+    Map<String, dynamic>? previous,
+    Map<String, dynamic>? next,
+  ) {
+    final previousIdentity = _logicalSessionIdentity(previous);
+    final nextIdentity = _logicalSessionIdentity(next);
+    return previousIdentity != null &&
+        nextIdentity != null &&
+        previousIdentity == nextIdentity;
+  }
+
+  static _LogicalSessionIdentity? _logicalSessionIdentity(
+    Map<String, dynamic>? session,
+  ) {
+    if (session == null) return null;
+    final userId = _requiredIdentityString(session['userId']);
+    final sessionId = _requiredIdentityString(session['sessionId']);
+    final emailValue = session['email'];
+    final createdAtValue = session['createdAt'];
+    if (userId == null || sessionId == null || emailValue is! String) {
+      return null;
+    }
+    final email = emailValue.trim().toLowerCase();
+    if (email.isEmpty || createdAtValue is! String) return null;
+    final createdAt = DateTime.tryParse(createdAtValue);
+    if (createdAt == null) return null;
+    return _LogicalSessionIdentity(
+      userId: userId,
+      email: email,
+      sessionId: sessionId,
+      createdAtMicros: createdAt.toUtc().microsecondsSinceEpoch,
+    );
+  }
+
+  static String? _requiredIdentityString(Object? value) {
+    if (value is! String || value.isEmpty || value.trim().isEmpty) return null;
+    return value;
+  }
+
+  static Future<bool> _removeStoredSessionIfRawMatches(String expectedRaw) {
+    return _sessionMutationQueue.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getString(_sessionKey) != expectedRaw) return false;
+      final removed = await prefs.remove(_sessionKey);
+      if (!removed || prefs.containsKey(_sessionKey)) return false;
+      _sessionGeneration += 1;
+      _refreshInFlight = null;
+      _notifyLocalPrincipalChanged();
+      return true;
+    });
+  }
+
+  @visibleForTesting
+  static Future<bool> persistRefreshResultSafely({
+    required bool Function() isCurrent,
+    required Future<void> Function() persist,
+    required Future<void> Function() remove,
+  }) async {
+    if (!isCurrent()) return false;
+    await persist();
+    if (isCurrent()) return true;
+    await remove();
+    return false;
   }
 
   static Future<List<Map<String, dynamic>>> _readAccounts(
@@ -387,7 +2322,90 @@ class AuthService {
     }
   }
 }
-enum AuthSocialProvider { google, apple }
+
+class _DiscardedRefreshResult implements Exception {
+  const _DiscardedRefreshResult();
+}
+
+class _LogicalSessionIdentity {
+  final String userId;
+  final String email;
+  final String sessionId;
+  final int createdAtMicros;
+
+  const _LogicalSessionIdentity({
+    required this.userId,
+    required this.email,
+    required this.sessionId,
+    required this.createdAtMicros,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      other is _LogicalSessionIdentity &&
+      other.userId == userId &&
+      other.email == email &&
+      other.sessionId == sessionId &&
+      other.createdAtMicros == createdAtMicros;
+
+  @override
+  int get hashCode => Object.hash(userId, email, sessionId, createdAtMicros);
+}
+
+enum AuthSocialProvider { google, apple, facebook }
+
+enum PhoneVerificationFailure {
+  invalidPhone,
+  invalidCode,
+  invalidToken,
+  phoneMismatch,
+  phoneAlreadyVerified,
+  rateLimited,
+  sessionExpired,
+  timeout,
+  unavailable,
+  network,
+  outcomeUnknown,
+  principalChanged,
+  localIdentityCleanupFailed,
+  confirmedLocalIdentityCleanupFailed,
+}
+
+class PhoneVerificationException implements Exception {
+  final PhoneVerificationFailure failure;
+  final bool remoteAcceptedOrConfirmed;
+
+  const PhoneVerificationException(
+    this.failure, {
+    this.remoteAcceptedOrConfirmed = false,
+  });
+}
+
+class PhoneVerificationChallenge {
+  final String phoneNumber;
+  final String? verificationId;
+  final bool automaticallyVerified;
+  final AuthSessionOwner owner;
+  final int attemptEpoch;
+
+  const PhoneVerificationChallenge({
+    required this.phoneNumber,
+    required this.owner,
+    required this.attemptEpoch,
+    this.verificationId,
+    this.automaticallyVerified = false,
+  });
+}
+
+class _SocialSignInCancelled implements Exception {
+  const _SocialSignInCancelled();
+}
+
+class _SocialProviderUnavailable implements Exception {
+  final AuthFailure failure;
+  const _SocialProviderUnavailable(
+      [this.failure = AuthFailure.providerUnavailable]);
+}
 
 class AuthSession {
   final String? userId;
@@ -395,6 +2413,7 @@ class AuthSession {
   final DateTime? createdAt;
   final String? accessToken;
   final String? refreshToken;
+  final String? sessionId;
   final DateTime? accessTokenExpiresAt;
 
   const AuthSession({
@@ -403,24 +2422,100 @@ class AuthSession {
     this.createdAt,
     this.accessToken,
     this.refreshToken,
+    this.sessionId,
     this.accessTokenExpiresAt,
   });
 }
 
-enum AuthFailure { invalidCredentials, network, emailInUse, notImplemented }
+/// Principal plus session identity captured synchronously with the auth epoch.
+/// Tokens are intentionally excluded so this value is safe to retain in UI
+/// state and cannot be used as a credential container.
+class AuthSessionOwner {
+  final String? userId;
+  final String? sessionId;
+  final String email;
+  final DateTime? createdAt;
+  final int epoch;
+
+  const AuthSessionOwner({
+    required this.userId,
+    required this.sessionId,
+    required this.email,
+    required this.createdAt,
+    required this.epoch,
+  });
+}
+
+class AuthSessionClearReceipt {
+  final AuthSessionOwner owner;
+  final int completionEpoch;
+
+  const AuthSessionClearReceipt({
+    required this.owner,
+    required this.completionEpoch,
+  });
+}
+
+enum AuthFailure {
+  principalChanged,
+  invalidCredentials,
+  invalidEmail,
+  emailVerificationRequired,
+  weakPassword,
+  consentRequired,
+  pilotRegistrationClosed,
+  verificationDeliveryUnavailable,
+  network,
+  mfaCodeRejected,
+  mfaLocked,
+  mfaRequired,
+  mfaChallengeExpired,
+  mfaChallengeInvalid,
+  emailInUse,
+  notImplemented,
+  socialCancelled,
+  socialPopupBlocked,
+  pilotAccountDenied,
+  socialIdentityConflict,
+  appleOwnershipUnresolved,
+  socialTokenInvalid,
+  providerUnavailable,
+  socialEmailRequired,
+  socialEmailVerificationRequired,
+  socialProviderAlreadyLinked,
+  socialAccountLinkRequiresReauthentication,
+  accountNotActive,
+}
 
 class AuthResult {
   final bool ok;
   final AuthFailure? failure;
   final AuthSession? session;
   final bool verificationEmailSent;
+  final bool verificationPending;
+  final String? pendingEmail;
+  final AuthMfaChallenge? mfaChallenge;
 
-  const AuthResult.success({this.session, this.verificationEmailSent = false})
-      : ok = true,
+  const AuthResult.success({
+    this.session,
+    this.verificationEmailSent = false,
+    this.verificationPending = false,
+    this.pendingEmail,
+    this.mfaChallenge,
+  })  : ok = true,
         failure = null;
-  const AuthResult.failure(AuthFailure failure)
+  const AuthResult.mfaRequired(this.mfaChallenge)
       : ok = false,
-        failure = failure,
+        failure = AuthFailure.mfaRequired,
         session = null,
-        verificationEmailSent = false;
+        verificationEmailSent = false,
+        verificationPending = false,
+        pendingEmail = null;
+  const AuthResult.failure(this.failure)
+      : ok = false,
+        session = null,
+        verificationEmailSent = false,
+        verificationPending = false,
+        pendingEmail = null,
+        mfaChallenge = null;
 }

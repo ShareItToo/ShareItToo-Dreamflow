@@ -1,0 +1,278 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-rw5-local-safety-privacy-principal-isolation",
+  "status": "verified-regression-and-codeql-passed",
+  "implementationBaseHead": "bed1e8923a82b745050a6c421ac12c77eacf1e42",
+  "implementationHead": "2dfb487cd3b4f4ebd59d184f1a5186f1da455672",
+  "architecture": "docs/architecture/rw5-local-safety-privacy-principal-isolation-2026-08-25.md",
+  "report": "docs/operations/RW5_LOCAL_SAFETY_PRIVACY_PRINCIPAL_ISOLATION_2026-08-25.md",
+  "predecessor": {
+    "package": "RW4",
+    "evidence": "docs/evidence/48h-remote/rw4-reduced-wave0-local-principal-isolation-20260825.json",
+    "verifiedImplementationHead": "f11335b74b88365a4f42c0bc748966d9b58d85d7",
+    "closureCommit": "bed1e8923a82b745050a6c421ac12c77eacf1e42"
+  },
+  "scope": {
+    "allowed": [
+      "opaque-principal-scoped-blocked-users",
+      "opaque-principal-scoped-local-user-reports",
+      "opaque-principal-scoped-listing-feedback-and-hidden-state",
+      "opaque-principal-scoped-muted-message-threads",
+      "opaque-principal-scoped-message-settings",
+      "opaque-principal-scoped-notification-preferences",
+      "guest-only-and-exact-owner-legacy-migration-or-quarantine",
+      "bucket-local-corruption-quarantine-and-closed-ui",
+      "current-principal-export-and-confirmed-deletion",
+      "bounded-serialized-local-principal-registry",
+      "immediate-session-transition-refresh"
+    ],
+    "excluded": [
+      "binding-request-contract-and-acceptance",
+      "payment-refund-and-payout",
+      "handover-return-damage-and-needs-review",
+      "physical-device-and-candidate",
+      "live-provider-ai-pilot-and-release"
+    ],
+    "syntheticOnly": true,
+    "localOnly": true,
+    "timingWorkaroundAllowed": false,
+    "testParallelismReductionAllowed": false
+  },
+  "findings": [
+    {
+      "id": "RW5-P0-BLOCKED-USERS-CROSS-PRINCIPAL-001",
+      "state": "resolved-and-tested",
+      "resolution": "Block state is opaque-principal scoped and corrupt state fails closed."
+    },
+    {
+      "id": "RW5-P0-REPORTS-CROSS-PRINCIPAL-002",
+      "state": "resolved-and-tested",
+      "resolution": "Local reports are bounded inside the reporter principal bucket."
+    },
+    {
+      "id": "RW5-P0-DISCOVERY-PROFILE-CROSS-PRINCIPAL-003",
+      "state": "resolved-and-tested",
+      "resolution": "Hidden listings and feedback signals no longer transfer between accounts."
+    },
+    {
+      "id": "RW5-P0-COMMUNICATION-STATE-CROSS-PRINCIPAL-004",
+      "state": "resolved-and-tested",
+      "resolution": "Muted threads and communication preferences are principal scoped."
+    },
+    {
+      "id": "RW5-P0-LEGACY-MISATTRIBUTION-005",
+      "state": "resolved-and-tested",
+      "resolution": "Unattributed legacy state is guest-only and attributed muted state requires an exact owner."
+    },
+    {
+      "id": "RW5-P0-EXPORT-DELETION-SCOPE-006",
+      "state": "resolved-and-tested",
+      "resolution": "Export and confirmed deletion affect only the current principal."
+    },
+    {
+      "id": "RW5-P1-IDENTIFIER-DISCLOSURE-007",
+      "state": "resolved-and-tested",
+      "resolution": "Canonical principal keys contain no raw account identifier or credential."
+    },
+    {
+      "id": "RW5-P1-SESSION-TRANSITION-008",
+      "state": "resolved-and-tested",
+      "resolution": "Invoked mutations retain their captured owner and open surfaces clear stale state."
+    },
+    {
+      "id": "RW5-P1-CORRUPTION-QUARANTINE-009",
+      "state": "resolved-and-tested",
+      "resolution": "Malformed legacy and principal buckets are preserved and fail closed."
+    },
+    {
+      "id": "RW5-P1-BOUNDED-REGISTRY-010",
+      "state": "resolved-and-tested",
+      "resolution": "The registry rejects overflow without evicting earlier principal state."
+    }
+  ],
+  "verification": {
+    "changedFileAnalyze": "passed-zero-issues",
+    "focusedRw5Flutter": "passed-12",
+    "safetyPrivacyAdjacentFlutter": "passed-37-one-skipped",
+    "lifecyclePrivacyRetention": "passed",
+    "rw5WiringTests": "passed",
+    "fullTechnicalRegression": "passed",
+    "githubRegression": "passed",
+    "githubCodeql": "passed-no-new-alerts"
+  },
+  "githubVerification": {
+    "head": "2dfb487cd3b4f4ebd59d184f1a5186f1da455672",
+    "regressionRunId": 32809930879,
+    "codeqlRunId": 32809930884,
+    "regressionConclusion": "success",
+    "codeqlConclusion": "success",
+    "openCodeScanningAlerts": 0
+  },
+  "gates": {
+    "BUILD_READY": "not-granted",
+    "PLAY_UPLOAD_APPROVED": "not-granted",
+    "HUMAN_PILOT_ACTIVATED": "not-granted",
+    "PR7_MERGE_APPROVED": "not-granted",
+    "R17_GITGUARDIAN_HISTORY_REVIEW_COMPLETE": "not-granted"
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "cloudChanged": false,
+    "firebaseChanged": false,
+    "storeChanged": false,
+    "paymentChanged": false,
+    "realMoneyUsed": false,
+    "realProviderTrafficSent": false,
+    "externalAiRuntimeEnabled": false,
+    "realTesterEnrolled": false,
+    "candidateCreated": false,
+    "deviceGateClaimed": false,
+    "legalApprovalChanged": false,
+    "gitHistoryRewritten": false,
+    "prMerged": false
+  },
+  "sourceInventory": [
+    {
+      "path": "lib/services/local_principal_scope.dart",
+      "sha256": "7bc2b1254651b1cca95059ef99de2fe4b9027bb7ebbd3cea88777f3db33e2218"
+    },
+    {
+      "path": "lib/services/local_safety_privacy_service.dart",
+      "sha256": "4f346ac2164be806b19821a77e50f1f11ce835b312dcb37f16828958cfd0d002"
+    },
+    {
+      "path": "lib/services/blocked_users_service.dart",
+      "sha256": "b87f9f5f8890ac77572c29752e218912a3ff90548af45bf59a1576f88907657a"
+    },
+    {
+      "path": "lib/services/listing_feedback_service.dart",
+      "sha256": "d81154226c90146a4e808681e1a683a3d8700c515b43a07e66c64059e5c1ecc9"
+    },
+    {
+      "path": "lib/services/user_reports_service.dart",
+      "sha256": "94399bb6798ee4132f0b2ba15f1c3dbf2f755729029410b6d91057e5409f107c"
+    },
+    {
+      "path": "lib/services/messages_settings_service.dart",
+      "sha256": "5a396a6ded2d49d414f8b9d3ca4fab6ab161485f77998c438ce58d0bf118894c"
+    },
+    {
+      "path": "lib/services/notification_preferences_service.dart",
+      "sha256": "cb94554e9c938b9f2a63463f767bf0d18a7f84739b337937e3b6a38059e25154"
+    },
+    {
+      "path": "lib/services/auth_service.dart",
+      "sha256": "1607dfd6d0b7907aa9040d7ec10f649fcaab12b6fef872accc66b4b4602b2687"
+    },
+    {
+      "path": "lib/services/data_service.dart",
+      "sha256": "f23002e697a484a16e392e8fcf5dd9de527ecc55eb791dde7fab98386e37375f"
+    },
+    {
+      "path": "lib/services/shared_persistence_sync.dart",
+      "sha256": "b4294550220badf563c3a2fb0ea1929e15b0026483fb3dd3633370c6b486adb2"
+    },
+    {
+      "path": "lib/services/account_deletion_service.dart",
+      "sha256": "c4f4da84e907f6007e61a04b54654c4386ad93ed7b16657c517ad99bd8599c3a"
+    },
+    {
+      "path": "lib/screens/privacy_info_screen.dart",
+      "sha256": "b8322e4b53f08b8c644bee12d498bc713a0f28ef6f55a263f28f017fe9a24b61"
+    },
+    {
+      "path": "lib/screens/blocked_users_screen.dart",
+      "sha256": "90877ab10d0cb3426de08a66235c71feef443e8857322ca365c2809e60b9888b"
+    },
+    {
+      "path": "lib/screens/explore_screen.dart",
+      "sha256": "da3fdd19a41c20d663fb358c5660645f81803f9a5d77c59498def5f35338aef8"
+    },
+    {
+      "path": "lib/screens/messages_screen.dart",
+      "sha256": "9c4c80880f0c105674f334a8475069cff6167de67b3400fe9a11e5f7ff2dbf4f"
+    },
+    {
+      "path": "lib/screens/message_thread_screen.dart",
+      "sha256": "ada88d85648d9feda6ff6e875ae045ca0055a62f7104e96b44de65f5026605be"
+    },
+    {
+      "path": "lib/widgets/messages_settings_sheet.dart",
+      "sha256": "107243e6e21c6a8c60384419319f96df9ec565c2349e27bef364ebc773fe2c7a"
+    },
+    {
+      "path": "lib/screens/notification_settings_screen.dart",
+      "sha256": "27a145dde96c8766cf07ccc2b3d0807cc35d969ef8adcd3bb67271e467051261"
+    },
+    {
+      "path": "lib/screens/notifications_screen.dart",
+      "sha256": "5945769044a86f2b2c37bd3f111911f8dac98cae109470cd3050eb1c30990df3"
+    },
+    {
+      "path": "store/g2-data-lifecycle.json",
+      "sha256": "1753947c8f92f4f6e82a6a7bb5e3a6e990368589b48dc3a1716ca7c9aecd749d"
+    },
+    {
+      "path": "store/privacy-disclosures.json",
+      "sha256": "35c3a08e20e4f55183649af934e9415ea8cfd0c2d3327483a518cf477daee449"
+    },
+    {
+      "path": "store/retention-deletion-readiness.json",
+      "sha256": "955a901bbaec6511d119558b953274c3e5059a97c657fdcf93f2a939523315c8"
+    },
+    {
+      "path": "tool/validate_g2_data_lifecycle.mjs",
+      "sha256": "c0aede510163ab7580a6765d878d706ad6d957e795a8326053aeae84a5bbee97"
+    },
+    {
+      "path": "tool/validate_privacy_disclosures.mjs",
+      "sha256": "b78f41588e8a1a14520df4f5a730ae1190924f3b2f177fe40f6569f76bfb56f9"
+    },
+    {
+      "path": "tool/validate_retention_deletion_readiness.mjs",
+      "sha256": "dc7d749b5fb4100231f1de756b41f1406507f6abfe2c0953d4a5ad49bcb91b96"
+    },
+    {
+      "path": "scripts/technical_regression_check.sh",
+      "sha256": "61e7a485cf99f041394995b49355e2b283f6e36a04977589e2ba228e22137fb2"
+    },
+    {
+      "path": "test/rw5_local_safety_privacy_principal_isolation_test.dart",
+      "sha256": "2e13171312b92d30b753a50391c55846cd24cab6cbab7ab61157c41763b13a50"
+    },
+    {
+      "path": "test/messages_notification_settings_test.dart",
+      "sha256": "35f272852cda1b78d36e27eb8dd08167ad3315fe304e4d8cade4bc7af385df7c"
+    },
+    {
+      "path": "test/user_reports_harassment_guard_test.dart",
+      "sha256": "ff221021ac2579c6bb932f94f1190c7a8959e4960a6f3da74b418db2c02107c5"
+    },
+    {
+      "path": "test/tool/validate_g2_data_lifecycle.test.mjs",
+      "sha256": "5ab0e110998f046d197711388d4474fc700ce000160f2012ba017b8481d1bb50"
+    },
+    {
+      "path": "test/tool/validate_privacy_disclosures.test.mjs",
+      "sha256": "7f46226141f7ebc456c80ee9fdecf05815f0bf3cca2e0e5d37d3820c5502f6b1"
+    },
+    {
+      "path": "test/tool/validate_retention_deletion_readiness.test.mjs",
+      "sha256": "1db8f20c0da4c956aae8580b00e8048cc708833b0b7009e9691ef796cfb0b466"
+    },
+    {
+      "path": "test/tool/rw4_reduced_wave0_local_principal_isolation_wiring.test.mjs",
+      "sha256": "c4b669ec34dc1134bd82159b62f8ddc9f893a26fb9adb50afdc038810ba98f53"
+    },
+    {
+      "path": "docs/architecture/rw5-local-safety-privacy-principal-isolation-2026-08-25.md",
+      "sha256": "baa74443532f1f9fea75292ce63c52f3efa800aae421893c56e3af3639cddbc7"
+    },
+    {
+      "path": "docs/operations/RW5_LOCAL_SAFETY_PRIVACY_PRINCIPAL_ISOLATION_2026-08-25.md",
+      "sha256": "3ff4be940b01d55a5e360893f140678c6598479547f048b3dfeb2887a361f541"
+    }
+  ]
+}

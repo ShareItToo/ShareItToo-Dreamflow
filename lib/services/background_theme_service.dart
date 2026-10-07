@@ -66,6 +66,11 @@ class BackgroundThemeController extends ChangeNotifier {
 
   bool get hydrated => _hydrated;
   AppBackgroundChoice? get selectedChoice => _selectedChoice;
+  ThemeMode get themeMode => switch (_selectedChoice?.family) {
+        Brightness.dark => ThemeMode.dark,
+        Brightness.light => ThemeMode.light,
+        null => ThemeMode.system,
+      };
 
   AppBackgroundChoice effectiveChoice(Brightness platformBrightness) {
     return _selectedChoice ??
@@ -96,6 +101,18 @@ class BackgroundThemeController extends ChangeNotifier {
       await prefs.setString(_prefsKey, choice.storageValue);
     } catch (_) {
       // ignore
+    }
+  }
+
+  Future<void> clearChoice() async {
+    _selectedChoice = null;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_prefsKey);
+    } catch (_) {
+      // Keep the current session on the explicit system default. A later
+      // successful choice/reset can persist the preference again.
     }
   }
 }

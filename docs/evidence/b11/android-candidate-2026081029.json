@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-release-candidate",
+  "status": "installed-launched-session-links-logout-role-lifecycle-crash-and-fcm-diagnostics-passed-other-exact-candidate-diagnostics-pending",
+  "generatedAt": "2026-08-10T16:41:28Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081029",
+    "commit": "fc57adbfdf676e6abf9b7df63ec7e657e6a92a89",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "android": {
+    "delivery": "pending",
+    "aabSha256": "58baa13fab35f233a80e4d7240db2db5df999511b3b1d001ec16b893ba6ee382",
+    "apkSha256": "99f69b05943bb8d4a18ec63e6a6c9425e81d1cf72b1815265067d5774cbbfc4e",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "packageIdentityVerified": true
+  },
+  "privacyAndNetwork": {
+    "binaryScan": "passed",
+    "binaryScanReportSha256": "3ea2439efd0b1f55a1788771b1ac4c00fa38324bfbf24b4af78900532b1c19f1",
+    "targetSdkVersion": 35,
+    "backupDisabled": true,
+    "cleartextTrafficDisabled": true,
+    "analyticsSdkPresent": false,
+    "advertisingSdkPresent": false,
+    "disclosedSdks": [
+      "Firebase Cloud Messaging",
+      "Firebase Crashlytics"
+    ],
+    "findings": []
+  },
+  "exactCandidateDiagnostics": {
+    "directInstallAndLaunch": "passed",
+    "controlledSanitizedCrashEvent": "passed",
+    "crashlyticsConsoleReleaseAssignment": "passed",
+    "guestAppLinks": "passed",
+    "authenticatedSessionRestore": "passed",
+    "syntheticRoleBooking": "passed",
+    "authenticatedDeepLinks": "passed",
+    "foregroundFcm": "passed",
+    "backgroundFcm": "passed",
+    "terminatedProcessFcm": "passed",
+    "logoutColdStartGuestPersistence": "passed",
+    "postLogoutPushSuppression": "passed"
+  },
+  "controlledFcm": {
+    "status": "passed",
+    "evidenceRef": "docs/evidence/b11/android-controlled-fcm-2026081029-20260810T172500Z.json"
+  },
+  "logoutLifecycle": {
+    "status": "passed",
+    "evidenceRef": "docs/evidence/b11/android-logout-lifecycle-2026081029-20260810T175031Z.json"
+  },
+  "staging": {
+    "serverCommit": "ec570acfddc218cec6d2bfba43d4feb33bda4cfc",
+    "liveHttpStatus": 200,
+    "readyHttpStatus": 200,
+    "fcmEnabled": true,
+    "googleCredentialValidation": "passed",
+    "productionInvariant": "passed"
+  },
+  "boundaries": {
+    "uploadedToStore": false,
+    "installedOnPhysicalDevice": true,
+    "controlledFcmSentToSyntheticAccount": true,
+    "controlledCrashDiagnosticSent": true,
+    "productionPushSent": false,
+    "productionCrashGenerated": false,
+    "iosValidated": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

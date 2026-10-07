@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-synthetic-role-booking-diagnostic",
+  "status": "passed-bounded-synthetic-role-booking-diagnostic",
+  "capturedAt": "2026-08-15T13:30:48.422Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081509",
+    "commit": "3fa045b98897f9551f91da932136c2b100b2d700",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "installed": {
+    "packageIdentityVerified": true,
+    "versionName": "1.0.0",
+    "buildNumber": "2026081509",
+    "delivery": "google-play-split",
+    "installerPackageName": "com.android.vending",
+    "splitCount": 4
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "16",
+    "apiLevel": 36,
+    "securityPatch": "2026-04-05",
+    "containsRawDeviceIdentifier": false
+  },
+  "backendFixture": {
+    "accountCount": 2,
+    "roles": [
+      "owner",
+      "renter"
+    ],
+    "registration": "public-staging-accepted",
+    "verification": "isolated-staging-fixture",
+    "listingStatus": "active",
+    "workflow": [
+      "requested",
+      "accepted",
+      "active",
+      "completed"
+    ],
+    "confirmations": {
+      "pickup": {
+        "status": "passed",
+        "presenterRole": "owner",
+        "verifierRole": "renter",
+        "verificationVersion": 3
+      },
+      "return": {
+        "status": "passed",
+        "presenterRole": "renter",
+        "verifierRole": "owner",
+        "verificationVersion": 3
+      }
+    },
+    "paymentMode": "memory",
+    "stripeLivemode": false,
+    "paymentEndpointCalled": false
+  },
+  "tests": {
+    "ownerRequestVisibility": {
+      "status": "passed",
+      "result": "requested-visible-to-owner"
+    },
+    "renterUpcomingVisibility": {
+      "status": "passed",
+      "result": "accepted-visible-to-renter"
+    },
+    "renterRunningVisibility": {
+      "status": "passed",
+      "result": "active-visible-to-renter"
+    },
+    "renterCompletedVisibility": {
+      "status": "passed",
+      "result": "completed-visible-to-renter"
+    }
+  },
+  "boundaries": {
+    "syntheticAccountsOnly": true,
+    "directDiagnosticOnly": false,
+    "storeInstallationGateSatisfied": true,
+    "fullDeviceMatrixPassed": false,
+    "wifiOnlyDiagnostic": true,
+    "hotspotPassed": false,
+    "authenticatedDeepLinksPassed": false,
+    "realPushPassed": false,
+    "manualTalkBackTraversalPassed": false,
+    "iosTestFlightPassed": false,
+    "paymentEndpointCalled": false,
+    "stripeLivemode": false,
+    "lockCodeUsed": false,
+    "accountIdentityRecorded": false,
+    "containsPersonalAccountData": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false
+  },
+  "isolation": {
+    "protectedReviewFixtureUnchanged": true,
+    "temporaryVaultRemovedAfterProbe": true,
+    "temporaryBookingCompleted": true,
+    "temporaryListingPaused": true,
+    "containsReviewCredentials": false
+  }
+}

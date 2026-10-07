@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-candidate-build-and-device-services-boundary",
+  "status": "built-archived-direct-install-device-service-boundary-passed-crash-event-awaiting-explicit-approval",
+  "capturedAt": "2026-08-17T06:56:33Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081510",
+    "commit": "4cb004641391efe40fa2bf89f62da11bc1f71291",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1"
+  },
+  "build": {
+    "preflight": "passed",
+    "canonicalSigning": "passed",
+    "firebaseAndroidConfigured": true,
+    "firebaseAnalyticsEnabled": false,
+    "aabSha256": "ad6ede96f47c7d5a9b1af000c6a51b4e1c8090729ff9801f29f8fe43ebeb75e4",
+    "apkSha256": "ebc8810e591e564733807605ac6291e8d752e8b69ae66da0f748d3f3f73856cc",
+    "binaryPrivacyScan": "passed",
+    "binaryPrivacyReportSha256": "b12b593b872c4490124691209102b2b887e2d979a1f3385c09bfb5871c422fa6",
+    "privateArchive": "archived-and-verified"
+  },
+  "regression": {
+    "flutterTestsPassed": 279,
+    "intentionalFlutterSkips": 1,
+    "analyzerFindings": 229,
+    "analyzerErrors": 0,
+    "webDebugBuild": "passed",
+    "androidDebugBuild": "passed",
+    "googleOnlyCandidateTests": "14-of-14-passed"
+  },
+  "physicalDevice": {
+    "platform": "android",
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "16",
+    "installMethod": "direct-apk-after-play-signature-mismatch",
+    "installedVersionVerified": true,
+    "coldLaunch": "passed",
+    "stagingFeed": "passed",
+    "syntheticAccountSession": "restored-without-exposing-credentials"
+  },
+  "deviceServices": {
+    "initialPushOptIn": false,
+    "initialCrashDiagnosticsOptIn": false,
+    "separateControlsVisible": true,
+    "pushConsentCopyVisible": true,
+    "pushEnabledForBoundaryProbe": true,
+    "crashRemainedDisabledWhilePushEnabled": true,
+    "pushDisabledAgainAfterProbe": true,
+    "finalPushOptIn": false,
+    "finalCrashDiagnosticsOptIn": false,
+    "androidNotificationPermissionGrantedDuringProbe": true,
+    "controlledCrashDiagnostic": "not-sent-awaiting-separate-explicit-approval",
+    "compiledCrashRunId": "b11-android-2026081510"
+  },
+  "boundaries": {
+    "externalUploadPerformed": false,
+    "googlePlayChanged": false,
+    "closedTestingChanged": false,
+    "productionChanged": false,
+    "realPaymentPerformed": false,
+    "crashDataTransferred": false,
+    "containsSecrets": false,
+    "containsEmailAddresses": false,
+    "containsTokens": false,
+    "containsAccountIdentifiers": false,
+    "containsRawDeviceIdentifiers": false,
+    "privateScreenshotStoredInRepository": false
+  }
+}

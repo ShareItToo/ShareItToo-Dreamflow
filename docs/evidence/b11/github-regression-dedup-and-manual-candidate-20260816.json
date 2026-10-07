@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "kind": "github-regression-dedup-and-manual-candidate-gate",
+  "capturedAt": "2026-08-16T05:36:53Z",
+  "status": "passed",
+  "implementationCommit": "e522d6fd9511707ef61113a702a3c514376f2bd2",
+  "githubRun": {
+    "id": 31929053929,
+    "event": "pull_request",
+    "conclusion": "success",
+    "url": "https://github.com/walidwalidchraibi-dot/ShareItToo-Dreamflow/actions/runs/31929053929",
+    "backendRegression": "passed-including-postgresql-integration",
+    "flutterRegression": "passed",
+    "signedAndroidCandidateStep": "skipped-by-policy",
+    "apiImagePublication": "skipped-for-pull-request"
+  },
+  "correctedRootCauses": [
+    {
+      "area": "postgres-migration-integration-expectation",
+      "priorFailureRun": 31928400135,
+      "correction": "included-014-account-legal-holds-in-expected-migration-order"
+    },
+    {
+      "area": "automatic-signed-android-candidate-build",
+      "priorFailureRun": 31928400135,
+      "correction": "candidate-build-requires-explicit-workflow-dispatch-boolean"
+    },
+    {
+      "area": "duplicate-branch-and-pull-request-runs",
+      "priorFailureRuns": [
+        31928396701,
+        31928400135
+      ],
+      "correction": "feature-branches-run-via-pull-request-only-with-concurrency-cancellation"
+    }
+  ],
+  "localVerification": {
+    "workflowWiringTests": "passed-8",
+    "workflowYamlParse": "passed",
+    "backendSuite": "passed-138-one-postgres-integration-skipped-without-local-test-database",
+    "gitHistorySecretScan": "passed-no-unexpected-high-confidence-findings",
+    "technicalRegression": "passed",
+    "flutterTests": "passed-267-one-skipped",
+    "webBuild": "passed",
+    "androidDebugBuild": "passed",
+    "diffCheck": "passed"
+  },
+  "policy": {
+    "featureBranchPushRun": false,
+    "pullRequestRun": true,
+    "mainPushRun": true,
+    "docsOnlyRun": false,
+    "supersededRunCancellation": true,
+    "signedCandidateAutomatic": false,
+    "signedCandidateManualBooleanRequired": true
+  },
+  "boundaries": {
+    "newAppCandidateBuilt": false,
+    "existingAppCandidateChanged": false,
+    "productionChanged": false,
+    "storeTrackChanged": false,
+    "reviewSubmitted": false,
+    "realMoneyUsed": false
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-moderation-account-ui-diagnostic",
+  "status": "passed-bounded-ui-coverage-with-destructive-actions-open",
+  "capturedAt": "2026-08-17T06:11:38Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081509",
+    "commit": "3fa045b98897f9551f91da932136c2b100b2d700",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "model": "Pixel 7 Pro",
+    "osVersion": "Android 16",
+    "storeInstall": "play-internal",
+    "containsRawDeviceIdentifier": false
+  },
+  "checks": {
+    "accountDeletionPreflight": {
+      "status": "passed-ui-only",
+      "requirementsVisible": true,
+      "irreversibilityWarningVisible": true,
+      "cancelledWithoutDeletion": true
+    },
+    "blockedUsers": {
+      "status": "passed-ui-only",
+      "screenReachable": true,
+      "emptyStateVisible": true,
+      "mutationPerformed": false
+    },
+    "privateDataExport": {
+      "status": "passed-bounded-share-handoff",
+      "exportActionVisible": true,
+      "systemShareSurfaceOpened": true,
+      "shareTargetSelected": false,
+      "exportContentsInspectedOrStored": false
+    },
+    "profileReporting": {
+      "status": "passed-ui-only",
+      "reportActionVisible": true,
+      "reasonCategoriesVisible": true,
+      "reportSubmitted": false
+    },
+    "counterpartyBlocking": {
+      "status": "passed-fail-closed-guard",
+      "blockActionVisible": true,
+      "blockedBecauseHandoverOrReturnWasIncomplete": true,
+      "blockPerformed": false,
+      "counterpartyRemainsUnblocked": true
+    }
+  },
+  "restoration": {
+    "fontScale": 0.85,
+    "talkBackDisabled": true,
+    "systemShareSurfaceClosed": true,
+    "reportFlowClosedWithoutSubmission": true,
+    "deleteFlowClosedWithoutConfirmation": true
+  },
+  "boundaries": {
+    "fullModerationAndAccountPassed": false,
+    "disposableAccountDeleted": false,
+    "successfulUiBlockAndUnblockPassed": false,
+    "reportSubmitted": false,
+    "externalSharePerformed": false,
+    "productionChanged": false,
+    "storeChanged": false,
+    "paymentEndpointCalled": false,
+    "pushConfigurationChanged": false,
+    "crashConfigurationChanged": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

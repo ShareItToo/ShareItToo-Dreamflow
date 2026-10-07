@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp29-pixel-candidate-preparation",
+  "status": "prepared-for-freeze",
+  "capturedAt": "2026-09-06T14:14:47Z",
+  "workPackage": "WP29",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "preparationBase": "96096f4413d5c274764536495865003189ffeea8",
+    "candidateSourceHead": "pending-preparation-commit"
+  },
+  "candidate": {
+    "versionName": "1.0.0",
+    "versionCode": "2026090607",
+    "packageId": "com.shareittoo.app",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "highestVerifiedLocalArchiveBefore": "2026090606",
+    "installedPixelVersionBefore": "2026090606",
+    "versionPreviouslyReservedLocally": false,
+    "archiveCreated": false,
+    "installed": false
+  },
+  "envelope": {
+    "firebaseEnvironment": "staging",
+    "firebaseConsoleChanged": false,
+    "canonicalSigningRequired": true,
+    "googleSocialEnabled": true,
+    "appleSocialEnabled": false,
+    "facebookSocialEnabled": false,
+    "blueOceanListingAssistantEnabled": true,
+    "closedPilotEnvelopeEnabled": true,
+    "stageANonBindingPilotEnabled": true,
+    "stageAPilotId": "heilbronn_wave0",
+    "providerState": "prepared-hold",
+    "realMoneyEnabled": false,
+    "productionEnabled": false
+  },
+  "preparation": {
+    "versionFilesChanged": [
+      "pubspec.yaml",
+      "lib/config/private_pilot_config.dart"
+    ],
+    "hashPropagationOnlyOutsideVersionFiles": true,
+    "jsonFilesCompared": 23,
+    "jsonChangedLeaves": 150,
+    "jsonNonSha256Changes": 0,
+    "repositoryToolTestsPassed": 2341,
+    "repositoryToolTestsFailed": 0
+  },
+  "remaining": [
+    "freeze-exact-candidate-source-head",
+    "complete-local-regression",
+    "signed-aab-apk-archive",
+    "independent-artifact-verification",
+    "data-preserving-pixel-update",
+    "exact-head-github-regression-and-codeql"
+  ],
+  "boundaries": {
+    "googlePlayChanged": false,
+    "testerListChanged": false,
+    "backendDeployed": false,
+    "paymentOrKycCalled": false,
+    "productionChanged": false,
+    "publicRegistrationChanged": false,
+    "cloudVpsDnsChanged": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false,
+    "containsCredential": false,
+    "containsToken": false,
+    "containsPrivateFilesystemPath": false,
+    "containsRawDeviceIdentifier": false
+  }
+}

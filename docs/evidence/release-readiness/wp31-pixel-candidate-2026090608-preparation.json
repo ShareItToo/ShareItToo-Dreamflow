@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp31-pixel-candidate-preparation",
+  "status": "prepared-for-source-freeze",
+  "capturedAt": "2026-09-06T16:06:00Z",
+  "workPackage": "WP31",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "preparationBase": "9f6e775a93fa6f2e9f1c6f77d4fd6ef007be386f",
+    "candidateSourceHead": "pending-preparation-commit",
+    "preparationBaseTreeClean": true,
+    "preparationBaseRemoteDivergence": "0/0"
+  },
+  "candidate": {
+    "versionName": "1.0.0",
+    "versionCode": "2026090608",
+    "packageId": "com.shareittoo.app",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "highestVerifiedLocalArchiveBefore": "2026090607",
+    "installedPixelVersionBefore": "2026090607",
+    "versionPreviouslyReservedLocally": false,
+    "archiveCreated": false,
+    "installed": false
+  },
+  "requiredEnvelope": {
+    "firebaseAndroidStagingRequired": true,
+    "canonicalSigningRequired": true,
+    "googleSignInEnabled": true,
+    "appleSignInEnabled": false,
+    "facebookSignInEnabled": false,
+    "closedPilotEnvelope": true,
+    "stageAPilotId": "heilbronn_wave0",
+    "providerState": "hold",
+    "realMoneyEnabled": false,
+    "publicRegistrationEnabled": false
+  },
+  "boundaries": {
+    "googlePlayChanged": false,
+    "testerListChanged": false,
+    "backendDeployed": false,
+    "firebaseConsoleChanged": false,
+    "providerChanged": false,
+    "paymentOrKycCalled": false,
+    "productionChanged": false,
+    "publicRegistrationChanged": false,
+    "cloudVpsDnsChanged": false,
+    "pixelChanged": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false,
+    "containsCredential": false,
+    "containsToken": false,
+    "containsPrivateFilesystemPath": false,
+    "containsRawDeviceIdentifier": false
+  }
+}

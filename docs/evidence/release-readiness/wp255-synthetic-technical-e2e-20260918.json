@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 2,
+  "package": "WP255-B",
+  "status": "SYNTHETIC_TECHNICAL_PASS_WITH_PAYOUT_HOLD",
+  "verifiedAt": "2026-09-18T02:13:00Z",
+  "sourceHead": "3a904352a4da05c335e1ebb325d235570cb91a26",
+  "runtimeSourceCommit": "338c7bc066f10b72b05f89a5485cb5f5204a8e25",
+  "runtimeImageDigest": "sha256:43c3e62e47fd6b22ea5015a5a90003f48b6704066b490502466919a0e46e8c43",
+  "schemaSqlSha256": "fe2442a6fb2b2254df845ffbd0d405a6646569692a3b6fdb0f32eb3a678303f8",
+  "inputGreenBackup": {
+    "path": "/docker/shareittoo/backups/rehearsals/staging-wp254-green-20260918012350.dump",
+    "bytes": 1073299,
+    "sha256": "79b1e739cac9d4e9a80a270aa111075840e01f7f8b9662347b37310eb0db75d9"
+  },
+  "clone": {
+    "runId": "wp255-20260918015300-9abc1234",
+    "network": "sit-synthetic-clone-wp255-20260918015300-9abc1234-network",
+    "databaseVolume": "sit-synthetic-clone-wp255-20260918015300-9abc1234-db",
+    "uploadsVolume": "sit-synthetic-clone-wp255-20260918015300-9abc1234-uploads",
+    "internalNetwork": true,
+    "hostPorts": null,
+    "providerEgress": "blocked",
+    "targetAttestation": "passed",
+    "initialInventory": {"users": 2, "listings": 1, "uploads": 1, "payments": 0, "refunds": 0, "payouts": 0, "supportCases": 0, "disputes": 0}
+  },
+  "negativeTests": {
+    "wrongTarget": "passed",
+    "protectedCleanup": "passed",
+    "runtimeDrift": "passed (runtime_source_drift)",
+    "schemaDrift": "passed (schema_drift)",
+    "missingSnapshot": "passed (synthetic_snapshot_missing)",
+    "wrongHash": "passed (synthetic_snapshot_hash_invalid)",
+    "futureEffectiveAt": "passed (synthetic_snapshot_future_effective_at; separate fixture)",
+    "unitSuite": "10/10 passed"
+  },
+  "syntheticLegalFixtures": {
+    "datasetId": "wp255-green-clone-002",
+    "runId": "wp255-20260918015300-9abc1234",
+    "count": 9,
+    "effectiveAt": "2026-09-18T01:58:00.000Z",
+    "runtimeAt": "2026-09-18T01:59:00.000Z",
+    "timeBinding": "positive fixture effective one minute before documented runtime",
+    "marker": "SYNTHETIC_TEST_ONLY / NOT_FOR_CONTRACT_OR_RELEASE",
+    "hashes": {
+      "platform_terms": "5377daab8e2d3021d3bc64bbca906b809d8a33c75d8845c21645fab3c372a795",
+      "private_rental_terms": "9aade7348cc00826ab33cadcab3fe3a36cfeec9e72cf1e9bf71b29d778df5a63",
+      "cancellation_refund": "6ed49d3af2f3dcf9c93e98c6b7048ba9d3fdf0c976095b11ce425f2cc2ae606e",
+      "handover_return_damage": "01007ce530ef2a0d75851d39a138bbe0cf95a1e0a073462a1af42c9ecbd27ca9",
+      "payment_payout": "772475d95152feb9bd08783625641c67eeaa0a0e854ea9fac2ed9c6e9c68fd27",
+      "community_safety": "cf9395ddff478e002e3c95b80b62bca53d9e0c11ede9445930d7435dd044a553",
+      "reporting_moderation_review": "7cb38b894cfeb1d75f455d9b837f25b0be9397f021e8b9975666478df100f083",
+      "privacy": "6205e0c78a56f035bf1890c6516c1049862fa6382735cad4e56c25beb1ba330c",
+      "imprint_withdrawal_shorttexts": "b454dcbb83a4fab8a3f58c300788f67fe47cdd21bdec3b637543a381720a595e"
+    }
+  },
+  "contract": {"version": "V5.2-2026-08-16", "persistentPlatformContract": "passed", "declarations": 2, "bookingId": "wp255-clone-booking-002", "ownerAndRenterBound": true},
+  "e2e": {
+    "checkout": "passed",
+    "checkoutReplay": "passed",
+    "paymentRequiresActionAndCapture": "passed",
+    "duplicateEventSuppression": "passed",
+    "paymentBeforeRestart": "captured/2640",
+    "paymentAfterRestart": "refunded/2640",
+    "refund": "succeeded/2640",
+    "refundReplay": "passed",
+    "ledgerTransactionsAfterRefund": 2,
+    "payout": "blocked_by_payout_hold_active",
+    "payoutAvailableAt": "2026-10-02T21:59:59.999Z",
+    "payoutBlockIsLegalWindow": true,
+    "needsReview": false
+  },
+  "cleanup": {"resourceAttestation": "passed", "cloneContainersAbsent": true, "cloneVolumesAbsent": true, "cloneNetworkAbsent": true, "cloneCredentialAbsent": true, "cloneBackupsAbsent": true},
+  "greenUnchanged": {
+    "apiRunning": true,
+    "counts": {"users": 2, "listings": 1, "uploads": 1, "payments": 0, "legalDocumentSnapshots": 0},
+    "greenBackupSha256": "79b1e739cac9d4e9a80a270aa111075840e01f7f8b9662347b37310eb0db75d9",
+    "freshBackupSha256": "b724f8de6be1a88434c613c44fd8335b77d9bfa12c7d374c9928a4ceb6eaef8a",
+    "originalAltDumpSha256": "0fb025cad33f9ca9642603e0239103d85368996456af540de3d394c2bd64e193",
+    "wp253EvidenceSha256": "b2a55bc18d9690a6f826a017878118185b2b3c2189bce39318429996285e01a7"
+  },
+  "legalStatus": "V5.2 canonical assets remain draft-blocked; synthetic rows were clone-only and non-contractual",
+  "nextGate": "Sol review; no Green switch, Provider write, Store/Play or Production action"
+}

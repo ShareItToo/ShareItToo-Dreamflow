@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "kind": "staging-mail-push-runtime-verification",
+  "capturedAt": "2026-08-11T02:12:00Z",
+  "environment": "staging",
+  "release": {
+    "version": "0.1.0-ec570acfddc2",
+    "commit": "ec570acfddc218cec6d2bfba43d4feb33bda4cfc"
+  },
+  "checks": {
+    "mailTransport": "smtp",
+    "pushTransport": "fcm",
+    "apiContainer": "healthy",
+    "database": "ok",
+    "mailer": "ok",
+    "notificationDeadLetters": 0,
+    "verificationMessagesDelivered": 2,
+    "verificationLinksConsumed": 2,
+    "reviewAccountsVerified": 2,
+    "ownerOnlyRollbackBackupCreated": true,
+    "rollbackBackupMode": "0600"
+  },
+  "paymentBoundary": {
+    "transport": "memory",
+    "stripeLivemode": false,
+    "paymentEndpointCalled": false
+  },
+  "boundaries": {
+    "stagingOnly": true,
+    "productionContainerRestarted": false,
+    "publicStoreChanged": false,
+    "containsSecrets": false,
+    "containsEmailAddresses": false,
+    "containsTokens": false,
+    "containsAccountIdentifiers": false,
+    "containsFixtureIdentifiers": false
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-crash-release-mapping",
+  "status": "mapping-and-native-symbols-uploaded-console-release-observed-controlled-event-pending",
+  "capturedAt": "2026-08-11T09:10:14Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081104",
+    "commit": "d4511175a03a9eb574db55b5efcb140f60364765",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "artifacts": {
+    "aabSha256": "4e0ca39cc393cdb1ef52a03838a0c30dd6d588fad54e83b889d9c70f80647c7a",
+    "apkSha256": "495dba0e792b75aa5c279f64ed09bccd8de4db257b5737b30a111634df5b9dc9",
+    "embeddedProguardMappingSha256": "230ea7222e60c5acb58f857be1615dbae8aa4fc0c0f42cc907e9a30de1613ea3",
+    "embeddedMappingIdSha256": "fdad831a080be48afa0de5c02a82c2f50d1d53e8ce3c4fa8ec3dd5ca152f6d89",
+    "nativeDebugSymbolsZipSha256": "b5964d753ff1193a77f3c9de4bf56c832c72cc5807d25e25478b411cb90f5c51",
+    "nativeSymbolMembers": [
+      {
+        "abi": "armeabi-v7a",
+        "sha256": "27bf0edea5454c1a63e8c2caa9cda43ad335ed4e663626dfbb32bcd602e6f29f"
+      },
+      {
+        "abi": "arm64-v8a",
+        "sha256": "1dad644b879e1ddd6e8134d7892a2dc8127e08bee3490d565a89ea39cc4508c2"
+      },
+      {
+        "abi": "x86_64",
+        "sha256": "ef827b186c04aacd96893ce551de8f6f17a6fc37e126099f5433c1a3d55c02f2"
+      }
+    ]
+  },
+  "verifications": {
+    "aabIdentity": "passed",
+    "embeddedMappingPresent": "passed",
+    "mappingIdPresentAndHashed": "passed",
+    "nativeSymbolsPresentForAllBundledAbis": "passed",
+    "nativeSymbolsMatchStandaloneArchive": "passed",
+    "originalAabMappingUploadedToCrashlytics": "passed",
+    "uploadBuildResult": "successful",
+    "controlledSanitizedCrashEvent": "pending",
+    "consoleReleaseAssignment": "passed",
+    "consoleObservedVersion": "1.0.0 (2026081104)"
+  },
+  "consoleObservation": {
+    "source": "firebase-console-read-only",
+    "latestReleaseMatchesExactCandidate": true,
+    "issueCountsUsedAsCandidateProof": false
+  },
+  "boundaries": {
+    "uploadedToStore": false,
+    "productionCrashGenerated": false,
+    "controlledStagingEventGenerated": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "workPackage": "WP115_CURRENT_CANDIDATE_PIXEL_ON_DEVICE_LISTING_AI_REPLAY",
+  "status": "passed-exact-current-candidate-physical-pixel-on-device-listing-ai",
+  "capturedAt": "2026-09-11T19:49:14.528Z",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "artifactSourceHead": "c8e2a49e14f5cae0026fa5f2bc327859fe0ff17b",
+    "executionHead": "4ae7837a22abdb5fc8a27d9a7f3df4b73a7d365e",
+    "runnerSourceCommit": "d25b34d743c04ee5a060c1d31c3c5127416ccd03",
+    "appRuntimePathsChangedBetweenArtifactAndExecution": []
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091110",
+    "sourceCommit": "c8e2a49e14f5cae0026fa5f2bc327859fe0ff17b",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "apkSha256": "711f058c113bd714abb1e4bcedf05d62a382004e1bf9882f6d85d04b876dd0f7",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true
+  },
+  "staging": {
+    "sourceHead": "df39a14b7a19afe467842461a28f1e77fec8445e",
+    "publicApiVersion": "0.1.0-df39a14b7a19",
+    "imageDigest": "sha256:4d440d9481369b477b9495f5cefa419783f974ff35438c3490e54b42322ddfd6",
+    "containerHealthy": true,
+    "containerRestartCount": 0,
+    "databaseHealthy": true,
+    "mailHealthy": true,
+    "readiness": "degraded-only-known-noncritical-support-followups"
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "apiLevel": 37,
+    "securityPatch": "2026-07-05",
+    "exactSignedCandidateInstalled": true,
+    "containsRawDeviceIdentifier": false
+  },
+  "fixture": {
+    "kind": "repository-controlled-synthetic-cordless-drill-image",
+    "sha256": "85458cb5bc4777c587bfb8994ff0f960c8549f5423df9cc33b4c90fc65ffd420",
+    "uniqueNewestPhotoPickerItem": true,
+    "personalMediaRead": false,
+    "retainedOnDevice": false
+  },
+  "tests": {
+    "exactProtectedOwnerPrincipal": true,
+    "explicitDisclosureConsent": true,
+    "physicalAndroidMlKitExecuted": true,
+    "draftReady": true,
+    "editableDraftVisible": true,
+    "titleSuggested": true,
+    "categorySuggested": true,
+    "subcategorySuggested": true,
+    "descriptionSuggested": true,
+    "projectTagsSuggested": true,
+    "useCasesSuggested": true,
+    "safeFallbackAbsent": true,
+    "recentDraftFound": true,
+    "exactlyOneRecentDraft": true,
+    "ageBounded": true,
+    "statusEditing": true,
+    "revisionOne": true,
+    "disclosureExact": true,
+    "preflightConsumed": true,
+    "oneVersion": true,
+    "suggestionsNonempty": true,
+    "allOwnerConfirmationsFalse": true,
+    "providerOnDevice": true,
+    "modelExact": true,
+    "zeroUnitsAndCost": true,
+    "outcomeSucceeded": true,
+    "notPublished": true,
+    "generationAuditExact": true
+  },
+  "runtime": {
+    "provider": "on_device",
+    "model": "mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1",
+    "externalProviderExecutionAllowed": false,
+    "estimatedCostCents": 0,
+    "billedCostCents": 0,
+    "automaticPublicationAllowed": false,
+    "paymentTransport": "memory",
+    "stripeLivemode": false
+  },
+  "cleanup": {
+    "localRecoveryCleared": true,
+    "controlledMediaRemoved": true,
+    "protectedOwnerSessionRestored": true
+  },
+  "verification": {
+    "preReplayLocalTechnicalRegression": {
+      "head": "4ae7837a22abdb5fc8a27d9a7f3df4b73a7d365e",
+      "conclusion": "success"
+    },
+    "preReplayGithubRegression": {
+      "runId": 34638823164,
+      "head": "4ae7837a22abdb5fc8a27d9a7f3df4b73a7d365e",
+      "conclusion": "success",
+      "cleanCheckoutJob": "success"
+    },
+    "preReplayGithubCodeql": {
+      "runId": 34638823139,
+      "head": "4ae7837a22abdb5fc8a27d9a7f3df4b73a7d365e",
+      "conclusion": "success"
+    },
+    "openCodeScanningAlerts": 0,
+    "pullRequest7": "draft-open-mergeable-unmerged"
+  },
+  "sourceInventory": {
+    "tool/diagnose_android_on_device_listing_ai.mjs": "3fd37c44b71ae57d32c1b754567bc0720629f4b6cba5f0707f05d0c2f110dd05",
+    "test/tool/diagnose_android_on_device_listing_ai.test.mjs": "a8946cc4783b1ecbeea0b7a3cc2865d78a7a30d1a86f536c35c51704c3cc495d",
+    "test/fixtures/listing-ai/generic-cordless-drill.png": "85458cb5bc4777c587bfb8994ff0f960c8549f5423df9cc33b4c90fc65ffd420"
+  },
+  "boundaries": {
+    "listingPublished": false,
+    "paymentEndpointCalled": false,
+    "realMoneyUsed": false,
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "testerListChanged": false,
+    "firebaseProjectChanged": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false,
+    "containsAccountIdentity": false,
+    "containsSecrets": false,
+    "containsTokens": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsPrivateFilesystemPaths": false
+  },
+  "remaining": [
+    "professional-v52-legal-snapshots-and-owner-approval",
+    "binding-booking-pickup-return-damage-needs-review-review-replay",
+    "official-stripe-sandbox-payment-refund-and-simulated-payout",
+    "separate-oneplus-exact-candidate-two-device-replay"
+  ]
+}

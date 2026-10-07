@@ -1,0 +1,397 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-mission-d5-preregistration-candidate",
+  "version": "D5-B-2026-10-03.1",
+  "status": "draft_pending_gemini",
+  "activationReady": false,
+  "schema": {
+    "version": 1,
+    "evidenceClasses": [
+      "synthetisch",
+      "beobachtet_staging",
+      "beobachtet_freigegebener_pilot"
+    ],
+    "caseStates": [
+      "not_started",
+      "completed",
+      "aborted",
+      "error",
+      "open",
+      "invalid"
+    ],
+    "metricIds": [
+      "planning_effort",
+      "required_coverage",
+      "quorum_stability",
+      "supply_activation",
+      "mismatch_effort",
+      "handover_return",
+      "safety_quality"
+    ],
+    "digestAlgorithm": "sha256_canonical_sorted_keys_json_utf8_arrays_ordered",
+    "unknownKeys": "reject",
+    "unknownValues": "reject",
+    "payloadEcho": false
+  },
+  "source": {
+    "head": "b05d678b57a8568c96320034d32fdc8ea4b6db2c",
+    "inventory": [
+      {
+        "path": "docs/product/SIT_MISSION_MASTERPLAN_2026-09-30.md",
+        "sha256": "22375f1c7847a76e55fcb362e476067086fb3a5c5d6c378592bc20635847001d"
+      },
+      {
+        "path": "docs/operations/BLUE_OCEAN_HEILBRONN_WAVE0_RUNBOOK.md",
+        "sha256": "1308032de713b1bc2c2ec0372ac4fbdf918d9b002659fc99493d3e5d700baef3"
+      },
+      {
+        "path": "docs/operations/CLOSED_ANDROID_PILOT_TEST_AND_MEASUREMENT_PLAN.md",
+        "sha256": "4e288bdfd64b0041ca85f36989c8f0bd577bda99bec84e18a8ad65934bbbbc0a"
+      },
+      {
+        "path": "docs/evidence/p0b-next/invited-synthetic-pilot-spiegelberg-cat8-readiness.json",
+        "sha256": "89de016bb9b75d0c4f61511befa2a68193bafb6158705c2351a7cc8706794259"
+      },
+      {
+        "path": "docs/operations/SIT_GEMINI_MISSION_P6C_D3_D4_GATE_2026-10-02.md",
+        "sha256": "4187465351b7ecd4177c275d1c7100053e932ee124515870d4be5d3b928a3082"
+      },
+      {
+        "path": "docs/operations/FI1_SUPPORT_ESCALATION_RUNBOOK.md",
+        "sha256": "d8e7a47c50d057b807c99e7d93aa882846b0bb390f021ceb43289a5eb49d6cfa"
+      },
+      {
+        "path": "store/privacy-disclosures.json",
+        "sha256": "8120cd9d9133806bbe55cd0681f4a7c979cab1e38ece0046de994f57097691af"
+      },
+      {
+        "path": "store/retention-deletion-readiness.json",
+        "sha256": "89b4bdfb77fb9fa9856aeacdd729ba398a969aa88fd7fe89fcd5c8f6402ddd96"
+      },
+      {
+        "path": "backend/test/support/mission_synthetic_measurement.js",
+        "sha256": "9ae21c1180effa7c4c153fec186d1e50b7fb7c16bf76746d783aa3f8f0217f69"
+      },
+      {
+        "path": "backend/test/mission_synthetic_measurement.test.js",
+        "sha256": "1e9173d8f3dcd5a21f9bb81078d8068b92694c15acc92e28acde911b13f97e9d"
+      }
+    ],
+    "authority": "current_mission_masterplan; older pilot envelopes remain separate inactive scopes",
+    "historicalKpiTransfer": "forbidden",
+    "currentSyntheticEvidence": "fixed 13-case D5 evaluator; no demand source, no proven Fit, no human observation"
+  },
+  "cohort": {
+    "state": "proposed_pending_gemini",
+    "maximumAdults": 3,
+    "minimumAge": 18,
+    "regionLabel": "Heilbronn",
+    "regionMeaning": "coarse_design_label_not_location_matching",
+    "roster": [],
+    "reuseExistingPilotAuthorization": false,
+    "rationale": "Small bounded process/usability design, inspired by but not activating Heilbronn wave0; no market inference."
+  },
+  "tasks": {
+    "state": "proposed_pending_gemini",
+    "maximumTasks": 9,
+    "entries": [
+      {
+        "ordinal": 1,
+        "scenario": "confirm_need",
+        "state": "not_started"
+      },
+      {
+        "ordinal": 2,
+        "scenario": "correct_required_units",
+        "state": "not_started"
+      },
+      {
+        "ordinal": 3,
+        "scenario": "unknown_fit",
+        "state": "not_started"
+      },
+      {
+        "ordinal": 4,
+        "scenario": "recheck_source_drift",
+        "state": "not_started"
+      },
+      {
+        "ordinal": 5,
+        "scenario": "reject_or_timeout",
+        "state": "not_started"
+      },
+      {
+        "ordinal": 6,
+        "scenario": "explicit_release_not_acceptance",
+        "state": "not_started"
+      },
+      {
+        "ordinal": 7,
+        "scenario": "pickup_evidence",
+        "state": "not_started"
+      },
+      {
+        "ordinal": 8,
+        "scenario": "return_evidence",
+        "state": "not_started"
+      },
+      {
+        "ordinal": 9,
+        "scenario": "abort_and_support",
+        "state": "not_started"
+      }
+    ],
+    "replacementCases": "forbidden",
+    "rerunUntilGreen": "forbidden",
+    "fixtureOnly": true,
+    "realPrivateMissionUse": false
+  },
+  "window": {
+    "state": "proposed_pending_gemini",
+    "maximumTestDays": 1,
+    "startsAt": null,
+    "endsAt": null,
+    "observationStarted": false,
+    "requireExactWindowBeforeObservation": true,
+    "rationale": "One bounded predeclared test day; no automatic extension and no retention period."
+  },
+  "metrics": [
+    {
+      "id": "planning_effort",
+      "numerator": "Zeit vom bestaetigten Einstieg bis zum nutzerbestaetigten Bedarf; Dauer nur fuer beobachtete Bestaetigungen.",
+      "denominator": "Alle bestaetigt begonnenen Vorhaben; Abbruch, Fehler und offene Faelle bleiben separat im Nenner.",
+      "unit": "duration_and_counts"
+    },
+    {
+      "id": "required_coverage",
+      "numerator": "Belegte erforderliche Einheiten derselben Bedarfsrevision; unbekannt gilt nie als belegt.",
+      "denominator": "Alle erforderlichen Einheiten der vorregistrierten Bedarfsrevision; keine nachtraegliche Entfernung fehlender Einheiten.",
+      "unit": "units"
+    },
+    {
+      "id": "quorum_stability",
+      "numerator": "Nach Neupruefung unveraendert belegte Missionen; stabil-unvollstaendig ist kein belegtes Quorum.",
+      "denominator": "Alle tatsaechlich begonnenen vorregistrierten Neupruefungen; fehlende Readbacks bleiben enthalten, Drift und Teilbindung separat.",
+      "unit": "mission_rechecks"
+    },
+    {
+      "id": "supply_activation",
+      "numerator": "Explizit freigegebene passende Beitraege; released ist niemals accepted.",
+      "denominator": "Nachweislich zugestellte berechtigte Nachfragen; Ablehnung, Nichtantwort, Widerruf und Ablauf separat; ohne Nachfragequelle not_applicable.",
+      "unit": "delivered_eligible_demands"
+    },
+    {
+      "id": "mismatch_effort",
+      "numerator": "Verifizierte FitCheck-Korrekturen, unnoetige Kontakte und Supportfaelle jeweils getrennt.",
+      "denominator": "Alle bestaetigt begonnenen Vorhaben, einschliesslich Abbruch, Fehler und offener Faelle.",
+      "unit": "separate_event_counts_per_started_mission"
+    },
+    {
+      "id": "handover_return",
+      "numerator": "Pickup bzw. Return mit vier eindeutigen benannten Slots, Gegenbestaetigung und exakt gebundener QR-v3- oder Sechs-Ziffern-Verifikation; Abschluss/Auszahlung getrennt.",
+      "denominator": "Tatsaechlich begonnene Pickup- bzw. Return-Segmente, getrennt und explizit komponentengebunden; Evidence bei unbegonnener Phase ist ungueltig.",
+      "unit": "separate_started_component_segments"
+    },
+    {
+      "id": "safety_quality",
+      "numerator": "Absolute akzeptierte Schutzverletzungen, nicht mit sicheren Ablehnungen oder Erfolgen verrechnen.",
+      "denominator": "Vollstaendiges vorregistriertes Fallregister einschliesslich not_started, aborted, error, open, invalid; zusaetzlich tatsaechlich ausgefuehrte Faelle separat.",
+      "unit": "absolute_violations_and_registered_cases"
+    }
+  ],
+  "measurementPolicy": {
+    "evidenceMixing": "forbidden",
+    "nullDenominator": "not_applicable_no_rate",
+    "missingReadback": "unavailable_retained_in_begun_denominator",
+    "abortedAndErrorCases": "retained_in_registered_and_begun_denominators",
+    "notStarted": "retained_in_register_excluded_from_begun_phase_denominators",
+    "lostCase": "measurement_invalid",
+    "sourceOrRevisionMismatch": "measurement_invalid",
+    "evidenceWithoutPhaseStart": "measurement_invalid",
+    "observedAtOnlyChange": "not_source_drift_preserve_original_digest",
+    "reportCountsBeforeRates": true,
+    "rateRequiresKnownPositiveDenominator": true,
+    "missingMustNotBecomeZero": true,
+    "publication": "no_human_results_in_this_draft; no segment below five; no identity-revealing aggregates",
+    "proofRequired": [
+      "evidence_class",
+      "source_and_artifact_digest",
+      "schema_digest",
+      "window",
+      "sample_size",
+      "denominator",
+      "abort_error_counts",
+      "collection_method",
+      "explicit_phase_starts"
+    ],
+    "thresholdComparisonRequiresCompleteObservations": true
+  },
+  "thresholds": {
+    "state": "proposed_pending_gemini",
+    "finalized": null,
+    "comparativeBaseline": null,
+    "proposals": [
+      {
+        "metric": "planning_effort",
+        "condition": "confirmed_needs_equal_zero_with_positive_started_denominator",
+        "value": 0,
+        "unit": "confirmed_needs",
+        "action": "pivot_to_existing_non_binding_planner",
+        "rationale": "Existence screen only, not a success target; a flow that confirms no need has no demonstrated process utility."
+      },
+      {
+        "metric": "required_coverage",
+        "condition": "proven_required_units_equal_zero_with_positive_required_denominator",
+        "value": 0,
+        "unit": "proven_units",
+        "action": "narrow_need_class_without_inventing_supply",
+        "rationale": "No supported supply is an honest gap, not permission to loosen Fit."
+      },
+      {
+        "metric": "quorum_stability",
+        "condition": "unchanged_proven_missions_equal_zero_with_positive_fully_observed_rechecks",
+        "value": 0,
+        "unit": "unchanged_proven_missions",
+        "action": "retain_non_binding_manual_recheck",
+        "rationale": "Stable incomplete projections cannot demonstrate reliable binding quorum."
+      },
+      {
+        "metric": "supply_activation",
+        "condition": "released_matching_contributions_equal_zero_with_positive_delivered_eligible_denominator",
+        "value": 0,
+        "unit": "released_matching_contributions",
+        "action": "limit_contact_scope_or_keep_manual_planner",
+        "rationale": "No observed activation benefit; never send more contacts to force a positive result."
+      },
+      {
+        "metric": "mismatch_effort",
+        "condition": "effort_ratio_not_below_predeclared_comparable_baseline",
+        "value": 1,
+        "unit": "relative_effort_ratio",
+        "action": "pivot_process_without_expanding_scope",
+        "rationale": "No process improvement if effort is not lower; baseline and comparability remain pending, so no comparison is currently valid."
+      },
+      {
+        "metric": "handover_return",
+        "condition": "complete_evidence_ratio_for_terminal_started_segments",
+        "value": 1,
+        "unit": "ratio",
+        "action": "review_incomplete_cases_under_binding_safety_policy",
+        "rationale": "Exploratory target only; mandatory evidence cannot be waived. An open segment is not terminal failure."
+      }
+    ],
+    "safetyRule": "binding_zero_accepted_violations_not_a_product_target",
+    "noSuccessThresholdApproved": true,
+    "productKillThreshold": null,
+    "killThresholdStatus": "pending_gemini_no_empirical_mission_basis",
+    "decisionWhenMissing": "unavailable_no_activation_no_success_claim"
+  },
+  "safety": {
+    "state": "binding_existing_masterplan",
+    "maximumAcceptedViolations": 0,
+    "immediateStopReasons": [
+      "unauthorized_private_disclosure",
+      "unauthorized_publication",
+      "false_binding_or_payment_claim",
+      "duplicate_acceptance",
+      "real_test_payment",
+      "lost_required_evidence",
+      "state_not_safely_reconstructible",
+      "wrong_role_access",
+      "data_corruption",
+      "unsafe_physical_event",
+      "privacy_export_or_erasure_unavailable"
+    ],
+    "action": "stop_affected_new_lane; preserve_minimized_evidence; escalate_to_specialist; independently_recheck_bounded_fix",
+    "existingComponents": "continue_safe_support_no_automatic_delete_cancel_or_refund",
+    "higherSeverityWhenUncertain": true,
+    "resumption": "separate_verified_bounded_decision_never_automatic"
+  },
+  "privacy": {
+    "realMissionDataAllowed": false,
+    "realInventoryDataAllowed": false,
+    "rosterInContract": false,
+    "retentionDuration": null,
+    "output": "synthetic_or_reviewed_non_identifying_aggregates_only",
+    "forbidden": [
+      "raw_photos",
+      "free_text",
+      "exact_location",
+      "personal_inventory",
+      "account_ids",
+      "booking_ids",
+      "contract_ids",
+      "recipient_ids",
+      "device_ids",
+      "ip_addresses",
+      "contact_details",
+      "hashed_personal_identifiers",
+      "secrets",
+      "provider_payloads"
+    ],
+    "analyticsSdk": false,
+    "networkCollection": false,
+    "persistence": false,
+    "exportDeletion": "no_new_store_or_export; later human-data path requires exact D3/D4 and candidate privacy/export/erasure/retention gates; never destroy audit evidence",
+    "auditSeparation": "safety_audit_evidence_not_funnel_analytics"
+  },
+  "governance": {
+    "gatekeeper": "Gemini",
+    "decision": "pending",
+    "gateQuestion": "A: accept this bounded preregistration design only; B: FIX exact clauses/values; C: block design. A never activates a pilot or approves law/payment/privacy.",
+    "geminiEvidence": "Pro plus Extended; exact packet bytes; fresh decisive primary sources; complete source register; NOT VERIFIED never supports PASS",
+    "walidEscalation": "unavoidable_physical_action_only",
+    "sol": "review_and_bind_exact_candidate_and_gate_result",
+    "luna": "source_only_contract_and_negative_tests",
+    "observer": "only_after_separate_gates; structured_minimized_observations_no_private_payload",
+    "thresholdSupplier": "Gemini gate decision on source-bound proposed values; no escalation to Walid",
+    "legalProfessionalApprovalClaim": false,
+    "sent": false
+  },
+  "freeze": {
+    "beforeFirstObservation": true,
+    "scope": [
+      "source",
+      "schema",
+      "cohort",
+      "tasks",
+      "window",
+      "thresholds"
+    ],
+    "registration": "independent_pinned_digest_in_validator",
+    "afterObservationChange": "new_version_and_new_unstarted_cohort; preserve_prior_contract_and_results; no_relabel_no_pooling",
+    "candidateChange": "new_source_binding_and_independent_review",
+    "missingFinalWindowOrThreshold": "draft_valid_but_observation_and_activation_blocked",
+    "doesNotProvideTamperProofExternalStorage": true
+  },
+  "claims": {
+    "pilotReady": false,
+    "observedSuccess": false,
+    "statisticalMarketValidation": false,
+    "legalApproval": false,
+    "realPayment": false,
+    "providerActivation": false,
+    "runtimeActivation": false,
+    "missionCompletion": false
+  },
+  "openGates": [
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "D5",
+    "D6",
+    "exact_release_and_operations",
+    "gemini_preregistration_decision"
+  ],
+  "observations": [],
+  "bindings": {
+    "contractDigest": "adab6f0067f0fd20ab2129fbc1a5af8890772599251a8fcfc74b30d6e70a5552",
+    "schemaDigest": "0c50b2928d8ed916f43f3357d99c561b9dbbbb66bdb9ef38025d2f7f98b33a0e",
+    "sourceDigest": "4c8a0cf2f0ec9616a1695686bec3afe6bdc06ab60ced78172b1d7a44cce6fed5",
+    "cohortDigest": "855bc4f9d481f5af84b63f8e5f3644ac27e754c5c3006d13c1f1cbb4a204af6c",
+    "tasksDigest": "54d0a23350ee0b4bb040944962abd7798ebb8e8d98413c78203f62a33f62fc6f",
+    "windowDigest": "cb30e99c7dd101169dc16d80bd0b2450918984064aa9571c266f4a2b2b234c1b",
+    "thresholdsDigest": "eb0805b57e731d5007cc312c58d24381481fdf4ed7d9205e39889f6bfc60fde3"
+  }
+}

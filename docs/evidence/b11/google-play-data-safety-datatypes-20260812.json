@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "kind": "google-play-data-safety-data-types-preparation",
+  "capturedAt": "2026-08-12T21:48:11Z",
+  "status": "step-three-prepared-provider-sharing-and-retention-pending",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081302",
+    "commit": "530ed17e46dbd82916eef0d59f1b07e448c737f8"
+  },
+  "selectionCounts": {
+    "evaluated": 18,
+    "select": 17,
+    "doNotSelect": 1
+  },
+  "select": [
+    "Personal info / Name",
+    "Personal info / Email address",
+    "Personal info / Phone number",
+    "Personal info / Address",
+    "Personal info / User IDs",
+    "Location / Approximate location",
+    "Location / Precise location",
+    "Photos and videos / Photos",
+    "Messages / Other in-app messages",
+    "Other / Other user-generated content",
+    "Health and fitness / Health info",
+    "Financial info / Purchase history",
+    "Financial info / Other financial info",
+    "Device or other IDs / Device or other IDs",
+    "App info and performance / Crash logs",
+    "App info and performance / Other app performance data",
+    "App activity / App interactions"
+  ],
+  "doNotSelect": [
+    {
+      "dataType": "Financial info / User payment info",
+      "reason": "current-candidate-uses-memory-payments-and-does-not-collect-card-or-bank-credentials"
+    }
+  ],
+  "explicitlyAbsentLaunchInputs": [
+    {
+      "dataType": "Files and docs / Files and docs",
+      "reason": "all-server-uploads-are-image-only-jpeg-png-webp"
+    },
+    {
+      "dataType": "Photos and videos / Videos",
+      "reason": "no-video-upload-in-candidate"
+    },
+    {
+      "dataType": "Audio files / Voice or sound recordings",
+      "reason": "no-audio-upload-in-candidate"
+    },
+    {
+      "dataType": "Web browsing / Web browsing history",
+      "reason": "not-collected"
+    },
+    {
+      "dataType": "App activity / In-app search history",
+      "reason": "search-terms-are-not-persisted-as-user-history"
+    },
+    {
+      "dataType": "Contacts / Contacts",
+      "reason": "no-contacts-permission-or-upload"
+    },
+    {
+      "dataType": "Calendar / Calendar events",
+      "reason": "no-calendar-permission-or-upload"
+    }
+  ],
+  "openBeforeStepFour": {
+    "serviceProviderSharingClassification": true,
+    "retentionAndDeletionScheduleApproval": true,
+    "publicAccountDeletionRoute": true,
+    "googleMapsCredentialRestrictionEvidence": true
+  },
+  "evidenceRefs": [
+    "store/privacy-disclosures.json",
+    "docs/evidence/b11/android-binary-privacy-release-check-2026081202.json",
+    "docs/evidence/b11/google-play-data-safety-step2-20260812.json"
+  ],
+  "boundaries": {
+    "consoleAnswersChanged": false,
+    "draftSaved": false,
+    "formSubmitted": false,
+    "publicRoutesChanged": false,
+    "productionChanged": false,
+    "containsSecrets": false,
+    "containsEmailAddresses": false,
+    "containsAccountIdentifiers": false
+  }
+}

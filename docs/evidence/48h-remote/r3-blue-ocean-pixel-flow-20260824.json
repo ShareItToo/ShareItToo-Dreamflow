@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-48h-r3-blue-ocean-pixel-flow",
+  "status": "verified-pixel-flow-regression-and-codeql-passed",
+  "observedOn": "2026-08-24",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "implementationCommit": "19fc3221bc3879788db9c48b70a89a33656116b6",
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026082404"
+  },
+  "candidate": {
+    "ownerOnlyArchiveVerified": true,
+    "canonicalSigningRelationshipVerified": true,
+    "debuggableLocalQaOnly": true,
+    "releaseChannel": "internal",
+    "apiBaseUrl": "http://127.0.0.1:18080/api/v1",
+    "aabCreated": false,
+    "storeUploaded": false
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "17",
+    "apiLevel": 37,
+    "securityPatch": "2026-07-05",
+    "containsRawDeviceIdentifier": false
+  },
+  "installation": {
+    "installedVersionBefore": "1.0.0+2026082403",
+    "installedVersionAfter": "1.0.0+2026082404",
+    "dataPreservingDirectUpdate": true,
+    "firstInstallTimePreserved": true,
+    "ceDataInodePreserved": true,
+    "installedCandidateHashMatched": true,
+    "foregroundActivityVerified": true,
+    "uninstallUsed": false,
+    "dataResetUsed": false
+  },
+  "localHarness": {
+    "postgresMajor": 16,
+    "ephemeralDatabase": true,
+    "loopbackBinding": "127.0.0.1",
+    "adbReverse": "tcp:18080",
+    "apiPrefix": "/api/v1",
+    "syntheticAccountOnly": true,
+    "transientCredentialsOwnerOnly": true,
+    "listingAiProvider": "mock",
+    "listingAiBudgetCents": 0,
+    "externalProviderExecutionAllowed": false,
+    "paymentTransport": "memory",
+    "paymentLivemode": false,
+    "publicComplianceApproved": false
+  },
+  "syntheticFixture": {
+    "repositoryPath": "store/assets/synthetic-listings/cordless-drill.png",
+    "repositorySha256": "6028e8b513f5ead1a38362cc057c246ebbf1203604420baf18ddd94f7c1914bc",
+    "deviceSelection": "exact-filename-through-android-documents-ui",
+    "processedWebpSha256": "c8d8d316b3e317609370e4ec9cd6b2b56be9365536661c8b16d01ba5465c2b5a",
+    "privateGalleryImageSelectedOrAnalyzed": false
+  },
+  "observedFlow": {
+    "analysisStatus": "draft_ready",
+    "title": "Akku-Bohrschrauber",
+    "category": "cat8",
+    "categoryLabel": "Werkzeuge & Kleingeräte",
+    "subcategory": "Bohrmaschinen",
+    "editableFieldsVerified": true,
+    "clarificationQuestionCount": 2,
+    "clarificationMaximum": 3,
+    "initialPriceAutofillInvalidatedOwnerConfirmation": true,
+    "firstCompleteReviewState": "READY_TO_PUBLISH",
+    "oneDayOwnerRentMinor": 1000,
+    "oneDaySitContributionMinor": 100,
+    "oneDayRenterTotalMinor": 1100,
+    "sevenDayOwnerRentMinor": 4900,
+    "sevenDaySitContributionMinor": 490,
+    "sevenDayRenterTotalMinor": 5390,
+    "explicitPublicationActionPerformed": false,
+    "listingCreated": false
+  },
+  "staleReviewRegression": {
+    "trigger": "owner-edited-model-after-ready",
+    "itemIdentityConfirmationReset": true,
+    "finalPublicationConfirmationReset": true,
+    "clarificationAnswersReset": true,
+    "staleReadyPresentationHidden": true,
+    "stateAfterEdit": "NEEDS_REVIEW",
+    "publicationFingerprintMismatchFailsClosed": true,
+    "stateAfterFreshReview": "READY_TO_PUBLISH",
+    "implementationCommits": [
+      "897ff5582b381d6bf6ee1b34a14cda78d4427da6",
+      "19fc3221bc3879788db9c48b70a89a33656116b6"
+    ]
+  },
+  "cleanup": {
+    "adbReverseRemoved": true,
+    "syntheticDeviceFixtureRemoved": true,
+    "transientSessionRemoved": true,
+    "ephemeralDatabaseRemoved": true,
+    "temporaryUploadsRemoved": true,
+    "localBackendStopped": true
+  },
+  "verification": {
+    "blueOceanUiWiringTests": "passed-10",
+    "privacyRetentionAndProviderTests": "passed-71",
+    "focusedTotalTests": "passed-81",
+    "flutterAnalyze": "passed-no-issues",
+    "fullTechnicalRegression": "passed-candidate-rollover-ci-metadata-mode",
+    "githubRegression": "passed",
+    "githubCodeql": "passed-no-new-alerts"
+  },
+  "githubVerification": {
+    "implementationCommit": "19fc3221bc3879788db9c48b70a89a33656116b6",
+    "verifiedHead": "40eb46c39b95ad54fa67b40fa54977bc0d034523",
+    "regression": {
+      "runId": 32730758489,
+      "conclusion": "success",
+      "signedCandidateBuilt": false,
+      "apiImagePublished": false
+    },
+    "codeql": {
+      "workflowRunId": 32730758551,
+      "workflowConclusion": "success",
+      "advancedSecurityCheckId": 97442882988,
+      "advancedSecurityConclusion": "success",
+      "newAlerts": 0
+    }
+  },
+  "boundaries": {
+    "apiBillingCreated": false,
+    "externalAiProviderCalled": false,
+    "realMoneyUsed": false,
+    "productionChanged": false,
+    "cloudChanged": false,
+    "firebaseChanged": false,
+    "paymentChanged": false,
+    "storeChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "publicRegistrationEnabled": false,
+    "pilotActivated": false,
+    "publicReleasePerformed": false,
+    "pullRequestMerged": false,
+    "credentialsPersistedInRepository": false,
+    "containsSecrets": false
+  },
+  "nextPackage": "R4_ANDROID_LIFECYCLE_FAILURE_MATRIX"
+}

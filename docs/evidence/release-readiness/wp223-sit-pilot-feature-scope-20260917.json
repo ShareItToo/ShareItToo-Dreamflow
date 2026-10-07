@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-pilot-feature-scope-runtime-readback-20260917",
+  "capturedOn": "2026-09-17",
+  "source": "current-read-only-staging-readback",
+  "backendShortCommit": "df39a14b7a19",
+  "payment": {
+    "capabilitiesHttp": 200,
+    "transport": "memory",
+    "providerStatus": "disabled",
+    "mode": "unavailable",
+    "livemode": false
+  },
+  "mfa": {
+    "statusHttp": 404,
+    "statusCode": "not_found"
+  },
+  "identityVerification": {
+    "statusHttp": 404,
+    "statusCode": "not_found"
+  },
+  "boundaries": {
+    "credentialsRecorded": false,
+    "providerMutationPerformed": false,
+    "productionChanged": false,
+    "paymentChanged": false
+  }
+}

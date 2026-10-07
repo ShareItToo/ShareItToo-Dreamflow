@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "kind": "flutter-analysis-navigation-and-web-download",
+  "capturedAt": "2026-08-16T10:59:11Z",
+  "status": "passed-navigation-and-web-api-migration",
+  "baseline": {
+    "totalDiagnostics": 307,
+    "errors": 0,
+    "deprecatedMemberUse": 38,
+    "avoidWebLibrariesInFlutter": 1
+  },
+  "result": {
+    "totalDiagnostics": 304,
+    "errors": 0,
+    "diagnosticsRemovedThisBatch": 3,
+    "diagnosticsRemovedFromOriginal611": 307,
+    "deprecatedMemberUse": 36,
+    "avoidWebLibrariesInFlutter": 0,
+    "runtimeSourceFilesChanged": 2,
+    "dependencyManifestsChanged": 2,
+    "ciAnalyzerBaseline": 304
+  },
+  "migrationScope": {
+    "willPopScopeDiagnosticsRemoved": 1,
+    "dartHtmlDiagnosticsRemoved": 1,
+    "webOnlyLibraryDiagnosticsRemoved": 1,
+    "newAnalyzerDiagnosticsIntroduced": 0,
+    "privacyBoundSourceFilesChanged": 1,
+    "privacySourceHashesRefreshed": 1,
+    "backNavigationRuleChanged": false,
+    "downloadBytesChanged": false,
+    "downloadFilenameChanged": false,
+    "downloadMimeTypeChanged": false,
+    "collectedDataChanged": false
+  },
+  "migratedRegions": [
+    "main navigation explore-first system back handling",
+    "web-only temporary-anchor file download"
+  ],
+  "remainingDiagnostics": {
+    "unused_element": 101,
+    "use_build_context_synchronously": 107,
+    "deprecated_member_use": 36,
+    "unused_element_parameter": 44,
+    "unused_field": 16,
+    "avoid_web_libraries_in_flutter": 0
+  },
+  "verification": {
+    "flutterAnalyze": "passed-with-zero-errors-and-304-non-error-diagnostics",
+    "navigationAndWebApiWiringTests": "passed-3",
+    "analyzerBaselineWiringTests": "passed-2",
+    "privacyDisclosureTests": "passed-16",
+    "targetedNavigationAndDownloadTests": "passed-24",
+    "flutterTests": "passed-268-one-skipped",
+    "technicalRegression": "passed-with-bounded-internal-candidate-rollover",
+    "webBuild": "passed",
+    "androidDebugBuild": "passed",
+    "diffCheck": "passed"
+  },
+  "boundaries": {
+    "newAppCandidateBuilt": false,
+    "existingAppCandidateChanged": false,
+    "productionChanged": false,
+    "storeTrackChanged": false,
+    "reviewSubmitted": false,
+    "testAccountsMutated": false,
+    "realMoneyUsed": false
+  }
+}

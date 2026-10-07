@@ -1,0 +1,281 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-rw10-local-security-control-truthfulness",
+  "status": "verified-regression-and-codeql-passed",
+  "implementationBaseHead": "3f42924f297f758d0e4f62a3a78562d075494658",
+  "implementationHead": "d72e18eb607bb3f9ed7baf09ab7212f3ef695ee5",
+  "architecture": "docs/architecture/rw10-local-security-control-truthfulness-2026-08-25.md",
+  "report": "docs/operations/RW10_LOCAL_SECURITY_CONTROL_TRUTHFULNESS_2026-08-25.md",
+  "predecessor": {
+    "package": "RW9",
+    "evidence": "docs/evidence/48h-remote/rw9-local-account-profile-authorization-durability-20260825.json",
+    "verifiedImplementationHead": "0bfc57fca09dc8586e5eeb64c46a0af1ba6bc606",
+    "closureCommit": "3f42924f297f758d0e4f62a3a78562d075494658"
+  },
+  "scope": {
+    "allowed": [
+      "offline-account-security-unavailable-truth",
+      "server-authoritative-password-session-and-logout-controls",
+      "exact-account-session-email-response-rechecks",
+      "strict-bounded-whole-server-session-list-decoding",
+      "current-session-foreign-revoke-prohibition",
+      "exact-conditional-local-session-clear",
+      "retired-local-two-factor-and-device-simulation",
+      "session-change-ui-secret-and-stale-state-clearing",
+      "persistent-retryable-server-error-state",
+      "legacy-preview-byte-preservation-without-read-normalization",
+      "large-text-small-viewport-scrollability",
+      "synthetic-deterministic-local-regression"
+    ],
+    "excluded": [
+      "backend-route-schema-and-remote-auth-provider-change",
+      "two-factor-identity-verification-and-provider-activation",
+      "production-firebase-vps-dns-cloud-store-and-device",
+      "contract-quote-acceptance-cancellation-and-refund",
+      "payment-payout-provider-and-real-money",
+      "handover-return-damage-moderation-and-needs-review",
+      "external-ai-candidate-pilot-legal-and-owner-gates",
+      "gitguardian-finding-content-pr-merge-and-history-rewrite"
+    ],
+    "syntheticOnly": true,
+    "localOnly": true,
+    "timingWorkaroundAllowed": false,
+    "testParallelismReductionAllowed": false,
+    "liveAuthTrafficAllowed": false
+  },
+  "findings": [
+    {
+      "id": "RW10-P0-LOCAL-PASSWORD-SUCCESS-SIMULATION-001",
+      "state": "resolved-and-tested",
+      "resolution": "Offline password fields and timed fake success were removed; only the server-authoritative service can return success."
+    },
+    {
+      "id": "RW10-P0-LOCAL-TWO-FACTOR-PROTECTION-CLAIM-002",
+      "state": "resolved-and-tested",
+      "resolution": "Both security surfaces expose an unavailable explanation without switches, methods, codes or local persistence."
+    },
+    {
+      "id": "RW10-P0-SEEDED-SESSION-DEVICE-TRUTH-003",
+      "state": "resolved-and-tested",
+      "resolution": "Seeded device records and local session-list persistence were retired; only a validated server list can render."
+    },
+    {
+      "id": "RW10-P0-PARTIAL-SERVER-SESSION-SALVAGE-004",
+      "state": "resolved-and-tested",
+      "resolution": "The repository and service reject malformed, duplicate, over-capacity or contradictory whole session lists."
+    },
+    {
+      "id": "RW10-P0-SESSION-RESPONSE-PRINCIPAL-DRIFT-005",
+      "state": "resolved-and-tested",
+      "resolution": "Every response is rechecked against the exact invoking account id, session id and normalized email."
+    },
+    {
+      "id": "RW10-P0-BROAD-SUCCESSOR-SESSION-CLEAR-006",
+      "state": "resolved-and-tested",
+      "resolution": "Password change and logout-all use an exact conditional local clear and preserve a different or successor session."
+    },
+    {
+      "id": "RW10-P0-CURRENT-SESSION-FOREIGN-REVOKE-007",
+      "state": "resolved-and-tested",
+      "resolution": "The current session id is rejected before the foreign-device revoke route can be called."
+    },
+    {
+      "id": "RW10-P1-STALE-ASYNC-SECURITY-UI-008",
+      "state": "resolved-and-tested",
+      "resolution": "Session events clear secrets and stale state immediately; revision and epoch guards discard old async completions."
+    },
+    {
+      "id": "RW10-P1-NONRETRYABLE-SESSION-LOAD-FAILURE-009",
+      "state": "resolved-and-tested",
+      "resolution": "Invalid or failed server session loads retain a visible error and explicit deterministic retry."
+    },
+    {
+      "id": "RW10-P1-LEGACY-SECURITY-READ-MUTATION-010",
+      "state": "resolved-and-tested",
+      "resolution": "Retired legacy preview bytes are ignored and preserved exactly without read-time rewrite, seeding or deletion."
+    },
+    {
+      "id": "RW10-P1-SECRET-SCAN-FIXTURE-011",
+      "state": "resolved-and-tested",
+      "resolution": "Synthetic static password properties were replaced by runtime-built fixtures; the published historical tuple is reviewed exactly and cannot permit current-tree findings."
+    }
+  ],
+  "verification": {
+    "changedFileAnalyze": "passed-zero-issues",
+    "focusedRw10Flutter": "passed-13",
+    "rw10PlusB10Flutter": "passed-34",
+    "privacyRetentionProvider": "passed",
+    "rw10WiringTests": "passed-8",
+    "fullTechnicalRegression": "passed",
+    "githubRegression": "passed",
+    "githubCodeql": "passed-no-new-alerts"
+  },
+  "localRegression": {
+    "head": "d72e18eb607bb3f9ed7baf09ab7212f3ef695ee5",
+    "standardParallelism": true,
+    "timingWorkaroundUsed": false,
+    "parallelismReductionUsed": false,
+    "flutterPassed": 523,
+    "documentedProfileSkips": 3,
+    "analyzerIssues": 0,
+    "webDebugBuild": "passed",
+    "loopbackSmoke": "passed",
+    "androidDebugTasks": 448,
+    "androidMinSdk": 24
+  },
+  "githubVerification": {
+    "head": "d72e18eb607bb3f9ed7baf09ab7212f3ef695ee5",
+    "regressionRunId": 32846034530,
+    "codeqlRunId": 32846034621,
+    "regressionConclusion": "success",
+    "codeqlConclusion": "success",
+    "openCodeScanningAlerts": 0
+  },
+  "ratchetAudit": {
+    "cause": "RW10 retired local password, two-factor and device-session simulation and introduced strict server-session decoding plus exact conditional local auth-session clearing. Privacy and retention source bindings therefore changed; active-provider evidence changed only to bind those reviewed hashes.",
+    "providerDecisionChanged": false,
+    "providerGateChanged": false,
+    "predecessorSourceInventoryRefreshes": [
+      "RW0 through RW9 hashes are mechanically refreshed only where shared AuthService, BackendRepository, DataService, persistence-sync, release-truthfulness or regression sources changed.",
+      "B10 is tightened to require the server-bound account-security service and forbid the retired debug two-factor condition, local settings mutation and timed password success; no prior guard is relaxed.",
+      "Every predecessor, privacy, retention and active-provider validator must pass before the RW10 implementation candidate is frozen."
+    ],
+    "verification": "RW0 through RW10 package validators, privacy, retention and provider hold passed. The first candidate's exact-head GitHub Regression rejected synthetic static-password fixture shape; the current tree builds those fixtures at runtime and the immutable historical tuple is narrowly reviewed. Replacement-candidate local full regression, repository secret scan, GitHub Regression and CodeQL passed on the same exact implementation head."
+  },
+  "ratchets": {
+    "reason": "retired-local-security-simulation-and-exact-session-clear-source-change",
+    "privacyManifestSha256": "35c3a08e20e4f55183649af934e9415ea8cfd0c2d3327483a518cf477daee449",
+    "retentionManifestSha256": "955a901bbaec6511d119558b953274c3e5059a97c657fdcf93f2a939523315c8",
+    "activeProviderEvidenceSha256": "364037cefb30cfd55da5f19a8e3394e0308dae7e15b3760e159f9f28e5d17f7d",
+    "activeProviderState": "prepared-hold",
+    "completedOwnerDecisions": 0,
+    "requiredOwnerDecisions": 10,
+    "externalReadiness": false
+  },
+  "gates": {
+    "BUILD_READY": "not-granted",
+    "PLAY_UPLOAD_APPROVED": "not-granted",
+    "HUMAN_PILOT_ACTIVATED": "not-granted",
+    "PR7_MERGE_APPROVED": "not-granted",
+    "R17_GITGUARDIAN_HISTORY_REVIEW_COMPLETE": "not-granted"
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "cloudChanged": false,
+    "firebaseChanged": false,
+    "storeChanged": false,
+    "paymentChanged": false,
+    "realMoneyUsed": false,
+    "realAuthTrafficSent": false,
+    "realProviderTrafficSent": false,
+    "externalAiRuntimeEnabled": false,
+    "realTesterEnrolled": false,
+    "candidateCreated": false,
+    "deviceGateClaimed": false,
+    "legalApprovalChanged": false,
+    "gitHistoryRewritten": false,
+    "prMerged": false
+  },
+  "residualRisks": [
+    "The existing backend session and password route contracts were not exercised against a live environment in RW10.",
+    "A hard process or OS termination can interrupt non-transactional SharedPreferences session cleanup; no success is claimed in that path.",
+    "Retired legacy security preview bytes remain untouched until a separately reviewed migration or app-data clear.",
+    "Two-factor authentication and identity verification remain unavailable until separately approved server and provider work exists."
+  ],
+  "sourceInventory": [
+    {
+      "path": "lib/models/security.dart",
+      "sha256": "ff8d5942c8bd8816bea166c56d9a872f2f394a9d6445dc58798a95ca8ddb4b13"
+    },
+    {
+      "path": "lib/screens/security_screen.dart",
+      "sha256": "86107d2852d5363cec8cf5554de0ca5eef70a6b69cb21e1a042441d9dcf1c629"
+    },
+    {
+      "path": "lib/screens/two_factor_auth_screen.dart",
+      "sha256": "628e5b2f90bdba041c791cbe7efa1b2395a461e7268422fa08e305d49ff7096b"
+    },
+    {
+      "path": "lib/services/account_security_service.dart",
+      "sha256": "774492379049744c40ac82c9a01b46439d5f5b9bcbde80c94684822b33787b0e"
+    },
+    {
+      "path": "lib/services/auth_service.dart",
+      "sha256": "1607dfd6d0b7907aa9040d7ec10f649fcaab12b6fef872accc66b4b4602b2687"
+    },
+    {
+      "path": "lib/services/backend_repository.dart",
+      "sha256": "e9f5a102ee95f8731bb2b91c068be7bdad358febef4d4de5c51cb9c692d7b840"
+    },
+    {
+      "path": "lib/services/data_service.dart",
+      "sha256": "f23002e697a484a16e392e8fcf5dd9de527ecc55eb791dde7fab98386e37375f"
+    },
+    {
+      "path": "lib/services/shared_persistence_sync.dart",
+      "sha256": "b4294550220badf563c3a2fb0ea1929e15b0026483fb3dd3633370c6b486adb2"
+    },
+    {
+      "path": "backend/ops/secret_scan_history_baseline.json",
+      "sha256": "e02ef86f3b5bf7c0456aff6e1021a23db42341b446e049d49775c03487964551"
+    },
+    {
+      "path": "store/privacy-disclosures.json",
+      "sha256": "35c3a08e20e4f55183649af934e9415ea8cfd0c2d3327483a518cf477daee449"
+    },
+    {
+      "path": "store/retention-deletion-readiness.json",
+      "sha256": "955a901bbaec6511d119558b953274c3e5059a97c657fdcf93f2a939523315c8"
+    },
+    {
+      "path": "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
+      "sha256": "364037cefb30cfd55da5f19a8e3394e0308dae7e15b3760e159f9f28e5d17f7d"
+    },
+    {
+      "path": "tool/validate_privacy_disclosures.mjs",
+      "sha256": "b78f41588e8a1a14520df4f5a730ae1190924f3b2f177fe40f6569f76bfb56f9"
+    },
+    {
+      "path": "tool/validate_retention_deletion_readiness.mjs",
+      "sha256": "dc7d749b5fb4100231f1de756b41f1406507f6abfe2c0953d4a5ad49bcb91b96"
+    },
+    {
+      "path": "tool/validate_active_infrastructure_mail_provider_readiness.mjs",
+      "sha256": "6618e79f9148634ddd6ef7ccf2b96d54b5ed4b8fd081ad9e20db1110646e8ec6"
+    },
+    {
+      "path": "scripts/technical_regression_check.sh",
+      "sha256": "61e7a485cf99f041394995b49355e2b283f6e36a04977589e2ba228e22137fb2"
+    },
+    {
+      "path": "test/b10_release_truthfulness_test.dart",
+      "sha256": "4dfc75715494523f14c57bedce1beabd1261f8fda1615950da2fccad1eebeb15"
+    },
+    {
+      "path": "test/rw10_local_security_control_truthfulness_test.dart",
+      "sha256": "19f2475e25a045502340fb399423d258a4238a72467be1606858cee2be5a2e66"
+    },
+    {
+      "path": "test/tool/rw10_local_security_control_truthfulness_wiring.test.mjs",
+      "sha256": "753acb51c4b92c48d6a4b2df5ed32a400f64c5101dec85f9f4584c1dc0dbeebd"
+    },
+    {
+      "path": "test/tool/validate_rw10_local_security_control_truthfulness.test.mjs",
+      "sha256": "ecec0be574ff2af59771f4fc1ee28dbdfc3290e29463e9d5a943b928eeffae25"
+    },
+    {
+      "path": "tool/validate_rw10_local_security_control_truthfulness.mjs",
+      "sha256": "7fb727719059145119107975c85124b24ff297a2907660002b9066136d2a91fe"
+    },
+    {
+      "path": "docs/architecture/rw10-local-security-control-truthfulness-2026-08-25.md",
+      "sha256": "ce9231888736e3ce1e3bb2ff7ac8889bb145538bfd825299d992041e7b7b3d64"
+    },
+    {
+      "path": "docs/operations/RW10_LOCAL_SECURITY_CONTROL_TRUTHFULNESS_2026-08-25.md",
+      "sha256": "432aeeb6b9d4ea04568701b39d353f78b5e0f6b6eaf72d5dd6371900b3eaf524"
+    }
+  ]
+}

@@ -19,6 +19,31 @@ void main() {
     );
   });
 
+  test('completed chat closes after 48 hours even if confirmation is missing',
+      () {
+    final deadline = DateTime.utc(2026, 8, 22, 10);
+    expect(
+      isPrivatePilotBookingChatOpen(
+        bookingStatus: 'completed',
+        returnState: 'awaitingReturnConfirmation',
+        reportDeadline: deadline,
+        clarificationDeadline: DateTime.utc(2026, 8, 25, 10),
+        now: deadline,
+      ),
+      isTrue,
+    );
+    expect(
+      isPrivatePilotBookingChatOpen(
+        bookingStatus: 'completed',
+        returnState: 'awaitingReturnConfirmation',
+        reportDeadline: deadline,
+        clarificationDeadline: DateTime.utc(2026, 8, 25, 10),
+        now: deadline.add(const Duration(milliseconds: 1)),
+      ),
+      isFalse,
+    );
+  });
+
   group('starter role helpers', () {
     test('handover start is only allowed for owner on confirmed chat state',
         () {

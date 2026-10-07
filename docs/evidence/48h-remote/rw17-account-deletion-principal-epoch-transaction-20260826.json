@@ -1,0 +1,444 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-rw17-account-deletion-principal-epoch-transaction",
+  "status": "verified-regression-and-codeql-passed",
+  "implementationBaseHead": "5b2862ad40f79fe2287977868660f348806d68ae",
+  "implementationHead": "7ec6a24eadd1b04c9e3c77025d0ebf5f6fe59c34",
+  "architecture": "docs/architecture/rw17-account-deletion-principal-epoch-transaction-2026-08-26.md",
+  "report": "docs/operations/RW17_ACCOUNT_DELETION_PRINCIPAL_EPOCH_TRANSACTION_CLOSURE_2026-08-26.md",
+  "predecessor": {
+    "package": "RW16",
+    "evidence": "docs/evidence/48h-remote/rw16-session-transition-principal-epoch-20260826.json",
+    "verifiedImplementationHead": "4e307afa7f17cb0ac710ab19cea8f963c12b6dd4",
+    "closureCommit": "5b2862ad40f79fe2287977868660f348806d68ae"
+  },
+  "scope": {
+    "allowed": [
+      "account-deletion-owner-and-epoch-transaction-closure",
+      "typed-preflight-and-deletion-outcome-semantics",
+      "explicit-deleted-principal-local-finalization",
+      "successor-session-profile-installation-and-state-preservation",
+      "identity-bound-account-deletion-dialog-dismissal",
+      "red-first-account-a-to-account-b-transition-regressions",
+      "privacy-retention-and-lifecycle-technical-truth-refresh",
+      "security-action-inventory-refresh",
+      "mechanical-predecessor-hash-refresh",
+      "deterministic-local-and-ci-regression-evidence"
+    ],
+    "excluded": [
+      "contact-and-email-verification-actions-rw18",
+      "backend-route-schema-and-auth-provider-change",
+      "timing-retry-parallelism-reduction-and-test-exclusion",
+      "production-vps-dns-cloud-firebase-store-and-play",
+      "payment-provider-ai-pilot-real-money-and-live-traffic",
+      "legal-owner-gitguardian-pr-merge-and-history-rewrite"
+    ],
+    "syntheticOnly": true,
+    "localOnly": true,
+    "timingWorkaroundAllowed": false,
+    "testParallelismReductionAllowed": false,
+    "liveAuthTrafficAllowed": false
+  },
+  "findings": [
+    {
+      "id": "RW17-P0-PREFLIGHT-UNAVAILABLE-AS-EMPTY-001",
+      "state": "resolved-and-tested",
+      "resolution": "Transport and invalid preflight responses are typed unavailable states and can never become a server-confirmed empty blocker list."
+    },
+    {
+      "id": "RW17-P0-DELETION-RESULT-COLLAPSE-002",
+      "state": "resolved-and-tested",
+      "resolution": "Only six exact status-code-plus-error-code contracts are definite rejection; 408, intermediary, unstructured 4xx and transport failures remain outcome-unknown."
+    },
+    {
+      "id": "RW17-P0-CONFIRMED-LOCAL-FAILURE-003",
+      "state": "resolved-and-tested",
+      "resolution": "Server confirmation followed by local finalization failure has its own typed result and cannot display account-not-deleted."
+    },
+    {
+      "id": "RW17-P0-DELETED-A-SUCCESSOR-B-CLEANUP-004",
+      "state": "resolved-and-tested",
+      "resolution": "Confirmed cleanup addresses A by explicit identity and treats a stable active B session, profile, principal buckets and device-scoped Firebase installation as preserved success without enabling A navigation."
+    },
+    {
+      "id": "RW17-P0-AWAIT-OWNER-EPOCH-RESULT-RACE-005",
+      "state": "resolved-and-tested",
+      "resolution": "The screen captures A synchronously and revalidates before remote calls, result presentation and navigation; delayed A results cannot render under B."
+    },
+    {
+      "id": "RW17-P0-A-DIALOG-B-NAVIGATOR-RACE-006",
+      "state": "resolved-and-tested",
+      "resolution": "Each A deletion dialog is removed by its exact tracked route identity; a newer B-owned dialog remains visible."
+    }
+  ],
+  "deletionInvariant": {
+    "owner": "exact-user-session-email-created-at-plus-monotonic-auth-epoch-no-tokens",
+    "capture": "exact-principal-and-epoch-before-first-await",
+    "preflight": "strict-server-shape-or-typed-unavailable-never-empty-on-error",
+    "definiteRejection": "exact-status-and-error-code-allowlist-only",
+    "remoteUnknown": "no-success-or-not-deleted-claim-exact-a-session-clear-only",
+    "localOnlyFailure": "typed-non-server-partial-finalization-never-generic-not-started",
+    "serverConfirmedLocalFailure": "server-deleted-truth-preserved-local-finalization-retry-needed",
+    "localFinalization": "explicit-a-principal-cleanup-successor-b-preserved",
+    "presentation": "owner-or-stable-local-completion-specific-typed-result",
+    "navigation": "stable-completion-epoch-and-definite-session-absence",
+    "dialogDismissal": "remove-exact-a-owned-route-never-pop-current-route"
+  },
+  "definiteRejectionContracts": [
+    {
+      "status": 401,
+      "code": "authentication_required"
+    },
+    {
+      "status": 401,
+      "code": "invalid_or_expired_session"
+    },
+    {
+      "status": 401,
+      "code": "account_not_active"
+    },
+    {
+      "status": 401,
+      "code": "invalid_credentials"
+    },
+    {
+      "status": 409,
+      "code": "account_deletion_blocked"
+    },
+    {
+      "status": 429,
+      "code": "rate_limit_exceeded"
+    }
+  ],
+  "securityActionInventory": [
+    {
+      "id": "security.password.change",
+      "file": "lib/screens/security_screen.dart",
+      "status": "guarded-rw15"
+    },
+    {
+      "id": "security.remote-session.revoke",
+      "file": "lib/screens/security_screen.dart",
+      "status": "guarded-rw15"
+    },
+    {
+      "id": "security.sessions.logout-all",
+      "file": "lib/screens/security_screen.dart",
+      "status": "guarded-rw15"
+    },
+    {
+      "id": "profile.session.logout",
+      "file": "lib/screens/profile_screen.dart",
+      "status": "guarded-rw16"
+    },
+    {
+      "id": "account.deletion",
+      "file": "lib/screens/account_settings_screen.dart",
+      "status": "guarded-rw17"
+    },
+    {
+      "id": "contact.email-change",
+      "file": "lib/screens/contact_data_screen.dart",
+      "status": "guarded-rw18"
+    },
+    {
+      "id": "contact.phone-verification",
+      "file": "lib/screens/contact_data_screen.dart",
+      "status": "guarded-rw18"
+    },
+    {
+      "id": "contact.email-verification",
+      "file": "lib/screens/contact_data_screen.dart",
+      "status": "guarded-rw18"
+    },
+    {
+      "id": "login.session-clear",
+      "file": "lib/screens/login_screen.dart",
+      "status": "guarded-rw16"
+    },
+    {
+      "id": "login.email-verification",
+      "file": "lib/screens/login_screen.dart",
+      "status": "guarded-rw18"
+    },
+    {
+      "id": "legacy.change-password-placeholder",
+      "file": "lib/screens/change_password_screen.dart",
+      "status": "unreachable-b10-guarded"
+    },
+    {
+      "id": "data-service.test-session-clear-hook",
+      "file": "lib/services/data_service.dart",
+      "status": "test-only"
+    }
+  ],
+  "callSiteInventory": [
+    {
+      "symbol": "AuthService.clearSession",
+      "paths": {
+        "lib/services/data_service.dart": 2
+      }
+    },
+    {
+      "symbol": "_sessionTransitions.signOut",
+      "paths": {
+        "lib/screens/login_screen.dart": 1,
+        "lib/screens/profile_screen.dart": 1,
+        "lib/services/account_deletion_service.dart": 1
+      }
+    },
+    {
+      "symbol": "_accountDeletionService.preflightCheck",
+      "paths": {
+        "lib/screens/account_settings_screen.dart": 1
+      }
+    },
+    {
+      "symbol": "_accountDeletionService.deleteAccount",
+      "paths": {
+        "lib/screens/account_settings_screen.dart": 1
+      }
+    },
+    {
+      "symbol": "DataService.clearOperationalRecordsForConfirmedAccountDeletion",
+      "paths": {
+        "lib/services/account_deletion_service.dart": 1
+      }
+    },
+    {
+      "symbol": "DataService.clearSavedItemsForConfirmedAccountDeletion",
+      "paths": {
+        "lib/services/account_deletion_service.dart": 2
+      }
+    },
+    {
+      "symbol": "LocalSafetyPrivacyService.clearPrincipalForConfirmedAccountDeletion",
+      "paths": {
+        "lib/services/account_deletion_service.dart": 2
+      }
+    },
+    {
+      "symbol": "DataService.finalizeProfileForConfirmedAccountDeletion",
+      "paths": {
+        "lib/services/account_deletion_service.dart": 2
+      }
+    }
+  ],
+  "verification": {
+    "redFirst": "failed-missing-typed-deletion-context-outcome-and-completion-contract-before-fix",
+    "focusedRw17Flutter": "passed-13",
+    "rw17AndAdjacentCompatibilityFlutter": "passed-134",
+    "changedFileAnalyze": "passed-zero-issues",
+    "rw17WiringTests": "passed-6",
+    "rw17ValidatorTests": "passed-3",
+    "completeToolInventory": "passed-1924",
+    "completeToolInventorySkipped": 0,
+    "fullTechnicalRegression": "passed",
+    "githubRegression": "passed",
+    "githubCodeql": "passed-no-new-alerts"
+  },
+  "inventoryAudit": {
+    "predecessorRepositoryOwnedFiles": 334,
+    "closureRepositoryOwnedFiles": 341,
+    "predecessorPassedTests": 1915,
+    "closurePassedTests": 1924,
+    "skippedTests": 0,
+    "executionPattern": "node --test test/tool/*.test.mjs",
+    "standardNodeParallelism": true
+  },
+  "localRegression": {
+    "head": "7ec6a24eadd1b04c9e3c77025d0ebf5f6fe59c34",
+    "standardParallelism": true,
+    "timingWorkaroundUsed": false,
+    "parallelismReductionUsed": false,
+    "completeToolInventoryPassed": 1924,
+    "completeToolInventorySkipped": 0,
+    "flutterPassed": 585,
+    "documentedProfileSkips": 3,
+    "analyzerIssues": 0,
+    "webDebugBuild": "passed-with-wasm-dry-run",
+    "loopbackSmoke": "passed",
+    "androidDebugTasks": 448,
+    "androidMinSdk": 24,
+    "cleanCheckoutMigrations": 112,
+    "cleanCheckoutAssets": 84,
+    "cleanCheckoutFinallyClean": true,
+    "privateReleaseArtifact": "unavailable-ci-metadata-validated",
+    "storeOrDeviceGateClaimed": false
+  },
+  "githubVerification": {
+    "head": "7ec6a24eadd1b04c9e3c77025d0ebf5f6fe59c34",
+    "regressionRunId": 32948288131,
+    "codeqlRunId": 32948288027,
+    "regressionConclusion": "success",
+    "codeqlConclusion": "success",
+    "openCodeScanningAlerts": 0
+  },
+  "ratchetAudit": {
+    "cause": "RW17 replaces current-session inferred deletion cleanup with explicit deleted-principal cleanup, successor preservation and typed remote/local result truth.",
+    "privacyDisclosureSemanticsChanged": true,
+    "retentionSemanticsChanged": true,
+    "providerDecisionChanged": false,
+    "providerGateChanged": false,
+    "rw16VerifiedHeadChanged": false,
+    "timingWorkaroundIntroduced": false,
+    "mechanicalRefreshes": [
+      "RW0 through RW16 source inventories are re-hashed only for changed account deletion, data, privacy, retention and supported-regression sources.",
+      "RW15 and RW16 call-site counts are mechanically refreshed after broad AccountDeletionService static calls and broad session clearing are removed; historical action status and verified heads remain unchanged.",
+      "Active-provider evidence is revalidated without semantic, decision or gate changes."
+    ]
+  },
+  "ratchets": {
+    "privacyManifestSha256": "35c3a08e20e4f55183649af934e9415ea8cfd0c2d3327483a518cf477daee449",
+    "retentionManifestSha256": "955a901bbaec6511d119558b953274c3e5059a97c657fdcf93f2a939523315c8",
+    "activeProviderEvidenceSha256": "364037cefb30cfd55da5f19a8e3394e0308dae7e15b3760e159f9f28e5d17f7d",
+    "activeProviderState": "prepared-hold",
+    "completedOwnerDecisions": 0,
+    "requiredOwnerDecisions": 10,
+    "externalReadiness": false
+  },
+  "gates": {
+    "BUILD_READY": "not-granted",
+    "PLAY_UPLOAD_APPROVED": "not-granted",
+    "HUMAN_PILOT_ACTIVATED": "not-granted",
+    "PR7_MERGE_APPROVED": "not-granted",
+    "R17_GITGUARDIAN_HISTORY_REVIEW_COMPLETE": "not-granted"
+  },
+  "boundaries": {
+    "backendRuntimeChanged": false,
+    "productionChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "cloudChanged": false,
+    "firebaseChanged": false,
+    "storeChanged": false,
+    "paymentChanged": false,
+    "realMoneyUsed": false,
+    "realAuthTrafficSent": false,
+    "realProviderTrafficSent": false,
+    "realSupportTrafficSent": false,
+    "externalAiRuntimeEnabled": false,
+    "realTesterEnrolled": false,
+    "candidateCreated": false,
+    "deviceGateClaimed": false,
+    "legalApprovalChanged": false,
+    "gitHistoryRewritten": false,
+    "prMerged": false
+  },
+  "residualRisks": [
+    "Contact email change and phone verification still need exact owner, typed outcome and identity-bound route handling in RW18 P0.",
+    "Contact and login email verification remain RW18 P1 follow-ups.",
+    "A process termination after server confirmation but before local finalization still requires a future durable reconciliation design tied to backend contract evidence.",
+    "No live backend, process-termination, release artifact, Store or device proof is claimed."
+  ],
+  "sourceInventory": [
+    {
+      "path": "lib/screens/account_settings_screen.dart",
+      "sha256": "834bbac55e6e07ac9d69bace94bb5ad7072eb420dbe7d2ee940099b6d25aef68"
+    },
+    {
+      "path": "lib/services/account_deletion_service.dart",
+      "sha256": "c4f4da84e907f6007e61a04b54654c4386ad93ed7b16657c517ad99bd8599c3a"
+    },
+    {
+      "path": "lib/services/backend_repository.dart",
+      "sha256": "e9f5a102ee95f8731bb2b91c068be7bdad358febef4d4de5c51cb9c692d7b840"
+    },
+    {
+      "path": "lib/services/data_service.dart",
+      "sha256": "f23002e697a484a16e392e8fcf5dd9de527ecc55eb791dde7fab98386e37375f"
+    },
+    {
+      "path": "lib/services/local_safety_privacy_service.dart",
+      "sha256": "4f346ac2164be806b19821a77e50f1f11ce835b312dcb37f16828958cfd0d002"
+    },
+    {
+      "path": "lib/services/auth_service.dart",
+      "sha256": "1607dfd6d0b7907aa9040d7ec10f649fcaab12b6fef872accc66b4b4602b2687"
+    },
+    {
+      "path": "lib/services/session_transition_service.dart",
+      "sha256": "f7ff42ca7649ac1681d772e707d87d8a805c63e2962f71707a0490f321389804"
+    },
+    {
+      "path": "lib/services/shared_persistence_sync.dart",
+      "sha256": "b4294550220badf563c3a2fb0ea1929e15b0026483fb3dd3633370c6b486adb2"
+    },
+    {
+      "path": "lib/widgets/tracked_dialog_route.dart",
+      "sha256": "e01ac3c1006f4098e6d5b289fa499272c44e2a314da93351f088879d43012454"
+    },
+    {
+      "path": "store/g2-data-lifecycle.json",
+      "sha256": "1753947c8f92f4f6e82a6a7bb5e3a6e990368589b48dc3a1716ca7c9aecd749d"
+    },
+    {
+      "path": "store/privacy-disclosures.json",
+      "sha256": "35c3a08e20e4f55183649af934e9415ea8cfd0c2d3327483a518cf477daee449"
+    },
+    {
+      "path": "store/retention-deletion-readiness.json",
+      "sha256": "955a901bbaec6511d119558b953274c3e5059a97c657fdcf93f2a939523315c8"
+    },
+    {
+      "path": "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
+      "sha256": "364037cefb30cfd55da5f19a8e3394e0308dae7e15b3760e159f9f28e5d17f7d"
+    },
+    {
+      "path": "docs/evidence/48h-remote/rw16-session-transition-principal-epoch-20260826.json",
+      "sha256": "3e32481add0738d638c806da65b12a931eb78065a322e79fd030d2c342e67860"
+    },
+    {
+      "path": "scripts/technical_regression_check.sh",
+      "sha256": "61e7a485cf99f041394995b49355e2b283f6e36a04977589e2ba228e22137fb2"
+    },
+    {
+      "path": "test/rw17_account_deletion_principal_epoch_transaction_test.dart",
+      "sha256": "be812ddfbde32e18bc313e0bb5acb0c91a6e60ae7220efa59a105e2af6b40538"
+    },
+    {
+      "path": "test/tool/rw5_local_safety_privacy_principal_isolation_wiring.test.mjs",
+      "sha256": "ce6421bab6b0094392dc2691c4efa96397c08cba5f342c220a12f2eac376b487"
+    },
+    {
+      "path": "test/tool/rw6_local_operational_authorization_truth_recovery_wiring.test.mjs",
+      "sha256": "553bbb5b02b00bec5d4b091466a2656bdc8bddc5caf754fade5072fbb6139585"
+    },
+    {
+      "path": "test/tool/rw9_local_account_profile_authorization_durability_wiring.test.mjs",
+      "sha256": "c82904d0d1c7ab8702bdc98aa4ad35654ca7f03a8675804750381222a5281969"
+    },
+    {
+      "path": "test/tool/rw17_account_deletion_principal_epoch_transaction_wiring.test.mjs",
+      "sha256": "d56add43b20d633ae949fe2176528fd6ff6c1311e9a22c215175493c50a82193"
+    },
+    {
+      "path": "test/tool/validate_rw17_account_deletion_principal_epoch_transaction.test.mjs",
+      "sha256": "0327c4b9ace9562c59d577f82f665fd7c45c6e1c22d81333eb03ce2bf1617643"
+    },
+    {
+      "path": "tool/validate_g2_data_lifecycle.mjs",
+      "sha256": "c0aede510163ab7580a6765d878d706ad6d957e795a8326053aeae84a5bbee97"
+    },
+    {
+      "path": "tool/validate_privacy_disclosures.mjs",
+      "sha256": "b78f41588e8a1a14520df4f5a730ae1190924f3b2f177fe40f6569f76bfb56f9"
+    },
+    {
+      "path": "tool/validate_retention_deletion_readiness.mjs",
+      "sha256": "dc7d749b5fb4100231f1de756b41f1406507f6abfe2c0953d4a5ad49bcb91b96"
+    },
+    {
+      "path": "tool/validate_rw17_account_deletion_principal_epoch_transaction.mjs",
+      "sha256": "f6e6dc9050481a08a1cbcfcdfa166f38e7cab3400cd9d2593abc6ba432e0c01b"
+    },
+    {
+      "path": "docs/architecture/rw17-account-deletion-principal-epoch-transaction-2026-08-26.md",
+      "sha256": "4bb68272d4dab4d5e5d323004aac0e50f78b2e468b9bd782f5505280ec740ffc"
+    },
+    {
+      "path": "docs/operations/RW17_ACCOUNT_DELETION_PRINCIPAL_EPOCH_TRANSACTION_CLOSURE_2026-08-26.md",
+      "sha256": "b251a3a131ff9dd434c417df4ef86aaca6e2aeb992db076d5a988a947f806fa7"
+    }
+  ]
+}

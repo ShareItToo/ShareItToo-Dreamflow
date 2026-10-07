@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "kind": "v51-owner-acceptance-server-price-gate",
+  "status": "passed-source-and-regression",
+  "capturedAt": "2026-08-17T08:45:00Z",
+  "sourceCommit": "1f3cde5af2729a25b8ebcb0a6addfd23be768790",
+  "checks": {
+    "requestSnapshotRevalidated": true,
+    "ownerPayoutMustEqualRentalSubtotal": true,
+    "remoteRequestDetailBlocksInvalidSnapshot": true,
+    "sharedAcceptanceDialogBlocksInvalidSnapshot": true,
+    "declarationDisabledWithoutValidSnapshot": true,
+    "acceptanceDisabledWithoutValidSnapshot": true,
+    "requestDetailSurfaceGuarded": true,
+    "ongoingOwnerSurfaceGuarded": true,
+    "ownerRequestsSurfaceGuarded": true,
+    "messageThreadSurfaceGuarded": true,
+    "localTestFallbackExplicitlyNonbinding": true,
+    "ownerSeesRentFeeTotalAndPayout": true
+  },
+  "verification": {
+    "sourceWiringTestsPassed": 11,
+    "targetedFlutterTestsPassed": 9,
+    "targetedAnalyzerExistingFindings": 61,
+    "targetedAnalyzerNewFindings": 0,
+    "fullFlutterTestsPassed": 271,
+    "intentionalFlutterTestsSkipped": 1,
+    "fullAnalyzerFindings": 229,
+    "fullAnalyzerErrors": 0,
+    "webDebugBuild": "passed",
+    "androidDebugBuild": "passed",
+    "technicalRegression": "passed"
+  },
+  "privacy": {
+    "dataCollectionChanged": false,
+    "dataStorageChanged": false,
+    "dataTransportChanged": false,
+    "providerChanged": false,
+    "permissionChanged": false,
+    "privacyInventoryChangeRequired": false
+  },
+  "boundaries": {
+    "backendDeployed": false,
+    "stagingChanged": false,
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "storeSubmissionPerformed": false,
+    "realPaymentPerformed": false,
+    "candidateBuiltOrRelabeled": false,
+    "pushRetainedDefaultOff": true,
+    "crashRetainedDefaultOff": true,
+    "pushEnablesCrash": false,
+    "crashDataTransferred": false
+  },
+  "conclusion": {
+    "remoteOwnerAcceptance": "valid-complete-server-price-snapshot-required",
+    "alternateAcceptanceRoutes": "same-shared-fail-closed-dialog",
+    "invalidPriceUserMessage": "Preisprüfung fehlgeschlagen",
+    "officialPlayInternalCandidate": "1.0.0+2026081509",
+    "localSignedCandidate": "1.0.0+2026081510-built-local-not-uploaded"
+  }
+}

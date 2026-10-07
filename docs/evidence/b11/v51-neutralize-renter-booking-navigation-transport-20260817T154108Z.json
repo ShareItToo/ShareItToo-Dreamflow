@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "checkpoint": "16.174",
+  "capturedAtUtc": "2026-08-17T15:41:08Z",
+  "sourceBaseCommit": "e193dff8179acf075cbf5e28d132a38ac82e35ff",
+  "status": "passed",
+  "renterBookingBoundary": {
+    "savedTransportSelectionRead": false,
+    "transientTransportPriceInput": false,
+    "expressFieldsForwarded": false,
+    "deliveryCapabilityFieldsForwarded": false,
+    "deliveryResponsibilityFieldsForwarded": false,
+    "deliveryAddressFieldsForwarded": false,
+    "bindingServerPriceSnapshotPreserved": true,
+    "confirmedHandoverLocationPreserved": true,
+    "confirmedReturnLocationPreserved": true,
+    "bookingNavigationPreserved": true,
+    "renterCancellationAndReviewPreserved": true
+  },
+  "privacyBoundary": {
+    "collectionChanged": false,
+    "storageChanged": false,
+    "transmissionChanged": false,
+    "permissionsChanged": false,
+    "sourceInventoryChangeRequired": false
+  },
+  "verification": {
+    "targetedWiring": "17/17 passed",
+    "runtimeDiff": "10 insertions, 48 deletions",
+    "fullTechnicalRegression": "passed with exit code 0",
+    "fullFlutter": "292 passed, 1 intentional skip",
+    "backend": "213 passed, 1 intentional PostgreSQL skip",
+    "flutterAnalyzer": "224 findings, 0 errors",
+    "webDebugBuild": "passed",
+    "androidDebugBuild": "passed"
+  },
+  "serviceBoundary": {
+    "pushRetained": true,
+    "crashlyticsRetained": true,
+    "separateVoluntaryDefaultOffChoices": true,
+    "pushEnablesCrashlytics": false,
+    "adsMarketingAnalyticsExternalGenAiEnabled": false
+  },
+  "externalActions": {
+    "deployment": false,
+    "upload": false,
+    "storeMutation": false,
+    "providerConsoleMutation": false,
+    "liveMoney": false,
+    "candidateBuiltOrRelabeled": false
+  },
+  "sourceHashesSha256": {
+    "lib/screens/bookings_screen.dart": "78c844201745c6a21e13389453c4d9641c35c3c392f2fc3bec615cd431fabcb6",
+    "test/tool/bookings_screen_dead_ui_cleanup_wiring.test.mjs": "dc650c4cdd7c892b6f1bfbd400f58b83d6c42cef4a7482c1ee81e0a8d2e25716"
+  }
+}

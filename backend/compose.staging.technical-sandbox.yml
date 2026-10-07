@@ -1,0 +1,34 @@
+services:
+  api:
+    environment:
+      # This lane is deliberately separate from the real payment transport.
+      PAYMENT_TRANSPORT: memory
+      STRIPE_LIVEMODE: "false"
+      STRIPE_SECRET_KEY: ""
+      STRIPE_WEBHOOK_SECRET: ""
+      STRIPE_CONNECT_WEBHOOK_SECRET: ""
+      STRIPE_SECRET_KEY_FILE: ""
+      STRIPE_WEBHOOK_SECRET_FILE: ""
+      STRIPE_CONNECT_WEBHOOK_SECRET_FILE: ""
+      TECHNICAL_SANDBOX_ENABLED: "1"
+      TECHNICAL_SANDBOX_KILL_SWITCH: ${TECHNICAL_SANDBOX_KILL_SWITCH:-0}
+      TECHNICAL_SANDBOX_SECRET_KEY_FILE: /run/secrets/technical-sandbox-secret-key
+      TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE: /run/secrets/technical-sandbox-webhook-secret
+      TECHNICAL_SANDBOX_ACCOUNT_ID: ${TECHNICAL_SANDBOX_ACCOUNT_ID:?TECHNICAL_SANDBOX_ACCOUNT_ID must be set for the technical sandbox overlay}
+      TECHNICAL_SANDBOX_USER_IDS: ${TECHNICAL_SANDBOX_USER_IDS:?TECHNICAL_SANDBOX_USER_IDS must be set for the technical sandbox overlay}
+      TECHNICAL_SANDBOX_AUTHORIZATION_ID: ${TECHNICAL_SANDBOX_AUTHORIZATION_ID:?TECHNICAL_SANDBOX_AUTHORIZATION_ID must be set for the technical sandbox overlay}
+      TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT: ${TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT:?TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT must be set for the technical sandbox overlay}
+      TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT: ${TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT:?TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT must be set for the technical sandbox overlay}
+    volumes:
+      - type: bind
+        source: ${TECHNICAL_SANDBOX_SECRET_KEY_HOST_FILE:?TECHNICAL_SANDBOX_SECRET_KEY_HOST_FILE must be set for the technical sandbox overlay}
+        target: /run/secrets/technical-sandbox-secret-key
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${TECHNICAL_SANDBOX_WEBHOOK_SECRET_HOST_FILE:?TECHNICAL_SANDBOX_WEBHOOK_SECRET_HOST_FILE must be set for the technical sandbox overlay}
+        target: /run/secrets/technical-sandbox-webhook-secret
+        read_only: true
+        bind:
+          create_host_path: false

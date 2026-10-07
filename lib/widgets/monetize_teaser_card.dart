@@ -2,10 +2,10 @@ import 'dart:async';
 import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:lendify/models/item.dart';
 import 'package:lendify/screens/create_listing_screen.dart';
 import 'package:lendify/services/localization_service.dart';
+import 'package:lendify/widgets/app_image.dart';
 import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
 
@@ -27,7 +27,6 @@ class _MonetizeTeaserCardState extends State<MonetizeTeaserCard> with TickerProv
   bool _showQuestion = true;
   bool _ctaVisible = false; // Start hidden to avoid initial flicker
   bool _videoCompleted = false;
-  bool _shouldAutoplay = false; // If intro ends before video initializes
   Timer? _sequenceTimer;
 
   @override
@@ -155,14 +154,10 @@ class _MonetizeTeaserCardState extends State<MonetizeTeaserCard> with TickerProv
                       fit: StackFit.expand,
                       children: [
                         Positioned.fill(
-                          child: Image.network(
-                            heroPosterUrl,
+                          child: AppImage(
+                            url: heroPosterUrl,
                             fit: BoxFit.cover,
-                            alignment: Alignment.center,
-                            loadingBuilder: (context, child, loadingProgress) {
-                              if (loadingProgress == null) return child;
-                              return const ColoredBox(color: Color(0x1A000000));
-                            },
+                            fallback: const ColoredBox(color: Color(0x1A000000)),
                           ),
                         ),
                         if (videoReady)
@@ -270,7 +265,11 @@ class _CurrencyAssembleIntro extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color stroke = Theme.of(context).colorScheme.primary;
-    final TextStyle base = GoogleFonts.baloo2(fontSize: fontSize, fontWeight: FontWeight.w800, height: 1.15);
+    final TextStyle base = TextStyle(
+      fontSize: fontSize,
+      fontWeight: FontWeight.w800,
+      height: 1.15,
+    );
     return Stack(alignment: Alignment.center, children: [
       // Currency particles assembling
       SizedBox(

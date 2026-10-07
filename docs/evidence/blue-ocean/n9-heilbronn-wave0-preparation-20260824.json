@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-stage-a-blue-ocean-n9-heilbronn-wave0-preparation",
+  "status": "verified-ready-for-n10",
+  "capturedAt": "2026-08-24T00:32:00Z",
+  "implementationBaseHead": "9ba15e519edf1fdec01e4bdf74a94c9c03bd0ea8",
+  "wave": {
+    "pilotId": "heilbronn_wave0",
+    "nature": ["CLOSED", "INVITED", "NON-BINDING", "ANDROID-FIRST", "NO-REAL-MONEY", "PRODUCT-AND-PROCESS-PILOT"],
+    "plannedAdultParticipantCount": 3,
+    "plannedListingMinimum": 9,
+    "plannedListingMaximum": 15,
+    "plannedListingsPerParticipantMinimum": 3,
+    "plannedListingsPerParticipantMaximum": 5,
+    "activated": false,
+    "testerRosterStoredInGit": false,
+    "spiegelbergChanged": false
+  },
+  "preparedArtifacts": {
+    "runbook": "docs/operations/BLUE_OCEAN_HEILBRONN_WAVE0_RUNBOOK.md",
+    "feedbackForm": "docs/templates/BLUE_OCEAN_HEILBRONN_WAVE0_FEEDBACK_FORM.md",
+    "evaluationSheet": "docs/templates/blue_ocean_heilbronn_wave0_evaluation_sheet.csv",
+    "safePhotoInstructions": "complete",
+    "aiDisclosureAndConsent": "complete",
+    "meetingPointLabels": ["Pilot Treffpunkt A", "Pilot Treffpunkt B", "Pilot Treffpunkt C"],
+    "pauseAbortProcedure": "complete",
+    "uiNonBindingNoMoneyNotice": "complete",
+    "operatorConfigChecker": "tool/check_stage_a_operator_config.mjs"
+  },
+  "operatorConfig": {
+    "requiredFields": ["SIT_OPERATOR_LEGAL_NAME", "SIT_OPERATOR_POSTAL_ADDRESS", "SIT_OPERATOR_CONTACT_EMAIL"],
+    "currentRepositoryEvidenceState": "facts-open",
+    "valuesStoredInRepository": false,
+    "factsAloneActivatePilot": false
+  },
+  "remainingActivationGates": [
+    "HEILBRONN_WAVE0_ACTIVATION_GO",
+    "exact-signed-android-internal-candidate-owner-approved",
+    "operator-config-complete-outside-repository",
+    "three-adult-roster-and-consent-outside-repository",
+    "exact-candidate-privacy-export-erasure-retention-revalidation",
+    "external-ai-provider-budget-approval-or-explicit-manual-mock-limitation",
+    "physical-safety-pause-abort-and-owner-support-acknowledgement"
+  ],
+  "initialServiceState": {
+    "firebaseAnalytics": "off",
+    "marketingAnalytics": "off",
+    "crashlyticsCollection": "off",
+    "fcmPush": "off",
+    "supportEvidenceUpload": "off",
+    "realMoney": "off",
+    "publicRegistration": "off",
+    "publicStoreRelease": "off"
+  },
+  "targetedVerification": {
+    "operatorConfigDomainTests": "passed-6",
+    "operatorConfigHelperTests": "passed-2",
+    "wave0WiringTests": "passed-4",
+    "artifactValidatorTests": "passed-7",
+    "artifactValidator": "passed",
+    "fullTechnicalRegression": "passed-candidate-rollover-mode",
+    "githubRegression": "passed",
+    "githubCodeql": "passed"
+  },
+  "exactGitHubVerification": {
+    "headSha": "b606e2864b6ab429a9dd64c04280968720454581",
+    "regressionRunId": 32675356026,
+    "regressionConclusion": "success",
+    "codeqlRunId": 32675356015,
+    "codeqlConclusion": "success"
+  },
+  "boundaries": {
+    "humanPilotActivated": false,
+    "realTesterEnrolled": false,
+    "realPersonDataStored": false,
+    "externalProviderCallPerformed": false,
+    "paidCallPerformed": false,
+    "billingActivated": false,
+    "realMoneyEnabled": false,
+    "playConsoleChanged": false,
+    "storeUploadPerformed": false,
+    "firebaseChanged": false,
+    "productionChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "cloudChanged": false,
+    "publicReleasePerformed": false,
+    "pullRequestMerged": false,
+    "historyRewritten": false
+  },
+  "nextPackage": "N10"
+}

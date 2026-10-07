@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp140-staging-historical-support-deadline-recovery",
+  "status": "passed-historical-simulation-deadline-recovery",
+  "capturedAt": "2026-09-13T15:28:54Z",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "implementationHead": "b8deb49affa6e3bd7f13c4233849b20e8cb2db92",
+    "backendRuntimeHead": "df39a14b7a19afe467842461a28f1e77fec8445e",
+    "sourceInventory": {
+      "tool/run_wp140_staging_historical_support_deadline_recovery.mjs": "5dcf48e0ea78dad960b12d761bb8d59550fdb2c054ef4f0e490349550decf9dd",
+      "test/tool/run_wp140_staging_historical_support_deadline_recovery.test.mjs": "e5981ec46e33bbaaf0a47a7d3e844a9a4d1c107facbaf2ff527a1f52238d5489"
+    }
+  },
+  "staging": {
+    "runtimeImage": "ghcr.io/shareittoo/shareittoo-api:df39a14b7a19afe467842461a28f1e77fec8445e",
+    "runtimeRestartCountBefore": 0,
+    "runtimeRestartCountAfter": 0,
+    "readinessBefore": "degraded-three-noncritical-simulation-followups-overdue",
+    "readinessAfter": "ready",
+    "readinessReadbackHttpStatus": 200,
+    "supportDeadlineWorkerVersion": "support-deadline-watchdog-v1",
+    "supportDeadlineWorkerStale": false,
+    "p0WithoutOwnerAfter": 0,
+    "nextUpdateOverdueAfter": 0,
+    "criticalNextUpdateOverdueAfter": 0
+  },
+  "support": {
+    "targetCount": 3,
+    "targetOperatingMode": "simulation",
+    "targetPriority": "p3",
+    "syntheticProvenanceConfirmed": true,
+    "publishedProgressCount": 2,
+    "independentReviewCount": 2,
+    "closedSyntheticRecipientTransitionCount": 1,
+    "futureDeadlineCount": 3,
+    "overdueCountAfter": 0,
+    "pendingProgressCountAfter": 0,
+    "eventCountAfter": 22,
+    "messageCountAfter": 3,
+    "progressCountAfter": 3,
+    "priorHistoryPreserved": true,
+    "externalMessageSentCount": 0
+  },
+  "recoverySemantics": {
+    "publishedCasesUsedOfficialProgressWorkflow": true,
+    "publishedCasesHadIndependentTwoAdminReview": true,
+    "closedSyntheticRecipientUsedOfficialStatusTransition": true,
+    "closedSyntheticRecipientReactivated": false,
+    "closedSyntheticRecipientReceivedNewMessage": false,
+    "supportCaseTableWrittenDirectly": false,
+    "oldEventsRewritten": false,
+    "retryResumeCohortBoundByRepositoryMarkers": true
+  },
+  "cleanup": {
+    "temporaryAdminCount": 2,
+    "activeTemporaryAdminCountAfter": 0,
+    "activeTemporarySessionCountAfter": 0,
+    "activeTemporaryElevationCountAfter": 0,
+    "credentialsRevoked": true,
+    "privateVaultDeleted": true,
+    "auditHistoryRetained": true
+  },
+  "verification": {
+    "focusedRunnerContractTests": "passed-10-of-10",
+    "fullLocalTechnicalRegression": "passed-ci-metadata-and-candidate-rollover-mode",
+    "implementationGithubRegressionRunId": 34764505554,
+    "implementationGithubRegressionConclusion": "success",
+    "implementationGithubCodeqlRunId": 34764505588,
+    "implementationGithubCodeqlConclusion": "success",
+    "independentPostRecoveryReadback": "passed",
+    "portfolioBefore": { "pass": 20, "partial": 4, "open": 8 },
+    "portfolioAfter": { "pass": 21, "partial": 4, "open": 7 }
+  },
+  "boundaries": {
+    "simulationOnly": true,
+    "existingHistoryDeleted": false,
+    "externalMessageSent": false,
+    "productionChanged": false,
+    "paymentChanged": false,
+    "realMoneyUsed": false,
+    "googlePlayChanged": false,
+    "firebaseChanged": false,
+    "appCandidateChanged": false,
+    "pixelContacted": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false,
+    "containsAccountIdentity": false,
+    "containsCaseIdentity": false,
+    "containsCredential": false,
+    "containsToken": false,
+    "containsPrivateFilesystemPath": false
+  }
+}

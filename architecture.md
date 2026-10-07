@@ -1,4 +1,14 @@
-# ShareItToo - Architecture Documentation
+# ShareItToo - Architecture Documentation (Historical Snapshot)
+
+> **Historical only — do not use as current implementation authority.** This
+> document describes an early prototype and is preserved for traceability. Its
+> statements about vehicles, deposits, sample data, local-only persistence,
+> future Firebase migration, broad internationalization and incomplete booking
+> flows are stale or conflict with the current fail-closed launch boundaries.
+> Use `AGENTS.md`, `docs/current_state.md`,
+> `docs/current_work_package.md`, the versioned documents under
+> `docs/architecture/`, and the validated manifests under `store/` for current
+> work. The remainder below is intentionally retained as historical text.
 
 ## App Overview
 ShareItToo is a peer-to-peer rental marketplace for ANY item, following an Airbnb-like design structure. Users can rent anything from tools to electronics, with a complete booking flow and messaging system.

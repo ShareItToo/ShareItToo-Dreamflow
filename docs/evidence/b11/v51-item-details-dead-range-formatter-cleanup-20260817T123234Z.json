@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "kind": "v51-item-details-dead-range-formatter-cleanup",
+  "status": "passed-source-and-full-regression",
+  "capturedAt": "2026-08-17T12:32:34Z",
+  "sourceBaseCommit": "aa4cc85e380cb8f7d428819b877c27c358362230",
+  "runtimeChange": {
+    "file": "lib/widgets/item_details_overlay.dart",
+    "removedSymbol": "_ItemDetailsPageState._formatRange",
+    "runtimeLinesAdded": 0,
+    "runtimeLinesDeleted": 7,
+    "reason": "The private compact range formatter had no repository call site and was independently reported as unused by the analyzer."
+  },
+  "activeBehaviorPreserved": {
+    "availabilityCheck": true,
+    "rentalRequestPersistence": true,
+    "privatePilotCheckout": true,
+    "activePriceFormatting": true,
+    "activeFullRangeFormatting": true,
+    "guestGate": true
+  },
+  "productDecision": {
+    "firebaseCloudMessagingRetained": true,
+    "firebaseCrashlyticsRetained": true,
+    "bothServicesRequireSeparateVoluntaryChoice": true,
+    "nextCandidateDefaultOff": true,
+    "pushCannotEnableCrashlytics": true,
+    "adsMarketingAnalyticsAndExternalGenAiRemainDisabled": true
+  },
+  "privacyAndReleaseBoundary": {
+    "sourceInventoryBindingChanged": false,
+    "dataCollectionChanged": false,
+    "storageChanged": false,
+    "transportChanged": false,
+    "permissionsChanged": false,
+    "providerChanged": false,
+    "publicPrivacyCopyChanged": false,
+    "storeMetadataChanged": false,
+    "candidateBuiltOrRelabeled": false,
+    "deploymentOrUploadPerformed": false,
+    "crashEventGenerated": false,
+    "realPaymentPerformed": false
+  },
+  "sourceBindings": {
+    "itemDetailsOverlaySha256": "69fb5603870aebf219d0c478049173f3c5504b18fde6af088ae52b8f9b596651",
+    "wiringTestSha256": "9cc9e14b867ace3877c9f6927a440b4e0bbe70996619ffa772e89ae22ab10c88"
+  },
+  "verification": {
+    "targetedNodeTests": "passed-7",
+    "targetedFlutterTests": "passed-34",
+    "fullFlutterTests": "passed-282-with-1-intentional-skip",
+    "flutterAnalyzer": "224-findings-0-errors-baseline-accepted",
+    "googleOnlySocialProfile": "passed",
+    "webDebugBuild": "passed-existing-wasm-dry-run-warnings-only",
+    "androidDebugBuild": "passed",
+    "privacyValidator": "passed-draft-fail-closed",
+    "retentionValidator": "passed-draft-nine-open-decisions",
+    "diffCheck": "passed"
+  },
+  "containsSecrets": false,
+  "containsAccountData": false
+}

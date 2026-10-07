@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-authenticated-deep-link-diagnostic",
+  "status": "passed-bounded-authenticated-deep-link-diagnostic",
+  "capturedAt": "2026-08-12T20:31:05.148Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app", "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0", "buildNumber": "2026081202",
+    "commit": "72dd8f13b5d3be0e82392a8b28c31292bdc23b53",
+    "releaseChannel": "internal", "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true, "paymentMode": "memory", "stripeLivemode": false
+  },
+  "installed": {
+    "packageIdentityVerified": true, "versionName": "1.0.0", "buildNumber": "2026081202",
+    "apkSha256": "4445ff773ae728ef0959b4063e9f687ab86777ca9847d2a3605766de55afafec"
+  },
+  "device": {
+    "platform": "android", "physical": true, "manufacturer": "Google", "model": "Pixel 7 Pro",
+    "osVersion": "16", "apiLevel": 36, "securityPatch": "2026-04-05", "containsRawDeviceIdentifier": false
+  },
+  "tests": {
+    "authenticatedHttpsListing": {"status": "passed", "result": "synthetic-listing-visible"},
+    "authenticatedHttpsBooking": {"status": "passed", "result": "completed-booking-visible"},
+    "authenticatedCustomSchemeChat": {"status": "passed", "result": "booking-chat-visible"}
+  },
+  "boundaries": {
+    "syntheticAccountsOnly": true, "directDiagnosticOnly": true, "storeInstallationGateSatisfied": false,
+    "fullDeviceMatrixPassed": false, "wifiOnlyDiagnostic": true, "hotspotPassed": false,
+    "authenticatedDeepLinksPassed": true, "realPushPassed": false,
+    "manualTalkBackTraversalPassed": false, "iosTestFlightPassed": false,
+    "paymentEndpointCalled": false, "stripeLivemode": false, "messageSent": false,
+    "lockCodeUsed": false, "accountIdentityRecorded": false, "containsPersonalAccountData": false,
+    "containsSecrets": false, "containsRawDeviceIdentifiers": false, "containsReviewCredentials": false
+  },
+  "isolation": {
+    "protectedReviewFixtureUnchanged": true, "protectedReviewSessionRestored": true,
+    "temporaryVaultRemovedAfterProbe": true, "containsReviewCredentials": false
+  }
+}

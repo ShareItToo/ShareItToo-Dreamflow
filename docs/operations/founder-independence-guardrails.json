@@ -1,0 +1,206 @@
+{
+  "schemaVersion": 1,
+  "kind": "founder-independence-fi0-guardrails",
+  "state": "foundation-hold-external-assignments",
+  "source": {
+    "driveDocument": "03_SIT_FOUNDER_INDEPENDENCE_UND_DELEGATION.pdf",
+    "documentDate": "2026-08-18",
+    "requirements": [
+      "FI-001",
+      "FI-002",
+      "FI-003",
+      "FI-004",
+      "FI-005",
+      "FI-006"
+    ]
+  },
+  "roleModel": {
+    "applicationRoles": [
+      "user",
+      "support",
+      "admin",
+      "system"
+    ],
+    "functionalRoles": [
+      {
+        "id": "software_automation",
+        "scope": "deterministic standard support, status and scheduling",
+        "currentAssignee": null,
+        "delegateAssignee": null,
+        "assignmentState": "open"
+      },
+      {
+        "id": "operations_general_manager",
+        "scope": "daily operations, goals and escalation quality",
+        "currentAssignee": null,
+        "delegateAssignee": null,
+        "assignmentState": "open"
+      },
+      {
+        "id": "trust_safety_support",
+        "scope": "disputes, damage, abuse, support and human review",
+        "currentAssignee": null,
+        "delegateAssignee": null,
+        "assignmentState": "open"
+      },
+      {
+        "id": "technical_owner_on_call",
+        "scope": "releases, security, incidents and provider dependencies",
+        "currentAssignee": null,
+        "delegateAssignee": null,
+        "assignmentState": "open"
+      },
+      {
+        "id": "finance_compliance",
+        "scope": "accounting, tax, provider reconciliation, privacy and external advice",
+        "currentAssignee": null,
+        "delegateAssignee": null,
+        "assignmentState": "open"
+      },
+      {
+        "id": "country_lead_launch_partner",
+        "scope": "country or regional launch operations after a separately approved gate",
+        "currentAssignee": null,
+        "delegateAssignee": null,
+        "assignmentState": "open"
+      }
+    ],
+    "namedPersonAuthorizationAllowed": false,
+    "assignmentAuthority": "owner-approved-company-system",
+    "minimumBusFactor": 2,
+    "unknownAssignmentFailsClosed": true
+  },
+  "criticalProcessTemplate": {
+    "requiredFields": [
+      "processId",
+      "ownerRoleId",
+      "delegateRoleId",
+      "runbookRef",
+      "monitoringRef",
+      "escalationThreshold",
+      "fallback",
+      "approvalPolicy",
+      "readiness"
+    ],
+    "assignmentUnknownFailsClosed": true,
+    "fourEyesPolicyValues": [
+      "not-required-with-reason",
+      "required",
+      "external-gate"
+    ],
+    "readinessValues": [
+      "ready",
+      "hold",
+      "not-applicable"
+    ]
+  },
+  "auditSchema": {
+    "storage": "backend.audit_log",
+    "foundationMigration": "backend/sql/migrations/001_b3_foundation.up.sql",
+    "appendOnly": true,
+    "appendOnlyTrigger": "sit_reject_append_only_mutation",
+    "requiredFields": [
+      "actor_id",
+      "actor_role",
+      "action",
+      "resource_type",
+      "resource_id",
+      "request_id",
+      "before_hash",
+      "after_hash",
+      "metadata",
+      "created_at"
+    ],
+    "actorRoles": [
+      "user",
+      "support",
+      "admin",
+      "system"
+    ],
+    "sensitiveMetadataForbidden": [
+      "passwords",
+      "tokens",
+      "signing_material",
+      "raw_device_identifiers",
+      "recovery_codes",
+      "message_content_unless_case_required"
+    ],
+    "criticalActionApprovalPolicyRequired": true,
+    "existingCoverageState": "append-only-foundation-present-role-capability-expansion-open"
+  },
+  "founderHoursEvents": {
+    "eventType": "founder_hours_aggregate_recorded",
+    "collectionMode": "manual-monthly-aggregate-only",
+    "categories": [
+      "strategy",
+      "operations",
+      "support",
+      "technical",
+      "emergency"
+    ],
+    "requiredFields": [
+      "periodMonth",
+      "category",
+      "minutes",
+      "recordedByRole",
+      "recordedAt"
+    ],
+    "recordingRoles": [
+      "admin",
+      "system"
+    ],
+    "forbiddenCollection": [
+      "exact_activity_timestamps",
+      "keystrokes",
+      "screenshots",
+      "urls",
+      "app_usage",
+      "message_content",
+      "gps",
+      "biometrics",
+      "continuous_monitoring"
+    ],
+    "automaticCollectionAllowed": false,
+    "cashAndNormalizedResultSeparated": true,
+    "normalizedResultIncludesFounderReplacementCompensation": true
+  },
+  "founderEscalationEvents": {
+    "eventType": "founder_escalation_aggregate_recorded",
+    "collectionMode": "manual-monthly-aggregate-only",
+    "requiredFields": [
+      "periodMonth",
+      "totalCount",
+      "roleRoutedCount",
+      "founderOnlyCount",
+      "unroutedCount",
+      "recordedByRole",
+      "recordedAt"
+    ],
+    "recordingRoles": [
+      "admin",
+      "system"
+    ],
+    "routingQualityRule": "roleRoutedCount + founderOnlyCount + unroutedCount = totalCount",
+    "caseDetailsAllowed": false,
+    "automaticCollectionAllowed": false
+  },
+  "runbookTemplate": "docs/operations/FOUNDER_INDEPENDENCE_RUNBOOK_TEMPLATE.md",
+  "externalGates": {
+    "companySystemOwnership": "open",
+    "functionalRoleAssignees": "open",
+    "functionalRoleDelegates": "open",
+    "accountRbacChanges": "open",
+    "absenceTests": "not-started",
+    "founderReplacementCompensationAmount": "open-finance-owner-decision"
+  },
+  "boundaries": {
+    "invasiveTimeTracking": false,
+    "personalActivityCollection": false,
+    "accountPermissionsChanged": false,
+    "secretsMoved": false,
+    "productionChanged": false,
+    "storeChanged": false,
+    "providerChanged": false,
+    "signedCandidateCreated": false
+  }
+}

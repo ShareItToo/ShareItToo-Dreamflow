@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "kind": "flutter-analysis-safe-batch",
+  "capturedAt": "2026-08-16T06:11:28Z",
+  "status": "passed-partial-reduction",
+  "baseline": {
+    "totalDiagnostics": 611,
+    "errors": 0,
+    "warnings": 283,
+    "infos": 328
+  },
+  "result": {
+    "totalDiagnostics": 435,
+    "errors": 0,
+    "warnings": 266,
+    "infos": 169,
+    "diagnosticsRemoved": 176,
+    "automatedFixesApplied": 165,
+    "sourceFilesChanged": 28,
+    "broadFormatterChurnExcluded": true
+  },
+  "safeFixScope": [
+    "avoid_init_to_null",
+    "curly_braces_in_flow_control_structures",
+    "no_leading_underscores_for_local_identifiers",
+    "prefer_conditional_assignment",
+    "prefer_final_fields",
+    "prefer_function_declarations_over_variables",
+    "prefer_interpolation_to_compose_strings",
+    "prefer_is_empty",
+    "prefer_null_aware_operators",
+    "prefer_typing_uninitialized_variables",
+    "unnecessary_non_null_assertion",
+    "unnecessary_null_comparison",
+    "unnecessary_string_escapes",
+    "unused_import"
+  ],
+  "remainingDiagnostics": {
+    "unused_element": 126,
+    "use_build_context_synchronously": 107,
+    "deprecated_member_use": 60,
+    "unused_element_parameter": 53,
+    "unused_local_variable": 52,
+    "unused_field": 29,
+    "curly_braces_in_flow_control_structures": 8,
+    "dead_code": 3,
+    "unreachable_switch_default": 2,
+    "equal_keys_in_map": 1,
+    "empty_catches": 1,
+    "avoid_web_libraries_in_flutter": 1
+  },
+  "remainingScopeBoundary": {
+    "p1_01Complete": false,
+    "reason": "remaining-unused-and-async-context-diagnostics-require-flow-aware-product-review-and-deprecated-api-migrations-require-targeted-ui-validation"
+  },
+  "verification": {
+    "flutterAnalyze": "passed-with-zero-errors-and-435-non-error-diagnostics",
+    "flutterTests": "passed-267-one-skipped",
+    "technicalRegression": "passed",
+    "privacyDisclosureSourceBinding": "updated-and-passed",
+    "webBuild": "passed",
+    "androidDebugBuild": "passed",
+    "diffCheck": "passed"
+  },
+  "boundaries": {
+    "newAppCandidateBuilt": false,
+    "existingAppCandidateChanged": false,
+    "productionChanged": false,
+    "storeTrackChanged": false,
+    "reviewSubmitted": false,
+    "realMoneyUsed": false
+  }
+}

@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 /// Wishlist model used for local persistence.
 ///
 /// id: unique identifier
@@ -31,7 +29,7 @@ class Wishlist {
       );
 
   @override
-  String toString() => 'Wishlist(id='+id+', name='+name+', system='+system.toString()+')';
+  String toString() => 'Wishlist(id=$id, name=$name, system=$system)';
 
   @override
   bool operator ==(Object other) =>

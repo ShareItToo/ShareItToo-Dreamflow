@@ -1,0 +1,533 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-rw20-listing-mutation-principal-epoch-transaction",
+  "status": "verified-regression-and-codeql-passed",
+  "implementationBaseHead": "176d35d6622aefaa833b2f2194ab5ae628c93257",
+  "implementationHead": "bd1d6f3b2289c85699dd220deaafe34f7ee183fd",
+  "architecture": "docs/architecture/rw20-listing-mutation-principal-epoch-transaction-2026-08-26.md",
+  "report": "docs/operations/RW20_LISTING_MUTATION_PRINCIPAL_EPOCH_TRANSACTION_CLOSURE_2026-08-26.md",
+  "predecessor": {
+    "package": "RW19",
+    "evidence": "docs/evidence/48h-remote/rw19-profile-location-mutation-principal-epoch-transaction-20260826.json",
+    "verifiedImplementationHead": "93b7a4cde7bbcb04f9f6c0c60b26dc5bb941e2ae",
+    "closureCommit": "176d35d6622aefaa833b2f2194ab5ae628c93257"
+  },
+  "scope": {
+    "allowed": [
+      "owner-listing-create-edit-draft-publish-status-delete-epoch-closure",
+      "owner-bound-listing-media-blue-ocean-and-supply-awaits",
+      "owner-bound-listing-backend-credential-resolution",
+      "typed-listing-mutation-result-truth-and-local-rollback",
+      "identity-bound-dialog-page-event-and-navigation-cleanup",
+      "red-first-account-a-to-account-b-regressions",
+      "listing-action-and-call-site-inventory",
+      "mechanical-predecessor-hash-and-wiring-refresh",
+      "deterministic-local-and-ci-regression-evidence"
+    ],
+    "excluded": [
+      "backend-route-schema-and-provider-change",
+      "listing-set-quote-contract-payment-refund-and-damage-business-change",
+      "timing-retry-parallelism-reduction-and-test-exclusion",
+      "production-vps-dns-cloud-firebase-store-and-play",
+      "payment-ai-pilot-real-money-and-live-traffic",
+      "legal-owner-gitguardian-pr-merge-and-history-rewrite"
+    ],
+    "syntheticOnly": true,
+    "localOnly": true,
+    "timingWorkaroundAllowed": false,
+    "testParallelismReductionAllowed": false,
+    "liveBackendTrafficAllowed": false,
+    "liveProviderTrafficAllowed": false
+  },
+  "findings": [
+    {
+      "id": "RW20-P0-LISTING-SUCCESSOR-TOKEN-RACE-001",
+      "state": "resolved-and-tested",
+      "resolution": "Listing writes carry the exact token-free owner through coordinator, data layer and repository, so Account A payloads cannot acquire Account B credentials."
+    },
+    {
+      "id": "RW20-P0-DELAYED-LISTING-RESULT-UNDER-SUCCESSOR-002",
+      "state": "resolved-and-tested",
+      "resolution": "Result surfaces and navigation revalidate exact principal and action epoch; delayed Account A results remain invisible under Account B."
+    },
+    {
+      "id": "RW20-P1-LISTING-RESULT-TRUTH-COLLAPSE-003",
+      "state": "resolved-and-tested",
+      "resolution": "Rejected, remotely accepted with local failure, unknown and principal-changed results remain typed and are handled before generic catches."
+    },
+    {
+      "id": "RW20-P0-LOCAL-CATALOG-MID-WRITE-TRANSITION-004",
+      "state": "resolved-and-tested",
+      "resolution": "Owner verification brackets persistence and any interrupted local catalog commit is rolled back before the failure is surfaced."
+    },
+    {
+      "id": "RW20-P1-MEDIA-ASSISTANT-AWAIT-RACE-005",
+      "state": "resolved-and-tested",
+      "resolution": "Picker, byte read, upload, Blue Ocean and supply-enrichment awaits revalidate their captured listing owner."
+    },
+    {
+      "id": "RW20-P0-LISTING-ROUTE-GLOBAL-POP-RACE-006",
+      "state": "resolved-and-tested",
+      "resolution": "Dialogs and pushed pages are removed by exact owned route identity and never by globally popping a successor route."
+    },
+    {
+      "id": "RW20-P1-CROSS-OWNER-CREATE-EVENT-007",
+      "state": "resolved-and-tested",
+      "resolution": "The transient created-listing event is set and consumed only for the exact session owner and is cleared on mismatch."
+    },
+    {
+      "id": "RW20-P0-DIRECT-SCREEN-LISTING-WRITE-BYPASS-008",
+      "state": "resolved-and-tested",
+      "resolution": "Every repository-owned listing mutation surface uses the owner-bound coordinator; permanent inventory requires zero legacy DataService listing write call sites in UI screens."
+    }
+  ],
+  "transactionInvariant": {
+    "owner": "exact-user-session-email-created-at-plus-auth-epoch-and-listing-user-id-no-tokens",
+    "action": "exact-loaded-listing-context-plus-monotonic-screen-action-epoch",
+    "capture": "exact-owner-and-action-epoch-before-first-await",
+    "revalidation": "before-remote-media-assistant-result-state-dialog-page-event-and-navigation",
+    "backendCredential": "access-token-for-exact-owner-only-no-global-current-session-fallback",
+    "localCommit": "exact-owner-verified-before-during-and-after-local-listing-catalog-write-with-rollback",
+    "definiteRejection": "exact-status-and-structured-error-code-allowlist-only",
+    "remoteAccepted": "expected-listing-response-remains-accepted-after-local-or-principal-failure",
+    "unknown": "timeout-transport-intermediary-malformed-and-nonallowlisted-never-rejected-or-success",
+    "routeDismissal": "remove-exact-owned-dialog-or-page-route-never-pop-current-successor-route",
+    "createEvent": "set-and-take-for-exact-session-owner-only"
+  },
+  "definiteRejectionContracts": {
+    "listingMutation": {
+      "400": [
+        "invalid_listing",
+        "listing_title_required",
+        "listing_description_too_short",
+        "listing_category_required",
+        "invalid_listing_condition",
+        "invalid_listing_price",
+        "listing_location_required",
+        "invalid_listing_coordinates",
+        "invalid_listing_duration",
+        "invalid_handover_radius",
+        "listing_photo_required",
+        "listing_photo_must_be_uploaded",
+        "listing_photo_not_found",
+        "listing_photo_not_approved",
+        "invalid_listing_status",
+        "listing_revision_required",
+        "private_pilot_listing_declaration_required",
+        "private_pilot_category_not_allowed",
+        "private_pilot_subcategory_not_allowed",
+        "private_pilot_country_not_allowed",
+        "private_pilot_region_not_allowed"
+      ],
+      "401": [
+        "authentication_required",
+        "invalid_or_expired_session",
+        "account_not_active"
+      ],
+      "403": [
+        "listing_forbidden",
+        "listing_photo_forbidden",
+        "action_blocked_by_moderation"
+      ],
+      "404": [
+        "listing_not_found",
+        "user_not_found"
+      ],
+      "409": [
+        "listing_revision_conflict",
+        "listing_locked_by_moderation",
+        "listing_photo_already_used",
+        "private_pilot_account_declaration_required",
+        "private_pilot_commercial_review_blocked",
+        "private_pilot_listing_declaration_required",
+        "private_pilot_category_not_allowed",
+        "private_pilot_subcategory_not_allowed",
+        "private_pilot_country_not_allowed",
+        "private_pilot_region_not_allowed",
+        "private_pilot_listing_region_unbound"
+      ],
+      "429": [
+        "rate_limit_exceeded"
+      ]
+    }
+  },
+  "listingMutationActionInventory": [
+    {
+      "id": "create.media-and-upload",
+      "file": "lib/screens/create_listing_screen.dart",
+      "status": "guarded-rw20"
+    },
+    {
+      "id": "create.blue-ocean-analysis-and-review",
+      "file": "lib/screens/create_listing_screen.dart",
+      "status": "guarded-rw20"
+    },
+    {
+      "id": "create.draft",
+      "file": "lib/screens/create_listing_screen.dart",
+      "status": "guarded-rw20"
+    },
+    {
+      "id": "create.publish",
+      "file": "lib/screens/create_listing_screen.dart",
+      "status": "guarded-rw20"
+    },
+    {
+      "id": "edit.update",
+      "file": "lib/screens/create_listing_screen.dart",
+      "status": "guarded-rw20"
+    },
+    {
+      "id": "my-listings.status",
+      "file": "lib/screens/my_listings_screen.dart",
+      "status": "guarded-rw20"
+    },
+    {
+      "id": "my-listings.delete",
+      "file": "lib/screens/my_listings_screen.dart",
+      "status": "guarded-rw20"
+    },
+    {
+      "id": "my-listings.edit-and-preview",
+      "file": "lib/screens/my_listings_screen.dart",
+      "status": "guarded-rw20"
+    },
+    {
+      "id": "own-profile.status",
+      "file": "lib/screens/own_profile_screen.dart",
+      "status": "guarded-rw20"
+    },
+    {
+      "id": "own-profile.preview",
+      "file": "lib/screens/own_profile_screen.dart",
+      "status": "guarded-rw20"
+    },
+    {
+      "id": "explore.created-result",
+      "file": "lib/screens/explore_screen.dart",
+      "status": "guarded-rw20"
+    },
+    {
+      "id": "explore.supply-enrichment",
+      "file": "lib/screens/explore_screen.dart",
+      "status": "guarded-rw20"
+    }
+  ],
+  "callSiteInventory": [
+    {
+      "symbol": "DataService.addItem",
+      "paths": {}
+    },
+    {
+      "symbol": "DataService.addItemForOwner",
+      "paths": {
+        "lib/services/listing_mutation_service.dart": 1
+      }
+    },
+    {
+      "symbol": "DataService.updateItem",
+      "paths": {}
+    },
+    {
+      "symbol": "DataService.updateItemForOwner",
+      "paths": {
+        "lib/services/listing_mutation_service.dart": 1
+      }
+    },
+    {
+      "symbol": "DataService.updateItemStatus",
+      "paths": {}
+    },
+    {
+      "symbol": "DataService.updateItemStatusForOwner",
+      "paths": {
+        "lib/services/listing_mutation_service.dart": 1
+      }
+    },
+    {
+      "symbol": "DataService.deleteItemById",
+      "paths": {}
+    },
+    {
+      "symbol": "DataService.deleteItemByIdForOwner",
+      "paths": {
+        "lib/services/listing_mutation_service.dart": 1
+      }
+    },
+    {
+      "symbol": "BackendRepository.createListingForOwner",
+      "paths": {
+        "lib/services/data_service.dart": 1
+      }
+    },
+    {
+      "symbol": "BackendRepository.publishBlueOceanListingForOwner",
+      "paths": {
+        "lib/services/data_service.dart": 1
+      }
+    },
+    {
+      "symbol": "BackendRepository.updateListingForOwner",
+      "paths": {
+        "lib/services/data_service.dart": 1
+      }
+    },
+    {
+      "symbol": "BackendRepository.updateListingStatusForOwner",
+      "paths": {
+        "lib/services/data_service.dart": 1
+      }
+    },
+    {
+      "symbol": "BackendRepository.deleteListingForOwner",
+      "paths": {
+        "lib/services/data_service.dart": 1
+      }
+    },
+    {
+      "symbol": "ListingMutationInteractionController",
+      "paths": {
+        "lib/screens/create_listing_screen.dart": 1,
+        "lib/screens/explore_screen.dart": 1,
+        "lib/screens/my_listings_screen.dart": 1,
+        "lib/screens/own_profile_screen.dart": 2
+      }
+    }
+  ],
+  "verification": {
+    "redFirst": "failed-missing-owner-bound-listing-coordinator-typed-results-exact-route-and-account-transition-contract-before-fix",
+    "focusedRw20Flutter": "passed-13",
+    "rw7Rw19CompatibilityFlutter": "passed-24",
+    "changedFileAnalyze": "passed-zero-issues",
+    "rw20WiringTests": "passed-8",
+    "rw20ValidatorTests": "passed-3",
+    "completeToolInventory": "passed-1956",
+    "completeToolInventorySkipped": 0,
+    "fullTechnicalRegression": "passed",
+    "githubRegression": "passed",
+    "githubCodeql": "passed-no-new-alerts"
+  },
+  "inventoryAudit": {
+    "predecessorRepositoryOwnedFiles": 358,
+    "closureRepositoryOwnedFiles": 367,
+    "predecessorPassedTests": 1945,
+    "closurePassedTests": 1956,
+    "skippedTests": 0,
+    "executionPattern": "node --test test/tool/*.test.mjs",
+    "standardNodeParallelism": true
+  },
+  "localRegression": {
+    "head": "bd1d6f3b2289c85699dd220deaafe34f7ee183fd",
+    "command": "CI=true SIT_ALLOW_CANDIDATE_ROLLOVER=1 bash scripts/technical_regression_check.sh",
+    "conclusion": "passed",
+    "nodeTests": {
+      "passed": 1956,
+      "failed": 0,
+      "skipped": 0
+    },
+    "flutterTests": {
+      "passed": 624,
+      "failed": 0,
+      "skipped": 3
+    },
+    "focusedRw20Flutter": {
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0
+    },
+    "flutterAnalyzeIssues": 0,
+    "webBuild": "passed",
+    "wasmDryRun": "passed",
+    "p0aLoopbackSmoke": "passed",
+    "androidDebugBuild": "passed",
+    "androidMinimumSdk": 24,
+    "standardParallelism": true,
+    "timingWorkaroundUsed": false,
+    "parallelismReductionUsed": false,
+    "releaseCandidateCreated": false
+  },
+  "githubVerification": {
+    "head": "bd1d6f3b2289c85699dd220deaafe34f7ee183fd",
+    "regressionRunId": 32974917299,
+    "regressionUrl": "https://github.com/walidwalidchraibi-dot/ShareItToo-Dreamflow/actions/runs/32974917299",
+    "regressionConclusion": "success",
+    "codeqlRunId": 32974917182,
+    "codeqlUrl": "https://github.com/walidwalidchraibi-dot/ShareItToo-Dreamflow/actions/runs/32974917182",
+    "codeqlConclusion": "success",
+    "openCodeScanningAlerts": 0
+  },
+  "ratchetAudit": {
+    "cause": "RW20 replaces mutable-current-session listing writes and generic post-await UI with exact owner and action epochs, owner-only backend credentials, typed remote truth, rollback and exact route identity.",
+    "privacyDisclosureSemanticsChanged": false,
+    "retentionSemanticsChanged": false,
+    "backendRouteOrSchemaChanged": false,
+    "providerDecisionChanged": false,
+    "rw19VerifiedHeadChanged": false,
+    "rw19ClosureHeadChanged": false,
+    "timingWorkaroundIntroduced": false,
+    "mechanicalRefreshes": [
+      "RW0 through RW19 source inventories are re-hashed only for changed listing screens, data and backend repositories, permanent regression and retained wiring tests.",
+      "Blue Ocean, photo lifecycle, G5A and RW7 wiring assertions now require the stronger owner-bound coordinator and exact-owner async flow.",
+      "RW15 through RW17 retain the additional listing-persistence test-only session-clear hook in their clearSession call-site counts, and RW18 retains the additional exact-owner repository credential call site.",
+      "RW19 retains the added exact owned-route removal call site used to close the Account A listing editor without popping a successor route.",
+      "Predecessor implementation and closure heads, backend routes, schema, provider configuration, privacy, retention and external gate decisions remain unchanged."
+    ]
+  },
+  "gates": {
+    "BUILD_READY": "not-granted",
+    "PLAY_UPLOAD_APPROVED": "not-granted",
+    "HUMAN_PILOT_ACTIVATED": "not-granted",
+    "PR7_MERGE_APPROVED": "not-granted",
+    "R17_GITGUARDIAN_HISTORY_REVIEW_COMPLETE": "not-granted"
+  },
+  "boundaries": {
+    "backendRuntimeChanged": false,
+    "backendRouteOrSchemaChanged": false,
+    "productionChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "cloudChanged": false,
+    "firebaseConfigurationChanged": false,
+    "storeChanged": false,
+    "paymentChanged": false,
+    "realMoneyUsed": false,
+    "realAuthTrafficSent": false,
+    "realProviderTrafficSent": false,
+    "realSupportTrafficSent": false,
+    "externalAiRuntimeEnabled": false,
+    "realTesterEnrolled": false,
+    "candidateCreated": false,
+    "deviceGateClaimed": false,
+    "legalApprovalChanged": false,
+    "gitHistoryRewritten": false,
+    "prMerged": false
+  },
+  "residualRisks": [
+    "No live backend, device, upload or assistant flow has been exercised; runtime and provider equivalence remain external gates.",
+    "A process termination after remote acceptance still needs future durable reconciliation against an explicit backend status or idempotency contract.",
+    "Legacy trusted compatibility methods remain in the data and repository layers but are permanently forbidden from repository-owned listing UI call sites.",
+    "No release artifact, Store, Play, payment, real-money, pilot, legal or owner-gate readiness is claimed."
+  ],
+  "sourceInventory": [
+    {
+      "path": "backend/src/app.js",
+      "sha256": "3a30a389612dddf4b5d636d9da2eaa35451596e7dac3add80c5f0a192badce55"
+    },
+    {
+      "path": "lib/screens/create_listing_screen.dart",
+      "sha256": "331b7c58116bc0fa76d25eca68c0352f76326dcbb0ab6521200a3d12f1988ce6"
+    },
+    {
+      "path": "lib/screens/explore_screen.dart",
+      "sha256": "da3fdd19a41c20d663fb358c5660645f81803f9a5d77c59498def5f35338aef8"
+    },
+    {
+      "path": "lib/screens/my_listings_screen.dart",
+      "sha256": "c43d48a4eecbbd7e58ed5f6a47787f864130d7e81a44c2fe31ca221e21cbe65e"
+    },
+    {
+      "path": "lib/screens/own_profile_screen.dart",
+      "sha256": "3c59cc158fd327bb19a82553e24adf7c1c867367a26020c99c3f065ab7720a5e"
+    },
+    {
+      "path": "lib/services/auth_service.dart",
+      "sha256": "1607dfd6d0b7907aa9040d7ec10f649fcaab12b6fef872accc66b4b4602b2687"
+    },
+    {
+      "path": "lib/services/backend_repository.dart",
+      "sha256": "e9f5a102ee95f8731bb2b91c068be7bdad358febef4d4de5c51cb9c692d7b840"
+    },
+    {
+      "path": "lib/services/data_service.dart",
+      "sha256": "f23002e697a484a16e392e8fcf5dd9de527ecc55eb791dde7fab98386e37375f"
+    },
+    {
+      "path": "lib/services/listing_mutation_service.dart",
+      "sha256": "3425847c27de8864df3d2a15b65ebf13b6a020b8c52a7f5bb39f65f92b127334"
+    },
+    {
+      "path": "lib/services/session_transition_service.dart",
+      "sha256": "f7ff42ca7649ac1681d772e707d87d8a805c63e2962f71707a0490f321389804"
+    },
+    {
+      "path": "lib/services/shared_persistence_sync.dart",
+      "sha256": "b4294550220badf563c3a2fb0ea1929e15b0026483fb3dd3633370c6b486adb2"
+    },
+    {
+      "path": "lib/widgets/item_details_overlay.dart",
+      "sha256": "3541d27c2964795b925e30a2d990b81da759f3ef521b79e4fe4902be965c2141"
+    },
+    {
+      "path": "lib/widgets/listing_mutation_interaction.dart",
+      "sha256": "8b10d83fe566f6cea92f372ce77a43cb2a8ae8109417c7d0c211ec000ff22059"
+    },
+    {
+      "path": "lib/widgets/search_header.dart",
+      "sha256": "f1a39b049badaed1cb45636c41221a58ea7c4e0c190047af291a5f40e28f3ad6"
+    },
+    {
+      "path": "lib/widgets/tracked_dialog_route.dart",
+      "sha256": "e01ac3c1006f4098e6d5b289fa499272c44e2a314da93351f088879d43012454"
+    },
+    {
+      "path": "docs/evidence/48h-remote/rw19-profile-location-mutation-principal-epoch-transaction-20260826.json",
+      "sha256": "a39ba5753ab231544b6d6750d88d34c492cc2a4194dd2a79ebb23abe5b8ada61"
+    },
+    {
+      "path": "scripts/technical_regression_check.sh",
+      "sha256": "61e7a485cf99f041394995b49355e2b283f6e36a04977589e2ba228e22137fb2"
+    },
+    {
+      "path": "test/rw7_local_listing_catalog_authorization_durability_test.dart",
+      "sha256": "b4a54f27e5af0982029b93ea22946e6c29311de001814714bfc76ab31a798d85"
+    },
+    {
+      "path": "test/rw19_profile_location_mutation_principal_epoch_transaction_test.dart",
+      "sha256": "f93c9c9e1fcd93a17640b8852e4c7b6d169f64874864cc684705882782512c6e"
+    },
+    {
+      "path": "test/rw20_listing_mutation_principal_epoch_transaction_test.dart",
+      "sha256": "6a9f96393e664f353fb92e86b8f9e711354b2176d09b44b21e4139d895f1a473"
+    },
+    {
+      "path": "test/tool/blue_ocean_draft_recovery_wiring.test.mjs",
+      "sha256": "092b57a349d5d94f157736ee1ba25dc0698a5be64d0cbc8bbdf7dbf441791f84"
+    },
+    {
+      "path": "test/tool/blue_ocean_n6_listing_ui_wiring.test.mjs",
+      "sha256": "6826fe5b1ed834a1d6de60bfd4d281413ddfc6a5f8fa527d9abfe2ec5987fe49"
+    },
+    {
+      "path": "test/tool/create_listing_photo_async_lifecycle_wiring.test.mjs",
+      "sha256": "a509d1c618869ae26cd678a7508cc98bcdee65a51defca9cb4c32b5b7330775f"
+    },
+    {
+      "path": "test/tool/g5a_supply_enrichment_wiring.test.mjs",
+      "sha256": "bd69ad104843b5a12a62c59303503e977132fd3dbc5b61072b5be5bc7f37ce69"
+    },
+    {
+      "path": "test/tool/rw7_local_listing_catalog_authorization_durability_wiring.test.mjs",
+      "sha256": "029061ed2df650fc53fdd464f7c86a077825229a2cbd6aa58feef0b5dc872d7c"
+    },
+    {
+      "path": "test/tool/rw20_listing_mutation_principal_epoch_transaction_wiring.test.mjs",
+      "sha256": "1b107131a5ab606e8e6b61a248a0551a277cd540c3dbd14713dd8bcf6df8aa35"
+    },
+    {
+      "path": "test/tool/validate_rw20_listing_mutation_principal_epoch_transaction.test.mjs",
+      "sha256": "9f43db54617e0ea7c99fe3e133cf426b88d3380e6e82a58f37c1c1cd4ab39830"
+    },
+    {
+      "path": "tool/validate_rw20_listing_mutation_principal_epoch_transaction.mjs",
+      "sha256": "c25ce9ac46fa2053028ecc862f43bcf58a6e1003602b5c17d3ce9a5d028993c9"
+    },
+    {
+      "path": "docs/architecture/rw20-listing-mutation-principal-epoch-transaction-2026-08-26.md",
+      "sha256": "30abccdc1739770050fb8ef983d2c4ea92f3346e2093a75f5c2ad3c719138e74"
+    },
+    {
+      "path": "docs/operations/RW20_LISTING_MUTATION_PRINCIPAL_EPOCH_TRANSACTION_CLOSURE_2026-08-26.md",
+      "sha256": "7883cf682d75769b4c6ef7e31962dd959f4decd48ce6ad3d915a970873fd379f"
+    }
+  ]
+}

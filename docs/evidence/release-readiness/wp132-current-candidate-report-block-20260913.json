@@ -1,0 +1,162 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp132-current-candidate-report-block",
+  "status": "complete-exact-current-report-block",
+  "capturedAt": "2026-09-13T04:36:43.893Z",
+  "workPackage": "WP132",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "wp131ClosureHead": "ef17b775019be82fdf22d3b7eb87d012730d8c7d",
+    "candidateSourceHead": "abf911d1c944a4e5874269111985d0cc4736546e",
+    "diagnosticHead": "32366382b0ffcce477b5101d6529edd0f9ccff90",
+    "applicationRuntimePathsChangedAfterCandidateSource": []
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091309",
+    "releaseChannel": "internal",
+    "environment": "staging",
+    "delivery": "direct-apk",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "apkSha256": "6f688e3641f54da91caf0e4f7c039f192a0c4e481b3ebb98ac3b2723cbe27ddf",
+    "aabSha256": "6fc8164cd7a941da83aa104e1a238c4b1725c983dab6bb7651fd3f9880bbcb04",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "physicalPixelPackageMatched": true,
+    "dataPreservingInstallPassed": true
+  },
+  "device": {
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "17",
+    "apiLevel": 37,
+    "securityPatch": "2026-07-05",
+    "containsRawDeviceIdentifier": false
+  },
+  "physicalLifecycle": {
+    "reportSubmittedThroughExactListingUi": true,
+    "reportAcceptedExactlyOnce": true,
+    "ownerBlockedThroughOwnerBoundUi": true,
+    "serverConfirmedExactBlockCount": 1,
+    "bothSameOwnerListingsHiddenForReporter": true,
+    "exactCancelledChatHiddenForReporter": true,
+    "blockedUsersEntryVisible": true,
+    "ownerUnblockedThroughExactEntryUi": true,
+    "serverConfirmedEmptyBlockTruth": true,
+    "bothSameOwnerListingsVisibleAgain": true,
+    "exactSearchesUsedRunBoundTitles": true,
+    "globalCatalogListingsRemainedPublicWhileReporterBlockApplied": true
+  },
+  "cleanup": {
+    "exactListingsEnded": 3,
+    "exactListingsAbsentFromPublicCatalog": 3,
+    "temporaryBlockRemoved": true,
+    "moderationReportRetainedAsAudit": true,
+    "exactRoleSessionsRevoked": true,
+    "protectedOwnerSessionRestored": true,
+    "recoveryRequired": false,
+    "paymentEndpointCalled": false,
+    "contractCreated": false,
+    "reservationCreated": false,
+    "monetaryEffectMinor": 0
+  },
+  "privateJournal": {
+    "status": "complete-restored",
+    "mode": "0600",
+    "sha256": "1ec2960a62eb4e3e4d1770e57e87f4faca82fe27166e63486b17bd49dd7c0d5f",
+    "recoveryRequired": false,
+    "containsCredential": false,
+    "containsAccountIdentity": false,
+    "containsFixtureIdentifier": false,
+    "containsPrivatePath": false,
+    "containsRawDeviceIdentifier": false
+  },
+  "portfolioEffect": {
+    "promotedRequirement": "support-report-block",
+    "affectedRequirementHeldPartial": "search-filter-favorites-wishlists",
+    "passCount": 16,
+    "partialCount": 8,
+    "openCount": 8,
+    "totalCount": 32,
+    "releaseDecision": "hold-not-production-ready"
+  },
+  "verification": {
+    "focusedNodeTests": "passed",
+    "focusedFlutterTests": "passed",
+    "fullLocalRegression": "success",
+    "webWasmLoopbackAndroidBuildPassed": true,
+    "exactHeadGithubRegressionRequired": true,
+    "exactHeadCodeqlRequired": true
+  },
+  "sourceInventory": [
+    {
+      "path": "lib/screens/public_profile_screen.dart",
+      "sha256": "21b1850a62262f401526b8683064af657a0e08a0e2309ed5cf991751096bd0f6"
+    },
+    {
+      "path": "lib/screens/search_results_screen.dart",
+      "sha256": "9196a7b58add7015f2148aed3c4bc53e217a3aa870491e31fd3f7120cdee514a"
+    },
+    {
+      "path": "lib/services/data_service.dart",
+      "sha256": "5294f069ec2d9a06bd96632216fd121ed14e91d873109e9bcb7cb95fc753fa77"
+    },
+    {
+      "path": "lib/services/latest_search_recompute.dart",
+      "sha256": "6f2aa0a46e88f42c251b4b11616a07c8a9ba26245733f598b47e831e6659ce46"
+    },
+    {
+      "path": "lib/services/profile_ecosystem_service.dart",
+      "sha256": "bd3d9483d182e54f2d9722b4185347cbd7c7a52d452ae1177c5c787c6111eef8"
+    },
+    {
+      "path": "lib/widgets/listing_options_dialog.dart",
+      "sha256": "11d1090dcc8114eb19d5053c3ea813a8efe0f6153ffb8987e42218af7c648497"
+    },
+    {
+      "path": "lib/widgets/search_overlay.dart",
+      "sha256": "f1c2b2f55ded10999587bf9d6c4fd0103ea26a5b20f500e135e99d081fc025f5"
+    },
+    {
+      "path": "tool/diagnose_android_current_candidate_report_block.mjs",
+      "sha256": "d9efb21a3f7ee74011118d30c9b7d0ff14cb830b13f47485fb2fb3cafd90de16"
+    },
+    {
+      "path": "test/tool/diagnose_android_current_candidate_report_block.test.mjs",
+      "sha256": "cda78d9c11cc052325509065427ac4fec04bc9628655b68e259c51ec756bf894"
+    },
+    {
+      "path": "tool/run_staging_report_block_fixture.mjs",
+      "sha256": "8fe98e3d443ef68d10d68d14cab3b4900b36425f0dc58aa7a32e937ea8446141"
+    },
+    {
+      "path": "test/tool/run_staging_report_block_fixture.test.mjs",
+      "sha256": "080233b2f8fd272370eefef809c787a62ea3fac2c56aedad0e658d44a76e65f6"
+    }
+  ],
+  "technicalDebt": [
+    "Successive physical runs exposed real accessibility, public-profile loading, public-catalog isolation, remote-search settlement, category-focus and empty-result truth gaps. Every application defect was fixed in the signed 2026091309 candidate and exercised again instead of being accepted as a runner timing workaround.",
+    "The final false failure came from attempting to search for a nested account-settings action directly. The diagnostic now enters the exact parent settings surface, proves the privacy section, taps the route-owned Blocked Users entry and rejects the parent surface as completion."
+  ],
+  "boundaries": {
+    "applicationRuntimeChangedAfterCandidateBuild": false,
+    "backendRuntimeChanged": false,
+    "stagingSyntheticDataMutated": true,
+    "stagingSyntheticDataRestored": true,
+    "moderationAuditRetained": true,
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "testerListChanged": false,
+    "firebaseProjectChanged": false,
+    "paymentProviderCalled": false,
+    "realMoneyUsed": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false,
+    "credentialRecorded": false,
+    "accountIdentityRecorded": false,
+    "fixtureIdentifierRecorded": false,
+    "privateFilesystemPathRecorded": false,
+    "rawDeviceIdentifierRecorded": false
+  }
+}

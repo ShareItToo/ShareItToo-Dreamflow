@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "kind": "google-play-screenshot-candidate",
+  "status": "exact-candidate-local-not-uploaded",
+  "capturedAt": "2026-08-13T21:05:04.000Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081303",
+    "commit": "4144d0c0a3a2e19e89b6523594607c14625b0119",
+    "apkSha256": "19505969ca133bb773b59c3e0afd0d4e733b844bcde926fca742d6f3c91813b8",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1"
+  },
+  "scene": {
+    "id": "feed",
+    "locale": "de-DE",
+    "syntheticContent": true,
+    "storeFile": "store/assets/google-play/phone-screenshots/01-feed.png",
+    "width": 1080,
+    "height": 1920,
+    "format": "png",
+    "byteSize": 1637480,
+    "sha256": "cf2f2c8805c5f3c41b6cb2c8fa89e2530aef85b511750b388c54f94779612fb0"
+  },
+  "validation": {
+    "exactInstalledCandidateObserved": true,
+    "curatedSyntheticListing": true,
+    "personalDataVisible": false,
+    "deviceStatusBarVisible": false,
+    "testCredentialVisible": false,
+    "technicalFixtureCopyVisible": false,
+    "unapprovedProtectionClaimVisible": false,
+    "visualInspectionPassed": true
+  },
+  "feedCleanup": {
+    "protectedActiveBookings": 6,
+    "protectedPublicListingsObserved": 6,
+    "placeholderImagesRemaining": 0,
+    "technicalCopyRemaining": 0,
+    "publicTechnicalTitlesRemaining": 0,
+    "listingDeleted": false
+  },
+  "boundaries": {
+    "screenshotUploaded": false,
+    "playConsoleChanged": false,
+    "publicStoreChanged": false,
+    "productionChanged": false,
+    "paymentEndpointCalled": false,
+    "containsSecrets": false,
+    "containsEmailAddresses": false,
+    "containsAccountIdentifiers": false,
+    "containsRawDeviceIdentifiers": false
+  }
+}

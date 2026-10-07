@@ -1,0 +1,127 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp09-stripe-accounts-v2-payout-readiness",
+  "status": "implementation-closed-external-stripe-test-mode-activation-pending",
+  "observedAt": "2026-09-05T08:26:10Z",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "implementationCommit": "831fc7ec5138579f691a5ec1e4b3a76feae903b5"
+  },
+  "finding": {
+    "cause": "Accounts v2 stripe_transfers active was incorrectly treated as sufficient payout readiness",
+    "risk": "checkout or payout release could proceed while the independently reported payouts capability was unavailable",
+    "resolution": "require active stripe_transfers and active payouts plus the established recipient, dashboard, fee and loss responsibility contract",
+    "unknownPayoutStatusFailsClosed": true,
+    "checkoutAndPayoutUseOneReadinessPredicate": true
+  },
+  "architecture": {
+    "accountsApi": "v2",
+    "configuration": "recipient",
+    "dashboard": "express",
+    "feesCollector": "application",
+    "lossesCollector": "application",
+    "chargePattern": "separate-charges-and-transfers",
+    "requestedCapability": "stripe_transfers",
+    "payoutCapabilityObservedSeparately": true,
+    "explicitPayoutCapabilityRequestAdded": false,
+    "explicitPayoutCapabilityRequestReason": "Stripe automatically requests payouts for recipient configuration; runtime readiness must still observe its independent status"
+  },
+  "providerReadOnly": {
+    "mode": "test",
+    "availablePlatformAccounts": 1,
+    "platformProfileSubmitted": false,
+    "chargesEnabled": false,
+    "payoutsEnabled": false,
+    "businessTypePresent": false,
+    "businessProfileComplete": false,
+    "capabilitiesPresent": false,
+    "requirementsPastDue": true,
+    "connectedAccounts": 0,
+    "webhookEndpoints": 0,
+    "mutated": false,
+    "credentialReadOrExtracted": false,
+    "containsProviderAccountIdentity": false
+  },
+  "verification": {
+    "focusedTests": {
+      "passed": 31,
+      "failed": 0
+    },
+    "backendTests": {
+      "passed": 826,
+      "failed": 0,
+      "expectedDatabaseSkips": 2,
+      "syntaxCheck": "passed"
+    },
+    "localPostgresql16Integration": {
+      "passed": 2,
+      "failed": 0,
+      "temporaryClusterCleaned": true
+    },
+    "toolTests": {
+      "passed": 2251,
+      "failed": 0
+    },
+    "fullLocalRegression": "passed",
+    "cleanCheckout": {
+      "status": "passed-byte-identical",
+      "fullGateSeconds": 709,
+      "secondAndroidBuildSeconds": 38,
+      "migrations": 116,
+      "assets": 84,
+      "reportSha256": "967ebcc116556eb5f0d661d3f6e489ed4dce8afd7823c0a935655fea7a69e27b",
+      "reportCommitted": false
+    },
+    "sourceHashes": {
+      "paymentWorkflowSha256": "371b1c5b0cd01581dff34f548331b9e25eeffa1bc153df8f0083df32ccc5a3fe",
+      "stripeProviderSha256": "5526046e3aeaea29f2e5871fd0ab13723b3af2f5e233a92f5011841b0212cad9",
+      "postgresIntegrationSha256": "ea24dadf45a067fea0d27cdfb8e453d3067c868c59af7099b784c526f9fe9c87",
+      "stripeUnitTestSha256": "210ad681eaba03283a4f4bc82c80ea4cb49b229aae46589b42d0eb663ddfe154",
+      "paymentWiringTestSha256": "e3576e208c521daf8883eb7d3691201ffbcf2554de787da0ad59f4f06dc691f1"
+    },
+    "githubCodeql": {
+      "run": 33955021006,
+      "status": "passed"
+    },
+    "githubRegression": {
+      "run": 33955020884,
+      "status": "passed",
+      "jobs": {
+        "cleanCheckoutReproducibility": "passed",
+        "flutterRegressionAndSignedCandidate": "passed",
+        "backendRegression": "passed",
+        "postgresqlRunnerProof": "passed",
+        "publishApiImage": "skipped-by-design"
+      }
+    },
+    "openCodeScanningAlerts": 0,
+    "pullRequest": {
+      "number": 7,
+      "draft": true,
+      "open": true,
+      "mergeable": true,
+      "merged": false
+    }
+  },
+  "boundaries": {
+    "stripeObjectCreated": false,
+    "stripeSettingChanged": false,
+    "stripeTermsAcceptedByAgent": false,
+    "stagingDeploymentChanged": false,
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "deviceContacted": false,
+    "realMoneyUsed": false,
+    "legalSnapshotsActivated": false,
+    "pullRequestMerged": false,
+    "containsCredentials": false,
+    "containsAccountIdentity": false
+  },
+  "remaining": [
+    "complete or approve truthful Stripe platform business profile and support fields and have the owner personally accept Stripe terms",
+    "provision an isolated test connected account and two distinct test webhook destinations only after platform readiness is confirmed",
+    "configure Staging through external secret files while preserving STRIPE_LIVEMODE=false",
+    "execute and record all eight P0B Stripe sandbox scenarios with synthetic principals and test money",
+    "keep V5.2 professional legal approval and external Listing AI as independent holds"
+  ]
+}

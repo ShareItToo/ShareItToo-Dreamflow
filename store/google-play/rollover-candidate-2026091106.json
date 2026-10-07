@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-current-rollover-candidate",
+  "status": "build-ready-play-internal-upload-pending",
+  "generatedAt": "2026-09-11T07:36:54Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091106",
+    "artifactSourceHead": "67984d4e9ff41a7fc9beda2471f15eb61f1ba067",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "compileSdkVersion": 36,
+    "minSdkVersion": 24,
+    "targetSdkVersion": 36,
+    "firebaseAndroidConfigured": true,
+    "blueOceanListingAssistantEnabled": true,
+    "listingAiExecutionLocation": "android_on_device",
+    "listingAiModel": "mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1",
+    "listingAiExternalImageProviderEnabled": false,
+    "stageANonBindingPilotEnabled": true,
+    "closedPilotEnvelopeEnabled": true,
+    "stageAPilotId": "heilbronn_wave0",
+    "g3TechnicalUiEnabled": true,
+    "g4TechnicalUiEnabled": true,
+    "g5SupplyEnrichmentTechnicalUiEnabled": true,
+    "g5ListingSetsTechnicalUiEnabled": true
+  },
+  "artifact": {
+    "archiveDirectoryName": "2026091106-67984d4e9ff41a7fc9beda2471f15eb61f1ba067",
+    "aabFileName": "shareittoo-1.0.0-2026091106-67984d4e9ff41a7fc9beda2471f15eb61f1ba067.aab",
+    "aabBytes": 138700819,
+    "aabSha256": "57403b7a95c1e26b0f0b6ab41b1cc8c79e1070d777dfc4a2be75e19988b80beb",
+    "apkFileName": "shareittoo-1.0.0-2026091106-67984d4e9ff41a7fc9beda2471f15eb61f1ba067.apk",
+    "apkBytes": 199608577,
+    "apkSha256": "2f9eef14f0e4267807891429df5c3f0b556ce225b9d852f388b7cb07cc8ec4f8",
+    "privacyReportSha256": "e575f6bcc25b5d2d73ebbe41a505c4cddd6378898b3a23311f9de0e78428c023",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "zipStructureValidation": "passed",
+    "bundletoolVersion": "not-available-locally",
+    "bundletoolValidation": "not-run-tool-unavailable",
+    "binaryPrivacyScan": "passed",
+    "ownerOnlyPermissionsVerified": true,
+    "nonOverwritingArchive": true
+  },
+  "sourceVerification": {
+    "closedPilotFocusedTests": "passed-release-preflight",
+    "privacyAndPackageRatchets": "passed",
+    "fullToolInventory": "passed-2677",
+    "backendSuite": "passed-872-two-documented-skips",
+    "flutterAnalyzer": "passed-zero-issues",
+    "fullTechnicalRegression": "passed",
+    "cleanCheckoutReproducibility": "pending-github-regression",
+    "githubVerifiedHead": null,
+    "githubRegressionRunId": null,
+    "githubRegressionConclusion": "pending",
+    "githubCodeqlRunId": null,
+    "githubCodeqlConclusion": "pending",
+    "openCodeScanningAlertsPrHead": null
+  },
+  "stagingStateAtReadback": {
+    "sourceHead": "8afbb3525eac4542a61dbdad4fb0f13ee37a70fc",
+    "clientBuild": "1.0.0+2026091102",
+    "health": "passed",
+    "readiness": "degraded-only-two-noncritical-support-followups-overdue",
+    "paymentTransport": "memory",
+    "paymentLivemode": false,
+    "listingAiProvider": "on_device",
+    "externalListingAiEnabled": false,
+    "currentCandidateDeployment": "pending"
+  },
+  "playStateAtReadback": {
+    "activeInternalVersionCode": "2026090711",
+    "candidateVersionCodeStrictlyHigher": true,
+    "candidateUploaded": false,
+    "candidateActivated": false,
+    "testerListChanged": false
+  },
+  "providerAndLiveHolds": {
+    "externalListingAiEnabled": false,
+    "realPaymentsEnabled": false,
+    "productionChanged": false,
+    "firebaseProjectChanged": false,
+    "cloudVpsDnsChanged": false,
+    "pullRequestMerged": false
+  },
+  "legalAndPilotHold": {
+    "legalManifestVersion": "V5.2-2026-08-16",
+    "legalManifestStatus": "draft-blocked",
+    "legalActivationAllowed": false,
+    "professionallyReviewed": false,
+    "approvedV52SnapshotsProvisioned": false,
+    "acceptancePreflightResult": "closed_pilot_v52_legal_snapshots_not_ready",
+    "pilotActivationAllowed": false
+  },
+  "dataSafetyHold": {
+    "mlKitCandidateUploadedToPlay": false,
+    "playConsoleChanged": false,
+    "reconciliationRequiredBeforePlayUpload": true,
+    "handoffRef": "store/google-play/on-device-listing-ai-data-safety-handoff.json"
+  },
+  "deviceVerification": {
+    "preferredDeviceExactApkInstalled": false,
+    "preferredDeviceDataPreserved": false,
+    "onDeviceListingAiPhysicalInference": "pending-pixel-install-and-test",
+    "authenticatedPilotMatrix": "pending-current-candidate",
+    "secondaryDevice": "not-required-for-current-pixel-first-run"
+  },
+  "privateDriveHandoff": {
+    "status": "not-required-for-current-mac-mini-session",
+    "shared": false
+  },
+  "evidenceRef": "docs/evidence/release-readiness/wp109-on-device-listing-ai-pixel-journey-20260911.json",
+  "playCompletionEvidenceRef": null,
+  "handoverRef": "docs/operations/WP109_ON_DEVICE_LISTING_AI_PIXEL_JOURNEY_2026-09-11.md",
+  "releaseNotesRef": "store/google-play/de-DE/internal_release_notes.txt",
+  "containsSecrets": false,
+  "containsTesterIdentity": false,
+  "containsOptInUrl": false,
+  "containsPrivateFilesystemPath": false
+}

@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-release-candidate",
+  "status": "rejected-accessibility-regression",
+  "generatedAt": "2026-08-10T04:15:47Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081016",
+    "commit": "cf69a89f2c69455186a1b5fe599d315828cc93a4",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "android": {
+    "delivery": "pending",
+    "aabSha256": "fbf7624437a7b812c32a688f38a09f85f2d3bbdabb055c96b317f60a334e07fd",
+    "apkSha256": "56939494fca44a28882a4676a76b29f3938b026fc4594bbdad6e57559bb13870",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "packageIdentityVerified": true
+  },
+  "privacyAndNetwork": {
+    "binaryScan": "passed",
+    "binaryScanReportSha256": "62b5d11e62a9aad419e5ab8bae6c7fc153e8cf1e2ebf8c5762691b9e6063696a",
+    "targetSdkVersion": 35,
+    "backupDisabled": true,
+    "cleartextTrafficDisabled": true,
+    "analyticsSdkPresent": false,
+    "advertisingSdkPresent": false,
+    "disclosedSdks": [
+      "Firebase Cloud Messaging",
+      "Firebase Crashlytics"
+    ],
+    "findings": []
+  },
+  "guestGateDiagnostics": {
+    "staleCachedProfileBlocked": "passed-by-regression-and-candidate-1012-device-test",
+    "listingCreationGate": "passed-by-candidate-1014-pending-exact-physical-build",
+    "rentalRequestsGate": "passed-by-candidate-1014-pending-exact-physical-build",
+    "protectedBottomTabGate": "passed-by-candidate-1014-pending-exact-physical-build",
+    "notificationGate": "passed-by-candidate-1014-pending-exact-physical-build",
+    "notificationSearchGate": "passed-by-candidate-1014-pending-exact-physical-build",
+    "profileSearchActionNames": "passed-by-candidate-1014-pending-exact-physical-build",
+    "authenticationActionNames": "failed-on-exact-physical-build-field-labels-and-password-toggle-not-exposed",
+    "registrationActionNames": "passed-by-regression-pending-exact-physical-build",
+    "passwordResetActionNames": "passed-by-regression-pending-exact-physical-build",
+    "helpCenterActionNames": "passed-by-regression-pending-exact-physical-build",
+    "backArrowActionNames": "passed-by-regression-pending-exact-physical-build",
+    "accountScreenHeaderActionNames": "implemented-pending-authenticated-physical-verification",
+    "addPhotoActionName": "pending-authenticated-physical-verification"
+  },
+  "staging": {
+    "serverCommit": "9a1371e02d8e7d63d3dee30ca169c6c7f37fa966",
+    "liveHttpStatus": 200,
+    "readyHttpStatus": 200,
+    "fcmEnabled": true,
+    "googleCredentialValidation": "passed",
+    "productionInvariant": "passed"
+  },
+  "boundaries": {
+    "uploadedToStore": false,
+    "installedOnPhysicalDevice": true,
+    "realPushSent": false,
+    "iosValidated": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

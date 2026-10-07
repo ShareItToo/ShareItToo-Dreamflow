@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-48h-r0-code-scanning-p0-remediation",
+  "status": "verified-ready-for-r1",
+  "date": "2026-08-24",
+  "baseline": {
+    "productHead": "6d4e66e1d832b33d50ec1c44e624e45d635eff12",
+    "baselineCommit": "18ae00c82c108d5b1d6478d354c385f11cc83da4",
+    "regressionRunId": 32678159654,
+    "codeqlWorkflowRunId": 32678159650,
+    "advancedSecurityCheckRunId": 97290219956,
+    "advancedSecurityConclusion": "failure",
+    "newHighSeverityAlerts": 22,
+    "missingRateLimitAlerts": 9,
+    "filesystemRaceAlerts": 13
+  },
+  "correction": {
+    "blueOceanMutationRoutes": [
+      "/v1/blue-ocean/listing-drafts/analyze",
+      "/v1/blue-ocean/listing-drafts/:id/review",
+      "/v1/blue-ocean/listing-drafts/:id/publish"
+    ],
+    "sharedRateLimit": {
+      "position": "before-authentication",
+      "windowMinutes": 15,
+      "requestLimit": 30,
+      "request31Result": "rate_limit_exceeded"
+    },
+    "validatorCount": 13,
+    "repositoryReader": {
+      "path": "tool/read_repository_file.mjs",
+      "finalComponentNoFollow": true,
+      "openedDescriptorVerified": true,
+      "repositoryBoundaryChecked": true,
+      "intermediateSymlinkEscapeRejected": true
+    },
+    "sourceInventoryHashesUpdated": [
+      "store/privacy-disclosures.json",
+      "store/retention-deletion-readiness.json"
+    ]
+  },
+  "verification": {
+    "implementationHead": "6ca3afb69635ecab9a64384d626f39a2e8db7c9e",
+    "javascriptSyntax": "passed",
+    "securityAndWiringTests": "passed-21",
+    "releaseEndpointTests": "passed-5",
+    "blueOceanValidatorTests": "passed-97",
+    "blueOceanValidators": "passed-13",
+    "privacyDisclosureValidator": "passed",
+    "retentionDeletionValidator": "passed",
+    "fullTechnicalRegression": "passed-ci-metadata-candidate-rollover",
+    "strictLocalStoreHandoff": "hold-private-owner-only-aab-unavailable",
+    "exactGitHubRegression": {
+      "runId": 32711284861,
+      "conclusion": "success"
+    },
+    "exactGitHubCodeqlWorkflow": {
+      "runId": 32711284922,
+      "conclusion": "success"
+    },
+    "exactGitHubAdvancedSecurity": {
+      "checkRunId": 97383538142,
+      "conclusion": "success"
+    }
+  },
+  "boundaries": {
+    "deviceChanged": false,
+    "providerCallPerformed": false,
+    "apiBillingCreated": false,
+    "productionChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "cloudChanged": false,
+    "firebaseConsoleChanged": false,
+    "playConsoleChanged": false,
+    "paymentChanged": false,
+    "pilotActivated": false,
+    "pullRequestMerged": false,
+    "historyRewritten": false
+  },
+  "risks": [
+    "strict local Store handoff remains fail-closed because the historical private AAB is unavailable"
+  ],
+  "rollback": "Use a normal inverse commit; do not rewrite Git history.",
+  "nextPackageAfterExactClosure": "R1_PIXEL_7_PRO_SAFE_DEVICE_AUDIT"
+}

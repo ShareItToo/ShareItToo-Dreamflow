@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "kind": "v51-owner-acceptance-expired-popup",
+  "status": "passed-source-and-regression",
+  "capturedAt": "2026-08-17T09:16:11Z",
+  "sourceCommit": "c26cae5544a115ed838500898a36c2e4c6d8f778",
+  "checks": {
+    "serverExpiryCodeHandledExactly": true,
+    "unrelatedBackendErrorsRethrown": true,
+    "centeredSitPopupUsed": true,
+    "popupExplainsExpiredDeadline": true,
+    "popupRequestsViewReload": true,
+    "requestDetailUsesSharedCommit": true,
+    "ownerRequestsUsesSharedCommit": true,
+    "messageThreadUsesSharedCommit": true,
+    "ongoingOwnerUsesSharedCommit": true,
+    "postAcceptanceActionsBlockedAfterExpiry": true,
+    "backendRemainsAuthoritative": true
+  },
+  "verification": {
+    "ownerAcceptanceWiringTestsPassed": 8,
+    "targetedFlutterTestsPassed": 57,
+    "fullFlutterTestsPassed": 282,
+    "intentionalFlutterTestsSkipped": 1,
+    "fullAnalyzerFindings": 229,
+    "fullAnalyzerErrors": 0,
+    "webDebugBuild": "passed",
+    "androidDebugBuild": "passed",
+    "technicalRegression": "passed"
+  },
+  "privacy": {
+    "dataCollectionChanged": false,
+    "dataStorageChanged": false,
+    "dataTransportChanged": false,
+    "providerChanged": false,
+    "permissionChanged": false,
+    "sourceInventoryHashesUpdated": true
+  },
+  "boundaries": {
+    "backendDeployed": false,
+    "stagingChanged": false,
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "storeSubmissionPerformed": false,
+    "realPaymentPerformed": false,
+    "candidateBuiltOrRelabeled": false,
+    "pushRetainedDefaultOff": true,
+    "crashRetainedDefaultOff": true,
+    "pushEnablesCrash": false,
+    "crashDataTransferred": false
+  },
+  "conclusion": {
+    "expiredAcceptanceFeedback": "centered-sit-popup",
+    "allOwnerAcceptanceRoutes": "shared-expiry-handler",
+    "successSideEffectsAfterExpiry": "blocked",
+    "officialPlayInternalCandidate": "1.0.0+2026081509",
+    "localSignedCandidate": "1.0.0+2026081510-built-local-not-uploaded"
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-logout-push-lifecycle-diagnostic",
+  "status": "passed-bounded-logout-push-lifecycle-diagnostic",
+  "capturedAt": "2026-08-10T10:24:52Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081020",
+    "commit": "69bbb127e3c3a6a85905915ea289c5be981b9951",
+    "apkSha256": "3039ea1b7182b8b4e7e7f58816cca4ec2c80cf2cf4cac256be1c709a86742fe7",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "stripeLivemode": false
+  },
+  "staging": {
+    "serverCommit": "ec570acfddc218cec6d2bfba43d4feb33bda4cfc",
+    "environment": "staging",
+    "productionChanged": false
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "16",
+    "containsRawDeviceIdentifier": false
+  },
+  "tests": {
+    "authenticatedUiBeforeLogout": {
+      "status": "passed",
+      "result": "logout-action-present"
+    },
+    "pushDeviceRegisteredBeforeLogout": {
+      "status": "passed",
+      "result": "one-active-device"
+    },
+    "logoutCompletedWithoutRestart": {
+      "status": "passed",
+      "result": "guest-login-action-present-and-logout-action-absent"
+    },
+    "pushDeviceUnregisteredAfterLogout": {
+      "status": "passed",
+      "result": "zero-active-devices"
+    },
+    "relevantRuntimeErrors": {
+      "status": "passed",
+      "result": "zero"
+    }
+  },
+  "boundaries": {
+    "directDiagnosticOnly": true,
+    "storeInstallationGateSatisfied": false,
+    "realPushDeliveryPassed": false,
+    "paymentEndpointCalled": false,
+    "stripeLivemode": false,
+    "syntheticAccountsOnly": true,
+    "lockCodeUsed": false,
+    "accountIdentityRecorded": false,
+    "containsPersonalAccountData": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false
+  }
+}

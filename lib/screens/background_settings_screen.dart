@@ -9,6 +9,7 @@ class BackgroundSettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final controller = context.watch<BackgroundThemeController>();
     final selected = controller.selectedChoice;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -21,6 +22,7 @@ class BackgroundSettingsScreen extends StatelessWidget {
         title: const Text('Hintergrund'),
         centerTitle: true,
         leading: IconButton(
+          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
@@ -34,10 +36,43 @@ class BackgroundSettingsScreen extends StatelessWidget {
               Text(
                 'Wähle einen Hintergrund für den eingeloggten Bereich von ShareItToo.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.86),
+                      color: colorScheme.onSurface.withValues(alpha: 0.86),
                     ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 12),
+              Semantics(
+                container: true,
+                button: true,
+                selected: selected == null,
+                label: 'Systemeinstellung verwenden',
+                onTap: controller.clearChoice,
+                child: ExcludeSemantics(
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      key: const ValueKey('background-system-default'),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                        foregroundColor: colorScheme.onSurface,
+                        side: BorderSide(
+                          color: selected == null
+                              ? colorScheme.primary
+                              : colorScheme.onSurface.withValues(alpha: 0.28),
+                          width: selected == null ? 2 : 1,
+                        ),
+                      ),
+                      onPressed: controller.clearChoice,
+                      icon: Icon(
+                        selected == null
+                            ? Icons.check_circle
+                            : Icons.brightness_auto_outlined,
+                      ),
+                      label: const Text('Systemeinstellung verwenden'),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
               Expanded(
                 child: GridView.builder(
                   physics: const BouncingScrollPhysics(),
@@ -79,88 +114,125 @@ class _BackgroundPreviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final borderColor = selected
-        ? const Color(0xFF38BDF8)
-        : Colors.white.withValues(alpha: 0.16);
+        ? colorScheme.primary
+        : colorScheme.onSurface.withValues(alpha: 0.24);
+    final previewIsDark = choice.family == Brightness.dark;
+    final previewForeground =
+        previewIsDark ? Colors.white : const Color(0xFF0F172A);
+    final previewSurface = previewIsDark
+        ? Colors.black.withValues(alpha: 0.62)
+        : Colors.white.withValues(alpha: 0.86);
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(24),
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          decoration: BoxDecoration(
+    return Semantics(
+      container: true,
+      button: true,
+      selected: selected,
+      label: '${choice.uiLabel} Hintergrund',
+      onTap: onTap,
+      child: ExcludeSemantics(
+        child: Material(
+          key: ValueKey('background-choice-${choice.storageValue}'),
+          color: Colors.transparent,
+          child: InkWell(
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: borderColor,
-              width: selected ? 2.6 : 1.0,
-            ),
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                      color: const Color(0xFF38BDF8).withValues(alpha: 0.22),
-                      blurRadius: 18,
-                      spreadRadius: 1,
-                    ),
-                  ]
-                : null,
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(23),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                Image.asset(choice.assetPath, fit: BoxFit.cover),
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.black.withValues(alpha: 0.08),
-                        Colors.black.withValues(
-                          alpha: choice.overlayOpacity * 0.52,
-                        ),
-                      ],
-                    ),
-                  ),
+            onTap: onTap,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOut,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: borderColor,
+                  width: selected ? 2.6 : 1.0,
                 ),
-                Positioned(
-                  top: 12,
-                  right: 12,
-                  child: AnimatedOpacity(
-                    duration: const Duration(milliseconds: 150),
-                    opacity: selected ? 1.0 : 0.0,
-                    child: Container(
-                      width: 30,
-                      height: 30,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF38BDF8),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.check,
-                        color: Colors.white,
-                        size: 18,
+                boxShadow: selected
+                    ? [
+                        BoxShadow(
+                          color: colorScheme.primary.withValues(alpha: 0.22),
+                          blurRadius: 18,
+                          spreadRadius: 1,
+                        ),
+                      ]
+                    : null,
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(23),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.asset(choice.assetPath, fit: BoxFit.cover),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            (previewIsDark ? Colors.black : Colors.white)
+                                .withValues(alpha: 0.04),
+                            (previewIsDark ? Colors.black : Colors.white)
+                                .withValues(
+                              alpha: choice.overlayOpacity * 0.42,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ),
-                Positioned(
-                  left: 14,
-                  right: 14,
-                  bottom: 14,
-                  child: Text(
-                    choice.uiLabel,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                    Positioned(
+                      top: 12,
+                      right: 12,
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 150),
+                        opacity: selected ? 1.0 : 0.0,
+                        child: Container(
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            color: colorScheme.primary,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.check,
+                            color: Colors.black,
+                            size: 18,
+                          ),
                         ),
-                  ),
+                      ),
+                    ),
+                    Positioned(
+                      left: 14,
+                      right: 14,
+                      bottom: 14,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: previewSurface,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 9,
+                              vertical: 6,
+                            ),
+                            child: Text(
+                              choice.uiLabel,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: previewForeground,
+                                  ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
