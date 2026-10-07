@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { greenTarget } from './green_staging_promotion.mjs';
 import { assert, digest, green98106, objectDigest, validateConfiguration, validateTarget } from './green_staging_98_106_contract.mjs';
-import { assertEnvironment, containerFingerprint } from './green_staging_98_106_promotion.mjs';
+import { assertEnvironment, canonicalMounts, containerFingerprint } from './green_staging_98_106_promotion.mjs';
 import { assertArtifactFamily, privateDirectory, writeArtifact } from './green_staging_98_106_evidence.mjs';
 
 export function collectorCommand({ args }) {
@@ -53,7 +53,7 @@ export async function collectTarget({ directory, command = collectorCommand, pre
     networks.push({ name, id: record.Id, internal: record.Internal });
   }
   const uploads = await inspect('volume', greenTarget.uploadsVolume);
-  const target = { kind: 'sit-green-staging-98-106-target', schemaVersion: 1,
+  const target = { kind: 'sit-green-staging-98-106-target', schemaVersion: 2,
     api: api.value, database: database.value, networks,
     uploads: { name: greenTarget.uploadsVolume, configSha256: objectDigest(uploads) }, witnesses,
     databaseUser: greenTarget.databaseUser, databaseName: greenTarget.databaseName,
@@ -61,13 +61,13 @@ export async function collectTarget({ directory, command = collectorCommand, pre
   validateTarget(target);
   const allowlist = api.record.Config.Env.find(entry => entry.startsWith('SIT_STAGING_ALLOWED_USER_IDS='))?.split('=').slice(1).join('=');
   assert(typeof allowlist === 'string', 'green_98_106_collector_allowlist');
-  const config = { kind: 'sit-green-staging-98-106-config', schemaVersion: 1, environment: 'test',
+  const config = { kind: 'sit-green-staging-98-106-config', schemaVersion: 2, environment: 'test',
     firebaseAuthEnabled: true, emulatorEnabled: false, accessGateEnabled: true,
     allowedUsersSha256: digest(allowlist), googleRegistrationEnabled: false,
     appleRevocationEnabled: false, appleAcquisitionEnabled: false, paymentTransport: 'memory', stripeLivemode: false,
     mailTransport: 'memory', pushTransport: 'memory', identityTransport: 'memory', listingAiProvider: 'on_device',
     externalListingAiEnabled: false, technicalSandboxEnabled: false,
-    mountsSha256: objectDigest(api.record.Mounts), runtimeEnvironmentSha256: objectDigest(api.record.Config.Env) };
+    mountsSha256: objectDigest(canonicalMounts(api.record.Mounts)), runtimeEnvironmentSha256: objectDigest(api.record.Config.Env) };
   validateConfiguration(config); assertEnvironment(api.record.Config.Env, config);
   // Verify the captured identities again before creating any artifact.
   for (const captured of [api, database]) {

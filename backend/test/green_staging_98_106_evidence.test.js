@@ -6,7 +6,7 @@ import test from 'node:test';
 import { collectTarget, collectorCommand } from '../ops/green_staging_98_106_collector.mjs';
 import { digest, objectDigest, validateRuntimeManifest } from '../ops/green_staging_98_106_contract.mjs';
 import { bindMaterials } from '../ops/green_staging_98_106_execution.mjs';
-import { checkContainer, containerFingerprint, runReadOnlyPreflight } from '../ops/green_staging_98_106_promotion.mjs';
+import { canonicalMounts, checkContainer, containerFingerprint, runReadOnlyPreflight } from '../ops/green_staging_98_106_promotion.mjs';
 import { assertArtifactFamily, closeArtifact, exclusiveArtifact, openArtifact, privateDirectory, verifyArtifact } from '../ops/green_staging_98_106_evidence.mjs';
 import { dockerFixture } from './fixtures/green_98106_docker.js';
 
@@ -108,6 +108,67 @@ test('real identity variants retain their exact tag, UTC name, image ID and stab
     assert.throws(() => checkContainer(record, entry, entry === f.inputs.target.api));
     await assert.rejects(runReadOnlyPreflight(f.inputs, f.dependencies));
   });
+});
+test('schema-2 collection and preflight tolerate only full-mount permutation across repeated reads', async () => {
+  const f = dockerFixture(), directory = temporary(), original = f.dependencies.command;
+  let read = 0;
+  const command = async entry => {
+    const raw = await original(entry);
+    if (entry.args[0] !== 'inspect') return raw;
+    const rows = JSON.parse(raw);
+    if (rows[0].Mounts.length > 1) {
+      const offset = ++read % rows[0].Mounts.length;
+      rows[0].Mounts = [...rows[0].Mounts.slice(offset), ...rows[0].Mounts.slice(0, offset)];
+    }
+    return JSON.stringify(rows);
+  };
+  try {
+    const result = await collectTarget({ directory, command, acceptanceMfaFile: '/synthetic/protected/acceptance' });
+    const target = JSON.parse(fs.readFileSync(path.join(directory, result.artifacts[0].name)));
+    const config = JSON.parse(fs.readFileSync(path.join(directory, result.artifacts[1].name)));
+    assert.equal(target.schemaVersion, 2); assert.equal(config.schemaVersion, 2);
+    assert.deepEqual(target, f.inputs.target); assert.deepEqual(config, f.inputs.config);
+    assert.equal((await runReadOnlyPreflight(f.inputs, { ...f.dependencies, command })).status, 'read_only_prefix_passed');
+    assert.ok(read > 21, 'API and every stopped witness were read');
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+test('schema-1 target and config fingerprints are rejected before any Docker call', async () => {
+  for (const field of ['target', 'config']) {
+    const f = dockerFixture(); f.inputs[field].schemaVersion = 1;
+    f.inputs.binding[`${field}Sha256`] = objectDigest(f.inputs[field]);
+    await assert.rejects(runReadOnlyPreflight(f.inputs, f.dependencies), /green_98_106_(target|config)/u);
+    assert.equal(f.calls.length, 0);
+  }
+});
+test('stable mount fingerprint preserves every mount field and rejects structural or identity drift', async t => {
+  const changes = {
+    Type: m => { m[0].Type = 'volume'; }, Source: m => { m[0].Source += '-foreign'; },
+    Destination: m => { m[0].Destination += '-foreign'; }, Name: m => { m[0].Name = 'foreign'; },
+    Driver: m => { m[0].Driver = 'foreign'; }, Mode: m => { m[0].Mode = 'rw'; },
+    RW: m => { m[0].RW = true; }, Propagation: m => { m[0].Propagation = 'rshared'; },
+    unknownField: m => { m[0].FutureDockerField = 'changed'; }, remove: m => { m.pop(); },
+    add: m => { m.push({ ...m[0], Destination: '/foreign' }); },
+    duplicate: m => { m.push(structuredClone(m[0])); },
+  };
+  for (const [name, change] of Object.entries(changes)) await t.test(name, () => {
+    const f = dockerFixture(), expected = f.inputs.target.witnesses[0], record = f.records.get(expected.id);
+    const before = structuredClone(record.Mounts);
+    assert.deepEqual(canonicalMounts(record.Mounts).map(m => m.Destination), [...before.map(m => m.Destination)].sort());
+    assert.deepEqual(record.Mounts, before, 'canonicalization never mutates the captured record');
+    change(record.Mounts);
+    assert.throws(() => checkContainer(record, expected, false), /green_98_106_(container_drift|mount_destination)/u);
+  });
+  for (const value of [undefined, null, '', 'relative', '/a/../b', '/double//path', '/bad\u0000path']) {
+    assert.throws(() => canonicalMounts([{ Destination: value }]), /green_98_106_mount_destination/u);
+  }
+  for (const value of [undefined, null, {}, [null], [undefined]]) assert.throws(() => canonicalMounts(value));
+  const f = dockerFixture(), expected = f.inputs.target.witnesses[0], original = f.records.get(expected.id);
+  for (const change of [r => { r.Id = 'f'.repeat(64); }, r => { r.Image = `sha256:${'f'.repeat(64)}`; },
+    r => { r.Config.Env.reverse(); }, r => { r.HostConfig.Privileged = true; },
+    r => { Object.values(r.NetworkSettings.Networks)[0].NetworkID = 'f'.repeat(64); }]) {
+    const record = structuredClone(original); change(record);
+    assert.throws(() => checkContainer(record, expected, false), /green_98_106_container_drift/u);
+  }
 });
 test('held backup descriptor rejects byte drift, path substitution, hardlinks and metadata relaxation', () => {
   for (const fault of ['bytes', 'replacement', 'hardlink', 'mode']) {

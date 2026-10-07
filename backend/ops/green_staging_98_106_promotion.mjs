@@ -128,9 +128,24 @@ function singleton(raw) {
   assert(Array.isArray(records) && records.length === 1, 'green_98_106_inspect_shape');
   return records[0];
 }
+export function canonicalMounts(mounts) {
+  assert(Array.isArray(mounts), 'green_98_106_mounts_shape');
+  const destinations = new Set();
+  for (const mount of mounts) {
+    const destination = mount?.Destination;
+    assert(mount !== null && typeof mount === 'object' && Object.getPrototypeOf(mount) === Object.prototype
+      && typeof destination === 'string' && path.posix.isAbsolute(destination)
+      && path.posix.normalize(destination) === destination && !/[\u0000-\u001f\u007f]/u.test(destination)
+      && !destinations.has(destination), 'green_98_106_mount_destination');
+    destinations.add(destination);
+  }
+  // Docker inspect does not guarantee Mounts array order. Keep every field;
+  // normalize only this set's order, never Config/HostConfig arrays.
+  return [...mounts].sort((a, b) => a.Destination < b.Destination ? -1 : a.Destination > b.Destination ? 1 : 0);
+}
 export function containerFingerprint(record) {
   return objectDigest({ Config: record.Config, HostConfig: record.HostConfig,
-    Mounts: record.Mounts, Networks: Object.fromEntries(Object.entries(record.NetworkSettings?.Networks ?? {})
+    Mounts: canonicalMounts(record.Mounts), Networks: Object.fromEntries(Object.entries(record.NetworkSettings?.Networks ?? {})
       .map(([name, network]) => [name, { NetworkID: network.NetworkID }])) });
 }
 export function checkContainer(record, expected, running) {
@@ -155,7 +170,7 @@ export async function runReadOnlyPreflight(inputs, { command = readOnlyCommand, 
   const api = singleton(await run('api_inspect', ['inspect', target.api.id]));
   checkContainer(api, expectedApi, !sourceSealed);
   assert(objectDigest(api.Config.Env) === config.runtimeEnvironmentSha256
-    && objectDigest(api.Mounts) === config.mountsSha256, 'green_98_106_private_config_drift');
+    && objectDigest(canonicalMounts(api.Mounts)) === config.mountsSha256, 'green_98_106_private_config_drift');
   assertEnvironment(api.Config.Env, config);
   const database = singleton(await run('database_inspect', ['inspect', target.database.id]));
   checkContainer(database, target.database, true);

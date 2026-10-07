@@ -169,7 +169,7 @@ export function validateBinding(binding, { publication, publicationSha256, root 
 export function validateTarget(target) {
   exact(target, ['kind', 'schemaVersion', 'api', 'database', 'networks', 'uploads', 'witnesses',
     'databaseUser', 'databaseName', 'sourceLedger', 'targetLedger'], 'green_98_106_target');
-  assert(target.kind === 'sit-green-staging-98-106-target' && target.schemaVersion === 1
+  assert(target.kind === 'sit-green-staging-98-106-target' && target.schemaVersion === 2
     && target.sourceLedger === green98106.sourceLedger && target.targetLedger === green98106.targetLedger
     && target.databaseUser === 'shareittoo_green' && target.databaseName === 'shareittoo_green',
   'green_98_106_target');
@@ -211,7 +211,7 @@ export function validateConfiguration(config) {
     'appleAcquisitionEnabled', 'paymentTransport', 'stripeLivemode', 'mailTransport', 'pushTransport',
     'identityTransport', 'listingAiProvider', 'externalListingAiEnabled', 'technicalSandboxEnabled',
     'mountsSha256', 'runtimeEnvironmentSha256'], 'green_98_106_config');
-  assert(config.kind === 'sit-green-staging-98-106-config' && config.schemaVersion === 1
+  assert(config.kind === 'sit-green-staging-98-106-config' && config.schemaVersion === 2
     && config.environment === 'test' && config.firebaseAuthEnabled === true && config.emulatorEnabled === false
     && config.accessGateEnabled === true && hash.test(config.allowedUsersSha256)
     && config.googleRegistrationEnabled === false && config.appleRevocationEnabled === false

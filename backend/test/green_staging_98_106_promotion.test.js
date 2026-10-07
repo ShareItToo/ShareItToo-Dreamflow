@@ -26,10 +26,10 @@ function fixture() {
   for (const network of nets) records.set(network.id, { Id: network.id, Name: network.name,
     Internal: network.internal, Containers: { [api.id]: { Name: api.name }, [database.id]: { Name: database.name } } });
   const volume = { Name: 'sit-green-uploads-20260918011528-wp254', Driver: 'local', Labels: { synthetic: 'true' } };
-  const target = { kind: 'sit-green-staging-98-106-target', schemaVersion: 1, api, database, networks: nets,
+  const target = { kind: 'sit-green-staging-98-106-target', schemaVersion: 2, api, database, networks: nets,
     uploads: { name: volume.Name, configSha256: objectDigest(volume) }, witnesses,
     databaseUser: 'shareittoo_green', databaseName: 'shareittoo_green', sourceLedger: green98106.sourceLedger, targetLedger: green98106.targetLedger };
-  const config = { kind: 'sit-green-staging-98-106-config', schemaVersion: 1, environment: 'test', firebaseAuthEnabled: true,
+  const config = { kind: 'sit-green-staging-98-106-config', schemaVersion: 2, environment: 'test', firebaseAuthEnabled: true,
     emulatorEnabled: false, accessGateEnabled: true, allowedUsersSha256: digest('synthetic-test-user'), googleRegistrationEnabled: false,
     appleRevocationEnabled: false, appleAcquisitionEnabled: false, paymentTransport: 'memory', stripeLivemode: false,
     mailTransport: 'memory', pushTransport: 'memory', identityTransport: 'memory', listingAiProvider: 'on_device',

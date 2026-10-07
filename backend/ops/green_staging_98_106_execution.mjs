@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { assert, assertDataTransition, digest, equal, exact, green98106, objectDigest, repositoryRoot, safeError, validateRuntimeManifest } from './green_staging_98_106_contract.mjs';
-import { assertEnvironment, buildPlan, checkContainer, containerFingerprint, requiredEnvironment, runReadOnlyPreflight, sealedApiName } from './green_staging_98_106_promotion.mjs';
+import { assertEnvironment, buildPlan, canonicalMounts, checkContainer, containerFingerprint, requiredEnvironment, runReadOnlyPreflight, sealedApiName } from './green_staging_98_106_promotion.mjs';
 import { assertReadinessFindingsUnchanged } from './staging_forward_migration_rehearsal.mjs';
 import { assertGreenRuntimeReadbacks } from './green_staging_promotion.mjs';
 import { assertLoopbackPortAvailable, runMfaProbe } from './staging_controlled_acceptance.mjs';
@@ -32,7 +32,7 @@ export function assertPrivateRuntime(snapshot, inputs) {
   assert(snapshot.kind === 'sit-green-staging-98-106-private-runtime' && snapshot.schemaVersion === 1
     && Number.isFinite(Date.parse(snapshot.collectedAt)), 'green_98_106_private_runtime');
   checkContainer(snapshot.api, inputs.target.api, true); assertEnvironment(snapshot.api.Config.Env, inputs.config);
-  assert(objectDigest(snapshot.api.Mounts) === inputs.config.mountsSha256
+  assert(objectDigest(canonicalMounts(snapshot.api.Mounts)) === inputs.config.mountsSha256
     && objectDigest(snapshot.api.Config.Env) === inputs.config.runtimeEnvironmentSha256, 'green_98_106_private_runtime_binding');
 }
 export function bindMaterials(snapshot) {

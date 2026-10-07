@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { green98106, digest, migrationInventory, newTableNames, objectDigest, repositoryRoot, requiredSourcePaths } from '../../ops/green_staging_98_106_contract.mjs';
-import { containerFingerprint, requiredEnvironment } from '../../ops/green_staging_98_106_promotion.mjs';
+import { canonicalMounts, containerFingerprint, requiredEnvironment } from '../../ops/green_staging_98_106_promotion.mjs';
 import { historicalWitnesses } from '../../ops/green_staging_98_106_collector.mjs';
 
 export function dockerFixture() {
@@ -54,18 +54,19 @@ export function dockerFixture() {
     { Type: 'bind', Source: '/protected/synthetic/firebase', Destination: '/run/secrets/firebase-service-account.json', RW: false },
     { Type: 'volume', Name: 'sit-green-uploads-20260918011528-wp254', Source: '/protected/synthetic/uploads', Destination: '/data/uploads', RW: true },
   ];
+  for (const witness of witnesses) witness.Mounts = structuredClone(api.Mounts);
   const descriptor = (r, imageDigest) => ({ name: r.Name.slice(1), id: r.Id, imageId: r.Image, imageDigest, configSha256: containerFingerprint(r) });
   const upload = { Name: 'sit-green-uploads-20260918011528-wp254', Driver: 'local', Labels: {} };
   volumes.add(upload.Name);
-  const target = { kind: 'sit-green-staging-98-106-target', schemaVersion: 1, api: descriptor(api, green98106.predecessorDigest),
+  const target = { kind: 'sit-green-staging-98-106-target', schemaVersion: 2, api: descriptor(api, green98106.predecessorDigest),
     database: descriptor(database, green98106.postgresImage.split('@')[1]), networks: nets,
     uploads: { name: upload.Name, configSha256: objectDigest(upload) }, witnesses: witnesses.map((r, i) => descriptor(r, historicalWitnesses[i].imageDigest)),
     databaseUser: 'shareittoo_green', databaseName: 'shareittoo_green', sourceLedger: green98106.sourceLedger, targetLedger: green98106.targetLedger };
-  const config = { kind: 'sit-green-staging-98-106-config', schemaVersion: 1, environment: 'test', firebaseAuthEnabled: true,
+  const config = { kind: 'sit-green-staging-98-106-config', schemaVersion: 2, environment: 'test', firebaseAuthEnabled: true,
     emulatorEnabled: false, accessGateEnabled: true, allowedUsersSha256: digest('synthetic-unit-owner'), googleRegistrationEnabled: false,
     appleRevocationEnabled: false, appleAcquisitionEnabled: false, paymentTransport: 'memory', stripeLivemode: false,
     mailTransport: 'memory', pushTransport: 'memory', identityTransport: 'memory', listingAiProvider: 'on_device', externalListingAiEnabled: false,
-    technicalSandboxEnabled: false, mountsSha256: objectDigest(api.Mounts), runtimeEnvironmentSha256: objectDigest(api.Config.Env) };
+    technicalSandboxEnabled: false, mountsSha256: objectDigest(canonicalMounts(api.Mounts)), runtimeEnvironmentSha256: objectDigest(api.Config.Env) };
   const ops = 'f'.repeat(40), review = 'a'.repeat(40);
   const publicationSha256 = digest(`${JSON.stringify(publication, null, 2)}\n`);
   const sourceInventory = Object.fromEntries(requiredSourcePaths.map(p => [p, digest(fs.readFileSync(path.join(repositoryRoot, p)))]));
