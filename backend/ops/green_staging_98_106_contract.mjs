@@ -166,10 +166,27 @@ export function validateBinding(binding, { publication, publicationSha256, root 
   return Object.freeze({ ...structuredClone(binding), publication: Object.freeze(accepted) });
 }
 
+function validateNetworkMembers(members) {
+  assert(Array.isArray(members), 'green_98_106_network_members');
+  for (const member of members) {
+    exact(member, ['id', 'name'], 'green_98_106_network_members');
+    assert(id.test(member.id) && typeof member.name === 'string'
+      && /^[A-Za-z0-9][A-Za-z0-9_.-]*$/u.test(member.name), 'green_98_106_network_members');
+  }
+  assert(new Set(members.map(m => m.id)).size === members.length
+    && new Set(members.map(m => m.name)).size === members.length
+    && members.every((m, i) => i === 0 || members[i - 1].id < m.id), 'green_98_106_network_members');
+  return members;
+}
+export function networkMembers(containers) {
+  assert(containers !== null && typeof containers === 'object' && !Array.isArray(containers), 'green_98_106_network_members');
+  return validateNetworkMembers(Object.entries(containers).map(([id, value]) => ({ id, name: value?.Name }))
+    .sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
 export function validateTarget(target) {
   exact(target, ['kind', 'schemaVersion', 'api', 'database', 'networks', 'uploads', 'witnesses',
     'databaseUser', 'databaseName', 'sourceLedger', 'targetLedger'], 'green_98_106_target');
-  assert(target.kind === 'sit-green-staging-98-106-target' && target.schemaVersion === 2
+  assert(target.kind === 'sit-green-staging-98-106-target' && target.schemaVersion === 3
     && target.sourceLedger === green98106.sourceLedger && target.targetLedger === green98106.targetLedger
     && target.databaseUser === 'shareittoo_green' && target.databaseName === 'shareittoo_green',
   'green_98_106_target');
@@ -184,9 +201,15 @@ export function validateTarget(target) {
   assert(Array.isArray(target.networks) && target.networks.length === 2, 'green_98_106_networks');
   const names = ['sit-green-network-20260918011528-wp254', 'sit-staging-provider-egress'];
   for (const network of target.networks) {
-    exact(network, ['name', 'id', 'internal'], 'green_98_106_networks');
+    exact(network, ['name', 'id', 'internal', 'members'], 'green_98_106_networks');
     assert(typeof network.name === 'string' && names.includes(network.name) && id.test(network.id)
       && network.internal === (network.name === names[0]), 'green_98_106_networks');
+    validateNetworkMembers(network.members);
+    assert(network.members.some(m => m.id === target.api.id && m.name === target.api.name)
+      && (network.internal
+        ? network.members.some(m => m.id === target.database.id && m.name === target.database.name)
+        : network.members.every(m => m.id !== target.database.id && m.name !== target.database.name)),
+    'green_98_106_network_required_members');
   }
   assert(new Set(target.networks.map((n) => n.name)).size === 2
     && new Set(target.networks.map((n) => n.id)).size === 2, 'green_98_106_networks');

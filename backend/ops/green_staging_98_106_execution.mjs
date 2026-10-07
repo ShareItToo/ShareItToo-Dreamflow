@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { assert, assertDataTransition, digest, equal, exact, green98106, objectDigest, repositoryRoot, safeError, validateRuntimeManifest } from './green_staging_98_106_contract.mjs';
+import { assert, assertDataTransition, digest, equal, exact, green98106, networkMembers, objectDigest, repositoryRoot, safeError, validateRuntimeManifest } from './green_staging_98_106_contract.mjs';
 import { assertEnvironment, buildPlan, canonicalMounts, checkContainer, containerFingerprint, requiredEnvironment, runReadOnlyPreflight, sealedApiName } from './green_staging_98_106_promotion.mjs';
 import { assertReadinessFindingsUnchanged } from './staging_forward_migration_rehearsal.mjs';
 import { assertGreenRuntimeReadbacks } from './green_staging_promotion.mjs';
@@ -383,10 +383,11 @@ export async function runPromotion(inputs, options, dependencies = {}) {
       checkContainer(fresh, inputs.target.database, true);
       assert(fresh.NetworkSettings.Networks[internal.name].IPAddress === endpoint.IPAddress, 'green_98_106_canonical_database_ip_drift');
       const net = dockerObject(await command({ phase: 'canonical_network_cas', args: ['network', 'inspect', internal.id] }));
-      const allowed = new Set([inputs.target.api.id, database.id, ...(validId(finalId) ? [finalId] : []),
-        ...owned.owned.filter(r => r.kind === 'container').map(r => r.id)]);
+      // Every CAS runs before worker/final start; stopped owned containers and
+      // the sealed source must not appear in the active membership map.
       assert(net.Id === internal.id && net.Name === internal.name && net.Internal === true
-        && Object.keys(net.Containers ?? {}).every(value => allowed.has(value)), 'green_98_106_canonical_foreign_member');
+        && equal(networkMembers(net.Containers), internal.members.filter(m => m.id !== inputs.target.api.id)),
+      'green_98_106_canonical_foreign_member');
     };
     const worker = await owned.create({ kind: 'container', role: 'canonicalmigration',
       ...imageSpec(image, plan.image, internal.id, { [internal.name]: internal.id }, { DATABASE_URL: url.href },
@@ -445,7 +446,8 @@ export async function runPromotion(inputs, options, dependencies = {}) {
     // Last public-route boundary: provider network is attached only after internal acceptance.
     await inspectSource(command, inputs, sealedApiName, false); materials.recheck(); await finalInspect();
     const providerNow = dockerObject(await command({ phase: 'provider_network_cas', args: ['network', 'inspect', provider.id] }));
-    assert(providerNow.Id === provider.id && providerNow.Name === provider.name && providerNow.Internal === false,
+    assert(providerNow.Id === provider.id && providerNow.Name === provider.name && providerNow.Internal === false
+      && equal(networkMembers(providerNow.Containers), provider.members.filter(m => m.id !== inputs.target.api.id)),
       'green_98_106_provider_network_drift');
     try { await command({ phase: 'final_network_connect', args: ['network', 'connect', provider.id, finalId] }); } catch { /* Exact postcondition. */ }
     finalSpec.networks[provider.name] = provider.id;

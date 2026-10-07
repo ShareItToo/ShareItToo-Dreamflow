@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  assert, assertLedger, digest, equal, green98106, objectDigest,
+  assert, assertLedger, digest, equal, green98106, networkMembers, objectDigest,
   repositoryRoot, requiredSourcePaths, runtimeManifestPath, validateBinding, validateConfiguration, validateTarget,
 } from './green_staging_98_106_contract.mjs';
 
@@ -183,8 +183,10 @@ export async function runReadOnlyPreflight(inputs, { command = readOnlyCommand, 
       'green_98_106_network_drift');
     assert(api.NetworkSettings?.Networks?.[network.name]?.NetworkID === network.id,
       'green_98_106_api_network_drift');
-    const allowed = new Set([target.api.id, target.database.id]);
-    assert(record.Containers && Object.keys(record.Containers).every((value) => allowed.has(value)),
+    // Stopped containers retain their NetworkSettings bindings but disappear
+    // from Docker network inspect's active Containers map, even after rename.
+    const expectedMembers = sourceSealed ? network.members.filter(m => m.id !== target.api.id) : network.members;
+    assert(equal(networkMembers(record.Containers), expectedMembers),
       'green_98_106_foreign_network_member');
   }
   assert(equal(Object.keys(api.NetworkSettings.Networks).sort(), target.networks.map((n) => n.name).sort()),

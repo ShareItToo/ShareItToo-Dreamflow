@@ -204,7 +204,7 @@ test('late promotion receipt collision cannot leave an unacknowledged successor 
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
 test('promotion requires fresh successful acceptance, unchanged backup/material/source and independent consent', async t => {
-  for (const fault of ['confirmation', 'expired', 'cleanup', 'acceptance', 'backup', 'materials', 'source', 'foreign-network', 'database-IP']) {
+  for (const fault of ['confirmation', 'expired', 'cleanup', 'acceptance', 'backup', 'materials', 'source', 'foreign-network', 'missing-router', 'database-IP']) {
     await t.test(fault, async () => {
       const f = dockerFixture(), directory = temporary();
       try {
@@ -221,6 +221,11 @@ test('promotion requires fresh successful acceptance, unchanged backup/material/
           const raw = await original(entry);
           if (fault === 'foreign-network' && entry.phase === 'canonical_network_cas') {
             const values = JSON.parse(raw); values[0].Containers['9'.repeat(64)] = { Name: 'foreign' }; return JSON.stringify(values);
+          }
+          if (fault === 'missing-router' && entry.phase === 'canonical_network_cas') {
+            const values = JSON.parse(raw);
+            const router = f.inputs.target.networks.find(n => n.internal).members.find(m => ![f.api.Id, f.database.Id].includes(m.id));
+            delete values[0].Containers[router.id]; return JSON.stringify(values);
           }
           if (fault === 'database-IP' && entry.phase === 'canonical_database_cas') {
             const values = JSON.parse(raw); Object.values(values[0].NetworkSettings.Networks)[0].IPAddress = '172.20.0.99'; return JSON.stringify(values);

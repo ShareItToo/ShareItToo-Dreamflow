@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
-import { digest, green98106, migrationInventory, objectDigest, repositoryRoot, requiredSourcePaths } from '../ops/green_staging_98_106_contract.mjs';
+import { digest, green98106, migrationInventory, networkMembers, objectDigest, repositoryRoot, requiredSourcePaths } from '../ops/green_staging_98_106_contract.mjs';
 import { assertEnvironment, assertReadOnlyCommand, boundary, buildPlan, containerFingerprint, requiredEnvironment, runReadOnlyPreflight, validateGitBinding } from '../ops/green_staging_98_106_promotion.mjs';
 
 // These deliberately synthetic values are test inputs, never a runtime manifest.
@@ -22,11 +22,16 @@ function fixture() {
   };
   const api = make('shareittoo-staging-api', green98106.predecessorDigest, true);
   const database = make('sit-green-postgres-20260918011528-wp254', `sha256:${'b'.repeat(64)}`, true);
+  delete records.get(database.id).NetworkSettings.Networks[nets[1].name];
+  database.configSha256 = containerFingerprint(records.get(database.id));
   const witnesses = Array.from({ length: 21 }, (_, i) => make(`shareittoo-staging-api-synthetic-${i}`, `sha256:${'c'.repeat(64)}`, false));
+  const router = { id: id(), name: 'synthetic-router' };
   for (const network of nets) records.set(network.id, { Id: network.id, Name: network.name,
-    Internal: network.internal, Containers: { [api.id]: { Name: api.name }, [database.id]: { Name: database.name } } });
+    Internal: network.internal, Containers: { [api.id]: { Name: api.name },
+      ...(network.internal ? { [database.id]: { Name: database.name }, [router.id]: { Name: router.name } } : {}) } });
+  for (const network of nets) network.members = networkMembers(records.get(network.id).Containers);
   const volume = { Name: 'sit-green-uploads-20260918011528-wp254', Driver: 'local', Labels: { synthetic: 'true' } };
-  const target = { kind: 'sit-green-staging-98-106-target', schemaVersion: 2, api, database, networks: nets,
+  const target = { kind: 'sit-green-staging-98-106-target', schemaVersion: 3, api, database, networks: nets,
     uploads: { name: volume.Name, configSha256: objectDigest(volume) }, witnesses,
     databaseUser: 'shareittoo_green', databaseName: 'shareittoo_green', sourceLedger: green98106.sourceLedger, targetLedger: green98106.targetLedger };
   const config = { kind: 'sit-green-staging-98-106-config', schemaVersion: 2, environment: 'test', firebaseAuthEnabled: true,

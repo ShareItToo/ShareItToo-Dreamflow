@@ -4,9 +4,9 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { collectTarget, collectorCommand } from '../ops/green_staging_98_106_collector.mjs';
-import { digest, objectDigest, validateRuntimeManifest } from '../ops/green_staging_98_106_contract.mjs';
+import { digest, networkMembers, objectDigest, validateRuntimeManifest, validateTarget } from '../ops/green_staging_98_106_contract.mjs';
 import { bindMaterials } from '../ops/green_staging_98_106_execution.mjs';
-import { canonicalMounts, checkContainer, containerFingerprint, runReadOnlyPreflight } from '../ops/green_staging_98_106_promotion.mjs';
+import { canonicalMounts, checkContainer, containerFingerprint, runReadOnlyPreflight, sealedApiName } from '../ops/green_staging_98_106_promotion.mjs';
 import { assertArtifactFamily, closeArtifact, exclusiveArtifact, openArtifact, privateDirectory, verifyArtifact } from '../ops/green_staging_98_106_evidence.mjs';
 import { dockerFixture } from './fixtures/green_98106_docker.js';
 
@@ -109,7 +109,7 @@ test('real identity variants retain their exact tag, UTC name, image ID and stab
     await assert.rejects(runReadOnlyPreflight(f.inputs, f.dependencies));
   });
 });
-test('schema-2 collection and preflight tolerate only full-mount permutation across repeated reads', async () => {
+test('target-v3/config-v2 collection and preflight tolerate only full-mount permutation across repeated reads', async () => {
   const f = dockerFixture(), directory = temporary(), original = f.dependencies.command;
   let read = 0;
   const command = async entry => {
@@ -126,19 +126,77 @@ test('schema-2 collection and preflight tolerate only full-mount permutation acr
     const result = await collectTarget({ directory, command, acceptanceMfaFile: '/synthetic/protected/acceptance' });
     const target = JSON.parse(fs.readFileSync(path.join(directory, result.artifacts[0].name)));
     const config = JSON.parse(fs.readFileSync(path.join(directory, result.artifacts[1].name)));
-    assert.equal(target.schemaVersion, 2); assert.equal(config.schemaVersion, 2);
+    assert.equal(target.schemaVersion, 3); assert.equal(config.schemaVersion, 2);
     assert.deepEqual(target, f.inputs.target); assert.deepEqual(config, f.inputs.config);
     assert.equal((await runReadOnlyPreflight(f.inputs, { ...f.dependencies, command })).status, 'read_only_prefix_passed');
     assert.ok(read > 21, 'API and every stopped witness were read');
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
-test('schema-1 target and config fingerprints are rejected before any Docker call', async () => {
-  for (const field of ['target', 'config']) {
-    const f = dockerFixture(); f.inputs[field].schemaVersion = 1;
+test('old target and config fingerprints are rejected before any Docker call', async () => {
+  for (const [field, version] of [['target', 1], ['target', 2], ['config', 1]]) {
+    const f = dockerFixture(); f.inputs[field].schemaVersion = version;
     f.inputs.binding[`${field}Sha256`] = objectDigest(f.inputs[field]);
     await assert.rejects(runReadOnlyPreflight(f.inputs, f.dependencies), /green_98_106_(target|config)/u);
     assert.equal(f.calls.length, 0);
   }
+});
+test('target-v3 requires complete sorted unique network identities and mandatory API/database membership', () => {
+  const mutations = [
+    t => { delete t.networks[0].members; }, t => { t.networks[0].members.reverse(); },
+    t => { t.networks[0].members.push(t.networks[0].members[0]); },
+    t => { t.networks[0].members[1].name = t.networks[0].members[0].name; },
+    t => { t.networks[0].members[0].id = 'invalid'; },
+    t => { t.networks[0].members[0].name = '/invalid'; },
+    t => { t.networks[0].members[0].extra = true; },
+    t => { t.networks[0].members = t.networks[0].members.filter(m => m.id !== t.api.id); },
+    t => { t.networks[1].members = []; },
+    t => { t.networks[0].members = t.networks[0].members.filter(m => m.id !== t.database.id); },
+    t => { t.networks[1].members = t.networks[0].members; },
+    t => { t.networks[0].members.find(m => m.id === t.api.id).name = 'wrong-api'; },
+    t => { t.networks[0].members.find(m => m.id === t.database.id).name = 'wrong-db'; },
+  ];
+  for (const mutate of mutations) { const f = dockerFixture(); mutate(f.inputs.target); assert.throws(() => validateTarget(f.inputs.target)); }
+  for (const input of [undefined, null, [], { invalid: { Name: 'router' } }, { ['a'.repeat(64)]: {} }]) assert.throws(() => networkMembers(input));
+});
+test('exact network membership accepts captured router without a name allowlist and rejects any member drift', async t => {
+  for (const fault of ['none', 'extra', 'missing-router', 'router-name', 'router-id', 'missing-api', 'missing-db']) {
+    await t.test(fault, async () => {
+      const f = dockerFixture(), network = f.inputs.target.networks.find(n => n.internal);
+      const router = network.members.find(m => ![f.api.Id, f.database.Id].includes(m.id));
+      assert.equal(router.name, 'synthetic-router');
+      const original = f.dependencies.command;
+      const command = async entry => {
+        const raw = await original(entry);
+        if (entry.phase !== 'network_inspect' || entry.args.at(-1) !== network.id) return raw;
+        const rows = JSON.parse(raw), members = rows[0].Containers;
+        if (fault === 'extra') members['f'.repeat(64)] = { Name: 'foreign' };
+        if (fault === 'missing-router') delete members[router.id];
+        if (fault === 'router-name') members[router.id].Name = 'renamed-router';
+        if (fault === 'router-id') { members['f'.repeat(64)] = members[router.id]; delete members[router.id]; }
+        if (fault === 'missing-api') delete members[f.api.Id];
+        if (fault === 'missing-db') delete members[f.database.Id];
+        rows[0].Containers = Object.fromEntries(Object.entries(members).reverse());
+        return JSON.stringify(rows);
+      };
+      if (fault === 'none') assert.equal((await runReadOnlyPreflight(f.inputs, { ...f.dependencies, command })).status, 'read_only_prefix_passed');
+      else await assert.rejects(runReadOnlyPreflight(f.inputs, { ...f.dependencies, command }), /green_98_106_foreign_network_member/u);
+    });
+  }
+});
+test('sealed source keeps its bound ID and exact seal name but must be absent from active network members', async t => {
+  for (const fault of ['none', 'stale-original-member', 'sealed-member', 'wrong-seal-name', 'running']) await t.test(fault, async () => {
+    const f = dockerFixture();
+    await f.dependencies.command({ phase: 'fixture_stop', args: ['stop', f.api.Id] });
+    await f.dependencies.command({ phase: 'fixture_rename', args: ['rename', f.api.Id, sealedApiName] });
+    if (fault === 'wrong-seal-name') f.api.Name = '/foreign-seal';
+    if (fault === 'running') f.api.State.Running = true;
+    if (fault.endsWith('-member')) for (const n of f.inputs.target.networks) {
+      f.records.get(n.id).Containers[f.api.Id] = { Name: fault === 'sealed-member' ? sealedApiName : f.inputs.target.api.name };
+    }
+    const options = { ...f.dependencies, sourceSealed: true };
+    if (fault === 'none') assert.equal((await runReadOnlyPreflight(f.inputs, options)).status, 'read_only_prefix_passed');
+    else await assert.rejects(runReadOnlyPreflight(f.inputs, options), /green_98_106_(container_drift|foreign_network_member)/u);
+  });
 });
 test('stable mount fingerprint preserves every mount field and rejects structural or identity drift', async t => {
   const changes = {

@@ -1,7 +1,7 @@
 // Stateful Docker/SQL model only. It is NOT live or image-execution evidence.
 import fs from 'node:fs';
 import path from 'node:path';
-import { green98106, digest, migrationInventory, newTableNames, objectDigest, repositoryRoot, requiredSourcePaths } from '../../ops/green_staging_98_106_contract.mjs';
+import { green98106, digest, migrationInventory, networkMembers, newTableNames, objectDigest, repositoryRoot, requiredSourcePaths } from '../../ops/green_staging_98_106_contract.mjs';
 import { canonicalMounts, containerFingerprint, requiredEnvironment } from '../../ops/green_staging_98_106_promotion.mjs';
 import { historicalWitnesses } from '../../ops/green_staging_98_106_collector.mjs';
 
@@ -55,10 +55,13 @@ export function dockerFixture() {
     { Type: 'volume', Name: 'sit-green-uploads-20260918011528-wp254', Source: '/protected/synthetic/uploads', Destination: '/data/uploads', RW: true },
   ];
   for (const witness of witnesses) witness.Mounts = structuredClone(api.Mounts);
+  const router = { id: id(), name: 'synthetic-router' };
+  records.get(nets[0].id).Containers[router.id] = { Name: router.name };
+  for (const n of nets) n.members = networkMembers(records.get(n.id).Containers);
   const descriptor = (r, imageDigest) => ({ name: r.Name.slice(1), id: r.Id, imageId: r.Image, imageDigest, configSha256: containerFingerprint(r) });
   const upload = { Name: 'sit-green-uploads-20260918011528-wp254', Driver: 'local', Labels: {} };
   volumes.add(upload.Name);
-  const target = { kind: 'sit-green-staging-98-106-target', schemaVersion: 2, api: descriptor(api, green98106.predecessorDigest),
+  const target = { kind: 'sit-green-staging-98-106-target', schemaVersion: 3, api: descriptor(api, green98106.predecessorDigest),
     database: descriptor(database, green98106.postgresImage.split('@')[1]), networks: nets,
     uploads: { name: upload.Name, configSha256: objectDigest(upload) }, witnesses: witnesses.map((r, i) => descriptor(r, historicalWitnesses[i].imageDigest)),
     databaseUser: 'shareittoo_green', databaseName: 'shareittoo_green', sourceLedger: green98106.sourceLedger, targetLedger: green98106.targetLedger };

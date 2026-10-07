@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { greenTarget } from './green_staging_promotion.mjs';
-import { assert, digest, green98106, objectDigest, validateConfiguration, validateTarget } from './green_staging_98_106_contract.mjs';
+import { assert, digest, green98106, networkMembers, objectDigest, validateConfiguration, validateTarget } from './green_staging_98_106_contract.mjs';
 import { assertEnvironment, canonicalMounts, containerFingerprint } from './green_staging_98_106_promotion.mjs';
 import { assertArtifactFamily, privateDirectory, writeArtifact } from './green_staging_98_106_evidence.mjs';
 
@@ -50,10 +50,10 @@ export async function collectTarget({ directory, command = collectorCommand, pre
   for (const name of [greenTarget.network, greenTarget.providerNetwork]) {
     const record = await inspect('network', name);
     assert(record.Name === name && typeof record.Internal === 'boolean', 'green_98_106_collector_network');
-    networks.push({ name, id: record.Id, internal: record.Internal });
+    networks.push({ name, id: record.Id, internal: record.Internal, members: networkMembers(record.Containers) });
   }
   const uploads = await inspect('volume', greenTarget.uploadsVolume);
-  const target = { kind: 'sit-green-staging-98-106-target', schemaVersion: 2,
+  const target = { kind: 'sit-green-staging-98-106-target', schemaVersion: 3,
     api: api.value, database: database.value, networks,
     uploads: { name: greenTarget.uploadsVolume, configSha256: objectDigest(uploads) }, witnesses,
     databaseUser: greenTarget.databaseUser, databaseName: greenTarget.databaseName,
