@@ -166,6 +166,7 @@ verifiedOptions(
   String origin = WebGooglePublicConfig.stagingOrigin,
   GoogleEvidenceFixture? evidence,
   String? expectedSourceCommit,
+  DateTime? runtimeNow,
 }) {
   final binding = evidence ?? googleEvidence(candidate);
   return candidate.optionsFor(
@@ -180,7 +181,7 @@ verifiedOptions(
     approvedDecisionDigest: binding.decisionDigest,
     approvedEvidenceDigest: binding.evidenceDigest,
     expectedSourceCommit: expectedSourceCommit ?? binding.sourceCommit,
-    now: binding.now,
+    now: runtimeNow ?? binding.now,
   );
 }
 
@@ -193,6 +194,91 @@ void main() {
     expect(options?.appId, candidate.appId);
     expect(options?.authDomain, candidate.authDomain);
     expect(options?.projectId, candidate.backendProjectId);
+  });
+  test('accepted Google options survive the deployment freshness window', () {
+    final candidate = config();
+    final evidence = googleEvidence(candidate);
+    for (final elapsed in [
+      const Duration(minutes: 30),
+      const Duration(hours: 1),
+      const Duration(hours: 2),
+      const Duration(days: 30),
+    ]) {
+      final options = verifiedOptions(candidate,
+          evidence: evidence, runtimeNow: evidence.now.add(elapsed));
+      expect(options?.appId, candidate.appId);
+      expect(options?.projectId, candidate.backendProjectId);
+    }
+  });
+  test('runtime longevity preserves invalid and future evidence rejection', () {
+    final candidate = config();
+    final later = googleFixtureNow.add(const Duration(days: 30));
+    for (final changes in <Map<String, Object?>>[
+      {'firebaseProviderEnabled': false},
+      {'firebaseAuthEnabled': false},
+      {'firebaseEmulatorEnabled': true},
+      {'backendProjectId': 'other-project'},
+      {'webAppId': '${candidate.appId}a'},
+      {'authorizedDomain': 'shareittoo.com'},
+      {
+        'validUntilUtc': googleFixtureNow.toIso8601String(),
+        'collectedAtUtc': googleFixtureNow.toIso8601String()
+      },
+      {
+        'validUntilUtc':
+            googleFixtureNow.add(const Duration(hours: 3)).toIso8601String()
+      },
+    ]) {
+      expect(
+          verifiedOptions(candidate,
+              evidence: googleEvidence(candidate, readinessChanges: changes),
+              runtimeNow: later),
+          isNull,
+          reason: changes.toString());
+    }
+    for (final changes in <Map<String, Object?>>[
+      {'decision': 'revoked'},
+      {'decision': 'rejected'},
+      {'sourceCommit': 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'},
+      {'configurationSha256': googleFixtureDigest('other-config')},
+      {'validUntilUtc': googleFixtureNow.toIso8601String()},
+      {
+        'validUntilUtc':
+            googleFixtureNow.add(const Duration(hours: 3)).toIso8601String()
+      },
+    ]) {
+      expect(
+          verifiedOptions(candidate,
+              evidence: googleEvidence(candidate, decisionChanges: changes),
+              runtimeNow: later),
+          isNull,
+          reason: changes.toString());
+    }
+    final evidence = googleEvidence(candidate);
+    expect(
+        verifiedOptions(candidate,
+            evidence: evidence,
+            runtimeNow: googleFixtureNow.subtract(const Duration(minutes: 2))),
+        isNull);
+    expect(
+        verifiedOptions(candidate,
+            evidence: evidence,
+            runtimeNow: googleFixtureNow.subtract(const Duration(seconds: 1))),
+        isNull);
+    expect(
+        verifiedOptions(candidate,
+            evidence: evidence,
+            expectedSourceCommit: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+            runtimeNow: later),
+        isNull);
+    expect(
+        verifiedOptions(candidate,
+            evidence: evidence, activationValidated: false, runtimeNow: later),
+        isNull);
+    expect(
+        verifiedOptions(config(changes: {'app': '${candidate.appId}a'}),
+            evidence: evidence, runtimeNow: later),
+        isNull);
   });
   for (final mutation in <Map<String, String>>[
     {'project': ''},

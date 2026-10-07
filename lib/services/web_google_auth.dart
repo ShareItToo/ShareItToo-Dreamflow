@@ -197,6 +197,11 @@ class WebGooglePublicConfig {
       final digestFields =
           _googleReadinessKeys.where((key) => key.endsWith('Sha256'));
       const maximumValidity = Duration(hours: 2);
+      // Freshness is enforced at build, sealing and candidate deployment.
+      // Like current/rollback artifact validation, an installed client retains
+      // the exact accepted evidence after that deployment window expires.
+      // Preserve the bounded approval window and reject future evidence here;
+      // expiry is not a provider revocation or a runtime session expiry.
       if (r['sourceCommit'] != expectedSourceCommit ||
           r['projectId'] != projectId ||
           r['projectNumber'] != messagingSenderId ||
@@ -215,8 +220,7 @@ class WebGooglePublicConfig {
           readinessUntil == null ||
           !readinessUntil.isAfter(collected) ||
           readinessUntil.difference(collected) > maximumValidity ||
-          now.isBefore(collected) ||
-          !now.isBefore(readinessUntil)) {
+          now.isBefore(collected)) {
         return false;
       }
       if (d['schemaVersion'] != 1 ||
@@ -241,8 +245,7 @@ class WebGooglePublicConfig {
           !decisionUntil.isAfter(decided) ||
           decisionUntil.difference(decided) > maximumValidity ||
           decisionUntil.isAfter(readinessUntil) ||
-          now.isBefore(decided) ||
-          !now.isBefore(decisionUntil)) {
+          now.isBefore(decided)) {
         return false;
       }
       final envelope = <String, Object?>{
