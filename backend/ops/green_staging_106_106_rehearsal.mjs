@@ -102,9 +102,13 @@ export async function runSuccessorRehearsal(inputs, options, dependencies = {}) 
       CORS_ORIGINS: 'http://127.0.0.1:8080', APPLE_REVOCATION_ENABLED: 'false', APPLE_OWNERSHIP_ACQUISITION_ENABLED: 'false' };
     const user = `${fresh.candidateContent.uid}:${fresh.candidateContent.gid}`;
     const paths = inputs.config.materials.map(m => m.destination);
+    const supplementalGroups = entries => [...new Set(entries.map(material => String(material.gid))
+      .filter(group => group !== String(inputs.config.gid)))].sort((a, b) => Number(a) - Number(b));
+    require(equal(materials.supplementalGroups, supplementalGroups(inputs.config.materials)), 'rehearsal_material_groups');
     const materialScript = `import fs from 'node:fs';import crypto from 'node:crypto';await import('/app/src/config.js');process.stdout.write(JSON.stringify({uid:process.getuid(),gid:process.getgid(),hashes:${JSON.stringify(paths)}.map(p=>crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex'))}));`;
     const materialProbe = await owned.create({ kind: 'container', role: 'materials', ...isolatedSpec(candidateImage, null, neutral,
-      { user, script: materialScript, mounts: inputs.config.materials.map(m => ({ type: 'bind', source: m.source, destination: m.destination, readOnly: true })) }) });
+      { user, groups: materials.supplementalGroups, script: materialScript,
+        mounts: inputs.config.materials.map(m => ({ type: 'bind', source: m.source, destination: m.destination, readOnly: true })) }) });
     const materialResult = JSON.parse(await owned.task(materialProbe));
     require(equal(materialResult, { uid: fresh.candidateContent.uid, gid: fresh.candidateContent.gid,
       hashes: inputs.config.materials.map(m => m.sha256) }), 'rehearsal_namespace_materials');
@@ -161,7 +165,7 @@ export async function runSuccessorRehearsal(inputs, options, dependencies = {}) 
     const candidateEnv = { ...neutral, DATABASE_URL: `postgresql://${inputs.binding.scope.databaseUser}:${secret}@${address}:5432/${inputs.binding.scope.databaseName}` };
     const expectedVersion = buildReleaseMetadata({ ...Object.fromEntries(candidateImage.Config.Env.map(e => [e.slice(0, e.indexOf('=')), e.slice(e.indexOf('=') + 1)])), ...candidateEnv });
     const candidate = await owned.create({ kind: 'container', role: 'candidate', ...isolatedSpec(candidateImage, network, candidateEnv,
-      { user, mounts: [{ type: 'volume', destination: '/data/uploads', readOnly: false },
+      { user, groups: supplementalGroups([mfa]), mounts: [{ type: 'volume', destination: '/data/uploads', readOnly: false },
         { type: 'bind', source: mfa.source, destination: mfa.destination, readOnly: true }] }) });
     const dbCas = await owned.inspect('container', db.id); owned.assertOwned(dbCas, db);
     require(dbCas.State.Running && dbCas.NetworkSettings.Networks[network.name].IPAddress === address, 'rehearsal_database_cas');

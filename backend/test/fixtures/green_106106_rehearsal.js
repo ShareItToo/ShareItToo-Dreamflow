@@ -51,11 +51,12 @@ export async function rehearsalFixture(directory) {
       const record = { Id: id(), Name: a.at(-1), Internal: true, Driver: 'bridge', Labels: labels, Containers: {} };
       records[record.Id] = record; result = record.Id;
     } else if (a[0] === 'create') {
-      const fields = { env: {}, labels: {}, mounts: [] }; let i = 1;
+      const fields = { env: {}, labels: {}, mounts: [], groups: [] }; let i = 1;
       while (a[i]?.startsWith('--')) {
         const key = a[i++], value = a[i++];
         if (key === '--label') { const at = value.indexOf('='); fields.labels[value.slice(0, at)] = value.slice(at + 1); }
         else if (key === '--env') { if (!Object.hasOwn(entry.env, value)) throw new Error('missing env'); fields.env[value] = entry.env[value]; }
+        else if (key === '--group-add') fields.groups.push(value);
         else if (key === '--mount') {
           const m = Object.fromEntries(value.split(',').map(v => { const at = v.indexOf('='); return at < 0 ? [v, true] : [v.slice(0, at), v.slice(at + 1)]; }));
           if (!['bind', 'volume'].includes(m.type) || (m.type === 'volume' && m.src)) throw new Error('not anonymous');
@@ -74,7 +75,7 @@ export async function rehearsalFixture(directory) {
           Cmd: a.slice(i).length ? a.slice(i) : image.Config.Cmd },
         State: { Running: false, Paused: false, Status: 'created', ExitCode: 0 }, Mounts: fields.mounts,
         HostConfig: { Privileged: false, RestartPolicy: { Name: fields.restart, MaximumRetryCount: 0 }, NetworkMode: fields.network,
-          PortBindings: null, GroupAdd: [], CapAdd: [], Devices: [], VolumesFrom: [], PidMode: '' },
+          PortBindings: null, GroupAdd: fields.groups, CapAdd: [], Devices: [], VolumesFrom: [], PidMode: '' },
         NetworkSettings: { Networks: network ? { [network.Name]: { NetworkID: '', IPAddress: '' } } : { none: { NetworkID: '' } } } };
       records[record.Id] = record; result = record.Id;
     } else if (a[0] === 'start') {

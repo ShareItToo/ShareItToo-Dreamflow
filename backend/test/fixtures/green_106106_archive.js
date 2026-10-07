@@ -1,4 +1,6 @@
 import fs from 'node:fs';
+import { gzipSync } from 'node:zlib';
+import { tarEntries } from '../../ops/green_staging_106_106_image.mjs';
 import { digest, migrationInventory, repositoryRoot } from '../../ops/green_staging_98_106_contract.mjs';
 
 export function tar(entries) {
@@ -32,4 +34,25 @@ export function candidateArchive(env, { changeEntries = () => {}, extraLayers = 
   const archive = tar([{ name: 'manifest.json', data: JSON.stringify([{ Config: 'config.json', Layers: layers.map((_, i) => `layer${i}.tar`) }]) },
     { name: 'config.json', data: configBytes }, ...layers.map((data, i) => ({ name: `layer${i}.tar`, data }))]);
   return { image, archive };
+}
+
+export function containerdArchive({ changeManifest = () => {}, changeOuter = () => {}, changeImage = () => {} } = {}) {
+  const c = candidateArchive([], { extraLayers: [[{ name: 'ignored', data: 'second layer' }]] });
+  const legacyEntries = tarEntries(c.archive), configBytes = legacyEntries.find(e => e.name === 'config.json').data;
+  const layers = legacyEntries.filter(e => /^layer\d+\.tar$/u.test(e.name)).map(e => gzipSync(e.data));
+  const descriptor = (bytes, mediaType) => ({ mediaType, digest: `sha256:${digest(bytes)}`, size: bytes.length });
+  const blobName = d => `blobs/sha256/${d.digest.slice(7)}`;
+  const config = descriptor(configBytes, 'application/vnd.docker.container.image.v1+json');
+  const layerDescriptors = layers.map(bytes => descriptor(bytes, 'application/vnd.docker.image.rootfs.diff.tar.gzip'));
+  const manifest = { schemaVersion: 2, mediaType: 'application/vnd.docker.distribution.manifest.v2+json', config, layers: layerDescriptors };
+  const legacy = [{ Config: blobName(config), Layers: layerDescriptors.map(blobName) }];
+  const entries = [{ name: blobName(config), data: configBytes }, ...layers.map((data, i) => ({ name: blobName(layerDescriptors[i]), data }))];
+  changeManifest(manifest);
+  const bytes = Buffer.from(JSON.stringify(manifest)), d = descriptor(bytes, manifest.mediaType);
+  const image = { ...c.image, Id: d.digest, Descriptor: d, RepoDigests: [`ghcr.io/shareittoo/shareittoo-api@${d.digest}`] };
+  entries.push({ name: blobName(d), data: bytes }, { name: 'manifest.json', data: JSON.stringify(legacy) },
+    { name: 'index.json', data: JSON.stringify({ schemaVersion: 2, mediaType: 'application/vnd.oci.image.index.v1+json', manifests: [{ ...d }] }) },
+    { name: 'oci-layout', data: JSON.stringify({ imageLayoutVersion: '1.0.0' }) });
+  changeOuter(entries); changeImage(image);
+  return { image, archive: tar(entries) };
 }

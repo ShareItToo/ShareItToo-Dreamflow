@@ -8,6 +8,7 @@ import { requireBinding as require, validateSuccessorSource } from './green_stag
 import { validateSuccessorImage, validateSuccessorPublication } from './green_staging_106_106_contract.mjs';
 import { readCandidateArchive } from './green_staging_106_106_image.mjs';
 import { decodeSnapshot, snapshotSql } from './green_staging_106_106_database.mjs';
+import { strictSupplementalGroups } from './green_staging_106_106_resources.mjs';
 
 const hash = v => typeof v === 'string' && /^[a-f0-9]{64}$/u.test(v);
 const exact = (v, keys, code) => require(v && Object.getPrototypeOf(v) === Object.prototype && equal(Object.keys(v).sort(), [...keys].sort()), code);
@@ -76,6 +77,11 @@ export function bindExecutionMaterials(config, api, candidate, io = fs) {
   const mounts = canonicalMounts(api.Mounts), binds = mounts.filter(m => m.Type === 'bind');
   require(binds.length === config.materials.length && binds.every(m => m.RW === false
     && config.materials.some(f => f.source === m.Source && f.destination === m.Destination)), 'material_mounts');
+  const sourceGroups = strictSupplementalGroups(api?.HostConfig?.GroupAdd ?? []);
+  const allowedGroups = new Set([String(config.gid), ...sourceGroups]);
+  const supplementalGroups = [...new Set(config.materials.map(material => String(material.gid))
+    .filter(group => group !== String(config.gid)))].sort((a, b) => Number(a) - Number(b));
+  require(supplementalGroups.every(group => allowedGroups.has(group)), 'material_uid_permission');
   const held = [];
   const stable = entry => {
     const now = io.fstatSync(entry.fd, { bigint: true }), link = io.lstatSync(entry.source, { bigint: true });
@@ -103,7 +109,8 @@ export function bindExecutionMaterials(config, api, candidate, io = fs) {
         require(digest(bytes) === material.sha256, 'material_bytes');
         if (material === config.envFile) envBytes = bytes.toString('utf8');
       } finally { bytes.fill(0); }
-      if (material !== config.envFile) require(material.gid === config.gid && (material.mode & 0o040) !== 0, 'material_uid_permission');
+      if (material !== config.envFile) require(allowedGroups.has(String(material.gid))
+        && (material.mode & 0o040) !== 0, 'material_uid_permission');
     }
     const parseEnv = entries => {
       require(Array.isArray(entries), 'material_environment'); const result = new Map();
@@ -125,7 +132,8 @@ export function bindExecutionMaterials(config, api, candidate, io = fs) {
     require(equal([...merged].sort(), [...effective].sort()), 'material_environment_incomplete');
     held.forEach(stable);
     return { recheck: () => held.forEach(stable), close: () => held.splice(0).reverse().forEach(e => io.closeSync(e.fd)),
-      sha256: objectDigest({ materials: config.materials, envFile: config.envFile }), namespaceReadabilityVerified: false };
+      sha256: objectDigest({ materials: config.materials, envFile: config.envFile }),
+      supplementalGroups, namespaceReadabilityVerified: false };
   } catch (error) { held.reverse().forEach(e => io.closeSync(e.fd)); throw error; }
 }
 

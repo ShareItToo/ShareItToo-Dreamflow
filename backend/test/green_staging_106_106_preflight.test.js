@@ -5,6 +5,7 @@ import { digest, objectDigest } from '../ops/green_staging_98_106_contract.mjs';
 import { executionPreflight, physicalSchemaSql, writersSql, constraintsSql, validateExecutionInputs, bindExecutionMaterials,
   disposableResourcePlan, assertOwnedResource, assertOwnedNetwork } from '../ops/green_staging_106_106_preflight.mjs';
 import { readCandidateArchive, tarEntries } from '../ops/green_staging_106_106_image.mjs';
+import { isolatedSpec } from '../ops/green_staging_106_106_resources.mjs';
 import { hex } from './fixtures/green_106106_readonly.js';
 import { candidateArchive, tar } from './fixtures/green_106106_archive.js';
 
@@ -69,7 +70,42 @@ test('stable material descriptors reject changed bytes, metadata, path identity 
     assert.throws(() => bindExecutionMaterials(s.config, s.f.records[hex(1)], s.c.image, s.io)); assert.equal(s.open.size, 0);
   });
   const s = await inputs(), held = bindExecutionMaterials(s.config, s.f.records[hex(1)], s.c.image, s.io);
+  assert.deepEqual(held.supplementalGroups, ['65532']);
   s.stats.get(s.config.materials[0].source).mtimeNs++; assert.throws(held.recheck); held.close(); assert.equal(s.open.size, 0);
+});
+test('mixed material gids require exact strict source supplemental groups', async t => {
+  const changes = {
+    missing: source => { source.HostConfig.GroupAdd = []; },
+    foreign: source => { source.HostConfig.GroupAdd = ['65531']; },
+    root: source => { source.HostConfig.GroupAdd = ['0', '65532']; },
+    malformed: source => { source.HostConfig.GroupAdd = ['065532']; },
+    nonString: source => { source.HostConfig.GroupAdd = [65532]; },
+    duplicate: source => { source.HostConfig.GroupAdd = ['65532', '65532']; },
+  };
+  for (const [label, change] of Object.entries(changes)) await t.test(label, async () => {
+    const s = await inputs(), source = s.f.records[hex(1)]; change(source);
+    assert.throws(() => bindExecutionMaterials(s.config, source, s.c.image, s.io)); assert.equal(s.open.size, 0);
+  });
+  const s = await inputs(), source = s.f.records[hex(1)];
+  source.HostConfig.GroupAdd = ['65533', '65532'];
+  const held = bindExecutionMaterials(s.config, source, s.c.image, s.io);
+  assert.deepEqual(held.supplementalGroups, ['65532']); held.close(); assert.equal(s.open.size, 0);
+});
+test('isolated specs sort necessary groups and reject foreign observed groups exactly', async () => {
+  const s = await inputs(), built = isolatedSpec(s.c.image, null, {}, { groups: ['65533', '65532'] });
+  assert.deepEqual(built.spec.groups, ['65532', '65533']);
+  assert.deepEqual(built.args.filter((value, index) => value === '--group-add' || built.args[index - 1] === '--group-add'),
+    ['--group-add', '65532', '--group-add', '65533']);
+  const record = { Image: s.c.image.Id, Config: { Image: s.c.image.Id, User: s.c.image.Config.User,
+    Env: s.c.image.Config.Env, Entrypoint: s.c.image.Config.Entrypoint, Cmd: s.c.image.Config.Cmd },
+    HostConfig: { Privileged: false, NetworkMode: 'none', PortBindings: null, GroupAdd: ['65533', '65532'],
+      RestartPolicy: { Name: 'no' }, CapAdd: [], Devices: [], VolumesFrom: [], PidMode: '' },
+    State: { Running: false, Paused: false }, Mounts: [], NetworkSettings: { Networks: { none: { NetworkID: '' } } } };
+  built.validate(record);
+  const foreign = structuredClone(record); foreign.HostConfig.GroupAdd.push('65531'); assert.throws(() => built.validate(foreign));
+  for (const groups of [['0'], ['065532'], [65532], ['65532', '65532']]) {
+    assert.throws(() => isolatedSpec(s.c.image, null, {}, { groups }));
+  }
 });
 test('candidate archive binds actual config/layer bytes, complete ledger and resolved nonroot user', () => {
   const c = candidateArchive([]); assert.equal(readCandidateArchive(c.archive, c.image).migrations.length, 106);

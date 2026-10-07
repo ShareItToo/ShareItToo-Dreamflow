@@ -126,6 +126,10 @@ effective layer whiteouts, exact 001–106 migration bytes and passwd/group-deri
 nonroot identity. It accepts the explicitly tested USTAR/POSIX-PAX variants;
 unsupported formats, consumed links/xattrs, duplicate paths, invalid traversal,
 missing/extra/changed migrations and unreadable migration paths fail closed.
+For containerd-backed Docker exports where `image.Id` is the manifest digest,
+the exact single-entry OCI index, inspect descriptor, manifest blob, config blob
+and every ordered compressed layer descriptor/byte range are bound together;
+the legacy config-digest form remains separate and unchanged.
 It verifies image Env/OCI version/commit/build-time equality and reconstructs
 effective provider/config state from image defaults plus the protected env file;
 APP identity overrides, duplicates, omissions and changed effective values fail.
@@ -160,6 +164,10 @@ receipts, wrong consent and preexisting evidence names fail before mutation.
 The runner verifies PG16 tools and candidate namespace material readability/config
 import as the resolved nonroot identity. It quiesces and seals the exact source ID,
 proves zero writers, and creates an exclusive descriptor-held custom-format backup.
+Material access may carry only the exact positive numeric supplemental groups
+already present on the bound source container and actually required by a mounted
+root-owned secret; groups are sorted, deduplicated and checked on the created
+isolated container. Database resources receive none.
 It restores verified bytes into run-scoped, owned PG16/internal-network/anonymous
 storage resources after initialization and two successful readiness reads.
 Tables (including populated Mission tables), ledger106/timestamps, readiness,

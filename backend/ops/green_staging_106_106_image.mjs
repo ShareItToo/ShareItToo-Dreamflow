@@ -65,6 +65,58 @@ export function tarEntries(bytes) {
 }
 const relevant = name => name === 'etc' || ['etc/passwd', 'etc/group', 'app', 'app/sql', 'app/sql/migrations', 'run', 'run/secrets'].includes(name)
   || name.startsWith('app/sql/migrations/');
+// Containerd may report the manifest digest as image.Id instead of the config
+// digest. Accept only the observed single-manifest OCI layout; every edge is
+// bound to the same exported bytes, never inferred from annotation/tag text.
+function bindDescriptorArchive(outer, file, legacy, image, configBytes) {
+  const keys = (value, required, optional = []) => {
+    require(value && typeof value === 'object' && !Array.isArray(value)
+      && required.every(k => Object.hasOwn(value, k))
+      && Object.keys(value).every(k => [...required, ...optional].includes(k)), 'archive_descriptor_shape');
+    if (Object.hasOwn(value, 'annotations')) require(value.annotations && typeof value.annotations === 'object'
+      && !Array.isArray(value.annotations) && Object.values(value.annotations).every(v => typeof v === 'string'), 'archive_annotations');
+  };
+  const media = { manifest: 'application/vnd.docker.distribution.manifest.v2+json',
+    config: 'application/vnd.docker.container.image.v1+json', layer: 'application/vnd.docker.image.rootfs.diff.tar.gzip' };
+  const blobPath = descriptor => {
+    keys(descriptor, ['mediaType', 'digest', 'size']);
+    require(/^sha256:[a-f0-9]{64}$/u.test(descriptor.digest) && Number.isSafeInteger(descriptor.size)
+      && descriptor.size > 0 && descriptor.size <= limit, 'archive_descriptor');
+    return `blobs/sha256/${descriptor.digest.slice(7)}`;
+  };
+  const consumed = new Set(['manifest.json', 'index.json', 'oci-layout']);
+  const blob = (descriptor, type, expectedPath) => {
+    const name = blobPath(descriptor);
+    require(descriptor.mediaType === type && (expectedPath === undefined || expectedPath === name), 'archive_descriptor_path');
+    const bytes = file(name);
+    require(bytes.length === descriptor.size && `sha256:${digest(bytes)}` === descriptor.digest, 'archive_descriptor_bytes');
+    consumed.add(name); return bytes;
+  };
+  require(image.Descriptor?.digest === image.Id && Array.isArray(image.RepoDigests)
+    && image.RepoDigests.some(value => typeof value === 'string' && value.endsWith(`@${image.Id}`)), 'archive_descriptor_identity');
+  const manifestBytes = blob(image.Descriptor, media.manifest);
+  const index = JSON.parse(utf8(file('index.json'))), layout = JSON.parse(utf8(file('oci-layout')));
+  keys(layout, ['imageLayoutVersion']); require(layout.imageLayoutVersion === '1.0.0', 'archive_layout');
+  keys(index, ['schemaVersion', 'mediaType', 'manifests'], ['annotations']);
+  require(index.schemaVersion === 2 && index.mediaType === 'application/vnd.oci.image.index.v1+json'
+    && Array.isArray(index.manifests) && index.manifests.length === 1, 'archive_index');
+  const indexed = index.manifests[0];
+  keys(indexed, ['digest', 'size', 'mediaType'], ['annotations']);
+  require(['digest', 'size', 'mediaType'].every(k => indexed[k] === image.Descriptor[k]), 'archive_index_binding');
+  const manifest = JSON.parse(utf8(manifestBytes));
+  keys(manifest, ['schemaVersion', 'mediaType', 'config', 'layers']);
+  require(manifest.schemaVersion === 2 && manifest.mediaType === media.manifest
+    && Array.isArray(manifest.layers) && manifest.layers.length === legacy.Layers.length, 'archive_descriptor_manifest');
+  require(blob(manifest.config, media.config, legacy.Config).equals(configBytes), 'archive_config_binding');
+  for (const [i, descriptor] of manifest.layers.entries()) {
+    const raw = blob(descriptor, media.layer, legacy.Layers[i]);
+    require(raw[0] === 0x1f && raw[1] === 0x8b, 'archive_layer_encoding');
+  }
+  // Directory headers carry no descriptors. Every regular member must belong
+  // to this exact closure; surplus blobs/manifests cannot hide another image.
+  for (const entry of outer.values()) require(consumed.has(entry.name)
+    || (entry.type === '5' && ['blobs', 'blobs/sha256'].includes(entry.name) && entry.data.length === 0), 'archive_ambiguous_member');
+}
 export function readCandidateArchive(bytes, image, { maxLayerBytes = limit } = {}) {
   // Tests may reduce the bound, never expand the operational 512 MiB ceiling.
   require(Number.isSafeInteger(maxLayerBytes) && maxLayerBytes > 0 && maxLayerBytes <= limit, 'archive_layer_size');
@@ -76,7 +128,8 @@ export function readCandidateArchive(bytes, image, { maxLayerBytes = limit } = {
   const manifest = JSON.parse(utf8(file('manifest.json')));
   require(Array.isArray(manifest) && manifest.length === 1 && Array.isArray(manifest[0].Layers), 'archive_manifest');
   const configBytes = file(manifest[0].Config), config = JSON.parse(utf8(configBytes));
-  require(`sha256:${digest(configBytes)}` === image.Id && equal(config.config, image.Config)
+  if (`sha256:${digest(configBytes)}` !== image.Id) bindDescriptorArchive(outer, file, manifest[0], image, configBytes);
+  require(equal(config.config, image.Config)
     && Array.isArray(config.rootfs?.diff_ids) && equal(config.rootfs.diff_ids, image.RootFS?.Layers)
     && config.rootfs.diff_ids.length === manifest[0].Layers.length, 'archive_image');
   const effective = new Map();
