@@ -106,15 +106,14 @@ function main(argv) {
   const absolute = path.resolve(filename);
   if (!path.isAbsolute(filename) || absolute !== filename || absolute === repositoryRoot
       || absolute.startsWith(`${repositoryRoot}${path.sep}`)) fail('sandbox106_path');
-  const lstat = fs.lstatSync(absolute);
-  if (!lstat.isFile() || lstat.isSymbolicLink() || lstat.nlink !== 1 || lstat.uid !== process.getuid()
-      || (lstat.mode & 0o7777) !== 0o600 || lstat.size > 32768) fail('sandbox106_input_metadata');
   const fd = fs.openSync(absolute, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_CLOEXEC);
   let bytes;
   try {
     const opened = fs.fstatSync(fd);
-    if (!opened.isFile() || opened.dev !== lstat.dev || opened.ino !== lstat.ino || opened.nlink !== 1
-        || opened.uid !== process.getuid() || (opened.mode & 0o7777) !== 0o600 || opened.size !== lstat.size) fail('sandbox106_input_metadata');
+    if (!opened.isFile() || opened.nlink !== 1 || opened.uid !== process.getuid()
+        || (opened.mode & 0o7777) !== 0o600 || opened.size > 32768) fail('sandbox106_input_metadata');
+    const lstat = fs.lstatSync(absolute);
+    if (['dev','ino','mode','uid','gid','nlink','size','mtimeMs','ctimeMs'].some(k => opened[k] !== lstat[k])) fail('sandbox106_input_changed');
     bytes = Buffer.alloc(opened.size); let offset = 0;
     while (offset < bytes.length) { const n = fs.readSync(fd, bytes, offset, bytes.length - offset, offset); if (n <= 0) fail('sandbox106_input_read'); offset += n; }
     const after = fs.fstatSync(fd);

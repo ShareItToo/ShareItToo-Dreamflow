@@ -34,7 +34,7 @@ const sourceSnapshot = { sourceCommit: 'b'.repeat(40), files: sourceFiles, inven
 function validReadinessInputs() {
   const timestamp = '2026-10-25T10:00:00Z';
   const sources = facebookWebReadSources(metaAppId).map((source) => ({ method: 'GET', source, status: 200,
-    startedAtUtc: timestamp, endedAtUtc: timestamp, responseSha256: sha(source) }));
+    startedAtUtc: timestamp, endedAtUtc: timestamp }));
   const config = { projectId: project, messagingSenderId: number, appId,
     apiKey: `AIza${'x'.repeat(35)}`, authDomain: `${project}.firebaseapp.com`,
     backendProjectId: project, authorizedOrigin: 'https://staging.shareittoo.com' };

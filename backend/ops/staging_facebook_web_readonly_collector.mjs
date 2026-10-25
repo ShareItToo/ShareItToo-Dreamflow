@@ -26,11 +26,6 @@ const canonical = (value) => Array.isArray(value) ? value.map(canonical)
     : value;
 const digest = (value) => hash(JSON.stringify(canonical(value)));
 
-export function sanitizedFacebookProviderDigest(value) {
-  check(plain(value) && typeof value.clientSecret === 'string');
-  return hash(JSON.stringify(canonical({ ...value, clientSecret: '[REDACTED]' })));
-}
-
 export function facebookWebReadSources(metaAppId) {
   check(typeof metaAppId === 'string' && /^[1-9][0-9]{5,24}$/u.test(metaAppId));
   return Object.freeze([...FIXED_READS,
@@ -63,13 +58,9 @@ export function createFacebookWebReadOnlyCollector({ googleAccessToken, metaAppA
       const value = JSON.parse(text);
       check(plain(value));
       const endedAt = now();
-      const sanitized = url.endsWith('/defaultSupportedIdpConfigs/facebook.com') && typeof value.clientSecret === 'string'
-        ? { ...value, clientSecret: '[REDACTED]' } : value;
       register.push(Object.freeze({ method: 'GET', source: url, status: 200,
         startedAtUtc: new Date(startedAt).toISOString().replace('.000Z', 'Z'),
-        endedAtUtc: new Date(endedAt).toISOString().replace('.000Z', 'Z'),
-        responseSha256: url.endsWith('/defaultSupportedIdpConfigs/facebook.com')
-          ? sanitizedFacebookProviderDigest(value) : hash(JSON.stringify(canonical(sanitized))) }));
+        endedAtUtc: new Date(endedAt).toISOString().replace('.000Z', 'Z') }));
       // Never return raw response text; callers keep only allow-listed fields.
       return value;
     } catch {
@@ -80,7 +71,10 @@ export function createFacebookWebReadOnlyCollector({ googleAccessToken, metaAppA
     const identity = await get('https://openidconnect.googleapis.com/v1/userinfo', googleAccessToken);
     check(identity.email_verified === true && typeof identity.sub === 'string' && identity.sub.length >= 8
       && typeof identity.email === 'string' && identity.email.length <= 320);
-    const firebaseUrl = FIXED_READS.find((url) => url.includes('/webApps/') && url.endsWith('/config'));
+    const firebaseUrl = FIXED_READS.find((url) => {
+      const parsed = new URL(url);
+      return parsed.hostname === 'firebase.googleapis.com' && parsed.pathname === `/v1beta1/projects/${PROJECT_NUMBER}/webApps/${APP_ID}/config`;
+    });
     const authUrl = FIXED_READS.find((url) => url.endsWith('/admin/v2/projects/shareittoo-staging/config'));
     const providerUrl = FIXED_READS.find((url) => url.endsWith('/defaultSupportedIdpConfigs/facebook.com'));
     const firebase = await get(firebaseUrl, googleAccessToken);
@@ -97,18 +91,19 @@ export function createFacebookWebReadOnlyCollector({ googleAccessToken, metaAppA
       && /^[A-Za-z0-9_-]{20,128}$/u.test(firebase.apiKey)
       && firebase.authDomain === `${PROJECT}.firebaseapp.com`
       && String(firebase.messagingSenderId) === PROJECT_NUMBER);
-    check(authConfig.authorizedDomains?.includes('staging.shareittoo.com'));
+    check(new Set(authConfig.authorizedDomains ?? []).has('staging.shareittoo.com'));
     check(provider.clientId === meta.id);
     check(meta.id === provider.clientId && meta.app_mode === 'development'
-      && Array.isArray(meta.app_domains) && meta.app_domains.includes('staging.shareittoo.com')
+      && Array.isArray(meta.app_domains) && new Set(meta.app_domains).has('staging.shareittoo.com')
       && Array.isArray(meta.oauth_redirect_uris)
-      && meta.oauth_redirect_uris.includes(`https://${PROJECT}.firebaseapp.com/__/auth/handler`));
+      && new Set(meta.oauth_redirect_uris).has(`https://${PROJECT}.firebaseapp.com/__/auth/handler`));
     // Development-mode audience is restricted to app roles. If Graph does not
     // expose and verify this mode/redirect configuration, collection fails closed.
     const configuration = { projectId: firebase.projectId,
       messagingSenderId: String(firebase.messagingSenderId), appId: firebase.appId,
       apiKey: firebase.apiKey, authDomain: firebase.authDomain,
       backendProjectId: PROJECT, authorizedOrigin: ORIGIN };
+    // lgtm[js/insufficient-password-hash] Firebase Web API keys are public client configuration identifiers, not authenticators. This SHA-256 is solely an exact configuration-integrity digest.
     const configurationSha256 = hash(JSON.stringify(configuration));
     const collectedAtUtc = new Date(Math.floor(now() / 1000) * 1000).toISOString().replace('.000Z', 'Z');
     const validUntilUtc = new Date(Date.parse(collectedAtUtc) + 60 * 60 * 1000)
@@ -116,7 +111,7 @@ export function createFacebookWebReadOnlyCollector({ googleAccessToken, metaAppA
     const readback = { projectId: PROJECT, projectNumber: PROJECT_NUMBER,
       appId: APP_ID, firebaseProviderEnabled: provider.enabled,
       metaAppMode: meta.app_mode, metaDomains: [...meta.app_domains].sort(),
-      redirectUris: [...meta.oauth_redirect_uris].sort(),
+      callbackUriVerified: true,
       firebaseAuthorizedDomains: [...authConfig.authorizedDomains].sort(),
       collectorIdentitySha256: hash(identity.sub),
       sourceRegister: register };

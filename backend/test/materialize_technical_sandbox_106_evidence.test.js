@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { chmodSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, closeSync, constants, fstatSync, lstatSync, mkdtempSync, openSync, readFileSync, readSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -20,6 +20,19 @@ function inputs(){return {promotionReceipt:receipt(),promotionReceiptSha256:'5'.
  stripeReadback:{authenticated:true,accountId:'acct_synthetic1234',accountMode:'test',livemode:false,readAt:'2026-10-25T09:30:00.000Z'},stripeReadbackSha256:'9'.repeat(64),
  rollback:{target:commit,canonicalContainerId:containerId,imageDigest,gatewayReadbackSha256:'b'.repeat(64),
   verifiedAt:'2026-10-25T09:40:00.000Z',mockPaymentTransport:true,technicalSandboxDisabled:true,secretMountsRemoved:true},rollbackSha256:'a'.repeat(64),now:()=>now,validateSecrets:()=>true};}
+function readStable(file){
+  const fd=openSync(file,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_CLOEXEC);
+  try{
+    const before=fstatSync(fd,{bigint:true});assert.equal(before.isFile(),true);
+    const keys=['dev','ino','mode','uid','gid','nlink','size','mtimeNs','ctimeNs'];
+    const pathBefore=lstatSync(file,{bigint:true});assert.deepEqual(keys.map(k=>pathBefore[k]),keys.map(k=>before[k]));
+    const bytes=Buffer.alloc(Number(before.size));let offset=0;
+    while(offset<bytes.length){const n=readSync(fd,bytes,offset,bytes.length-offset,offset);assert.ok(n>0);offset+=n;}
+    const after=fstatSync(fd,{bigint:true}),pathAfter=lstatSync(file,{bigint:true});
+    assert.deepEqual(keys.map(k=>pathAfter[k]),keys.map(k=>after[k]));
+    return {bytes,stat:before};
+  }finally{closeSync(fd);}
+}
 
 test('materializes only exact fresh Green, runtime, test-only Stripe, authorization, secret and rollback evidence',()=>{
   const evidence=buildTechnicalSandbox106Evidence(inputs());
@@ -47,9 +60,9 @@ test('writes protected evidence atomically with no clobber and returns raw SHA o
   const directory=mkdtempSync(path.join(realpathSync(os.tmpdir()),'sit-materialize-106-'));chmodSync(directory,0o700);
   try{
     const output=path.join(directory,'evidence.json');const result=writeTechnicalSandboxEvidenceNoClobber(output,buildTechnicalSandbox106Evidence(inputs()));
-    const bytes=readFileSync(output);assert.equal(result.rawSha256,h(bytes));assert.equal(statSync(output).mode&0o777,0o600);
+    const read=readStable(output),bytes=read.bytes;assert.equal(result.rawSha256,h(bytes));assert.equal(Number(read.stat.mode&0o777n),0o600);
     assert.throws(()=>writeTechnicalSandboxEvidenceNoClobber(output,buildTechnicalSandbox106Evidence(inputs())),/EEXIST/u);
-    assert.equal(readFileSync(output).toString(),bytes.toString());
+    const after=readStable(output);assert.equal(after.stat.dev,read.stat.dev);assert.equal(after.stat.ino,read.stat.ino);assert.equal(after.bytes.toString(),bytes.toString());
   }finally{rmSync(directory,{recursive:true,force:true});}
 });
 

@@ -15,6 +15,22 @@ const oldId = 'c'.repeat(64), newId = 'd'.repeat(64);
 const oldImage = `sha256:${'e'.repeat(64)}`, newImage = `sha256:${'f'.repeat(64)}`;
 const now = '2026-10-25T12:00:00.000Z';
 
+function readStable(file) {
+  const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_CLOEXEC);
+  try {
+    const before = fs.fstatSync(fd, { bigint: true });
+    assert.equal(before.isFile(), true);
+    const keys = ['dev', 'ino', 'mode', 'uid', 'gid', 'nlink', 'size', 'mtimeNs', 'ctimeNs'];
+    const pathBefore = fs.lstatSync(file, { bigint: true });
+    assert.deepEqual(keys.map((key) => pathBefore[key]), keys.map((key) => before[key]));
+    const bytes = fs.readFileSync(fd);
+    const after = fs.fstatSync(fd, { bigint: true });
+    const pathAfter = fs.lstatSync(file, { bigint: true });
+    assert.deepEqual(keys.map((key) => pathAfter[key]), keys.map((key) => after[key]));
+    return { bytes, stat: before };
+  } finally { fs.closeSync(fd); }
+}
+
 function evidence(overrides = {}) {
   const green = Buffer.from(JSON.stringify({ schemaVersion: 2, kind: 'sit-green-staging-106-106-promotion',
     status: 'promoted_owner_smoke_pending', candidateId: oldId, runtimeCommit: commit,
@@ -85,10 +101,10 @@ test('protected receipt writer uses exclusive 0600 output under owner-only 0700 
   const receipt = composeStagingListingAiActivationReceipt(evidence());
   const first = writeStagingListingAiActivationReceipt({ directory: root, runId: 'run-001', receipt,
     now: Date.parse(now) });
-  const stat = fs.lstatSync(first.path);
-  assert.equal(stat.mode & 0o777, 0o600);
-  assert.equal(stat.nlink, 1);
-  assert.equal(hash(fs.readFileSync(first.path)), first.sha256);
+  const observed = readStable(first.path);
+  assert.equal(Number(observed.stat.mode & 0o777n), 0o600);
+  assert.equal(observed.stat.nlink, 1n);
+  assert.equal(hash(observed.bytes), first.sha256);
   assert.throws(() => writeStagingListingAiActivationReceipt({ directory: root,
     runId: 'run-001', receipt, now: Date.parse(now) }), /write_failed/u);
   assert.equal(fs.readdirSync(root).length, 1);

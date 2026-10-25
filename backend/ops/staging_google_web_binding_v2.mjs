@@ -153,8 +153,8 @@ export async function collectGoogleWebBindingV2({ readers, repositoryRoot, sourc
       && sdk.apiKeyId === app.apiKeyId && sdk.origin === ORIGIN && digestPattern.test(sdk.keyFingerprint)
       && digestPattern.test(sdk.configurationSha256));
     const key = observed.apiKeyInventory.value;
-    check(exact(key, ['complete', 'apiKeyId', 'resourceName', 'keyFingerprint', 'restrictionsDigest', 'webCompatible'])
-      && key.complete === true && key.apiKeyId === app.apiKeyId && key.keyFingerprint === sdk.keyFingerprint
+    check(exact(key, ['complete', 'apiKeyId', 'resourceName', 'keyMatchesSdkConfig', 'restrictionsDigest', 'webCompatible'])
+      && key.complete === true && key.apiKeyId === app.apiKeyId && key.keyMatchesSdkConfig === true
       && /^projects\/214007794438\/locations\/global\/keys\/[A-Za-z0-9_-]{1,200}$/u.test(key.resourceName)
       && digestPattern.test(key.restrictionsDigest) && key.webCompatible === true);
     const provider = observed.providerSnapshot.value;
@@ -174,7 +174,7 @@ export async function collectGoogleWebBindingV2({ readers, repositoryRoot, sourc
       sourceCommit, sourceInventory: inventory, projectId: PROJECT_ID, projectNumber: PROJECT_NUMBER,
       webAppId: WEB_APP_ID, origin: ORIGIN, serviceAccountEmailSha256: svc.serviceAccountEmailSha256,
       firebaseAccountEmailSha256: user.firebaseAccountEmailSha256, firebaseUserIdentityProofSha256: user.proofSha256,
-      apiKey: { apiKeyId: key.apiKeyId, keyFingerprint: key.keyFingerprint, restrictionsDigest: key.restrictionsDigest },
+      apiKey: { apiKeyId: key.apiKeyId, keyFingerprint: sdk.keyFingerprint, restrictionsDigest: key.restrictionsDigest },
       apiKeyResourceName: key.resourceName, expectedSnapshotSha256: provider.snapshotSha256,
       configurationSha256: provider.configurationSha256, reviewEvidenceSha256,
       runtimeContainerId: runtime.containerId, runtimeCommit, runtimeImageId, runtimeRepoDigest,

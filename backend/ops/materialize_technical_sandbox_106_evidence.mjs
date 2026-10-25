@@ -22,14 +22,14 @@ const exact = (value, keys, code) => {
 function readProtectedJsonWithTime(file, expectedSha256) {
   if (!outsideRepo(file) || !sha(expectedSha256)) fail('sandbox106_input_path');
   const parent = privateDirectory(path.dirname(file));
-  const beforePath = fs.lstatSync(file, { bigint: true }); let fd; let bytes;
+  let fd; let bytes;
   try {
-    if (!beforePath.isFile() || beforePath.nlink !== 1n || beforePath.uid !== BigInt(process.getuid())
-        || (beforePath.mode & 0o7777n) !== 0o600n || beforePath.size < 2n || beforePath.size > 32768n) fail('sandbox106_input_metadata');
     fd=fs.openSync(file,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW|fs.constants.O_CLOEXEC);
     const before=fs.fstatSync(fd,{bigint:true});
-    if (before.dev!==beforePath.dev||before.ino!==beforePath.ino||before.nlink!==1n||before.uid!==BigInt(process.getuid())
-        ||(before.mode&0o7777n)!==0o600n||before.size!==beforePath.size) fail('sandbox106_input_metadata');
+    if(!before.isFile()||before.nlink!==1n||before.uid!==BigInt(process.getuid())
+        ||(before.mode&0o7777n)!==0o600n||before.size<2n||before.size>32768n) fail('sandbox106_input_metadata');
+    const beforePath=fs.lstatSync(file,{bigint:true});
+    if(['dev','ino','mode','uid','gid','nlink','size','mtimeNs','ctimeNs'].some(k=>before[k]!==beforePath[k]))fail('sandbox106_input_changed');
     bytes=Buffer.alloc(Number(before.size)); let offset=0;
     while(offset<bytes.length){const n=fs.readSync(fd,bytes,offset,bytes.length-offset,offset);if(n<=0)fail('sandbox106_input_read');offset+=n;}
     const after=fs.fstatSync(fd,{bigint:true}), finalPath=fs.lstatSync(file,{bigint:true});
@@ -44,14 +44,14 @@ function readProtectedJsonWithTime(file, expectedSha256) {
 
 export function readTechnicalSandboxSecretEvidence(file) {
   if (!outsideRepo(file)) fail('sandbox106_secret_path');
-  const beforePath=fs.lstatSync(file,{bigint:true});let fd;let scratch;const parts=[];let size=0;
+  let fd;let scratch;const parts=[];let size=0;
   try {
-    if(!beforePath.isFile()||beforePath.nlink!==1n||beforePath.uid!==100n||beforePath.gid!==101n
-        ||(beforePath.mode&0o7777n)!==0o600n||beforePath.size<1n||beforePath.size>16384n)fail('sandbox106_secret_metadata');
     fd=fs.openSync(file,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW|fs.constants.O_CLOEXEC);
     const before=fs.fstatSync(fd,{bigint:true});
-    if(before.dev!==beforePath.dev||before.ino!==beforePath.ino||before.nlink!==1n||before.uid!==100n||before.gid!==101n
-        ||(before.mode&0o7777n)!==0o600n||before.size!==beforePath.size)fail('sandbox106_secret_metadata');
+    if(!before.isFile()||before.nlink!==1n||before.uid!==100n||before.gid!==101n
+        ||(before.mode&0o7777n)!==0o600n||before.size<1n||before.size>16384n)fail('sandbox106_secret_metadata');
+    const beforePath=fs.lstatSync(file,{bigint:true});
+    if(['dev','ino','mode','uid','gid','nlink','size','mtimeNs','ctimeNs'].some(k=>before[k]!==beforePath[k]))fail('sandbox106_secret_changed');
     scratch=Buffer.alloc(4096);
     while(true){const n=fs.readSync(fd,scratch,0,scratch.length,null);if(n<=0)break;size+=n;if(size>16384)fail('sandbox106_secret_size');parts.push(Buffer.from(scratch.subarray(0,n)));}
     const after=fs.fstatSync(fd,{bigint:true}),finalPath=fs.lstatSync(file,{bigint:true});
@@ -169,26 +169,24 @@ export function writeTechnicalSandboxEvidenceNoClobber(filename, evidence) {
   const temporary = `.${target}.${crypto.randomBytes(16).toString('hex')}.tmp`;
   let fd, createdIdentity;
   try {
-    fd = fs.openSync(path.join(directory.directory, temporary), fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW, 0o600);
+    fd = fs.openSync(path.join(directory.directory, temporary), fs.constants.O_RDWR | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW, 0o600);
     fs.writeFileSync(fd, bytes); fs.fsyncSync(fd);
     const stat = fs.fstatSync(fd, { bigint: true });
     createdIdentity = { dev: stat.dev, ino: stat.ino };
     if (!stat.isFile() || stat.nlink !== 1n || stat.uid !== BigInt(process.getuid()) || (stat.mode & 0o7777n) !== 0o600n || stat.size !== BigInt(bytes.length)) fail('sandbox106_output_metadata');
-    fs.closeSync(fd); fd = undefined;
     fs.linkSync(path.join(directory.directory, temporary), filename);
     const linked = fs.lstatSync(filename, { bigint: true });
     if (linked.dev !== stat.dev || linked.ino !== stat.ino) fail('sandbox106_output_link_changed');
     fs.unlinkSync(path.join(directory.directory, temporary));
-    const result = fs.openSync(filename, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_CLOEXEC);
-    try {
-      const final = fs.fstatSync(result, { bigint: true });
-      if (!final.isFile() || final.dev !== stat.dev || final.ino !== stat.ino || final.nlink !== 1n
-          || final.uid !== BigInt(process.getuid()) || (final.mode & 0o7777n) !== 0o600n || final.size !== BigInt(bytes.length)) fail('sandbox106_output_metadata');
-      const check = Buffer.alloc(bytes.length); let offset = 0;
-      while (offset < check.length) { const n = fs.readSync(result, check, offset, check.length - offset, offset); if (n <= 0) fail('sandbox106_output_short_read'); offset += n; }
-      if (rawSha(check) !== rawSha(bytes)) { check.fill(0); fail('sandbox106_output_digest'); }
-      check.fill(0);
-    } finally { fs.closeSync(result); }
+    const final = fs.fstatSync(fd, { bigint: true });
+    const finalPath = fs.lstatSync(filename, { bigint: true });
+    if (!final.isFile() || final.dev !== stat.dev || final.ino !== stat.ino || final.nlink !== 1n
+        || final.uid !== BigInt(process.getuid()) || (final.mode & 0o7777n) !== 0o600n || final.size !== BigInt(bytes.length)
+        || ['dev','ino','mode','uid','gid','nlink','size','mtimeNs','ctimeNs'].some(k => final[k] !== finalPath[k])) fail('sandbox106_output_metadata');
+    const check = Buffer.alloc(bytes.length); let offset = 0;
+    while (offset < check.length) { const n = fs.readSync(fd, check, offset, check.length - offset, offset); if (n <= 0) fail('sandbox106_output_short_read'); offset += n; }
+    if (rawSha(check) !== rawSha(bytes)) { check.fill(0); fail('sandbox106_output_digest'); }
+    check.fill(0);
     const rawSha256 = rawSha(bytes); bytes.fill(0); return Object.freeze({ path: filename, rawSha256 });
   } catch (error) {
     bytes.fill(0); try { fs.unlinkSync(path.join(directory.directory, temporary)); } catch {}

@@ -97,13 +97,17 @@ function validateCandidate(candidate, journal, candidateSha, journalSha, now) {
     && journal.collectorIdentitySha256 === candidate.collectorIdentitySha256
     && Array.isArray(journal.sources) && journal.sources.length === facebookWebReadSources(candidate.metaAppId).length
     && JSON.stringify(journal.sources.map((entry) => entry.source).sort()) === JSON.stringify(facebookWebReadSources(candidate.metaAppId))
-    && journal.sources.every((entry) => entry.method === 'GET' && entry.status === 200
-      && /^[a-f0-9]{64}$/u.test(entry.responseSha256 ?? '') && iso(entry.startedAtUtc)
+    && journal.sources.every((entry) => journalEntryShape(entry)
+      && entry.method === 'GET' && entry.status === 200 && iso(entry.startedAtUtc)
       && iso(entry.endedAtUtc) && Date.parse(entry.endedAtUtc) >= Date.parse(entry.startedAtUtc))
     && iso(candidate.collectedAtUtc) && iso(candidate.validUntilUtc)
     && candidate.validUntilUtc === new Date(Date.parse(candidate.collectedAtUtc) + 3600000).toISOString().replace('.000Z', 'Z')
     && candidate.validUntilUtc === journal.validUntilUtc
     && now >= Date.parse(candidate.collectedAtUtc) && now < Date.parse(candidate.validUntilUtc), 'candidate_invalid');
+}
+
+function journalEntryShape(entry) {
+  return plain(entry) && Object.keys(entry).sort().join('|') === 'endedAtUtc|method|source|startedAtUtc|status';
 }
 
 export function composeFacebookWebReadiness(candidate, journal, decision, candidateSha, journalSha, decisionSha, now) {

@@ -19,15 +19,14 @@ const outsideRepo = value => path.isAbsolute(value) && path.normalize(value) ===
 
 function readProtectedBytes(file, expectedSha256, { afterRead = () => {} } = {}) {
   if (!outsideRepo(file) || !isHash(expectedSha256)) safeFail('sandbox106_protected_path');
-  const beforePath = fs.lstatSync(file, { bigint: true });
-  if (!beforePath.isFile() || beforePath.nlink !== 1n || beforePath.uid !== BigInt(process.getuid())
-      || (beforePath.mode & 0o7777n) !== 0o600n || beforePath.size < 2n || beforePath.size > 32768n) safeFail('sandbox106_protected_metadata');
   let fd;
   try {
     fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_CLOEXEC);
     const before = fs.fstatSync(fd, { bigint: true });
-    if (!before.isFile() || before.dev !== beforePath.dev || before.ino !== beforePath.ino || before.nlink !== 1n
-        || before.uid !== BigInt(process.getuid()) || (before.mode & 0o7777n) !== 0o600n || before.size !== beforePath.size) safeFail('sandbox106_protected_metadata');
+    if (!before.isFile() || before.nlink !== 1n || before.uid !== BigInt(process.getuid())
+        || (before.mode & 0o7777n) !== 0o600n || before.size < 2n || before.size > 32768n) safeFail('sandbox106_protected_metadata');
+    const beforePath = fs.lstatSync(file, { bigint: true });
+    if (['dev','ino','mode','uid','gid','nlink','size','mtimeNs','ctimeNs'].some(k => before[k] !== beforePath[k])) safeFail('sandbox106_protected_changed');
     const bytes = Buffer.alloc(Number(before.size)); let offset = 0;
     while (offset < bytes.length) { const count = fs.readSync(fd, bytes, offset, bytes.length - offset, offset); if (count <= 0) safeFail('sandbox106_protected_read'); offset += count; }
     afterRead();
@@ -60,15 +59,14 @@ export function readTechnicalSandboxSessionProof(file, expectedSha256, { userIds
 
 function secretDigest(file, { lstatSync = fs.lstatSync, fstatSync = fs.fstatSync, openSync = fs.openSync,
   readSync = fs.readSync, closeSync = fs.closeSync } = {}) {
-  const beforePath = lstatSync(file, { bigint: true });
-  if (!beforePath.isFile() || beforePath.nlink !== 1n || beforePath.uid !== 100n || beforePath.gid !== 101n
-      || (beforePath.mode & 0o7777n) !== 0o600n || beforePath.size < 1n || beforePath.size > 16384n) safeFail('sandbox106_secret_metadata');
   let fd, scratch; const chunks = []; let size = 0;
   try {
     fd = openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_CLOEXEC);
     const before = fstatSync(fd, { bigint: true });
-    if (!before.isFile() || before.dev !== beforePath.dev || before.ino !== beforePath.ino || before.nlink !== 1n
-        || before.uid !== 100n || before.gid !== 101n || (before.mode & 0o7777n) !== 0o600n || before.size !== beforePath.size) safeFail('sandbox106_secret_metadata');
+    if (!before.isFile() || before.nlink !== 1n || before.uid !== 100n || before.gid !== 101n
+        || (before.mode & 0o7777n) !== 0o600n || before.size < 1n || before.size > 16384n) safeFail('sandbox106_secret_metadata');
+    const beforePath = lstatSync(file, { bigint: true });
+    if (['dev','ino','mode','uid','gid','nlink','size','mtimeNs','ctimeNs'].some(k => before[k] !== beforePath[k])) safeFail('sandbox106_secret_changed');
     scratch = Buffer.alloc(4096);
     while (true) {
       const count = readSync(fd, scratch, 0, scratch.length, null);

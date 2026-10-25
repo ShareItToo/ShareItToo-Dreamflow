@@ -21,14 +21,14 @@ export function readRootAuthorizationEnv(filename,{afterRead=()=>{},now=Date.now
   if(!outsideRepo(filename))fail('sandbox106_authorization_env_path');
   const lstatSync=fsOps.lstatSync??fs.lstatSync,fstatSync=fsOps.fstatSync??fs.fstatSync,openSync=fsOps.openSync??fs.openSync,
     readSync=fsOps.readSync??fs.readSync,closeSync=fsOps.closeSync??fs.closeSync;
-  const pathStat=lstatSync(filename,{bigint:true});let fd;let bytes;
+  let fd;let bytes;
   try{
-    if(!pathStat.isFile()||pathStat.nlink!==1n||pathStat.uid!==0n||pathStat.gid!==0n||(pathStat.mode&0o7777n)!==0o600n
-        ||pathStat.size<2n||pathStat.size>65536n)fail('sandbox106_authorization_env_metadata');
     fd=openSync(filename,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW|fs.constants.O_CLOEXEC);
     const before=fstatSync(fd,{bigint:true});
-    if(!before.isFile()||before.dev!==pathStat.dev||before.ino!==pathStat.ino||before.nlink!==1n||before.uid!==0n||before.gid!==0n
-        ||(before.mode&0o7777n)!==0o600n||before.size!==pathStat.size)fail('sandbox106_authorization_env_metadata');
+    if(!before.isFile()||before.nlink!==1n||before.uid!==0n||before.gid!==0n||(before.mode&0o7777n)!==0o600n
+        ||before.size<2n||before.size>65536n)fail('sandbox106_authorization_env_metadata');
+    const pathStat=lstatSync(filename,{bigint:true});
+    if(['dev','ino','mode','uid','gid','nlink','size','mtimeNs','ctimeNs'].some(k=>before[k]!==pathStat[k]))fail('sandbox106_authorization_env_changed');
     bytes=Buffer.alloc(Number(before.size));let offset=0;
     while(offset<bytes.length){const n=readSync(fd,bytes,offset,bytes.length-offset,offset);if(n<=0)fail('sandbox106_authorization_env_read');offset+=n;}
     afterRead();
@@ -66,14 +66,14 @@ export function readRestrictedSecret(filename,kind,{afterRead=()=>{},fsOps={}}={
   if(!outsideRepo(filename))fail('sandbox106_secret_path');
   const lstatSync=fsOps.lstatSync??fs.lstatSync,fstatSync=fsOps.fstatSync??fs.fstatSync,openSync=fsOps.openSync??fs.openSync,
     readSync=fsOps.readSync??fs.readSync,closeSync=fsOps.closeSync??fs.closeSync;
-  const beforePath=lstatSync(filename,{bigint:true});let fd;let scratch;const chunks=[];let length=0;
+  let fd;let scratch;const chunks=[];let length=0;
   try{
-    if(!beforePath.isFile()||beforePath.nlink!==1n||beforePath.uid!==100n||beforePath.gid!==101n||(beforePath.mode&0o7777n)!==0o600n
-        ||beforePath.size<16n||beforePath.size>16384n)fail('sandbox106_secret_metadata');
     fd=openSync(filename,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW|fs.constants.O_CLOEXEC);
     const before=fstatSync(fd,{bigint:true});
-    if(!before.isFile()||before.dev!==beforePath.dev||before.ino!==beforePath.ino||before.nlink!==1n||before.uid!==100n||before.gid!==101n
-        ||(before.mode&0o7777n)!==0o600n||before.size!==beforePath.size)fail('sandbox106_secret_metadata');
+    if(!before.isFile()||before.nlink!==1n||before.uid!==100n||before.gid!==101n||(before.mode&0o7777n)!==0o600n
+        ||before.size<16n||before.size>16384n)fail('sandbox106_secret_metadata');
+    const beforePath=lstatSync(filename,{bigint:true});
+    if(['dev','ino','mode','uid','gid','nlink','size','mtimeNs','ctimeNs'].some(k=>before[k]!==beforePath[k]))fail('sandbox106_secret_changed');
     scratch=Buffer.alloc(4096);
     while(true){const n=readSync(fd,scratch,0,scratch.length,null);if(n<=0)break;length+=n;if(length>16384)fail('sandbox106_secret_size');chunks.push(Buffer.from(scratch.subarray(0,n)));}
     afterRead();

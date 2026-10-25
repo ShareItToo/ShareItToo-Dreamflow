@@ -125,8 +125,12 @@ export function createGoogleWebBindingV2Readers({ serviceCredentialBytes, userCr
         cache.configuration = c;
         cache.configurationBinding = { projectId: c.projectId, messagingSenderId: String(c.messagingSenderId), appId: c.appId,
           apiKey: c.apiKey, authDomain: c.authDomain, backendProjectId: project, authorizedOrigin: origin };
-        value = { projectId: project, projectNumber: number, appId, apiKeyId: app.apiKeyId, keyFingerprint: hash(c.apiKey),
-          configurationSha256: hash(JSON.stringify(cache.configurationBinding)), origin };
+        // lgtm[js/insufficient-password-hash] Firebase Web API keys are public client configuration identifiers, not authenticators. This SHA-256 is solely an exact configuration-integrity digest; no raw key leaves this closure.
+        cache.configurationSha256 = hash(JSON.stringify(cache.configurationBinding));
+        // lgtm[js/insufficient-password-hash] Firebase Web API keys are public identifiers, not authenticators; this single digest exists only to satisfy the existing schema-1 reattestation binding contract.
+        cache.keyFingerprint = hash(c.apiKey);
+        value = { projectId: project, projectNumber: number, appId, apiKeyId: app.apiKeyId, keyFingerprint: cache.keyFingerprint,
+          configurationSha256: cache.configurationSha256, origin };
       } else if (name === 'apiKeyInventory') {
         // This closure is used after app and SDK discovery so the selected key
         // is derived from authoritative app config, never from user input.
@@ -134,14 +138,16 @@ export function createGoogleWebBindingV2Readers({ serviceCredentialBytes, userCr
         const inventory = await pages(`https://apikeys.googleapis.com/v2/projects/${number}/locations/global/keys`, 'keys');
         const selected = inventory.find((k) => k.uid === app.apiKeyId && !k.deleteTime); check(selected);
         const detail = await get(`https://apikeys.googleapis.com/v2/${selected.name}`); check(detail.uid === selected.uid && detail.name === selected.name);
-        const k = await get(`https://apikeys.googleapis.com/v2/${selected.name}/keyString`); check(typeof k.keyString === 'string');
+        const k = await get(`https://apikeys.googleapis.com/v2/${selected.name}/keyString`);
+        check(typeof k.keyString === 'string' && typeof cache.configuration?.apiKey === 'string'
+          && k.keyString === cache.configuration.apiKey);
         const refs = detail.restrictions?.browserKeyRestrictions?.allowedReferrers ?? [];
         const targets = detail.restrictions?.apiTargets;
         const unrestricted = new Set((targets ?? []).filter((x) => !Object.hasOwn(x, 'methods')).map((x) => x.service));
         const compatible = refs.includes(`${origin}/*`) && (!targets || ['identitytoolkit.googleapis.com', 'securetoken.googleapis.com'].every((s) => unrestricted.has(s)));
-        value = { complete: true, apiKeyId: selected.uid, resourceName: selected.name, keyFingerprint: hash(k.keyString),
+        value = { complete: true, apiKeyId: selected.uid, resourceName: selected.name, keyMatchesSdkConfig: true,
           restrictionsDigest: digest(detail.restrictions ?? {}), webCompatible: compatible };
-        cache.key = value;
+        cache.key = { ...value, keyFingerprint: cache.keyFingerprint };
       } else if (name === 'providerSnapshot') {
         check(cache.key && cache.app);
         const [projectState, projectConfig, google, facebook, apple, serviceIdentityToolkit, serviceSecureToken,
@@ -159,7 +165,7 @@ export function createGoogleWebBindingV2Readers({ serviceCredentialBytes, userCr
           pages(`https://apikeys.googleapis.com/v2/projects/${number}/locations/global/keys`, 'keys')]);
         check(projectState.projectId === project && String(projectState.projectNumber) === number && projectState.lifecycleState === 'ACTIVE'
           && projectConfig.name === `projects/${number}/config` && Array.isArray(projectConfig.authorizedDomains)
-          && projectConfig.authorizedDomains.includes('staging.shareittoo.com') && google.enabled === true
+          && new Set(projectConfig.authorizedDomains).has('staging.shareittoo.com') && google.enabled === true
           && facebook?.enabled !== true && apple?.enabled !== true && serviceIdentityToolkit.state === 'ENABLED'
           && serviceSecureToken.state === 'ENABLED' && webApps.some((a) => a.appId === appId && a.state === 'ACTIVE'
             && a.apiKeyId === cache.key.apiKeyId));
@@ -183,7 +189,7 @@ export function createGoogleWebBindingV2Readers({ serviceCredentialBytes, userCr
         cache.snapshot = snapshot; cache.configurationBinding = configuration;
         value = { complete: true, projectId: project, projectNumber: number, authEnabled: true, googleEnabled: true,
           facebookEnabled: false, appleEnabled: false, stagingAuthorized: true, webAppInventoryComplete: true,
-          apiKeyInventoryComplete: true, snapshotSha256: digest(snapshot), configurationSha256: hash(JSON.stringify(configuration)) };
+          apiKeyInventoryComplete: true, snapshotSha256: digest(snapshot), configurationSha256: cache.configurationSha256 };
       } else if (name === 'runtime') {
         const containerId = runtimeContainerId;
         const fmt = '{{json .Id}}|{{json .Name}}|{{json .State.Running}}|{{json (index .Config.Labels "com.shareittoo.sit.green")}}|{{json (index .Config.Labels "org.opencontainers.image.revision")}}|{{json .Image}}';

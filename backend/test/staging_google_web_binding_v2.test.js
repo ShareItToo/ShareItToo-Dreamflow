@@ -11,6 +11,22 @@ import { collectGoogleWebBindingV2, GOOGLE_WEB_BINDING_V2_READS, GOOGLE_WEB_BIND
 import { createGoogleWebBindingV2Readers } from '../ops/staging_google_web_binding_v2_adapter.mjs';
 import { runGoogleWebBindingV2Cli } from '../ops/staging_google_web_binding_v2_cli.mjs';
 import { runGoogleWebReattestationV2Cli } from '../ops/staging_google_web_reattestation_v2_cli.mjs';
+
+function readStable(file) {
+  const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_CLOEXEC);
+  try {
+    const before = fs.fstatSync(fd, { bigint: true });
+    assert.equal(before.isFile(), true);
+    const keys = ['dev', 'ino', 'mode', 'uid', 'gid', 'nlink', 'size', 'mtimeNs', 'ctimeNs'];
+    const pathBefore = fs.lstatSync(file, { bigint: true });
+    assert.deepEqual(keys.map((key) => pathBefore[key]), keys.map((key) => before[key]));
+    const bytes = fs.readFileSync(fd);
+    const after = fs.fstatSync(fd, { bigint: true });
+    const pathAfter = fs.lstatSync(file, { bigint: true });
+    assert.deepEqual(keys.map((key) => pathAfter[key]), keys.map((key) => after[key]));
+    return { bytes, stat: before };
+  } finally { fs.closeSync(fd); }
+}
 import { runGoogleWebReattestationCli } from '../ops/staging_google_web_reattestation_cli.mjs';
 import { sha256, validateArtifact } from '../../tool/staging_web_contract.mjs';
 import { syntheticListingAiWebEvidence } from '../../test/tool/staging_listing_ai_web_readiness_fixture.mjs';
@@ -33,7 +49,7 @@ function fixture(t) {
     userAccountIdentity: { projectId: 'shareittoo-staging', projectNumber: '214007794438', firebaseAccountEmailSha256: hash('operator@example.invalid'), proofSha256: hash('proof') },
     webApp: { appId: '1:214007794438:web:aefec13f9f030f46eaac87', projectId: 'shareittoo-staging', state: 'ACTIVE', apiKeyId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', origin: 'https://staging.shareittoo.com' },
     sdkConfig: { projectId: 'shareittoo-staging', projectNumber: '214007794438', appId: '1:214007794438:web:aefec13f9f030f46eaac87', apiKeyId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', keyFingerprint: hash('key'), configurationSha256: hash('config'), origin: 'https://staging.shareittoo.com' },
-    apiKeyInventory: { complete: true, apiKeyId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', resourceName: 'projects/214007794438/locations/global/keys/staging-key', keyFingerprint: hash('key'), restrictionsDigest: hash('restrictions'), webCompatible: true },
+    apiKeyInventory: { complete: true, apiKeyId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', resourceName: 'projects/214007794438/locations/global/keys/staging-key', keyMatchesSdkConfig: true, restrictionsDigest: hash('restrictions'), webCompatible: true },
     providerSnapshot: { complete: true, projectId: 'shareittoo-staging', projectNumber: '214007794438', authEnabled: true, googleEnabled: true, facebookEnabled: false, appleEnabled: false, stagingAuthorized: true, webAppInventoryComplete: true, apiKeyInventoryComplete: true, snapshotSha256: hash('snapshot'), configurationSha256: hash('config') },
     runtime: { containerId: 'c'.repeat(64), name: '/shareittoo-staging-api', running: true, green: true, revision: 'b'.repeat(40), imageId: `sha256:${'d'.repeat(64)}`, repoDigests: [`registry.invalid/sit@sha256:${'e'.repeat(64)}`], runtimeDigest: hash('runtime') },
   };
@@ -132,8 +148,9 @@ test('v2 binding/collect composes through v1 review into schema-8 Google and Lis
     '--runtime-container-id', 'c'.repeat(64), '--firebase-account-email-sha256', emailSha,
     '--service-credential-file', svcPath, '--user-credential-file', userPath],
   { repositoryRoot: f.repo, fetchImpl, execute, now: () => now });
-  assert.equal(bound.mode, '0600'); assert.equal(fs.statSync(bound.path).mode & 0o777, 0o600);
-  const bindingText = fs.readFileSync(bound.path, 'utf8'); assert.equal(hash(bindingText), bound.sha256);
+  assert.equal(bound.mode, '0600');
+  const boundFile = readStable(bound.path); assert.equal(Number(boundFile.stat.mode & 0o777n), 0o600);
+  const bindingText = boundFile.bytes.toString('utf8'); assert.equal(hash(bindingText), bound.sha256);
   assert.equal(bindingText.includes(apiKey), false); assert.equal(JSON.stringify(bound).includes(apiKey), false);
   const attest = await runGoogleWebReattestationV2Cli(['collect', '--binding', bound.path, '--binding-sha256', bound.sha256,
     '--service-credential-file', svcPath, '--user-credential-file', userPath, '--output-dir', attestOut, '--run-id', 'e2e'],
@@ -200,7 +217,12 @@ if(name==='bash'){
   assert.equal(calls.filter((x) => x.method === 'POST').length >= 1, true);
   assert.ok(calls.filter((x) => x.method === 'POST').every((x) => x.url === 'https://oauth2.googleapis.com/token'));
   assert.ok(calls.every((x) => x.redirect === 'error' && x.credentials === 'omit'));
-  assert.ok(calls.filter((x) => x.url.includes('identitytoolkit.googleapis.com') || x.url.includes('firebase.googleapis.com') || x.url.includes('apikeys.googleapis.com')).every((x) => x.method === 'GET'));
+  const allowedHosts = new Set(['oauth2.googleapis.com', 'accounts.google.com', 'openidconnect.googleapis.com',
+    'cloudresourcemanager.googleapis.com', 'firebase.googleapis.com', 'apikeys.googleapis.com',
+    'identitytoolkit.googleapis.com', 'serviceusage.googleapis.com']);
+  assert.ok(calls.every(({ url }) => { const parsed = new URL(url); return parsed.protocol === 'https:' && parsed.port === '' && allowedHosts.has(parsed.hostname); }));
+  const readOnlyHosts = new Set(['identitytoolkit.googleapis.com', 'firebase.googleapis.com', 'apikeys.googleapis.com']);
+  assert.ok(calls.filter(({ url }) => readOnlyHosts.has(new URL(url).hostname)).every((x) => x.method === 'GET'));
   const callsBeforeCollision = calls.length;
   await assert.rejects(runGoogleWebBindingV2Cli(['--output-dir', bindOut, '--run-id', 'e2e', '--source-commit', f.commit,
     '--runtime-commit', 'e'.repeat(40), '--runtime-image-id', `sha256:${'d'.repeat(64)}`,
