@@ -6,8 +6,10 @@ import test from 'node:test';
 import { runSuccessorPromotion, validatePromotionReceipt, canonicalSuccessorSpec, promotionGatewayReadback, temporaryPromotionName, convergePromotionGateway } from '../ops/green_staging_106_106_promotion.mjs';
 import { promotionFixture } from './fixtures/green_106106_promotion.js';
 import { canonicalMounts } from '../ops/green_staging_98_106_promotion.mjs';
-import { objectDigest } from '../ops/green_staging_98_106_contract.mjs';
+import { digest, objectDigest } from '../ops/green_staging_98_106_contract.mjs';
 import { constraintsSql } from '../ops/green_staging_106_106_preflight.mjs';
+import { runCli } from '../../tool/validate_green_staging_106_106_runtime.mjs';
+import { validateSuccessorSource } from '../ops/green_staging_106_106_binding.mjs';
 
 const scoped = async (fn, policies) => {
   const directory = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'sit-promotion-')); fs.chmodSync(directory, 0o700);
@@ -45,6 +47,99 @@ test('exact rehearsed schema106 successor preserves canonical resources and stop
   const evidence = JSON.parse(fs.readFileSync(path.join(directory, 'synthetic-run.promotion.json')));
   assert.equal(evidence.gatewayReadbackSha256, result.gatewayReadbackSha256);
   assert.ok(!f.calls.some(e => e.args[0] === 'start' && e.args[1] === f.source.Id));
+}));
+test('promotion accepts only the two Docker-equivalent HostConfig defaults and rejects non-default drift', async t => {
+  await t.test('empty Dns/null and null/false OomKillDisable', () => scoped(async f => {
+    assert.equal(f.source.HostConfig.Dns.length, 0); assert.equal(f.source.HostConfig.OomKillDisable, null);
+    const result = await runSuccessorPromotion(f.data, f.options, f.dependencies);
+    assert.equal(result.status, 'promoted_owner_smoke_pending');
+  }, { promotionDockerDefaults: true }));
+  for (const [key, value] of [['Dns', ['8.8.8.8']], ['OomKillDisable', true]]) await t.test(`${key} non-default`, () => scoped(async f => {
+    const command = f.dependencies.command;
+    f.dependencies.command = async e => {
+      const result = await command(e);
+      if (e.phase === 'promotion_create') f.records[result].HostConfig[key] = value;
+      return result;
+    };
+    assert.equal((await runSuccessorPromotion(f.data, f.options, f.dependencies)).status, 'forward_recovery_required');
+    assert.ok(!f.calls.some(e => e.phase === 'promotion_start'));
+  }, { promotionDockerDefaults: true }));
+});
+test('one-shot recovery resumes only the captured stopped create-stage candidate and never creates again', async () => scoped(async f => {
+  const command = f.dependencies.command;
+  f.dependencies.command = async e => {
+    const result = await command(e);
+    if (e.phase === 'promotion_create') f.records[result].HostConfig.Dns = ['8.8.8.8'];
+    return result;
+  };
+  const failed = await runSuccessorPromotion(f.data, f.options, f.dependencies);
+  assert.equal(failed.status, 'forward_recovery_required'); assert.equal(failed.stage, 'create');
+  const id = failed.candidateId, failure = JSON.parse(fs.readFileSync(path.join(f.options.evidenceDirectory, 'synthetic-run.promotion-failure.json')));
+  assert.equal(failure.candidateId, id); assert.equal(f.records[id].State.Running, false);
+  f.records[id].HostConfig.Dns = null; f.records[id].HostConfig.OomKillDisable = false;
+  fs.writeFileSync(path.join(f.options.evidenceDirectory, 'unrelated-protected-audit.json'), '{"retained":true}\n', { mode: 0o600 });
+  const lockBytes = fs.readFileSync(path.join(f.options.evidenceDirectory, 'synthetic-run.promotion-lock.json'));
+  const failureBytes = fs.readFileSync(path.join(f.options.evidenceDirectory, 'synthetic-run.promotion-failure.json'));
+  const promotionLockSha256 = digest(lockBytes), promotionFailureSha256 = digest(failureBytes);
+  f.calls.length = 0;
+  f.dependencies.command = command;
+  f.dependencies.now = () => Date.now() + 3600001;
+  const recoveryOpsCommit = 'a'.repeat(40); f.dependencies.currentOpsCommit = recoveryOpsCommit;
+  const sourceGit = f.dependencies.sourceOptions?.git;
+  let corruptRecoverySource = false;
+  f.dependencies.sourceOptions = { git: (args, root) => {
+    if (args[0] === 'rev-parse' && args[1] === 'HEAD') return recoveryOpsCommit;
+    if (args[0] === 'show' && args[1].startsWith(`${recoveryOpsCommit}:`)) {
+      const relative = args[1].slice(41), bytes = fs.readFileSync(path.join(root, relative));
+      return corruptRecoverySource && relative.endsWith('green_staging_106_106_promotion.mjs')
+        ? Buffer.concat([bytes, Buffer.from('\n// drift')]) : bytes;
+    }
+    return sourceGit(args, root);
+  } };
+  assert.equal(validateSuccessorSource(f.data.binding, { git: f.dependencies.sourceOptions.git, recoveryOpsCommit }), f.data.binding.opsCommit);
+  corruptRecoverySource = true;
+  assert.throws(() => validateSuccessorSource(f.data.binding, { git: f.dependencies.sourceOptions.git, recoveryOpsCommit }), /recovery_source_bytes/u);
+  corruptRecoverySource = false;
+  const recoveryOptions = { execute: true, evidenceDirectory: f.options.evidenceDirectory, rehearsalSha256: f.options.rehearsalSha256,
+    recoverCandidateId: id, recoveryOpsCommit, promotionLockSha256, promotionFailureSha256,
+    confirmation: `recover:${f.data.binding.runtimeCommit}:${f.data.binding.opsCommit}:${recoveryOpsCommit}:${f.options.rehearsalSha256}:${id}:${promotionLockSha256}:${promotionFailureSha256}` };
+  const directory = f.options.evidenceDirectory, protectedFile = (name, value) => {
+    const filename = path.join(directory, name), bytes = Buffer.isBuffer(value) ? value : Buffer.from(`${JSON.stringify(value)}\n`);
+    fs.writeFileSync(filename, bytes, { mode: 0o600 }); return { filename, sha256: digest(bytes) };
+  };
+  const bindingFile = protectedFile('recovery-binding.json', f.data.binding);
+  const publicationFile = protectedFile('recovery-publication.json', f.data.publicationBytes);
+  const targetFile = protectedFile('recovery-target.json', f.data.target);
+  const configFile = protectedFile('recovery-config.json', f.data.config);
+  const manifestFile = protectedFile('recovery-manifest.json', f.data.manifest);
+  const output = [], errors = [];
+  const argv = ['--mode', 'recover', '--binding', bindingFile.filename, '--binding-sha256', bindingFile.sha256,
+    '--publication', publicationFile.filename, '--publication-sha256', publicationFile.sha256,
+    '--target', targetFile.filename, '--target-sha256', targetFile.sha256,
+    '--execution-config', configFile.filename, '--execution-config-sha256', configFile.sha256,
+    '--runtime-manifest', manifestFile.filename, '--runtime-manifest-sha256', manifestFile.sha256,
+    '--rehearsal', path.join(directory, 'synthetic-run.rehearsal.json'), '--rehearsal-sha256', f.options.rehearsalSha256,
+    '--evidence-directory', directory, '--candidate-id', id, '--recovery-ops-commit', recoveryOpsCommit,
+    '--promotion-lock-sha256', promotionLockSha256, '--promotion-failure-sha256', promotionFailureSha256,
+    '--confirm', recoveryOptions.confirmation];
+  const exitCode = await runCli(argv, { dependencies: f.dependencies, stdout: { write: s => output.push(s) }, stderr: { write: s => errors.push(s) } });
+  assert.equal(exitCode, 0, errors.join(''));
+  const result = JSON.parse(output.join(''));
+  assert.equal(result.status, 'promoted_owner_smoke_pending', JSON.stringify(result)); assert.equal(result.candidateId, id);
+  assert.equal(f.calls.filter(e => e.phase === 'promotion_create').length, 0);
+  assert.equal(f.calls.filter(e => e.phase === 'promotion_start').length, 1);
+  assert.equal(f.source.State.Running, false);
+  assert.equal(result.recoveryOpsCommit, recoveryOpsCommit); assert.equal(result.promotionFailureSha256, promotionFailureSha256);
+  assert.equal(fs.existsSync(path.join(f.options.evidenceDirectory, 'unrelated-protected-audit.json')), true);
+}, { promotionDockerDefaults: true }));
+test('recovery rejects current-ops-commit mismatch before any command', async () => scoped(async f => {
+  f.dependencies.currentOpsCommit = 'a'.repeat(40);
+  const id = 'b'.repeat(64), ops = 'b'.repeat(40);
+  const options = { execute: true, evidenceDirectory: f.options.evidenceDirectory, rehearsalSha256: f.options.rehearsalSha256,
+    recoverCandidateId: id, recoveryOpsCommit: ops, promotionLockSha256: 'c'.repeat(64), promotionFailureSha256: 'd'.repeat(64),
+    confirmation: `recover:${f.data.binding.runtimeCommit}:${f.data.binding.opsCommit}:${ops}:${f.options.rehearsalSha256}:${id}:${'c'.repeat(64)}:${'d'.repeat(64)}` };
+  await assert.rejects(runSuccessorPromotion(f.data, options, f.dependencies), /promotion_recovery_ops_commit/u);
+  assert.equal(f.calls.length, 0);
 }));
 test('persistent source and database support repeat rehearsal/promotion without weakening disposable policies', async () => scoped(async f => {
   assert.equal(f.source.State.Running, false); assert.equal(f.source.HostConfig.RestartPolicy.Name, 'unless-stopped');
@@ -111,6 +206,9 @@ test('receipt rejects wrong commit/hash/snapshot/probes/freshness and payment-mo
     r => { r.createdAt = new Date(Date.now() + 100000).toISOString(); }]) {
     const r = structuredClone(f.receipt); mutate(r); assert.throws(() => validatePromotionReceipt(r, f.data, Date.now()));
   }
+  assert.doesNotThrow(() => validatePromotionReceipt(f.receipt, f.data, Date.parse(f.receipt.createdAt) + 3600001, { allowExpired: true }));
+  const future = structuredClone(f.receipt); future.createdAt = new Date(Date.now() + 60000).toISOString();
+  assert.throws(() => validatePromotionReceipt(future, f.data, Date.now(), { allowExpired: true }), /promotion_freshness/u);
   const source = structuredClone(f.source); source.Config.Env = source.Config.Env.map(e => e.startsWith('PAYMENT_TRANSPORT=') ? 'PAYMENT_TRANSPORT=stripe' : e);
   assert.throws(() => canonicalSuccessorSpec(source, f.c.image, f.data), /provider_modes/u);
 }));

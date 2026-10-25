@@ -24,23 +24,31 @@ export function successorSourcePaths(root = repositoryRoot) {
   return [...found].sort();
 }
 const gitRead = (args, root) => execFileSync('git', args, { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], timeout: 10000 });
-export function validateSuccessorSource(binding, { root = repositoryRoot, git = gitRead } = {}) {
+export function validateSuccessorSource(binding, { root = repositoryRoot, git = gitRead, recoveryOpsCommit } = {}) {
   requireBinding(binding?.kind === 'sit-green-staging-106-106-binding' && binding.schemaVersion === 1
     && equal(Object.keys(binding).sort(), ['candidateImageId', 'kind', 'opsCommit', 'publicationSha256', 'reviewedCommit',
       'runtimeCommit', 'schemaVersion', 'scope', 'sourceInventory'].sort())
     && ['opsCommit', 'reviewedCommit', 'runtimeCommit'].every(k => typeof binding[k] === 'string'
       && /^[a-f0-9]{40}$/u.test(binding[k])), 'binding');
-  requireBinding(String(git(['rev-parse', 'HEAD'], root)).trim() === binding.opsCommit
+  requireBinding((String(git(['rev-parse', 'HEAD'], root)).trim() === binding.opsCommit
+    || (typeof recoveryOpsCommit === 'string' && /^[a-f0-9]{40}$/u.test(recoveryOpsCommit)
+      && String(git(['rev-parse', 'HEAD'], root)).trim() === recoveryOpsCommit))
     && String(git(['merge-base', binding.reviewedCommit, binding.opsCommit], root)).trim() === binding.reviewedCommit,
   'source_commit');
   const paths = successorSourcePaths(root);
   requireBinding(binding.sourceInventory && equal(Object.keys(binding.sourceInventory).sort(), paths), 'source_inventory');
+  const recoveryCode = new Set(['backend/ops/green_staging_106_106_promotion.mjs',
+    'backend/ops/green_staging_106_106_binding.mjs', 'backend/ops/green_staging_106_106_preflight.mjs',
+    'tool/validate_green_staging_106_106_runtime.mjs']);
   for (const relative of paths) {
     const expected = binding.sourceInventory[relative];
     requireBinding(/^[a-f0-9]{64}$/u.test(expected)
-      && digest(fs.readFileSync(path.join(root, relative))) === expected
       && digest(git(['show', `${binding.opsCommit}:${relative}`], root)) === expected
       && digest(git(['show', `${binding.reviewedCommit}:${relative}`], root)) === expected, 'source_bytes');
+    if (recoveryOpsCommit && recoveryCode.has(relative)) {
+      requireBinding(digest(fs.readFileSync(path.join(root, relative)))
+        === digest(git(['show', `${recoveryOpsCommit}:${relative}`], root)), 'recovery_source_bytes');
+    } else requireBinding(digest(fs.readFileSync(path.join(root, relative))) === expected, 'source_bytes');
   }
   const migrations = paths.filter(p => p.startsWith('backend/sql/migrations/'));
   requireBinding(equal(String(git(['ls-tree', '--name-only', `${binding.runtimeCommit}:backend/sql/migrations`], root))

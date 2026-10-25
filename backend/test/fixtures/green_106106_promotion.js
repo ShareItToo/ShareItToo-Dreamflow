@@ -10,7 +10,9 @@ import { buildReleaseMetadata } from '../../src/release.js';
 
 export async function promotionFixture(directory, policies) {
   const f = await rehearsalFixture(directory, policies);
+  f.promotionDockerDefaults = policies?.promotionDockerDefaults === true;
   f.f.binding.scope.api.name = 'shareittoo-staging-api'; f.source.Name = '/shareittoo-staging-api';
+  if (f.promotionDockerDefaults) Object.assign(f.source.HostConfig, { Dns: [], OomKillDisable: null });
   f.source.Config.Labels['com.shareittoo.sit.green.run_id'] = 'synthetic-source-run';
   for (const n of f.f.binding.scope.networks) f.records[n.id].Containers[f.source.Id].Name = 'shareittoo-staging-api';
   f.source.Config.Env.push('DATABASE_URL=postgresql://synthetic:synthetic@canonical-db:5432/synthetic');
@@ -58,7 +60,8 @@ export async function promotionFixture(directory, policies) {
       f.records[id] = { Id: id, Name: `/${fields.name}`, Image: image.Id,
         Config: { ...structuredClone(image.Config), Image: image.Id, Env: Object.entries(env).map(([k, v]) => `${k}=${v}`), Labels: { ...image.Config.Labels, ...fields.labels } },
         HostConfig: { Privileged: false, ReadonlyRootfs: fields.readonly === true, RestartPolicy: { Name: fields.restart, MaximumRetryCount: 0 },
-          NetworkMode: fields.network, GroupAdd: fields.groups, PortBindings: {}, CapAdd: [], Devices: [], VolumesFrom: [], PidMode: '' },
+          NetworkMode: fields.network, GroupAdd: fields.groups, PortBindings: {}, CapAdd: [], Devices: [], VolumesFrom: [], PidMode: '',
+          ...(f.promotionDockerDefaults ? { Dns: null, OomKillDisable: false } : {}) },
         Mounts: fields.mounts, State: { Running: false, Paused: false }, NetworkSettings: { Networks: { [n.Name]: {
           NetworkID: n.Id, Aliases: [fields.name], DNSNames: [fields.name, id.slice(0, 12)] } } } };
       result = id;

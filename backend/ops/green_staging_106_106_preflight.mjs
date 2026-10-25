@@ -164,7 +164,7 @@ export function assertOwnedNetwork(record, plan, capturedId) {
 }
 
 export async function executionPreflight({ binding, publicationBytes, target, config, manifest },
-  { command = preflightRead, sourceOptions, materials = bindExecutionMaterials, now = Date.now } = {}) {
+  { command = preflightRead, sourceOptions, materials = bindExecutionMaterials, now = Date.now, recoveryCandidateId } = {}) {
   validateSuccessorSource(binding, sourceOptions); validateExecutionInputs(config, manifest, binding, target);
   const publication = validateSuccessorPublication(publicationBytes, binding);
   const one = async (kind, id) => {
@@ -199,7 +199,8 @@ export async function executionPreflight({ binding, publicationBytes, target, co
         && equal(networkMembers(n.Containers), members), 'preflight_network');
     }
     const inventory = String(await command({ args: ['ps', '-aq', '--no-trunc', '--filter', 'label=com.shareittoo.sit.green=true'] })).trim().split(/\s+/u).sort();
-    require(equal(inventory, target.containers.map(c => c.id).sort()), 'preflight_inventory');
+    const expectedInventory = [...target.containers.map(c => c.id), ...(recoveryCandidateId ? [recoveryCandidateId] : [])].sort();
+    require(equal(inventory, expectedInventory), 'preflight_inventory');
     require(objectDigest(await one('volume', target.uploads.name)) === target.uploads.configSha256, 'preflight_uploads');
   };
   await inspectState();
