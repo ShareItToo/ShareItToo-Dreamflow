@@ -123,10 +123,11 @@ test('Staging listing-AI validates its private key before Compose can run', asyn
 });
 
 test('deployment source keeps listing-AI opt-in, bounded and sanitized', async () => {
-  const [deploy, overlay, app] = await Promise.all([
+  const [deploy, overlay, app, receiptWriter] = await Promise.all([
     readFile(deployScript, 'utf8'),
     readFile(join(backendRoot, 'compose.staging.listing-ai.yml'), 'utf8'),
     readFile(join(backendRoot, 'src', 'app.js'), 'utf8'),
+    readFile(join(backendRoot, 'ops', 'write_staging_listing_ai_activation_receipt.mjs'), 'utf8'),
   ]);
   assert.match(deploy, /ENABLE_STAGING_LISTING_AI:-0/u);
   assert.match(deploy, /CONFIRM_STAGING_LISTING_AI/u);
@@ -152,6 +153,20 @@ test('deployment source keeps listing-AI opt-in, bounded and sanitized', async (
   assert.match(overlay, /OPENAI_API_KEY_FILE: \/run\/secrets\/openai-api-key/u);
   assert.match(overlay, /read_only: true/u);
   assert.match(overlay, /create_host_path: false/u);
+  assert.match(overlay, /com\.shareittoo\.sit\.green: "true"/u);
+  assert.match(deploy, /SIT_LISTING_AI_GREEN_PROMOTION_RECEIPT_FILE/u);
+  assert.match(deploy, /write_staging_listing_ai_activation_receipt\.mjs/u);
+  assert.match(deploy, /task_runtime_id/u);
+  assert.match(deploy, /task_runtime_repo_digest/u);
+  assert.doesNotMatch(deploy, /"activationRuntime"/u);
+  assert.match(deploy, /Deployment failed; previous image restored/u);
+  const receiptCall = deploy.indexOf('write_staging_listing_ai_activation_receipt.mjs');
+  assert.ok(receiptCall > deploy.indexOf('Staging listing-AI health does not confirm'));
+  assert.ok(receiptCall < deploy.lastIndexOf('task_deployment_started=false'));
+  assert.doesNotMatch(deploy.slice(0, deploy.indexOf('rollback_failed_deployment()')), /write_staging_listing_ai_activation_receipt/u);
+  assert.match(receiptWriter, /validateOpenAiStagingSecret/u);
+  assert.match(receiptWriter, /staging_listing_ai_activation_receipt_invalid/u);
+  assert.doesNotMatch(receiptWriter, /OPENAI_API_KEY=/u);
   assert.doesNotMatch(overlay, /sk-(?:proj-)?[A-Za-z0-9_-]{16}/u);
   assert.match(app, /const listingAiHealth = Object\.freeze\(\{/u);
   assert.match(app, /status: config\.listingAi\.enabled \? 'enabled' : 'disabled'/u);

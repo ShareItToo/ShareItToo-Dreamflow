@@ -410,7 +410,18 @@ command argument, Git, Drive, Flutter, chat or deployment evidence.
 
 Activation requires the Heilbronn Wave-0 pilot, the reviewed pinned model, a
 budget from 2 to 500 cents, the external-execution flag and a second
-confirmation equal to the exact image commit:
+confirmation equal to the exact image commit. It also requires the protected
+raw Green 106→106 promotion receipt for the canonical container being
+replaced; pass its absolute path as
+`SIT_LISTING_AI_GREEN_PROMOTION_RECEIPT_FILE`. After healthy runtime readback,
+the deploy writes `staging-listing-ai-activation-<run-id>.json` into the
+owner-only release directory. That typed receipt binds the new canonical
+container, image ID and repository digest to the Green receipt, deployment
+report, sanitized Listing-AI health readback, non-secret key metadata digest and
+the exact rollback target. A deploy failure or rollback does not emit a success
+receipt.
+
+The activation command is:
 
 ```sh
 ENABLE_STAGING_LISTING_AI=1 \
@@ -420,6 +431,7 @@ SIT_LISTING_AI_MODEL=gpt-4o-mini-2024-07-18 \
 SIT_LISTING_AI_BUDGET_CENTS=500 \
 SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED=1 \
 OPENAI_API_KEY_HOST_FILE=/absolute/private/path/openai-api-key \
+SIT_LISTING_AI_GREEN_PROMOTION_RECEIPT_FILE=/absolute/protected/path/green-promotion.json \
   ./ops/deploy_release.sh staging FULL_40_CHARACTER_COMMIT
 ```
 
@@ -429,8 +441,21 @@ runtime must report the exact enabled OpenAI boundary through `/health/ready`
 before deployment is accepted. A failed activation rolls the prior image back
 with the deterministic mock, so the new secret path cannot become a rollback
 dependency. Release evidence records only `stagingListingAi=true` or `false`.
+The deploy report retains the boolean boundary; the separate typed activation
+receipt carries the non-secret identity and readback digests. The default
+Listing-AI rate limit is five requests per owner per 15 minutes;
+each run is capped at five provider calls and the lifetime budget is bounded by
+the configured cent limit. Provider errors do not retry automatically and
+automatic publication remains disabled.
 Provider billing/project creation and the first real image evaluation remain
 separate owner actions; this procedure alone performs neither.
+
+The activation receipt contains only the `/health/ready` digest. It does not
+claim an authenticated Listing-AI capability readback: deployment has no user
+session. The next Web-readiness collector must perform the separate authenticated
+`GET /api/v1/blue-ocean/listing-drafts/capabilities`, bind that response to the
+same exact runtime/activation receipt, and only then compose the existing Web
+readiness input with the independent decision.
 
 ## Optional Staging Stripe test-mode activation
 

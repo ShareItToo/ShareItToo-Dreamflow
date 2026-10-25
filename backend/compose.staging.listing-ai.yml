@@ -1,5 +1,7 @@
 services:
   api:
+    labels:
+      com.shareittoo.sit.green: "true"
     environment:
       SIT_LISTING_AI_PROVIDER: openai
       SIT_LISTING_AI_MODEL: ${SIT_LISTING_AI_MODEL:?SIT_LISTING_AI_MODEL must be set for the Staging listing-AI override}

@@ -17,6 +17,7 @@ task_staging_rehearsal_ops_commit="${SIT_STAGING_REHEARSAL_OPS_COMMIT:-}"
 task_node_binary="${NODE_BINARY:-node}"
 task_deployment_started=false
 task_previous_image_id=''
+task_previous_container_id=''
 task_previous_commit=''
 task_previous_version='unknown'
 task_previous_build_time='unknown'
@@ -70,6 +71,30 @@ create_runtime_override() {
   mktemp "$task_runtime_override_dir/${task_environment}-${task_commit:0:12}-${task_override_kind}-XXXXXX"
 }
 
+read_external_listing_ai_runtime_snapshot() {
+  local task_runtime_id task_runtime_name task_runtime_running task_runtime_green
+  local task_runtime_commit task_runtime_image task_runtime_repo_digest
+  task_runtime_id="$(docker inspect --format '{{.Id}}' "$task_api_container")"
+  task_runtime_name="$(docker inspect --format '{{.Name}}' "$task_runtime_id")"
+  task_runtime_running="$(docker inspect --format '{{.State.Running}}' "$task_runtime_id")"
+  task_runtime_green="$(docker inspect --format '{{index .Config.Labels "com.shareittoo.sit.green"}}' "$task_runtime_id")"
+  task_runtime_commit="$(docker image inspect "$(docker inspect --format '{{.Image}}' "$task_runtime_id")" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')"
+  task_runtime_image="$(docker inspect --format '{{.Image}}' "$task_runtime_id")"
+  task_runtime_repo_digest="$(docker image inspect "$task_runtime_image" --format '{{index .RepoDigests 0}}')"
+  if [[ ! "$task_runtime_id" =~ ^[a-f0-9]{64}$ ||
+        "$task_runtime_name" != "/$task_api_container" ||
+        "$task_runtime_running" != true || "$task_runtime_green" != true ||
+        "$task_runtime_commit" != "$task_commit" ||
+        ! "$task_runtime_image" =~ ^sha256:[a-f0-9]{64}$ ||
+        ! "$task_runtime_repo_digest" =~ ^ghcr\.io/shareittoo/shareittoo-api@sha256:[a-f0-9]{64}$ ]]; then
+    echo "External Listing AI runtime identity readback is invalid." >&2
+    false
+  fi
+  printf '%s|%s|%s|%s|%s|%s|%s' "$task_runtime_id" "$task_runtime_name" \
+    "$task_runtime_running" "$task_runtime_green" "$task_runtime_commit" \
+    "$task_runtime_image" "$task_runtime_repo_digest"
+}
+
 rollback_failed_deployment() {
   task_failed_status=$?
   trap - ERR
@@ -110,6 +135,10 @@ rollback_failed_deployment() {
     chmod 600 "$task_rollback_override"
     printf 'services:\n  api:\n    image: "%s"\n' \
       "$task_previous_image_id" > "$task_rollback_override"
+    if [[ "$task_staging_external_listing_ai_enabled" == true ]]; then
+      printf '    labels:\n      com.shareittoo.sit.green: "true"\n' \
+        >> "$task_rollback_override"
+    fi
     if [[ "$task_staging_listing_ai_enabled" == true ||
           "$task_staging_stripe_enabled" == true ||
           "$task_staging_identity_enabled" == true ||
@@ -535,6 +564,13 @@ DATABASE_NAME="$task_database_name" \
 
 task_previous_commit="$(curl --fail --silent --show-error --max-time 15 "$task_health_url/version" 2>/dev/null | sed -n 's/.*"commit":"\([0-9a-f]*\)".*/\1/p' || true)"
 task_previous_image_id="$(docker inspect --format '{{.Image}}' "$task_api_container" 2>/dev/null || true)"
+if [[ "$task_staging_external_listing_ai_enabled" == true ]]; then
+  task_previous_container_id="$(docker inspect --format '{{.Id}}' "$task_api_container" 2>/dev/null || true)"
+  if [[ ! "$task_previous_container_id" =~ ^[a-f0-9]{64}$ || ! -f "${SIT_LISTING_AI_GREEN_PROMOTION_RECEIPT_FILE:-}" || -L "${SIT_LISTING_AI_GREEN_PROMOTION_RECEIPT_FILE:-}" ]]; then
+    echo "External Listing AI requires the exact prior Green promotion receipt and canonical container identity." >&2
+    false
+  fi
+fi
 if [[ -n "$task_previous_image_id" ]]; then
   task_previous_version="$(docker image inspect "$task_previous_image_id" \
     --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' 2>/dev/null || true)"
@@ -542,6 +578,11 @@ if [[ -n "$task_previous_image_id" ]]; then
     --format '{{ index .Config.Labels "org.opencontainers.image.created" }}' 2>/dev/null || true)"
   task_previous_version="${task_previous_version:-unknown}"
   task_previous_build_time="${task_previous_build_time:-unknown}"
+fi
+if [[ "$task_staging_external_listing_ai_enabled" == true ]]; then
+  "$task_node_binary" "$task_backend_root/ops/validate_staging_listing_ai_green_receipt.mjs" \
+    "$SIT_LISTING_AI_GREEN_PROMOTION_RECEIPT_FILE" "$task_previous_container_id" \
+    "$task_previous_image_id" "$task_previous_commit" >/dev/null
 fi
 
 task_deployment_started=true
@@ -560,9 +601,23 @@ if ! grep -q "\"commit\":\"$task_commit\"" <<<"$task_version_payload"; then
 fi
 if [[ "$task_environment" == staging ]]; then
   task_ready_payload_file="$(mktemp)"
+  task_external_runtime_before=''
+  if [[ "$task_staging_external_listing_ai_enabled" == true ]]; then
+    task_external_runtime_before="$(read_external_listing_ai_runtime_snapshot)"
+  fi
   task_ready_http_status="$(curl --silent --show-error --max-time 20 \
     --output "$task_ready_payload_file" --write-out '%{http_code}' \
     "$task_health_url/health/ready")"
+  if [[ "$task_staging_external_listing_ai_enabled" == true ]]; then
+    task_external_runtime_after="$(read_external_listing_ai_runtime_snapshot)"
+    if [[ "$task_external_runtime_before" != "$task_external_runtime_after" ]]; then
+      echo "External Listing AI runtime changed across health readback." >&2
+      false
+    fi
+    IFS='|' read -r task_activation_container_id task_activation_container_name \
+      task_activation_running task_activation_green task_activation_runtime_commit \
+      task_activation_image_id task_activation_repo_digest <<< "$task_external_runtime_after"
+  fi
   task_ready_payload="$(<"$task_ready_payload_file")"
   task_staging_readiness="$(printf '%s' "$task_ready_payload" | \
     "$task_node_binary" "$task_backend_root/ops/validate_staging_deployment_readiness.mjs" \
@@ -682,6 +737,21 @@ printf '{"environment":"%s","commit":"%s","previousCommit":"%s","version":"%s","
   "$task_staging_listing_ai_enabled" "$task_staging_stripe_enabled" "$task_staging_identity_enabled" "$task_staging_mfa_enabled" "$task_staging_technical_sandbox_enabled" \
   "$task_staging_pilot_id" "$task_staging_readiness" > "$task_report"
 chmod 600 "$task_report"
+if [[ "$task_staging_external_listing_ai_enabled" == true ]]; then
+  task_receipt_run_id="$(date -u +%Y%m%d%H%M%S)-${task_commit:0:12}"
+  "$task_node_binary" "$task_backend_root/ops/write_staging_listing_ai_activation_receipt.mjs" \
+    --green-promotion-receipt "$SIT_LISTING_AI_GREEN_PROMOTION_RECEIPT_FILE" \
+    --deployment-report "$task_report" \
+    --health-readback "$task_ready_payload_file" \
+    --secret-file "$OPENAI_API_KEY_HOST_FILE" \
+    --release-dir "$task_release_dir" \
+    --run-id "$task_receipt_run_id" \
+    --expected-commit "$task_commit" \
+    --rollback-container-id "$task_previous_container_id" \
+    --rollback-image-id "$task_previous_image_id" \
+    --rollback-commit "$task_previous_commit" \
+    --runtime-container-id "$task_activation_container_id"
+fi
 task_deployment_override_retained=true
 task_deployment_started=false
 
