@@ -152,7 +152,18 @@ for (const [name, mutate] of [
 ]) test(`operator proof rejects ${name} without service-account fallback`, async () => {
   const f = fixture(); mutate(f);
   await assert.rejects(f.readers().readAccountIdentity(), { message: 'google_web_read_only_adapter_denied' });
-  assert.ok(f.calls.every((call) => !call.url.includes('oauth2.googleapis.com')));
+  for (const call of f.calls) {
+    const url = new URL(call.url);
+    assert.equal(url.protocol, 'https:');
+    assert.equal(url.username, ''); assert.equal(url.password, ''); assert.equal(url.port, '');
+    assert.equal(url.search, ''); assert.equal(url.hash, '');
+    assert.ok([
+      ['accounts.google.com', '/.well-known/openid-configuration'],
+      ['openidconnect.googleapis.com', '/v1/userinfo'],
+      ['cloudresourcemanager.googleapis.com', `/v1/projects/${f.binding.projectId}`],
+    ].some(([hostname, pathname]) => url.hostname === hostname && url.pathname === pathname));
+    assert.equal(call.method, 'GET');
+  }
 });
 test('expired/mismatched local operator is rejected before any transport', () => {
   const f = fixture(); f.user.tokens.expires_at = now;
@@ -225,7 +236,15 @@ test('writer produces exclusive exact 0600 artifacts, refuses reuse and retains 
   const writer = reserveGoogleWebArtifacts(options);
   const files = writer.write({ candidate: '{"pending":true}', journal: '{"mutations":0}' }); writer.close();
   assert.equal(files.length, 2);
-  for (const file of files) { assert.equal(fs.statSync(file.path).mode & 0o777, 0o600); assert.equal(hash(fs.readFileSync(file.path)), file.sha256); }
+  for (const file of files) {
+    const fd = fs.openSync(file.path, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+    try {
+      const stat = fs.fstatSync(fd);
+      assert.equal(stat.isFile(), true); assert.equal(stat.nlink, 1);
+      assert.equal(stat.mode & 0o777, 0o600);
+      assert.equal(hash(fs.readFileSync(fd)), file.sha256);
+    } finally { fs.closeSync(fd); }
+  }
   assert.throws(() => reserveGoogleWebArtifacts(options));
   assert.equal(fs.readFileSync(files[0].path, 'utf8'), '{"pending":true}');
   assert.throws(() => writer.write({ candidate: '{}', journal: '{}' }));

@@ -138,8 +138,12 @@ async function protectedPreflight() {
     args.push(`--${name}`, file, `--${name}-sha256`, digest(bytes)); files[name] = file;
   }
   const snapshot = () => Object.fromEntries(fs.readdirSync(directory).sort().map(name => {
-    const file = path.join(directory, name), stat = fs.lstatSync(file);
-    return [name, { hash: digest(fs.readFileSync(file)), mode: stat.mode, ino: stat.ino, size: stat.size, mtime: stat.mtimeMs }];
+    const fd = fs.openSync(path.join(directory, name), fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+    try {
+      const stat = fs.fstatSync(fd);
+      assert.equal(stat.isFile(), true); assert.equal(stat.nlink, 1);
+      return [name, { hash: digest(fs.readFileSync(fd)), mode: stat.mode, ino: stat.ino, size: stat.size, mtime: stat.mtimeMs }];
+    } finally { fs.closeSync(fd); }
   }));
   return { ...state, args, files, directory, snapshot, close: () => fs.rmSync(directory, { recursive: true, force: true }) };
 }

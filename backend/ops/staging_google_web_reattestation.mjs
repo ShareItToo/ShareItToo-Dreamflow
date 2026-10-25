@@ -106,7 +106,7 @@ function snapshot(value, binding) {
     && value.webAppsInventory.nextPageToken === '');
   check(same(value.apiKey, { ...binding.apiKey, exists: true, webCompatible: true }));
   check(Array.isArray(value.authorizedDomains) && value.authorizedDomains.length > 0
-    && value.authorizedDomains.length < 1000 && value.authorizedDomains.includes(host)
+    && value.authorizedDomains.length < 1000 && value.authorizedDomains.some((domain) => domain === host)
     && value.authorizedDomains.every((item) => typeof item === 'string' && /^[a-z0-9.-]+$/u.test(item))
     && new Set(value.authorizedDomains).size === value.authorizedDomains.length);
   check(Array.isArray(value.webApps) && value.webApps.length > 0 && value.webApps.length < 1000);
