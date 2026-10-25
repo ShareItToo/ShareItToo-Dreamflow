@@ -249,6 +249,99 @@ const fake = overrides => ({
     portClosed: true, profileRemoved: true, exitCode: 0, exitSignal: null }), ...overrides,
 });
 
+test('inventory diagnosis identifies every failed condition before adapter return or launch', async () => {
+  const base = fake(); const valid = await base.inventory();
+  const changes = [
+    ...Object.entries({ platform: 'darwin', arch: 'arm64', imageOS: 'ubuntu22',
+      imageVersion: '20261019.341.1', node: '22.23.4', chrome: '155.0.8059.40',
+      head: 'f'.repeat(40), clean: false, uid: 0, gid: 0 }).map(([key, value]) => [key, { ...valid, [key]: value }]),
+    ...['uid', 'gid'].flatMap(key => [undefined, null, false, '1001', -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]
+      .map(value => [key, { ...valid, [key]: value }])),
+    ...Object.keys(valid.digests).map(key => {
+      const digests = { ...valid.digests }; delete digests[key]; return ['digestKeys', { ...valid, digests }];
+    }),
+    ...[undefined, null, [], {}, { ...valid.digests, extra: 'private' },
+      { ...valid.digests, [Symbol('private')]: true }].map(digests => ['digestKeys', { ...valid, digests }]),
+    ...Object.keys(valid.digests).flatMap(key =>
+      [undefined, 'A'.repeat(64), 'g'.repeat(64), '1'.repeat(63), '1'.repeat(65), 1, '/private/digest']
+        .map(value => [key, { ...valid, digests: { ...valid.digests, [key]: value } }])),
+  ];
+  for (const [failed, supplied] of changes) for (const validateBeforeReturn of [false, true]) {
+    const calls = []; const journal = [];
+    const result = await runProbe({ expectedHead: head, journal: row => journal.push(row), adapter: {
+      ...base, inventory: async () => {
+        if (validateBeforeReturn) validateInventory(supplied, head);
+        return supplied;
+      }, build: async () => calls.push('build'), prepare: async () => calls.push('prepare'),
+      cleanup: async () => { calls.push('cleanup'); return base.cleanup(); },
+    } });
+    assert.equal(result.status, 'fail'); assert.equal(result.code, ['uid', 'gid'].includes(failed) ? 'probe_sandbox' : 'probe_inventory');
+    assert.equal(result.diagnostic.checks[failed], false, failed);
+    assert.deepEqual(calls, ['cleanup']); assert.equal(result.inventory, undefined); assert.equal(result.proof, undefined);
+    assert.deepEqual(Object.keys(result.diagnostic), ['observed', 'checks']);
+    assert.deepEqual(Object.keys(result.diagnostic.observed), ['platform', 'arch', 'imageOS', 'imageVersion', 'node', 'chrome']);
+    assert.deepEqual(Object.keys(result.diagnostic.checks), ['platform', 'arch', 'imageOS', 'imageVersion', 'node', 'chrome',
+      'tuple', 'head', 'clean', 'uid', 'gid', 'digestKeys', 'runnerSha256', 'chromeSha256', 'nodeSha256']);
+    assert.ok(Object.values(result.diagnostic.checks).every(value => typeof value === 'boolean'));
+    assert.ok(JSON.stringify(result.diagnostic).length < 700);
+    assert.doesNotMatch(JSON.stringify({ result, journal }), /private|1001|[a-f0-9]{40}/);
+  }
+  const mixed = { ...valid, ...inventoryContracts[0], chrome: inventoryContracts[1].chrome };
+  const result = await runProbe({ expectedHead: head, adapter: { ...base, inventory: async () => mixed } });
+  assert.equal(result.diagnostic.checks.tuple, false);
+  assert.ok(['arch', 'imageOS', 'imageVersion', 'node', 'chrome'].every(key => result.diagnostic.checks[key]));
+  assert.deepEqual(result.diagnostic.observed, Object.fromEntries(
+    ['platform', 'arch', 'imageOS', 'imageVersion', 'node', 'chrome'].map(key => [key, mixed[key]])));
+});
+
+test('inventory diagnosis never serializes private values, coercion hooks or unknown fields', async () => {
+  const base = fake(); const valid = await base.inventory();
+  const privateValue = '/private/synthetic-user/credential?token=synthetic-secret';
+  const fields = ['platform', 'arch', 'imageOS', 'imageVersion', 'node', 'chrome', 'head', 'uid', 'gid', 'clean', 'digests'];
+  const coercion = { toString() { throw Error(privateValue); }, toJSON() { throw Error(privateValue); } };
+  for (const key of fields) for (const value of [privateValue, undefined, null, [], coercion, Symbol(privateValue),
+    privateValue.repeat(1000), String(valid[key]) + '\n']) {
+    const supplied = { ...valid, clean: false, [key]: value, path: privateValue, bytes: [{ file: privateValue, digest: 'e'.repeat(64) }],
+      env: { privateValue }, username: privateValue, stdout: privateValue, stderr: privateValue, toJSON: coercion.toJSON };
+    const result = await runProbe({ expectedHead: head, adapter: { ...base, inventory: async () => {
+      validateInventory(supplied, head); return supplied;
+    } } });
+    assert.equal(result.status, 'fail'); assert.equal(result.code, 'probe_inventory');
+    if (Object.hasOwn(result.diagnostic.observed, key)) assert.equal(result.diagnostic.observed[key], null);
+    assert.doesNotMatch(JSON.stringify(result), /private|synthetic-user|synthetic-secret|credential|token|username|stdout|stderr|bytes|[a-f0-9]{40}/);
+  }
+  for (const supplied of [undefined, null, [], coercion]) {
+    const result = await runProbe({ expectedHead: head, adapter: { ...base, inventory: async () => supplied } });
+    assert.equal(result.code, 'probe_inventory'); assert.ok(result.diagnostic);
+    assert.doesNotMatch(JSON.stringify(result), /private|synthetic-user|synthetic-secret/);
+  }
+  // A throwing accessor or Proxy cannot leak its exception or trigger a raw diagnostic fallback.
+  for (const supplied of [Object.defineProperty({ ...valid }, 'arch', { get() { throw Error(privateValue); } }),
+    new Proxy({}, { get() { throw Error(privateValue); } })]) {
+    const result = await runProbe({ expectedHead: head, adapter: { ...base, inventory: async () => supplied } });
+    assert.equal(result.code, 'probe_failure'); assert.equal(result.diagnostic, undefined);
+  }
+});
+
+test('inventory diagnosis is trusted, stage-specific and subordinate to cleanup failure', async () => {
+  const base = fake(); const supplied = { ...await base.inventory(), clean: false };
+  for (const stage of ['inventory', 'prepare']) {
+    const result = await runProbe({ expectedHead: head, adapter: { ...base, [stage]: async () => {
+      throw Object.assign(Error('probe_inventory'), { diagnostic: { secret: '/private/value' } });
+    } } });
+    assert.equal(result.code, 'probe_inventory'); assert.equal(result.diagnostic, undefined);
+  }
+  const result = await runProbe({ expectedHead: head, adapter: { ...base,
+    inventory: async () => { validateInventory(supplied, head); return supplied; },
+    cleanup: async () => ({ ...await base.cleanup(), portClosed: false }),
+  } });
+  assert.equal(result.code, 'probe_cleanup'); assert.equal(result.diagnostic.portClosed, false);
+  assert.equal(result.diagnostic.observed, undefined); assert.equal(result.diagnostic.checks, undefined);
+  const success = await runProbe({ expectedHead: head, adapter: base });
+  assert.equal(success.status, 'pass'); assert.equal(success.diagnostic, undefined);
+  assert.deepEqual(success.inventory.digests, supplied.digests);
+});
+
 const graphFixture = () => ({ roots: ['lendify'], packages: [
   { name: 'lendify', version: '1.0.0', dependencies: ['google_sign_in'], devDependencies: [] },
   { name: 'google_sign_in', version: '7.2.0', dependencies: ['flutter', 'google_sign_in_android',

@@ -336,7 +336,55 @@ export function launchArgs(directory) {
     '--disable-extensions', '--disable-component-extensions-with-background-pages', `--user-data-dir=${directory}`,
     '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', 'about:blank'];
 }
+// Keep diagnostics local to errors created by this validator; never trust error payloads.
+const inventoryDiagnostics = new WeakMap();
+function inventoryDiagnostic(value, expectedHead) {
+  const own = (object, key) => object && typeof object === 'object'
+    ? Object.getOwnPropertyDescriptor(object, key)?.value : undefined;
+  const fields = ['platform', 'arch', 'imageOS', 'imageVersion', 'node', 'chrome'];
+  const observed = Object.fromEntries(fields.map(key => [key, own(value, key)]));
+  const formats = {
+    platform: /^(?:linux|darwin|win32|freebsd|openbsd|aix|sunos|android)$/,
+    arch: /^(?:x64|arm64|arm|ia32|ppc64|s390x|riscv64|loong64)$/,
+    imageOS: /^ubuntu[0-9]{2}$/,
+    imageVersion: /^[0-9]{8}\.[0-9]{1,4}\.[0-9]{1,3}$/,
+    node: /^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$/,
+    chrome: /^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,5}\.[0-9]{1,5}$/,
+  };
+  const tupleFields = fields.slice(1);
+  const digests = own(value, 'digests');
+  const names = ['runnerSha256', 'chromeSha256', 'nodeSha256'];
+  const checks = {
+    platform: observed.platform === 'linux',
+    ...Object.fromEntries(tupleFields.map(key => [key, inventoryContracts.some(candidate => observed[key] === candidate[key])])),
+    tuple: inventoryContracts.some(candidate => tupleFields.every(key => observed[key] === candidate[key])),
+    head: own(value, 'head') === expectedHead, clean: own(value, 'clean') === true,
+    ...Object.fromEntries(['uid', 'gid'].map(key => {
+      const id = own(value, key); return [key, Number.isSafeInteger(id) && id > 0];
+    })),
+    digestKeys: !!digests && typeof digests === 'object' && !Array.isArray(digests)
+      && Reflect.ownKeys(digests).length === names.length && names.every(key => Object.hasOwn(digests, key)),
+    ...Object.fromEntries(names.map(key => {
+      const digest = own(digests, key);
+      return [key, typeof digest === 'string' && /^[a-f0-9]{64}$/.test(digest)];
+    })),
+  };
+  // Only fixed enums or bounded numeric public versions can cross this boundary.
+  return Object.freeze({ observed: Object.freeze(Object.fromEntries(fields.map(key => [key,
+    typeof observed[key] === 'string' && observed[key].length <= 32 && observed[key] === observed[key].trim()
+      && formats[key].test(observed[key]) ? observed[key] : null]))),
+  checks: Object.freeze(checks) });
+}
 export function validateInventory(v, expectedHead) {
+  try { return validateInventoryValue(v, expectedHead); }
+  catch (error) {
+    if (['probe_inventory', 'probe_sandbox'].includes(error?.message)) {
+      try { inventoryDiagnostics.set(error, inventoryDiagnostic(v, expectedHead)); } catch { /* No raw fallback. */ }
+    }
+    throw error;
+  }
+}
+function validateInventoryValue(v, expectedHead) {
   const matched = inventoryContracts.find(candidate => ['arch', 'imageOS', 'imageVersion', 'node', 'chrome']
     .every(key => v?.[key] === candidate[key]));
   check(v?.platform === 'linux' && matched
@@ -390,6 +438,7 @@ export async function runProbe({ expectedHead, adapter, journal = () => {}, sign
     }
   } catch (error) {
     code = codes.has(error?.message) ? error.message : 'probe_failure'; if (activeStage) emit(activeStage, 'failed');
+    if (activeStage === 'inventory') diagnostic = inventoryDiagnostics.get(error);
     if (code === 'probe_targets') {
       try { diagnostic = validateTargetDiagnostic(active.targetDiagnostic?.()); }
       catch { code = 'probe_failure'; }
