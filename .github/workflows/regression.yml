@@ -252,6 +252,30 @@ jobs:
           esac
           printf 'R10 CMake verified: %s; %s; %s\n' "$cmake_package" "$cmake_revision" "$cmake_first_line"
 
+      - name: Install and verify declared Android NDK
+        shell: bash
+        run: |
+          fail_ndk() { printf '::error::R10 NDK: %s\n' "$1" >&2; exit "${2:-1}"; }
+          android_sdk_root="${ANDROID_HOME:-}"
+          [[ -n "$android_sdk_root" && -d "$android_sdk_root" ]] || fail_ndk 'Android SDK root missing (ANDROID_HOME)'
+          flutter_extension="${FLUTTER_ROOT:-}/packages/flutter_tools/gradle/src/main/kotlin/FlutterExtension.kt"
+          [[ -r "$flutter_extension" ]] || fail_ndk 'Flutter NDK declaration missing'
+          ndk_version="$(sed -n 's/^[[:blank:]]*val ndkVersion: String = "\([0-9.]*\)"[[:blank:]]*$/\1/p' "$flutter_extension")" || fail_ndk 'Cannot read Flutter NDK declaration'
+          [[ "$ndk_version" == '28.2.13676358' ]] || fail_ndk 'Flutter NDK declaration differs from reviewed Flutter 3.41.7 pin'
+          sdkmanager_binary="$android_sdk_root/cmdline-tools/latest/bin/sdkmanager"
+          [[ -x "$sdkmanager_binary" ]] || fail_ndk 'SDK manager not executable'
+          "$sdkmanager_binary" --sdk_root="$android_sdk_root" --install "ndk;$ndk_version" || fail_ndk 'SDK NDK installation failed' "$?"
+          ndk_root="$android_sdk_root/ndk/$ndk_version"
+          ndk_properties="$ndk_root/source.properties"
+          [[ -f "$ndk_properties" && -r "$ndk_properties" ]] || fail_ndk 'NDK package metadata missing or unreadable'
+          ndk_revision="$(sed -n 's/^Pkg\.Revision[[:blank:]]*=[[:blank:]]*//p' "$ndk_properties")" || fail_ndk 'Cannot read Pkg.Revision'
+          [[ "$ndk_revision" == "$ndk_version" ]] || fail_ndk 'NDK Pkg.Revision mismatch'
+          [[ -f "$ndk_root/ndk-build" && -x "$ndk_root/ndk-build" ]] || fail_ndk 'ndk-build missing or not executable'
+          ndk_clang="$ndk_root/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
+          [[ -f "$ndk_clang" && -x "$ndk_clang" ]] || fail_ndk 'NDK Clang missing or not executable'
+          "$ndk_clang" --version || fail_ndk 'NDK Clang execution failed' "$?"
+          printf 'R10 NDK verified: ndk;%s; %s\n' "$ndk_version" "$ndk_revision"
+
       - name: Run exact clean-checkout reproducibility proof
         run: |
           node tool/run_r10_clean_reproducibility.mjs \

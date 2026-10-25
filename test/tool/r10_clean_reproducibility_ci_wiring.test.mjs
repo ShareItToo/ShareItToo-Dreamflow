@@ -121,6 +121,84 @@ exit ${scenario.cmakeStatus ?? 0}
   }
 });
 
+test('R10 provisions the declared Flutter NDK before offline builds and rejects incomplete SDKs', async (t) => {
+  const job = r10Job();
+  const setup = /      - name: Install and verify declared Android NDK\n        shell: bash\n        run: \|\n(?<script>(?:          .+\n)+)/u.exec(job);
+  assert.ok(setup, 'R10 must provision its declared NDK, independently of Gradle transport');
+  assert.ok(setup.index < job.indexOf('      - name: Run exact clean-checkout reproducibility proof'));
+  const script = setup.groups.script.replace(/^          /gmu, '');
+  const app = readFileSync(new URL('../../android/app/build.gradle', import.meta.url), 'utf8');
+  assert.match(app, /^\s*ndkVersion = flutter\.ndkVersion\s*$/mu);
+  assert.equal([...app.matchAll(/\bndkVersion\s*=/gu)].length, 1);
+  assert.doesNotMatch(app, /\bndkPath\b/u);
+  // Flutter 3.41.7 declares 28.2.13676358. AGP 8.13.2's NdkLocator failure
+  // prints NDK_DEFAULT_VERSION (27.0.12077973), even for a different DSL pin.
+  // Install the declared version, not the diagnostic's fallback version.
+  const declaration = '    val ndkVersion: String = "28.2.13676358"\n';
+  const properties = 'Pkg.Desc = Android NDK\nPkg.Revision = 28.2.13676358\nPkg.BaseRevision = 28.2.13676358\nPkg.ReleaseName = r28c\n';
+  for (const scenario of [
+    { name: 'exact Flutter NDK with real source.properties shape', status: 0 },
+    { name: 'missing SDK root', missingSdk: true, status: 1, diagnostic: 'Android SDK root missing' },
+    { name: 'missing Flutter declaration', missingDeclaration: true, status: 1, diagnostic: 'Flutter NDK declaration missing' },
+    { name: 'AGP diagnostic is not the Flutter pin', declaration: declaration.replace('28.2.13676358', '27.0.12077973'), status: 1, diagnostic: 'Flutter NDK declaration differs' },
+    { name: 'duplicate declaration', declaration: declaration.repeat(2), status: 1, diagnostic: 'Flutter NDK declaration differs' },
+    { name: 'missing SDK manager', missingManager: true, status: 1, diagnostic: 'SDK manager not executable' },
+    { name: 'installation failure', installStatus: 19, status: 19, diagnostic: 'SDK NDK installation failed' },
+    { name: 'missing package metadata', missingProperties: true, status: 1, diagnostic: 'NDK package metadata missing' },
+    { name: 'wrong installed revision', properties: properties.replace('Pkg.Revision = 28.2.13676358', 'Pkg.Revision = 27.0.12077973'), status: 1, diagnostic: 'NDK Pkg.Revision mismatch' },
+    { name: 'duplicate revision', properties: `${properties}Pkg.Revision = 28.2.13676358\n`, status: 1, diagnostic: 'NDK Pkg.Revision mismatch' },
+    { name: 'only fallback NDK installed', installedVersion: '27.0.12077973', status: 1, diagnostic: 'NDK package metadata missing' },
+    { name: 'missing ndk-build', missingBuild: true, status: 1, diagnostic: 'ndk-build missing' },
+    { name: 'non-executable ndk-build', buildMode: 0o644, status: 1, diagnostic: 'ndk-build missing' },
+    { name: 'missing compiler', missingClang: true, status: 1, diagnostic: 'NDK Clang missing' },
+    { name: 'non-executable compiler', clangMode: 0o644, status: 1, diagnostic: 'NDK Clang missing' },
+    { name: 'compiler cannot run', clangStatus: 23, status: 23, diagnostic: 'NDK Clang execution failed' },
+  ]) {
+    await t.test(scenario.name, () => {
+      const root = mkdtempSync(path.join(os.tmpdir(), 'sit-r10-ndk-'));
+      try {
+        const sdk = path.join(root, 'sdk');
+        const flutter = path.join(root, 'flutter');
+        const extension = path.join(flutter, 'packages/flutter_tools/gradle/src/main/kotlin');
+        const manager = path.join(sdk, 'cmdline-tools/latest/bin');
+        const ndk = path.join(sdk, 'ndk', scenario.installedVersion ?? '28.2.13676358');
+        const clang = path.join(ndk, 'toolchains/llvm/prebuilt/linux-x86_64/bin');
+        for (const directory of [extension, manager, clang]) mkdirSync(directory, { recursive: true });
+        if (!scenario.missingDeclaration) writeFileSync(path.join(extension, 'FlutterExtension.kt'), scenario.declaration ?? declaration);
+        if (!scenario.missingProperties) writeFileSync(path.join(ndk, 'source.properties'), scenario.properties ?? properties);
+        if (!scenario.missingManager) writeFileSync(path.join(manager, 'sdkmanager'), `#!/bin/bash
+set -eu
+test "$#" = 3
+test "$1" = "--sdk_root=$ANDROID_HOME"
+test "$2" = --install
+test "$3" = 'ndk;28.2.13676358'
+exit ${scenario.installStatus ?? 0}
+`, { mode: 0o755 });
+        if (!scenario.missingBuild) writeFileSync(path.join(ndk, 'ndk-build'), '#!/bin/bash\nexit 0\n', { mode: scenario.buildMode ?? 0o755 });
+        if (!scenario.missingClang) writeFileSync(path.join(clang, 'clang'), `#!/bin/bash
+test "$1" = --version || exit 2
+exit ${scenario.clangStatus ?? 0}
+`, { mode: scenario.clangMode ?? 0o755 });
+        const result = spawnSync('bash', ['--noprofile', '--norc', '-eo', 'pipefail', '-c', script], {
+          env: { ...process.env, ANDROID_HOME: scenario.missingSdk ? '' : sdk, FLUTTER_ROOT: flutter }, encoding: 'utf8',
+        });
+        assert.equal(result.status, scenario.status, result.stderr);
+        if (scenario.diagnostic) {
+          assert.ok(result.stderr.includes(`::error::R10 NDK: ${scenario.diagnostic}`), result.stderr);
+          assert.doesNotMatch(result.stdout, /R10 NDK verified/u);
+        } else {
+          assert.match(result.stdout, /R10 NDK verified: ndk;28\.2\.13676358; 28\.2\.13676358/u);
+        }
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    });
+  }
+  const runner = readFileSync(new URL('../../tool/run_r10_clean_reproducibility.mjs', import.meta.url), 'utf8');
+  assert.match(runner, /ANDROID_HOME: androidSdkRoot,\s+ANDROID_SDK_ROOT: androidSdkRoot/u);
+  assert.match(runner, /const configured = process\.env\.ANDROID_HOME \?\? process\.env\.ANDROID_SDK_ROOT/u);
+});
+
 test('R10 consumes only the same-run successful exact-head dependency artifact', () => {
   const job = r10Job();
   assert.match(job, /needs: flutter-regression/u);
