@@ -34,6 +34,30 @@ the session proof binds an exact synthetic principal and short expiry. Its beare
 token is never accepted in argv or written to output. The CLI checks protected
 credential mount metadata and authenticated capability readback before execution.
 
+Create the sanitized evidence file first, on the staging host with read-only
+Docker access. The four protected JSON inputs are supplied by their respective
+owner/provider/rollback evidence collection steps; the materializer makes no
+Stripe or network call. It reads the promotion receipt file timestamp directly
+for freshness, inspects the exact canonical Docker ID and immutable image
+RepoDigest, hashes the two protected secret files without printing their bytes,
+and atomically creates a new mode-0600 evidence file without overwriting one.
+The command emits the evidence file's raw SHA-256 for the activation CLI:
+
+```sh
+node backend/ops/materialize_technical_sandbox_106_evidence.mjs --promotion-receipt /private/green-promotion.json --promotion-receipt-sha256 PROMOTION_FILE_SHA256 --owner-authorization /private/owner-authorization.json --owner-authorization-sha256 OWNER_AUTHORIZATION_FILE_SHA256 --stripe-readback /private/stripe-test-readback.json --stripe-readback-sha256 STRIPE_READBACK_FILE_SHA256 --rollback-proof /private/rollback-proof.json --rollback-proof-sha256 ROLLBACK_PROOF_FILE_SHA256 --secret-key /run/secrets/technical-rk-test --webhook-secret /run/secrets/technical-webhook --output /private/technical-sandbox-evidence.json
+```
+
+The owner authorization input has exactly `id`, `issuedAt`, `expiresAt`,
+`scope`, and two `synthetic_sandbox_user_*` `userIds`. The Stripe readback has
+exactly `authenticated`, `accountId`, `accountMode`, `livemode`, and `readAt`;
+the rollback proof has exactly `target`, `verifiedAt`, `mockPaymentTransport`,
+`technicalSandboxDisabled`, and `secretMountsRemoved`. Their raw file hashes
+bind the original protected inputs. The materializer rejects stale/future
+timestamps, mode/identity drift, live-mode evidence, mismatched runtime and
+promotion receipt, or secret content whose SHA does not match the observed
+file. Promotion freshness comes from the protected receipt's direct filesystem
+mtime/ctime read, which must agree within five minutes.
+
 ```sh
 node backend/ops/activate_technical_sandbox_106.mjs --mode preflight --evidence /private/evidence.json --evidence-sha256 EVIDENCE_FILE_SHA256 --promotion-receipt /private/green-promotion.json --promotion-receipt-sha256 PROMOTION_FILE_SHA256 --session-proof /private/session-proof.json --session-proof-sha256 SESSION_FILE_SHA256 --evidence-directory /private/activation-receipts
 node backend/ops/activate_technical_sandbox_106.mjs --mode rehearse --evidence /private/evidence.json --evidence-sha256 EVIDENCE_FILE_SHA256 --promotion-receipt /private/green-promotion.json --promotion-receipt-sha256 PROMOTION_FILE_SHA256 --session-proof /private/session-proof.json --session-proof-sha256 SESSION_FILE_SHA256 --evidence-directory /private/activation-receipts --run-id RUN_UUID --confirm 'rehearse:CANONICAL_CONTAINER_ID:RUNTIME_COMMIT:IMAGE_DIGEST:EVIDENCE_DIGEST'
