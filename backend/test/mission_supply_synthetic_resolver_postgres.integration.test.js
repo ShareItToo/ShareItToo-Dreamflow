@@ -10,7 +10,46 @@ import { resolveSyntheticMissionSupplyRecipient } from '../src/mission_supply_sy
 import {
   createMissionSupplyDemand,
   missionSupplyDemandDigest,
+  normalizeMissionSupplyDemandRequest,
 } from '../src/mission_supply_demand_workflow.js';
+
+function futureSupplyWindow(now = new Date()) {
+  const atDay = (days) => new Date(now.getTime() + days * 86_400_000).toISOString();
+  return {
+    expiresAt: atDay(10),
+    startDate: atDay(12).slice(0, 10),
+    endDate: atDay(14).slice(0, 10),
+  };
+}
+
+test('synthetic bridge dates stay future across calendar boundaries without relaxing expiry', () => {
+  for (const instant of [
+    '2026-10-25T23:59:59.999Z',
+    '2030-12-31T23:59:59.999Z',
+    '2040-02-28T23:59:59.999Z',
+  ]) {
+    const now = new Date(instant);
+    const window = futureSupplyWindow(now);
+    const expiry = Date.parse(window.expiresAt);
+    assert.equal(new Date(expiry).toISOString(), window.expiresAt);
+    assert.ok(expiry > now.getTime() + 9 * 86_400_000);
+    assert.ok(expiry < Date.parse(`${window.startDate}T00:00:00.000Z`));
+    assert.ok(window.startDate < window.endDate);
+    const request = {
+      resolutionRevision: 1,
+      slotKey: 'required:plant_container_equipment:1',
+      purpose: 'mission_gap_supply_v1',
+      expiresAt: window.expiresAt,
+    };
+    assert.deepEqual(normalizeMissionSupplyDemandRequest(request, { now }), request);
+    for (const offset of [0, 1]) {
+      assert.throws(
+        () => normalizeMissionSupplyDemandRequest(request, { now: new Date(expiry + offset) }),
+        (error) => error.code === 'mission_supply_expiry_not_future',
+      );
+    }
+  }
+});
 
 const databaseUrl = process.env.TEST_DATABASE_URL?.trim();
 
@@ -18,6 +57,7 @@ if (!databaseUrl) {
   test.skip('synthetic participation bridge PostgreSQL integration requires TEST_DATABASE_URL');
 } else {
   test('P6-C2 HTTP create uses one current C1 participation and fails closed on block/withdrawal', async () => {
+    const { expiresAt, startDate, endDate } = futureSupplyWindow();
     Object.assign(process.env, {
       DATABASE_URL: databaseUrl,
       DEPLOYMENT_ENVIRONMENT: 'test',
@@ -115,8 +155,6 @@ if (!databaseUrl) {
           paymentCreated: false, publicShelfCreated: false, publicListingCreated: false,
           automaticPublicationPerformed: false, externalGenerativeAiUsed: false,
         };
-        const startDate = '2026-11-01';
-        const endDate = '2026-11-03';
         const resolutionDigest = missionSupplyDemandDigest(resolutionSnapshot);
         await setup.query(
           `INSERT INTO mission_needs (id, owner_id, domain_version, status)
@@ -185,7 +223,7 @@ if (!databaseUrl) {
       const create = await fetch(`${base}/v1/mission-inventory-resolutions/${first.resolutionId}/supply-demands`, {
         method: 'POST', headers,
         body: JSON.stringify({ resolutionRevision: 1, slotKey: first.slotKey,
-          purpose: 'mission_gap_supply_v1', expiresAt: '2026-10-20T00:00:00.000Z' }),
+          purpose: 'mission_gap_supply_v1', expiresAt }),
       });
       assert.equal(create.status, 201);
       const created = await create.json();
@@ -201,7 +239,7 @@ if (!databaseUrl) {
         resolutionId: gap.resolutionId,
         raw: {
           resolutionRevision: 1, slotKey: gap.slotKey,
-          purpose: 'mission_gap_supply_v1', expiresAt: '2026-10-20T00:00:00.000Z',
+          purpose: 'mission_gap_supply_v1', expiresAt,
         },
         idempotencyKey: key,
         recipientResolver: resolver,
@@ -233,7 +271,7 @@ if (!databaseUrl) {
       const blocked = await fetch(`${base}/v1/mission-inventory-resolutions/${blockedGap.resolutionId}/supply-demands`, {
         method: 'POST', headers: { ...headers, 'Idempotency-Key': 'p6c2-http-blocked-0001' },
         body: JSON.stringify({ resolutionRevision: 1, slotKey: blockedGap.slotKey,
-          purpose: 'mission_gap_supply_v1', expiresAt: '2026-10-20T00:00:00.000Z' }),
+          purpose: 'mission_gap_supply_v1', expiresAt }),
       });
       assert.equal(blocked.status, 404);
       assert.equal((await blocked.json()).error, 'mission_supply_recipient_not_eligible');
@@ -267,7 +305,7 @@ if (!databaseUrl) {
       const suspendedRecipient = await fetch(`${base}/v1/mission-inventory-resolutions/${suspendedRecipientGap.resolutionId}/supply-demands`, {
         method: 'POST', headers: { ...headers, 'Idempotency-Key': 'p6c2-http-suspended-recipient-0001' },
         body: JSON.stringify({ resolutionRevision: 1, slotKey: suspendedRecipientGap.slotKey,
-          purpose: 'mission_gap_supply_v1', expiresAt: '2026-10-20T00:00:00.000Z' }),
+          purpose: 'mission_gap_supply_v1', expiresAt }),
       });
       assert.equal(suspendedRecipient.status, 404);
       assert.equal((await suspendedRecipient.json()).error, 'mission_supply_recipient_not_eligible');
@@ -288,7 +326,7 @@ if (!databaseUrl) {
       const withdrawn = await fetch(`${base}/v1/mission-inventory-resolutions/${withdrawnGap.resolutionId}/supply-demands`, {
         method: 'POST', headers: { ...headers, 'Idempotency-Key': 'p6c2-http-withdrawn-0001' },
         body: JSON.stringify({ resolutionRevision: 1, slotKey: withdrawnGap.slotKey,
-          purpose: 'mission_gap_supply_v1', expiresAt: '2026-10-20T00:00:00.000Z' }),
+          purpose: 'mission_gap_supply_v1', expiresAt }),
       });
       assert.equal(withdrawn.status, 404);
       assert.equal((await withdrawn.json()).error, 'mission_supply_recipient_not_eligible');
