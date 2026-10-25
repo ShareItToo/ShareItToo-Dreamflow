@@ -76,7 +76,7 @@ function jsonOne(text, code) {
 }
 
 export async function readCanonicalGreenRuntime({ command = readOnlyDocker(), expectedCommit }) {
-  if (!/^[a-f0-9]{40}$/u.test(expectedCommit ?? '')) fail('sandbox106_runtime_commit_input');
+  if (expectedCommit !== undefined && !/^[a-f0-9]{40}$/u.test(expectedCommit)) fail('sandbox106_runtime_commit_input');
   const inventory = String(await command(['ps','--all','--no-trunc','--filter','name=^/shareittoo-staging-api$','--format','{{.ID}}'])).trim();
   const ids = inventory ? inventory.split(/\s+/u) : [];
   if (ids.length !== 1 || !/^[a-f0-9]{64}$/u.test(ids[0])) fail('sandbox106_runtime_name_inventory');
@@ -90,18 +90,25 @@ export async function readCanonicalGreenRuntime({ command = readOnlyDocker(), ex
   }));
   const labels = container.Config?.Labels ?? {};
   const promotionRunId = labels['com.shareittoo.green.106_106.promotion'];
-  if (env.APP_COMMIT !== expectedCommit || env.DEPLOYMENT_ENVIRONMENT !== 'test'
+  const runtimeCommit=env.APP_COMMIT;
+  if (!/^[a-f0-9]{40}$/u.test(runtimeCommit ?? '') || (expectedCommit !== undefined && runtimeCommit !== expectedCommit) || env.DEPLOYMENT_ENVIRONMENT !== 'test'
       || env.SIT_STAGING_PILOT_ID !== 'heilbronn_wave0' || env.PAYMENT_TRANSPORT !== 'memory'
       || env.STRIPE_LIVEMODE !== 'false' || env.TECHNICAL_SANDBOX_ENABLED !== '0'
       || env.TECHNICAL_SANDBOX_KILL_SWITCH !== '1' || labels['com.shareittoo.sit.green'] !== 'true'
       || !/^[a-z0-9][a-z0-9-]{7,47}$/u.test(promotionRunId ?? '')
       || !labels['com.shareittoo.sit.green.run_id']) fail('sandbox106_runtime_binding');
+  const sandboxPrivateEnv=['TECHNICAL_SANDBOX_ACCOUNT_ID','TECHNICAL_SANDBOX_USER_IDS','TECHNICAL_SANDBOX_AUTHORIZATION_ID',
+    'TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT','TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT',
+    'TECHNICAL_SANDBOX_SECRET_KEY_FILE','TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE','STRIPE_SECRET_KEY','STRIPE_WEBHOOK_SECRET',
+    'STRIPE_CONNECT_WEBHOOK_SECRET'];
+  if (sandboxPrivateEnv.some(key => (env[key] ?? '') !== '') || !Array.isArray(container.Mounts)
+      || container.Mounts.some(mount => /technical-sandbox/iu.test(String(mount.Destination ?? mount.DestinationPath ?? '')))) fail('sandbox106_runtime_not_disabled');
   const image = jsonOne(await command(['image','inspect',container.Image]), 'sandbox106_runtime_image');
   const digest = (image.RepoDigests ?? []).map(value => /^ghcr\.io\/shareittoo\/shareittoo-api@(?<digest>sha256:[a-f0-9]{64})$/u.exec(value)?.groups?.digest).filter(Boolean);
   if (image.Id !== container.Image || !digest.length || new Set(digest).size !== 1
-      || image.Config?.Labels?.['org.opencontainers.image.revision'] !== expectedCommit) fail('sandbox106_runtime_image_binding');
-  return Object.freeze({ canonicalContainerId: id, commit: expectedCommit, imageDigest: digest[0], promotionRunId,
-    observedAt: new Date().toISOString() });
+      || image.Config?.Labels?.['org.opencontainers.image.revision'] !== runtimeCommit) fail('sandbox106_runtime_image_binding');
+  return Object.freeze({ canonicalContainerId: id, commit: runtimeCommit, imageDigest: digest[0], promotionRunId,
+    secretMountsRemoved: true, technicalSandboxDisabled: true, paymentTransport: 'memory', observedAt: new Date().toISOString() });
 }
 
 export function buildTechnicalSandbox106Evidence({ promotionReceipt, promotionReceiptSha256, runtime,
@@ -121,7 +128,10 @@ export function buildTechnicalSandbox106Evidence({ promotionReceipt, promotionRe
       || promotionReceipt.visibilityBoundary !== 'captured_id_rename' || !sha(promotionReceipt.gatewayReadbackSha256)) fail('sandbox106_green_receipt_binding');
   exact(ownerAuthorization, ['id','issuedAt','expiresAt','scope','userIds'], 'sandbox106_owner_authorization_shape');
   exact(stripeReadback, ['authenticated','accountId','accountMode','livemode','readAt'], 'sandbox106_stripe_readback_shape');
-  exact(rollback, ['target','verifiedAt','mockPaymentTransport','technicalSandboxDisabled','secretMountsRemoved'], 'sandbox106_rollback_shape');
+  exact(rollback, ['target','canonicalContainerId','imageDigest','gatewayReadbackSha256','verifiedAt',
+    'mockPaymentTransport','technicalSandboxDisabled','secretMountsRemoved'], 'sandbox106_rollback_shape');
+  if(rollback.target!==runtime?.commit||rollback.canonicalContainerId!==runtime?.canonicalContainerId
+      ||rollback.imageDigest!==runtime?.imageDigest||!sha(rollback.gatewayReadbackSha256))fail('sandbox106_rollback_runtime_binding');
   if (!runtime || runtime.canonicalContainerId !== promotionReceipt.candidateId || runtime.commit !== promotionReceipt.runtimeCommit
   || !/^sha256:[a-f0-9]{64}$/u.test(runtime.imageDigest ?? '')
       || !/^[a-z0-9][a-z0-9-]{7,47}$/u.test(runtime.promotionRunId ?? '')

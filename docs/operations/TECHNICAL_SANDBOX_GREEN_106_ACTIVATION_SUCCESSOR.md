@@ -34,24 +34,44 @@ the session proof binds an exact synthetic principal and short expiry. Its beare
 token is never accepted in argv or written to output. The CLI checks protected
 credential mount metadata and authenticated capability readback before execution.
 
-Create the sanitized evidence file first, on the staging host with read-only
-Docker access. The four protected JSON inputs are supplied by their respective
-owner/provider/rollback evidence collection steps; the materializer makes no
-Stripe or network call. It reads the promotion receipt file timestamp directly
-for freshness, inspects the exact canonical Docker ID and immutable image
-RepoDigest, hashes the two protected secret files without printing their bytes,
-and atomically creates a new mode-0600 evidence file without overwriting one.
-The command emits the evidence file's raw SHA-256 for the activation CLI:
+On the staging host, first collect the three protected read-only inputs from
+the existing root:root mode-0600 authorization env and exact running Green
+container. This collector makes exactly two fixed Stripe GET reads (`/v1/account`
+and `/v1/balance`), with redirects disabled and bounded responses. It checks a
+restricted test key, binds the returned account ID to the authorization env,
+and requires `livemode=false`. These reads establish test-account/read access
+only; they do not establish payment processing or marketplace capability.
+Secrets are opened nofollow and are never printed. No Checkout, payment,
+booking, or other state-changing provider request is made.
 
 ```sh
-node backend/ops/materialize_technical_sandbox_106_evidence.mjs --promotion-receipt /private/green-promotion.json --promotion-receipt-sha256 PROMOTION_FILE_SHA256 --owner-authorization /private/owner-authorization.json --owner-authorization-sha256 OWNER_AUTHORIZATION_FILE_SHA256 --stripe-readback /private/stripe-test-readback.json --stripe-readback-sha256 STRIPE_READBACK_FILE_SHA256 --rollback-proof /private/rollback-proof.json --rollback-proof-sha256 ROLLBACK_PROOF_FILE_SHA256 --secret-key /run/secrets/technical-rk-test --webhook-secret /run/secrets/technical-webhook --output /private/technical-sandbox-evidence.json
+node backend/ops/collect_technical_sandbox_106_readonly_inputs.mjs --authorization-env /private/technical-sandbox-authorization.env --output-directory /private/activation-inputs
+```
+
+The collector atomically writes three new mode-0600 no-clobber JSON files:
+`technical-sandbox-owner-authorization.json`,
+`technical-sandbox-stripe-test-readback.json`, and
+`technical-sandbox-rollback-proof.json`. Stdout contains only their paths and
+raw hashes plus sanitized runtime/account identity. Use those exact paths and
+hashes in the materializer below. Then create the sanitized evidence file with
+read-only Docker access. The materializer makes no Stripe or network call. It
+reads the promotion receipt timestamp for freshness, re-inspects the exact
+canonical Docker ID and immutable image RepoDigest, hashes both protected
+secret files without printing their bytes, and atomically creates a new
+mode-0600 evidence file without overwriting one. It emits the evidence file's
+raw SHA-256 for the activation CLI:
+
+```sh
+node backend/ops/materialize_technical_sandbox_106_evidence.mjs --promotion-receipt /private/green-promotion.json --promotion-receipt-sha256 PROMOTION_FILE_SHA256 --owner-authorization /private/activation-inputs/technical-sandbox-owner-authorization.json --owner-authorization-sha256 OWNER_AUTHORIZATION_RAW_SHA256 --stripe-readback /private/activation-inputs/technical-sandbox-stripe-test-readback.json --stripe-readback-sha256 STRIPE_READBACK_RAW_SHA256 --rollback-proof /private/activation-inputs/technical-sandbox-rollback-proof.json --rollback-proof-sha256 ROLLBACK_RAW_SHA256 --secret-key /run/secrets/technical-rk-test --webhook-secret /run/secrets/technical-webhook --output /private/technical-sandbox-evidence.json
 ```
 
 The owner authorization input has exactly `id`, `issuedAt`, `expiresAt`,
 `scope`, and two `synthetic_sandbox_user_*` `userIds`. The Stripe readback has
 exactly `authenticated`, `accountId`, `accountMode`, `livemode`, and `readAt`;
-the rollback proof has exactly `target`, `verifiedAt`, `mockPaymentTransport`,
-`technicalSandboxDisabled`, and `secretMountsRemoved`. Their raw file hashes
+the rollback proof has exactly `target`, `canonicalContainerId`, `imageDigest`,
+`gatewayReadbackSha256`, `verifiedAt`, `mockPaymentTransport`,
+`technicalSandboxDisabled`, and `secretMountsRemoved`. The gateway hash binds
+the sanitized disabled/memory readback to the exact container and image. Raw file hashes
 bind the original protected inputs. The materializer rejects stale/future
 timestamps, mode/identity drift, live-mode evidence, mismatched runtime and
 promotion receipt, or secret content whose SHA does not match the observed

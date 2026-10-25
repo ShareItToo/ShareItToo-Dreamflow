@@ -18,7 +18,8 @@ function inputs(){return {promotionReceipt:receipt(),promotionReceiptSha256:'5'.
  runtime:{canonicalContainerId:containerId,commit,imageDigest,promotionRunId:runId,observedAt:'2026-10-25T09:59:00.000Z'},ownerAuthorization:{id:'owner-auth-technical-sandbox-1',issuedAt:'2026-10-25T09:00:00.000Z',expiresAt:'2026-10-25T12:00:00.000Z',scope:'stripe-technical-sandbox-1eur-staging',userIds:['synthetic_sandbox_user_owner','synthetic_sandbox_user_renter']},ownerAuthorizationSha256:'6'.repeat(64),
  credentials:{secretKey:{kind:'restricted_test_key',path:'/private/test-key',sha256:'7'.repeat(64),mode:'0600',uid:100,gid:101,regular:true,symlink:false,outsideRepository:true,mountReadOnly:true},webhookSecret:{kind:'webhook_signing_secret',path:'/private/webhook',sha256:'8'.repeat(64),mode:'0600',uid:100,gid:101,regular:true,symlink:false,outsideRepository:true,mountReadOnly:true}},
  stripeReadback:{authenticated:true,accountId:'acct_synthetic1234',accountMode:'test',livemode:false,readAt:'2026-10-25T09:30:00.000Z'},stripeReadbackSha256:'9'.repeat(64),
- rollback:{target:commit,verifiedAt:'2026-10-25T09:40:00.000Z',mockPaymentTransport:true,technicalSandboxDisabled:true,secretMountsRemoved:true},rollbackSha256:'a'.repeat(64),now:()=>now,validateSecrets:()=>true};}
+ rollback:{target:commit,canonicalContainerId:containerId,imageDigest,gatewayReadbackSha256:'b'.repeat(64),
+  verifiedAt:'2026-10-25T09:40:00.000Z',mockPaymentTransport:true,technicalSandboxDisabled:true,secretMountsRemoved:true},rollbackSha256:'a'.repeat(64),now:()=>now,validateSecrets:()=>true};}
 
 test('materializes only exact fresh Green, runtime, test-only Stripe, authorization, secret and rollback evidence',()=>{
   const evidence=buildTechnicalSandbox106Evidence(inputs());
@@ -26,14 +27,15 @@ test('materializes only exact fresh Green, runtime, test-only Stripe, authorizat
   assert.equal(evidence.promotion.runId,runId);assert.equal(evidence.runtime.imageDigest,imageDigest);
   assert.equal(evidence.stripeReadback.livemode,false);assert.equal(evidence.boundaries.amountMinor,100);assert.equal(binding.imageDigest,imageDigest);
   for(const mutate of [v=>v.promotionReceipt.candidateId='f'.repeat(64),v=>v.stripeReadback.livemode=true,
-    v=>v.rollback.secretMountsRemoved=false,v=>v.promotionReceiptSha256='z'.repeat(64),v=>v.promotedAt='2026-10-23T00:00:00.000Z']){
+    v=>v.rollback.secretMountsRemoved=false,v=>v.rollback.imageDigest=`sha256:${'0'.repeat(64)}`,
+    v=>v.promotionReceiptSha256='z'.repeat(64),v=>v.promotedAt='2026-10-23T00:00:00.000Z']){
     const v=inputs();mutate(v);assert.throws(()=>buildTechnicalSandbox106Evidence(v));
   }
 });
 
 test('direct Docker readback binds exact canonical ID, disabled runtime, Green label and immutable digest',async()=>{
   const imageId=`sha256:${'d'.repeat(64)}`;const container={Id:containerId,Name:'/shareittoo-staging-api',Image:imageId,State:{Running:true,Paused:false},
-    Config:{Env:[`APP_COMMIT=${commit}`,'DEPLOYMENT_ENVIRONMENT=test','SIT_STAGING_PILOT_ID=heilbronn_wave0','PAYMENT_TRANSPORT=memory','STRIPE_LIVEMODE=false','TECHNICAL_SANDBOX_ENABLED=0','TECHNICAL_SANDBOX_KILL_SWITCH=1'],
+    Mounts:[],Config:{Env:[`APP_COMMIT=${commit}`,'DEPLOYMENT_ENVIRONMENT=test','SIT_STAGING_PILOT_ID=heilbronn_wave0','PAYMENT_TRANSPORT=memory','STRIPE_LIVEMODE=false','TECHNICAL_SANDBOX_ENABLED=0','TECHNICAL_SANDBOX_KILL_SWITCH=1'],
       Labels:{'com.shareittoo.sit.green':'true','com.shareittoo.sit.green.run_id':'green-run-001','com.shareittoo.green.106_106.promotion':runId}}};
   const result=await readCanonicalGreenRuntime({expectedCommit:commit,command:async args=>args[0]==='ps'?`${containerId}\n`:args[0]==='inspect'?JSON.stringify([container]):JSON.stringify([{Id:imageId,
     RepoDigests:[`ghcr.io/shareittoo/shareittoo-api@${imageDigest}`],Config:{Labels:{'org.opencontainers.image.revision':commit}}}])});

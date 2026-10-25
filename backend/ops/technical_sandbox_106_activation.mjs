@@ -62,9 +62,12 @@ export function validateTechnicalSandbox106Evidence(evidence, { now = Date.now()
   if (evidence.stripeReadback.authenticated !== true || !/^acct_[A-Za-z0-9]+$/u.test(evidence.stripeReadback.accountId)
       || evidence.stripeReadback.accountMode !== 'test'
       || evidence.stripeReadback.livemode !== false || !sha(evidence.stripeReadback.receiptSha256)) fail('sandbox106_stripe_live_mode');
-  exactKeys(evidence.rollback, ['target','receiptSha256','verifiedAt','mockPaymentTransport','technicalSandboxDisabled','secretMountsRemoved'], 'sandbox106_rollback_shape');
+  exactKeys(evidence.rollback, ['target','canonicalContainerId','imageDigest','gatewayReadbackSha256','receiptSha256','verifiedAt',
+    'mockPaymentTransport','technicalSandboxDisabled','secretMountsRemoved'], 'sandbox106_rollback_shape');
   fresh(evidence.rollback.verifiedAt, now, 60 * 60 * 1000, 'sandbox106_rollback_stale');
-  if (evidence.rollback.target !== evidence.runtime.commit || !sha(evidence.rollback.receiptSha256)
+  if (evidence.rollback.target !== evidence.runtime.commit || evidence.rollback.canonicalContainerId !== evidence.runtime.canonicalContainerId
+      || evidence.rollback.imageDigest !== evidence.runtime.imageDigest || !sha(evidence.rollback.gatewayReadbackSha256)
+      || !sha(evidence.rollback.receiptSha256)
       || evidence.rollback.mockPaymentTransport !== true || evidence.rollback.technicalSandboxDisabled !== true
       || evidence.rollback.secretMountsRemoved !== true) fail('sandbox106_rollback_invalid');
   exactKeys(evidence.boundaries, ['paymentTransport','stripeLivemode','marketplaceStripe','bookingLedger','connect','payout','notifications','amountMinor','currency','maxRunsPerUser24h','syntheticOnly'], 'sandbox106_boundary_shape');

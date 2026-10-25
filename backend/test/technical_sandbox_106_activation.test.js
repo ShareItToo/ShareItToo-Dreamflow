@@ -13,7 +13,9 @@ export function evidence() {
     ownerAuthorization: { id: 'owner-auth-technical-sandbox-1', issuedAt: '2026-10-25T09:00:00.000Z', expiresAt: '2026-10-25T12:00:00.000Z', receiptSha256: 'd'.repeat(64), scope: 'stripe-technical-sandbox-1eur-staging', userIds: ['synthetic_sandbox_user_owner','synthetic_sandbox_user_renter'] },
     credentials: { secretKey: { kind: 'restricted_test_key', path: '/run/secrets/technical-rk-test', sha256: 'e'.repeat(64), mode: '0600', uid: 100, gid: 101, regular: true, symlink: false, outsideRepository: true, mountReadOnly: true }, webhookSecret: { kind: 'webhook_signing_secret', path: '/run/secrets/technical-webhook', sha256: 'f'.repeat(64), mode: '0600', uid: 100, gid: 101, regular: true, symlink: false, outsideRepository: true, mountReadOnly: true } },
     stripeReadback: { authenticated: true, accountId: 'acct_synthetic1234', accountMode: 'test', livemode: false, readAt: '2026-10-25T09:30:00.000Z', receiptSha256: '1'.repeat(64) },
-    rollback: { target: 'b'.repeat(40), receiptSha256: '2'.repeat(64), verifiedAt: '2026-10-25T09:40:00.000Z', mockPaymentTransport: true, technicalSandboxDisabled: true, secretMountsRemoved: true },
+    rollback: { target: 'b'.repeat(40), canonicalContainerId: '9'.repeat(64), imageDigest: `sha256:${'c'.repeat(64)}`,
+      gatewayReadbackSha256: '3'.repeat(64), receiptSha256: '2'.repeat(64), verifiedAt: '2026-10-25T09:40:00.000Z',
+      mockPaymentTransport: true, technicalSandboxDisabled: true, secretMountsRemoved: true },
     boundaries: { paymentTransport: 'memory', stripeLivemode: false, marketplaceStripe: false, bookingLedger: false, connect: false, payout: false, notifications: false, amountMinor: 100, currency: 'EUR', maxRunsPerUser24h: 3, syntheticOnly: true },
     validatedAt: '2026-10-25T09:45:00.000Z',
   };
