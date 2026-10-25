@@ -46,6 +46,21 @@ test('explicit promote CLI consumes every protected input, reopens the exact rec
     assert.equal(s.source.State.Running, false);
   } finally { mock.mock.restore(); s.close(); }
 });
+test('recover CLI without injected dependencies reaches the real Git commit guard and emits a fixed recovery label', async () => {
+  const s = await protectedPromotion(), before = fs.readdirSync(s.directory).sort();
+  const args = [...s.args]; args[args.indexOf('--mode') + 1] = 'recover';
+  args.push('--candidate-id', 'b'.repeat(64), '--recovery-ops-commit', '0'.repeat(40),
+    '--promotion-lock-sha256', 'c'.repeat(64), '--promotion-failure-sha256', 'd'.repeat(64));
+  let out = '', err = '';
+  try {
+    // This exercises the production call shape used by the executable entrypoint.
+    const code = await runCli(args, { stdout: { write: text => { out += text; } }, stderr: { write: text => { err += text; } } });
+    assert.equal(code, 1); assert.equal(out, '');
+    assert.equal(err, 'green_106_106_recover_failed\n');
+    assert.deepEqual(fs.readdirSync(s.directory).sort(), before);
+    assert.equal(s.calls.length, 0);
+  } finally { s.close(); }
+});
 test('promotion arguments never imply promotion when explicit mode is absent; no Docker or evidence writes', async () => {
   const s = await protectedPromotion(), before = fs.readdirSync(s.directory).sort();
   try {

@@ -85,10 +85,10 @@ export async function main(args, dependencies) {
           && options.rehearsal === path.join(directory.directory, `${inputs.config.runId}.rehearsal.json`), 'promotion_rehearsal_path');
         readProtectedJson(options.rehearsal, options['rehearsal-sha256']);
         const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-        const currentOpsCommit = dependencies.currentOpsCommit
+        const currentOpsCommit = dependencies?.currentOpsCommit
           ?? execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
         requireBinding(currentOpsCommit === options['recovery-ops-commit'], 'recovery_ops_commit');
-        if (!dependencies.currentOpsCommit) {
+        if (!dependencies?.currentOpsCommit) {
           execFileSync('git', ['merge-base', '--is-ancestor', inputs.binding.opsCommit, currentOpsCommit], { cwd: root });
           execFileSync('git', ['diff', '--quiet', 'HEAD', '--', 'backend/ops/green_staging_106_106_promotion.mjs',
             'backend/ops/green_staging_106_106_binding.mjs', 'backend/ops/green_staging_106_106_preflight.mjs',
@@ -98,7 +98,7 @@ export async function main(args, dependencies) {
         const result = await runSuccessorPromotion(inputs, { execute: true, rehearsalSha256: options['rehearsal-sha256'],
           evidenceDirectory: directory.directory, recoverCandidateId: options['candidate-id'], recoveryOpsCommit: currentOpsCommit,
           promotionLockSha256: options['promotion-lock-sha256'], promotionFailureSha256: options['promotion-failure-sha256'],
-          confirmation: options.confirm }, { ...dependencies, currentOpsCommit });
+          confirmation: options.confirm }, { ...(dependencies ?? {}), currentOpsCommit });
         if (Object.hasOwn(promotionFailures, result?.status)) throw new PromotionCliFailure(result);
         requireBinding(result?.status === 'promoted_owner_smoke_pending', 'promotion_status');
         return result;
@@ -125,7 +125,7 @@ export async function runCli(args, { dependencies, stdout = process.stdout, stde
     // rejected rows, environment values or Docker stderr.
     const labels = { arguments: 'green_106_106_arguments_failed', plan: 'green_106_106_plan_failed',
       collect: 'green_106_106_collect_failed', preflight: 'green_106_106_preflight_failed', rehearse: 'green_106_106_rehearse_failed',
-      promote: 'green_106_106_promote_failed' };
+      promote: 'green_106_106_promote_failed', recover: 'green_106_106_recover_failed' };
     stderr.write(`${labels[mode]}\n`); return 1;
   }
 }
