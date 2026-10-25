@@ -11,6 +11,8 @@ const expectedInventories = [
     imageVersion: '20260927.320.1', arch: 'x64', node: '22.23.3', chrome: '154.0.8037.57' },
   { inventoryCommit: 'e3fe113a581eb9a44ca43f479b69f9c93f36df34', imageOS: 'ubuntu24',
     imageVersion: '20261004.327.1', arch: 'x64', node: '22.23.3', chrome: '154.0.8037.97' },
+  { inventoryCommit: '7e7dc1bcc0ef464e5e315a2b4c33609590c6cffe', imageOS: 'ubuntu24',
+    imageVersion: '20261012.334.1', arch: 'x64', node: '22.23.3', chrome: '155.0.8059.39' },
 ];
 const digests = () => ({ runnerSha256: '1'.repeat(64), chromeSha256: '2'.repeat(64), nodeSha256: '3'.repeat(64) });
 const inventory = () => ({ platform: 'linux', arch: 'x64', imageOS: 'ubuntu24',
@@ -81,10 +83,11 @@ test('each complete official tuple binds browser observation and sanitized proof
   }
 });
 test('mixed official tuples and nearby runtime drift fail closed and clean up before launch', async () => {
-  for (const [index, expected] of expectedInventories.entries()) {
-    for (const change of [{ chrome: expectedInventories[1 - index].chrome },
-      { imageVersion: expectedInventories[1 - index].imageVersion },
-      { imageVersion: '20261004.327.2' }, { node: '22.23.4' }, { chrome: '154.0.8037.98' },
+  for (const expected of expectedInventories) {
+    const mixed = expectedInventories.filter(other => other !== expected)
+      .flatMap(other => [{ chrome: other.chrome }, { imageVersion: other.imageVersion }]);
+    for (const change of [...mixed,
+      { imageVersion: expected.imageVersion + '0' }, { node: '22.23.4' }, { chrome: expected.chrome + '0' },
       { imageOS: 'ubuntu22' }, { arch: 'arm64' }]) {
       const supplied = { ...inventory(), ...expected, ...change };
       assert.throws(() => validateInventory(supplied, sha), /probe_inventory/);
@@ -96,9 +99,10 @@ test('mixed official tuples and nearby runtime drift fail closed and clean up be
     }
   }
 });
-test('browser from the other accepted tuple or a nearby version cannot satisfy the selected inventory', async () => {
-  for (const [index, expected] of expectedInventories.entries()) {
-    for (const chrome of [expectedInventories[1 - index].chrome, '154.0.8037.98']) {
+test('browser from any other accepted tuple or a nearby version cannot satisfy the selected inventory', async () => {
+  for (const expected of expectedInventories) {
+    const otherVersions = expectedInventories.filter(other => other !== expected).map(other => other.chrome);
+    for (const chrome of [...otherVersions, expected.chrome + '0']) {
       const f = fake({ inventory: async () => ({ ...inventory(), ...expected }),
         observe: async () => ({ ...observation(), browser: `Chrome/${chrome}` }) });
       const result = await runProbe({ expectedHead: sha, adapter: f.adapter });

@@ -465,8 +465,10 @@ const expectedRunnerInventories = [
     imageOS: 'ubuntu24', imageVersion: '20260927.320.1', arch: 'x64', node: '22.23.3', chrome: '154.0.8037.57' },
   { inventoryCommit: 'e3fe113a581eb9a44ca43f479b69f9c93f36df34',
     imageOS: 'ubuntu24', imageVersion: '20261004.327.1', arch: 'x64', node: '22.23.3', chrome: '154.0.8037.97' },
+  { inventoryCommit: '7e7dc1bcc0ef464e5e315a2b4c33609590c6cffe',
+    imageOS: 'ubuntu24', imageVersion: '20261012.334.1', arch: 'x64', node: '22.23.3', chrome: '155.0.8059.39' },
 ];
-test('both exact official fleet inventories pass and bind the observed tuple and byte hashes', async () => {
+test('each exact official fleet inventory passes and binds the observed tuple and byte hashes', async () => {
   assert.deepEqual(inventoryContracts, expectedRunnerInventories);
   assert.equal(Object.isFrozen(inventoryContracts), true);
   for (const [index, expected] of expectedRunnerInventories.entries()) {
@@ -481,27 +483,35 @@ test('both exact official fleet inventories pass and bind the observed tuple and
     const result = await runProbe({ expectedHead: head, adapter });
     assert.equal(result.status, 'pass');
     assert.deepEqual(result.inventory, { ...expected, digests: inventory.digests });
-    // A CDP/browser version from the other reviewed image cannot prove this tuple.
-    adapter.observe = async () => ({ ...await observe(), browser: `Chrome/${expectedRunnerInventories[1 - index].chrome}` });
-    assert.equal((await runProbe({ expectedHead: head, adapter })).code, 'probe_version');
+    // A CDP/browser version from any other reviewed image cannot prove this tuple.
+    const otherVersions = expectedRunnerInventories.filter(other => other !== expected).map(other => other.chrome);
+    for (const chrome of [...otherVersions, expected.chrome + '0']) {
+      adapter.observe = async () => ({ ...await observe(), browser: `Chrome/${chrome}` });
+      const rejected = await runProbe({ expectedHead: head, adapter });
+      assert.equal(rejected.code, 'probe_version');
+      assert.equal(Object.hasOwn(rejected, 'inventory'), false);
+    }
   }
 });
 test('runner inventory rejects mixed or independently drifted fields before build and still cleans up', async () => {
-  for (const changed of [
-    { imageVersion: '20260927.320.1' }, { chrome: '154.0.8037.57' },
-    { imageVersion: '20260927.320.2', chrome: '154.0.8037.57' },
-    { imageVersion: '20261004.327.2' }, { chrome: '154.0.8037.98' },
-    { node: '22.23.4' }, { imageOS: 'ubuntu22' }, { arch: 'arm64' },
-  ]) {
-    const adapter = fake(); const inventory = adapter.inventory;
-    adapter.inventory = async () => ({ ...await inventory(), ...changed });
-    let built = false; let cleaned = false;
-    adapter.build = async () => { built = true; return artifact(); };
-    const cleanup = adapter.cleanup;
-    adapter.cleanup = async () => { cleaned = true; return cleanup(); };
-    const result = await runProbe({ expectedHead: head, adapter });
-    assert.equal(result.status, 'fail'); assert.equal(result.code, 'probe_inventory');
-    assert.equal(built, false); assert.equal(cleaned, true);
+  for (const expected of expectedRunnerInventories) {
+    const mixed = expectedRunnerInventories.filter(other => other !== expected)
+      .flatMap(other => [{ imageVersion: other.imageVersion }, { chrome: other.chrome }]);
+    for (const changed of [
+      ...mixed, { imageVersion: expected.imageVersion + '0' }, { chrome: expected.chrome + '0' },
+      { node: '22.23.4' }, { imageOS: 'ubuntu22' }, { arch: 'arm64' },
+    ]) {
+      const adapter = fake(); const inventory = adapter.inventory;
+      adapter.inventory = async () => ({ ...await inventory(), ...expected, ...changed });
+      let built = false; let cleaned = false;
+      adapter.build = async () => { built = true; return artifact(); };
+      const cleanup = adapter.cleanup;
+      adapter.cleanup = async () => { cleaned = true; return cleanup(); };
+      const result = await runProbe({ expectedHead: head, adapter });
+      assert.equal(result.status, 'fail'); assert.equal(result.code, 'probe_inventory');
+      assert.equal(built, false); assert.equal(cleaned, true);
+      assert.equal(Object.hasOwn(result, 'inventory'), false);
+    }
   }
 });
 

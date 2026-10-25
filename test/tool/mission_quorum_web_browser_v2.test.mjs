@@ -121,6 +121,8 @@ const expectedRunnerInventories = [
     imageOS: 'ubuntu24', imageVersion: '20260927.320.1', arch: 'x64', node: '22.23.3', chrome: '154.0.8037.57' },
   { inventoryCommit: 'e3fe113a581eb9a44ca43f479b69f9c93f36df34',
     imageOS: 'ubuntu24', imageVersion: '20261004.327.1', arch: 'x64', node: '22.23.3', chrome: '154.0.8037.97' },
+  { inventoryCommit: '7e7dc1bcc0ef464e5e315a2b4c33609590c6cffe',
+    imageOS: 'ubuntu24', imageVersion: '20261012.334.1', arch: 'x64', node: '22.23.3', chrome: '155.0.8059.39' },
 ];
 const contract = expectedRunnerInventories[1];
 const counts = () => Object.fromEntries(networkReasonKeys.map(k => [k, 0]));
@@ -163,7 +165,7 @@ test('success is exact scoped sanitized source/artifact evidence only after clea
   assert.doesNotMatch(JSON.stringify(r),/private|\/tmp\/|pid|portNumber|requestId|https?:/iu);
   assert.deepEqual(Object.keys(r).sort(),['artifact','boundaries','cleanup','evidenceClass','inventory','mode','proof','schemaVersion','sourceHead','status'].sort());
 });
-test('both exact official fleet tuples bind browser observation and emitted proof with cleanup',async()=>{
+test('each exact official fleet tuple binds browser observation and emitted proof with cleanup',async()=>{
   assert.deepEqual(inventoryContracts,expectedRunnerInventories);
   assert.equal(Object.isFrozen(inventoryContracts),true);
   for(const [index,expected]of expectedRunnerInventories.entries()){
@@ -180,17 +182,22 @@ test('both exact official fleet tuples bind browser observation and emitted proo
     const result=await runProbe({expectedHead:head,adapter});
     assert.equal(result.status,'pass');assert.equal(cleaned,1);
     assert.deepEqual(result.inventory,{...expected,digests:value.digests});
-    adapter.observe=async()=>({...await observe(),browser:`Chrome/${expectedRunnerInventories[1-index].chrome}`});
-    const rejected=await runProbe({expectedHead:head,adapter});
-    assert.equal(rejected.code,'probe_version');assert.equal(cleaned,2);
-    assert.equal(Object.hasOwn(rejected,'inventory'),false);
+    const otherVersions=expectedRunnerInventories.filter(other=>other!==expected).map(other=>other.chrome);
+    for(const chrome of [...otherVersions,expected.chrome+'0']){
+      adapter.observe=async()=>({...await observe(),browser:`Chrome/${chrome}`});
+      const previousCleanup=cleaned;
+      const rejected=await runProbe({expectedHead:head,adapter});
+      assert.equal(rejected.code,'probe_version');assert.equal(cleaned,previousCleanup+1);
+      assert.equal(Object.hasOwn(rejected,'inventory'),false);
+    }
   }
 });
 test('mixed tuples and independent runner drift fail before build and always clean up',async()=>{
   for(const expected of expectedRunnerInventories){
-    const other=expectedRunnerInventories.find(value=>value!==expected);
+    const mixed=expectedRunnerInventories.filter(other=>other!==expected)
+      .flatMap(other=>[{imageVersion:other.imageVersion},{chrome:other.chrome}]);
     for(const changed of [
-      {imageVersion:other.imageVersion},{chrome:other.chrome},
+      ...mixed,
       {imageVersion:expected.imageVersion+'0'},{chrome:expected.chrome+'0'},
       {node:'22.23.4'},{imageOS:'ubuntu22'},{arch:'arm64'},
       {platform:'darwin'},{head:'c'.repeat(40)},{clean:false},
