@@ -16,7 +16,8 @@ const FIXED_READS = Object.freeze([
   `https://identitytoolkit.googleapis.com/admin/v2/projects/${PROJECT}/defaultSupportedIdpConfigs/facebook.com`,
 ]);
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
-// lgtm[js/insufficient-password-hash] Firebase Web API keys are public client configuration, not authenticators. The readiness schema requires an exact configuration integrity digest; raw config is kept only in the intended web configuration field.
+// Firebase Web API keys are public client configuration, not authenticators; the readiness schema requires its exact configuration-integrity SHA-256.
+// codeql[js/insufficient-password-hash]
 const publicConfigurationDigest = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const check = (value, code = 'facebook_web_collector_not_verified') => {
   if (!value) throw new Error(code);

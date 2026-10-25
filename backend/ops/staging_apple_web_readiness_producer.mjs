@@ -19,9 +19,11 @@ export const APPLE_WEB_SOURCE_CLOSURE = Object.freeze([
   'tool/staging_apple_web_readiness.mjs',
 ]);
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
-// lgtm[js/insufficient-password-hash] This digests public provider configuration and evidence JSON for integrity; the payload contains no password or authentication secret.
+// Public Apple/Firebase configuration fields and sanitized evidence are digested for deterministic integrity binding; this is not a password or authentication-secret store.
+// codeql[js/insufficient-password-hash]
 const digest = (value) => crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
-// lgtm[js/insufficient-password-hash] Apple Services IDs and Firebase OAuth client IDs are public configuration identifiers, not authentication secrets; schema fields require stable source-bound SHA-256 identifiers.
+// Apple Services IDs and Firebase OAuth client IDs are public, non-authenticating identifiers required by the source-bound evidence schema.
+// codeql[js/insufficient-password-hash]
 const publicServiceIdSha256 = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const check = (condition, code = 'apple_web_producer_denied') => { if (!condition) throw new Error(code); };
 const plain = (value) => value !== null && typeof value === 'object' && !Array.isArray(value)

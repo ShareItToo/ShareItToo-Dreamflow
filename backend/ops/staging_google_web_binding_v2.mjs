@@ -38,6 +38,8 @@ const imageIdPattern = /^sha256:[a-f0-9]{64}$/u;
 const check = (v) => { if (!v) throw new Error('google_web_binding_v2_denied'); };
 const plain = (v) => v !== null && Object.getPrototypeOf(v) === Object.prototype;
 const exact = (v, fields) => plain(v) && Object.keys(v).sort().join('|') === [...fields].sort().join('|');
+// This hashes source bytes and already-sanitized evidence for integrity; API-key identifiers are omitted from redundant read digests and are bound separately.
+// codeql[js/insufficient-password-hash]
 const hash = (v) => createHash('sha256').update(v).digest('hex');
 function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);

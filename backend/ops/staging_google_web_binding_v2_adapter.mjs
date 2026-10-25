@@ -8,11 +8,15 @@ const origin = 'https://staging.shareittoo.com'; const allowedHosts = new Set(['
 const fail = () => { throw new Error('google_web_binding_v2_reader_denied'); };
 const check = (v) => { if (!v) fail(); };
 const plain = (v) => v !== null && Object.getPrototypeOf(v) === Object.prototype;
+// This hashes identity/source metadata for deterministic integrity, not passwords or authentication secrets.
+// codeql[js/insufficient-password-hash]
 const hash = (v) => createHash('sha256').update(v).digest('hex');
 const digest = (v) => hash(JSON.stringify(canonical(v)));
-// lgtm[js/insufficient-password-hash] Firebase Web API keys are public client configuration, not authenticators. The existing reattestation schema requires exact byte-order configuration/key digests; raw key strings remain closure-local.
+// Firebase Web API keys are public client configuration, not authenticators; the existing reattestation schema requires exact config/key digests and raw key strings remain closure-local.
+// codeql[js/insufficient-password-hash]
 const publicFirebaseConfigDigest = (v) => createHash('sha256').update(typeof v === 'string' ? v : JSON.stringify(v)).digest('hex');
-// lgtm[js/insufficient-password-hash] API-key resource identifiers and inventory metadata are public, non-authenticating provider configuration; existing snapshot fields require a deterministic inventory integrity digest.
+// API-key resource identifiers and inventory metadata are public provider metadata, not authenticators; the existing snapshot schema requires this integrity digest.
+// codeql[js/insufficient-password-hash]
 const publicFirebaseMetadataDigest = (v) => createHash('sha256').update(JSON.stringify(canonical(v))).digest('hex');
 function canonical(v) { if (Array.isArray(v)) return v.map(canonical); if (plain(v)) return Object.fromEntries(Object.keys(v).sort().map((k) => [k, canonical(v[k])])); return v; }
 const b64 = (v) => Buffer.from(v).toString('base64url');
