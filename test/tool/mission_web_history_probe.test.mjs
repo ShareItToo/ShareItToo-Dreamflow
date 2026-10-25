@@ -558,8 +558,8 @@ const expectedRunnerInventories = [
     imageOS: 'ubuntu24', imageVersion: '20260927.320.1', arch: 'x64', node: '22.23.3', chrome: '154.0.8037.57' },
   { inventoryCommit: 'e3fe113a581eb9a44ca43f479b69f9c93f36df34',
     imageOS: 'ubuntu24', imageVersion: '20261004.327.1', arch: 'x64', node: '22.23.3', chrome: '154.0.8037.97' },
-  { inventoryCommit: '7e7dc1bcc0ef464e5e315a2b4c33609590c6cffe',
-    imageOS: 'ubuntu24', imageVersion: '20261012.334.1', arch: 'x64', node: '22.23.3', chrome: '155.0.8059.39' },
+  { inventoryCommit: 'bf62c713fd9c48247e2a4d3ce99a9f0554cd745e',
+    imageOS: 'ubuntu24', imageVersion: '20261023.334.3', arch: 'x64', node: '22.23.3', chrome: '155.0.8059.39' },
 ];
 test('each exact official fleet inventory passes and binds the observed tuple and byte hashes', async () => {
   assert.deepEqual(inventoryContracts, expectedRunnerInventories);
