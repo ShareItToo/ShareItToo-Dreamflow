@@ -69,6 +69,9 @@ const bindingKeys = [
 ];
 const hashPattern = /^[a-f0-9]{64}$/u;
 const sourcePattern = /^[a-f0-9]{40}$/u;
+export const appleWebReadinessKeys = Object.freeze(readinessKeys.slice());
+export const appleWebBackendKeys = Object.freeze(backendKeys.slice());
+export const appleWebDecisionKeys = Object.freeze(decisionKeys.slice());
 // Build/deployment freshness is intentionally narrower than the dormant 24h UI bound.
 const maximumAgeMs = 2 * 60 * 60 * 1000;
 const sha256 = (value) => crypto.createHash('sha256').update(value).digest('hex');
