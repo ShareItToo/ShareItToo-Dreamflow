@@ -6,6 +6,7 @@ import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { profile, validateArtifact } from '../../tool/staging_web_contract.mjs';
+import { syntheticListingAiWebEvidence } from './staging_listing_ai_web_readiness_fixture.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 // Import/reference the real CLI in the current-consumer matrix. Never substitute
@@ -16,7 +17,7 @@ const stages = ['release_host_capacity_begin', 'flutter pub get --enforce-lockfi
 const marker = 'SIT_SHELL_INJECTION_MARKER';
 const version = '1.0.0+2026092905';
 
-function fixture(t, suffix = 'ordinary', failure = '') {
+function fixture(t, suffix = 'ordinary', failure = '', listingAi = false) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sit-builder-shell-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const checkout = path.join(root, `source-${suffix}-fixture`);
@@ -66,8 +67,16 @@ else process.exit(99);
   const git = (...args) => execFileSync('git', ['-C', checkout, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   git('init'); git('add', '.'); git('-c', 'user.name=Synthetic', '-c', 'user.email=test@example.invalid', 'commit', '-m', 'fixture');
   const source = git('rev-parse', 'HEAD');
+  const evidenceArgs = [];
+  if (listingAi) {
+    const evidenceDirectory = path.join(root, 'listing-ai-evidence'); fs.mkdirSync(evidenceDirectory, { mode: 0o700 });
+    const file = path.join(evidenceDirectory, 'readiness.json');
+    const evidence = syntheticListingAiWebEvidence(source, version);
+    fs.writeFileSync(file, JSON.stringify(evidence.evidence), { mode: 0o600, flag: 'wx' });
+    evidenceArgs.push('--listing-ai-web-readiness', file, evidence.digest);
+  }
   const events = path.join(root, 'events.jsonl'); const trace = path.join(root, 'trace.tsv');
-  const result = spawnSync(process.execPath, [fileURLToPath(builder), checkout, source, output], {
+  const result = spawnSync(process.execPath, [fileURLToPath(builder), checkout, source, output, ...evidenceArgs], {
     encoding: 'utf8', timeout: 15000,
     env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, TMPDIR: temporary,
       P0A_WEB_SMOKE_PORT: '0',
@@ -96,8 +105,25 @@ else process.exit(99);
   }
   noInjectedFiles(root);
   assert.deepEqual(fs.readdirSync(temporary), [], 'private defines directory cleaned on success and failure');
-  return { checkout, output, temporary, result, observed, calls: calls.map(({ command }) => command), source };
+  return { checkout, output, temporary, result, observed, calls: calls.map(({ command }) => command), source, listingAi };
 }
+
+test('bounded listing-AI readiness CLI input sets only the reviewed assistant Web define', (t) => {
+  const f = fixture(t, 'listing-ai-readiness', '', true);
+  assert.equal(f.result.status, 0, f.result.stderr);
+  assert.deepEqual(f.calls, stages);
+  const definitions = f.observed.find(({ stage }) => stage === 'definitions').value;
+  assert.equal(definitions.SIT_BLUE_OCEAN_LISTING_ASSISTANT, 'true');
+  assert.equal(definitions.SIT_STAGE_A_NON_BINDING_PILOT, 'false');
+  assert.equal(definitions.SIT_STAGE_A_PILOT_ID, '');
+  const summary = JSON.parse(f.result.stdout.trim().split('\n').at(-1));
+  const manifest = validateArtifact(f.output, summary.manifestHash, f.source);
+  assert.equal(manifest.profile.SIT_BLUE_OCEAN_LISTING_ASSISTANT, 'true');
+  assert.equal(manifest.schemaVersion, 8);
+  assert.equal(manifest.listingAiWebProviderSchemaVersion, 1);
+  assert.equal(manifest.listingAiWebProfileVersion, 'staging-listing-ai-web-v1');
+  assert.equal(manifest.listingAiWebDecisionDigest.length, 64);
+});
 
 for (const [label, suffix] of [
   ['spaces', 'two words'], ['quotes', `single'and"double`],

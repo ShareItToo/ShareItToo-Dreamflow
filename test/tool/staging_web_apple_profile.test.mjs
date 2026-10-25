@@ -356,7 +356,7 @@ for(const [file,text] of Object.entries({'index.html':'<script src="flutter_boot
   assert.equal(manifest.builderDigest, sha256(Buffer.concat([
     'build_staging_web.mjs', 'staging_web_contract.mjs', 'staging_google_web_readiness.mjs',
     'staging_apple_web_readiness.mjs', 'staging_facebook_web_readiness.mjs',
-    'staging_password_enrollment_web_readiness.mjs',
+    'staging_password_enrollment_web_readiness.mjs', 'staging_listing_ai_web_readiness.mjs',
   ].map((name) => fs.readFileSync(path.join(repo, 'tool', name))))));
   for (const [key, value] of Object.entries(e.value.configuration)) {
     if (key !== 'authorizedOrigin') assert.ok(!`${result.stdout}${result.stderr}`.includes(value));
