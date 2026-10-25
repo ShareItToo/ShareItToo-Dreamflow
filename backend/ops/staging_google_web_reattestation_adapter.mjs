@@ -94,14 +94,14 @@ export function createGoogleWebRuntimeReader(binding, execute = execFileSync) {
 }
 
 export function createGoogleWebReattestationReaders({ binding, serviceCredential, userCredentialBytes,
-  fetchImpl = globalThis.fetch, execute = execFileSync, now = Date.now } = {}) {
+  fetchImpl = globalThis.fetch, execute = execFileSync, runtimeReader, now = Date.now } = {}) {
   check(typeof now === 'function' && typeof userCredentialBytes === 'string');
   binding = structuredClone(binding);
   // Validate the selected account/token before any remote read. Current identity
   // is then independently checked through userinfo, not accepted from this file.
   parseFirebaseUserCredential(userCredentialBytes, binding.firebaseAccountEmailSha256, now);
   const guardedFetch = createGoogleWebReadOnlyFetch(binding, fetchImpl);
-  const runtimeReader = createGoogleWebRuntimeReader(binding, execute);
+  runtimeReader ??= createGoogleWebRuntimeReader(binding, execute);
   const live = createStagingGoogleWebLiveAdapter({ binding: { ...binding, origin: 'https://staging.shareittoo.com',
     displayName: 'ShareItToo Staging Web' }, serviceCredential, fetchImpl: guardedFetch, runtimeReader, now });
   async function userGet(url, authorization) {
