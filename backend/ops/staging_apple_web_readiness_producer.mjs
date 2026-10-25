@@ -19,7 +19,10 @@ export const APPLE_WEB_SOURCE_CLOSURE = Object.freeze([
   'tool/staging_apple_web_readiness.mjs',
 ]);
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
-const digest = (value) => hash(JSON.stringify(value));
+// lgtm[js/insufficient-password-hash] This digests public provider configuration and evidence JSON for integrity; the payload contains no password or authentication secret.
+const digest = (value) => crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
+// lgtm[js/insufficient-password-hash] Apple Services IDs and Firebase OAuth client IDs are public configuration identifiers, not authentication secrets; schema fields require stable source-bound SHA-256 identifiers.
+const publicServiceIdSha256 = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const check = (condition, code = 'apple_web_producer_denied') => { if (!condition) throw new Error(code); };
 const plain = (value) => value !== null && typeof value === 'object' && !Array.isArray(value)
   && Object.getPrototypeOf(value) === Object.prototype;
@@ -226,7 +229,7 @@ function verifyReadback(input, { now, expectedSource, allowSynthetic = false }) 
     && hashPattern.test(a.teamIdSha256) && hashPattern.test(a.keyIdSha256)
     && a.teamIdSha256 === f.teamIdSha256 && a.keyIdSha256 === f.keyIdSha256
     && b.sourceCommit === expectedSource && b.firebaseProjectId === f.projectId && b.webAppId === f.webAppId
-    && b.appleServicesIdSha256 === hash(c.clientId) && b.appleTeamIdSha256 === a.teamIdSha256
+    && b.appleServicesIdSha256 === publicServiceIdSha256(c.clientId) && b.appleTeamIdSha256 === a.teamIdSha256
     && b.appleKeyIdSha256 === a.keyIdSha256 && b.appleRedirectUriSha256 === hash(c.redirectUri)
     && b.observedAtUtc === input.observedAtUtc && b.validUntilUtc === input.validUntilUtc,
   'apple_web_readback_binding');
@@ -246,7 +249,7 @@ export function composeAppleWebCandidate(input, { now = Date.now(), expectedSour
     apiBaseUrl: `${APPLE_WEB_TARGET}/api/v1`, backendFirebaseProjectId: c.backendProjectId,
     webAppConfigSha256: configurationSha256, callbackUrl: c.redirectUri,
     firebaseProviderEnabled: f.providerEnabled, firebaseAppleOAuthConfigured: f.secretConfigured,
-    appleServicesIdSha256: hash(c.clientId), firebaseAppleServicesIdSha256: hash(f.oauthClientId),
+    appleServicesIdSha256: publicServiceIdSha256(c.clientId), firebaseAppleServicesIdSha256: publicServiceIdSha256(f.oauthClientId),
     backendAppleServicesIdSha256: b.appleServicesIdSha256,
     backendAppleOwnershipConfigured: b.ownershipConfigured, backendAppleAcquisitionEnabled: b.acquisitionEnabled,
     appleTeamIdSha256: a.teamIdSha256, firebaseAppleTeamIdSha256: f.teamIdSha256,

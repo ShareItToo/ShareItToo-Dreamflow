@@ -4,12 +4,29 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { createStagingListingAiCapabilityCollectorV2, writeStagingListingAiCapabilityCandidate,
   readStagingListingAiSessionToken, STAGING_LISTING_AI_CAPABILITY_V2_SOURCE_PATHS } from '../ops/staging_listing_ai_capability_collector_v2.mjs';
 import { runStagingListingAiCapabilityCliV2 } from '../ops/staging_listing_ai_capability_cli_v2.mjs';
 
 const sha = (value) => crypto.createHash('sha256').update(value).digest('hex');
+function readStable(file) {
+  const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_CLOEXEC);
+  try {
+    const before = fs.fstatSync(fd, { bigint: true });
+    assert.equal(before.isFile(), true);
+    const keys = ['dev', 'ino', 'mode', 'uid', 'gid', 'nlink', 'size', 'mtimeNs', 'ctimeNs'];
+    const namedBefore = fs.lstatSync(file, { bigint: true });
+    assert.deepEqual(keys.map((key) => namedBefore[key]), keys.map((key) => before[key]));
+    const bytes = fs.readFileSync(fd);
+    const after = fs.fstatSync(fd, { bigint: true });
+    const namedAfter = fs.lstatSync(file, { bigint: true });
+    assert.deepEqual(keys.map((key) => namedAfter[key]), keys.map((key) => after[key]));
+    return { bytes, stat: before };
+  } finally { fs.closeSync(fd); }
+}
+const sourceRepositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const sourceCommit = 'a'.repeat(40), runtimeCommit = 'b'.repeat(40), id = 'c'.repeat(64);
 const clientVersion = '1.0.0+2026092905';
 const imageId = `sha256:${'d'.repeat(64)}`;
@@ -145,11 +162,12 @@ test('candidate writer is owner-only no-clobber and preserves collisions', (t) =
   const bytes = Buffer.from('{"ok":true}\n');
   const out = writeStagingListingAiCapabilityCandidate({ directory, fileName: 'staging-listing-ai-capability-test.json', bytes });
   assert.equal(out.mode, '0600');
-  assert.equal(fs.statSync(out.file).mode & 0o777, 0o600);
+  const output = readStable(out.file);
+  assert.equal(Number(output.stat.mode & 0o777n), 0o600);
   assert.throws(() => writeStagingListingAiCapabilityCandidate({ directory,
     fileName: 'staging-listing-ai-capability-test.json', bytes: Buffer.from('replacement') }),
   /staging_listing_ai_capability_candidate_write_failed/u);
-  assert.deepEqual(fs.readFileSync(out.file), bytes);
+  assert.deepEqual(output.bytes, bytes);
 });
 
 test('candidate writer publishes atomically and removes only its own failed output', (t) => {
@@ -304,7 +322,7 @@ test('clean source closure succeeds in an isolated committed Git repository and 
   const repositoryRoot = path.join(base, 'repo'); fs.mkdirSync(repositoryRoot, { mode: 0o700 });
   for (const relative of STAGING_LISTING_AI_CAPABILITY_V2_SOURCE_PATHS) {
     const destination = path.join(repositoryRoot, relative); fs.mkdirSync(path.dirname(destination), { recursive: true, mode: 0o700 });
-    fs.copyFileSync(path.resolve(relative), destination);
+    fs.copyFileSync(path.resolve(sourceRepositoryRoot, relative), destination);
   }
   const git = (argv) => execFileSync('git', ['-C', repositoryRoot, ...argv], { stdio: 'ignore' });
   git(['init', '--quiet']); git(['config', 'user.email', 'fixture@example.invalid']); git(['config', 'user.name', 'Fixture']);

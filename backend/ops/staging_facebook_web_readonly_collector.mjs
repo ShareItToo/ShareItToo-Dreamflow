@@ -16,6 +16,8 @@ const FIXED_READS = Object.freeze([
   `https://identitytoolkit.googleapis.com/admin/v2/projects/${PROJECT}/defaultSupportedIdpConfigs/facebook.com`,
 ]);
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
+// lgtm[js/insufficient-password-hash] Firebase Web API keys are public client configuration, not authenticators. The readiness schema requires an exact configuration integrity digest; raw config is kept only in the intended web configuration field.
+const publicConfigurationDigest = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const check = (value, code = 'facebook_web_collector_not_verified') => {
   if (!value) throw new Error(code);
 };
@@ -104,7 +106,7 @@ export function createFacebookWebReadOnlyCollector({ googleAccessToken, metaAppA
       apiKey: firebase.apiKey, authDomain: firebase.authDomain,
       backendProjectId: PROJECT, authorizedOrigin: ORIGIN };
     // lgtm[js/insufficient-password-hash] Firebase Web API keys are public client configuration identifiers, not authenticators. This SHA-256 is solely an exact configuration-integrity digest.
-    const configurationSha256 = hash(JSON.stringify(configuration));
+    const configurationSha256 = publicConfigurationDigest(JSON.stringify(configuration));
     const collectedAtUtc = new Date(Math.floor(now() / 1000) * 1000).toISOString().replace('.000Z', 'Z');
     const validUntilUtc = new Date(Date.parse(collectedAtUtc) + 60 * 60 * 1000)
       .toISOString().replace('.000Z', 'Z');

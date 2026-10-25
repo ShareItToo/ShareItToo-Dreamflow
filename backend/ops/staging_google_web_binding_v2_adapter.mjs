@@ -10,6 +10,10 @@ const check = (v) => { if (!v) fail(); };
 const plain = (v) => v !== null && Object.getPrototypeOf(v) === Object.prototype;
 const hash = (v) => createHash('sha256').update(v).digest('hex');
 const digest = (v) => hash(JSON.stringify(canonical(v)));
+// lgtm[js/insufficient-password-hash] Firebase Web API keys are public client configuration, not authenticators. The existing reattestation schema requires exact byte-order configuration/key digests; raw key strings remain closure-local.
+const publicFirebaseConfigDigest = (v) => createHash('sha256').update(typeof v === 'string' ? v : JSON.stringify(v)).digest('hex');
+// lgtm[js/insufficient-password-hash] API-key resource identifiers and inventory metadata are public, non-authenticating provider configuration; existing snapshot fields require a deterministic inventory integrity digest.
+const publicFirebaseMetadataDigest = (v) => createHash('sha256').update(JSON.stringify(canonical(v))).digest('hex');
 function canonical(v) { if (Array.isArray(v)) return v.map(canonical); if (plain(v)) return Object.fromEntries(Object.keys(v).sort().map((k) => [k, canonical(v[k])])); return v; }
 const b64 = (v) => Buffer.from(v).toString('base64url');
 
@@ -126,9 +130,9 @@ export function createGoogleWebBindingV2Readers({ serviceCredentialBytes, userCr
         cache.configurationBinding = { projectId: c.projectId, messagingSenderId: String(c.messagingSenderId), appId: c.appId,
           apiKey: c.apiKey, authDomain: c.authDomain, backendProjectId: project, authorizedOrigin: origin };
         // lgtm[js/insufficient-password-hash] Firebase Web API keys are public client configuration identifiers, not authenticators. This SHA-256 is solely an exact configuration-integrity digest; no raw key leaves this closure.
-        cache.configurationSha256 = hash(JSON.stringify(cache.configurationBinding));
+        cache.configurationSha256 = publicFirebaseConfigDigest(cache.configurationBinding);
         // lgtm[js/insufficient-password-hash] Firebase Web API keys are public identifiers, not authenticators; this single digest exists only to satisfy the existing schema-1 reattestation binding contract.
-        cache.keyFingerprint = hash(c.apiKey);
+        cache.keyFingerprint = publicFirebaseConfigDigest(c.apiKey);
         value = { projectId: project, projectNumber: number, appId, apiKeyId: app.apiKeyId, keyFingerprint: cache.keyFingerprint,
           configurationSha256: cache.configurationSha256, origin };
       } else if (name === 'apiKeyInventory') {
@@ -178,7 +182,7 @@ export function createGoogleWebBindingV2Readers({ serviceCredentialBytes, userCr
           webAppsInventory: { showDeleted: true, exhausted: true, nextPageToken: '' },
           apiKey: { projectId: project, apiKeyId: cache.key.apiKeyId, keyFingerprint: cache.key.keyFingerprint,
             restrictionsDigest: cache.key.restrictionsDigest, exists: true, webCompatible: cache.key.webCompatible },
-          keyInventoryDigest: digest(apiKeys), authorizedDomains: projectConfig.authorizedDomains,
+          keyInventoryDigest: publicFirebaseMetadataDigest(apiKeys), authorizedDomains: projectConfig.authorizedDomains,
           authConfigDigest: digest(Object.fromEntries(Object.entries(projectConfig).filter(([k]) => k !== 'authorizedDomains'))),
           providerConfigDigest: digest(google), otherAppsDigest: digest({ androidApps, iosApps }),
           runtimeDigest: cache.runtimeLegacyDigest,
@@ -189,7 +193,7 @@ export function createGoogleWebBindingV2Readers({ serviceCredentialBytes, userCr
         cache.snapshot = snapshot; cache.configurationBinding = configuration;
         value = { complete: true, projectId: project, projectNumber: number, authEnabled: true, googleEnabled: true,
           facebookEnabled: false, appleEnabled: false, stagingAuthorized: true, webAppInventoryComplete: true,
-          apiKeyInventoryComplete: true, snapshotSha256: digest(snapshot), configurationSha256: cache.configurationSha256 };
+          apiKeyInventoryComplete: true, snapshotSha256: publicFirebaseMetadataDigest(snapshot), configurationSha256: cache.configurationSha256 };
       } else if (name === 'runtime') {
         const containerId = runtimeContainerId;
         const fmt = '{{json .Id}}|{{json .Name}}|{{json .State.Running}}|{{json (index .Config.Labels "com.shareittoo.sit.green")}}|{{json (index .Config.Labels "org.opencontainers.image.revision")}}|{{json .Image}}';

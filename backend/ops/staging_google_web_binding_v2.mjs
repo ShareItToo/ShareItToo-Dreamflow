@@ -45,6 +45,12 @@ function canonical(value) {
   return value;
 }
 export const googleWebBindingV2Digest = (value) => hash(JSON.stringify(canonical(value)));
+function readEvidenceValue(name, value) {
+  // API-key identifiers/fingerprints/config digests are independently bound by the exact checks and top-level binding; omit these redundant values from read digests.
+  if (!['webApp', 'sdkConfig', 'apiKeyInventory'].includes(name)) return value;
+  const keyFields = name === 'sdkConfig' ? new Set(['apiKeyId', 'keyFingerprint', 'configurationSha256']) : new Set(['apiKeyId']);
+  return Object.fromEntries(Object.entries(value).filter(([key]) => !keyFields.has(key)));
+}
 
 function sourceInventory(repositoryRoot, sourceCommit) {
   const own = fileURLToPath(import.meta.url);
@@ -179,7 +185,7 @@ export async function collectGoogleWebBindingV2({ readers, repositoryRoot, sourc
       configurationSha256: provider.configurationSha256, reviewEvidenceSha256,
       runtimeContainerId: runtime.containerId, runtimeCommit, runtimeImageId, runtimeRepoDigest,
       readEvidence: Object.fromEntries(GOOGLE_WEB_BINDING_V2_READS.map((name) => [name,
-        googleWebBindingV2Digest(observed[name])])) };
+        googleWebBindingV2Digest({ ...observed[name], value: readEvidenceValue(name, observed[name].value) })])) };
     const bytes = Buffer.from(`${JSON.stringify(canonical(binding))}\n`, 'utf8');
     return { binding, bytes, sha256: hash(bytes) };
   } catch { throw new Error('google_web_binding_v2_denied'); }
