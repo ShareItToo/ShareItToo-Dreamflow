@@ -33,7 +33,7 @@ function makeArtifact(t, googleWeb = bound()) {
     fs.writeFileSync(path.join(directory, 'web', file), bytes);
   }
   const hash = sealArtifact({ directory, source, version, builderDigest: 'b'.repeat(64), flutterVersion: { frameworkVersion: 'synthetic' }, googleWeb });
-  return { directory, hash };
+  return { directory, hash, googleWeb };
 }
 function rewriteManifest(directory, mutate) {
   const file = path.join(directory, 'staging-web-manifest.json');
@@ -132,14 +132,14 @@ test('config rejects extras, mismatched identities/origin, malformed values and 
 test('generated v6 artifact binds journal, decision and config; default-off v1 remains valid', (t) => {
   const f = makeArtifact(t); const m = validateArtifact(f.directory, f.hash, source);
   assert.equal(m.schemaVersion, 6); assert.equal(m.profileContractVersion, GOOGLE_WEB_PROFILE_V2);
-  assert.equal(m.googleWebConfigDigest, bound().configDigest);
-  assert.equal(m.googleWebReadinessDigest, bound().readinessDigest);
-  assert.equal(m.googleWebDecisionDigest, bound().decisionDigest);
-  assert.equal(m.googleWebEvidenceDigest, bound().evidenceDigest);
+  assert.equal(m.googleWebConfigDigest, f.googleWeb.configDigest);
+  assert.equal(m.googleWebReadinessDigest, f.googleWeb.readinessDigest);
+  assert.equal(m.googleWebDecisionDigest, f.googleWeb.decisionDigest);
+  assert.equal(m.googleWebEvidenceDigest, f.googleWeb.evidenceDigest);
   const release = JSON.parse(fs.readFileSync(path.join(f.directory, 'web/staging-release.json')));
   assert.equal(release.profileDigest, sha256(JSON.stringify(m.profile)));
   assert.notEqual(release.profileDigest, sha256(JSON.stringify(profile(source, version))));
-  assert.equal(fs.readFileSync(path.join(f.directory, 'web/staging_bootstrap.js'), 'utf8'), stagingBootstrapFor(source, version, bound()));
+  assert.equal(fs.readFileSync(path.join(f.directory, 'web/staging_bootstrap.js'), 'utf8'), stagingBootstrapFor(source, version, f.googleWeb));
   const old = makeArtifact(t, null); const legacy = validateArtifact(old.directory, old.hash, source);
   assert.equal(legacy.schemaVersion, 1); assert.equal(legacy.profile.SIT_SOCIAL_GOOGLE_ENABLED, 'false');
   assert.equal(Object.hasOwn(legacy, 'googleWebConfigDigest'), false);
@@ -244,7 +244,8 @@ test('activation evidence rejects pending, stale, replayed and independently mis
   const file = path.join(root, 'readiness.json');
   fs.writeFileSync(file, valid.bytes, { mode: 0o600 });
   assert.deepEqual(readGoogleWebReadiness(file, valid.evidenceDigest,
-    { now: valid.now, expectedSource: source }), bound());
+    { now: valid.now, expectedSource: source }), bindGoogleWebReadiness(valid.envelope, valid.evidenceDigest,
+    { now: valid.now, expectedSource: source }));
   const pending = {
     schemaVersion: 1,
     kind: valid.envelope.kind,
