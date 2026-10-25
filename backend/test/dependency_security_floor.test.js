@@ -65,13 +65,13 @@ test('backend image and mail dependencies retain the reviewed advisory floors', 
     },
     {
       packageName: 'nodemailer',
-      minimum: '9.1.1',
-      advisory: 'GHSA-8m3c-c648-2xjj',
+      minimum: '10.1.4',
+      advisory: 'GHSA-8c8m-p3m8-cjg8 / GHSA-m943-m63m-w62w / GHSA-85x2-q946-cp5h',
     },
     {
       packageName: 'multer',
-      minimum: '2.3.0',
-      advisory: 'GHSA-wc9g-mqfw-jrwm / GHSA-qfvm-cv95-jqjf / GHSA-535w-7cp7-47q4',
+      minimum: '2.5.0',
+      advisory: 'GHSA-q7qp-rjg7-q26m',
     },
   ];
 
@@ -91,6 +91,24 @@ test('backend image and mail dependencies retain the reviewed advisory floors', 
         atLeast(parseVersion(version, requirement.packageName), parseVersion(requirement.minimum, requirement.packageName)),
         `${requirement.packageName}@${version} regresses ${requirement.advisory}`,
       );
+    }
+  }
+});
+
+test('HTTP parser and IP limiter retain patched transitive lock and installed resolutions', async () => {
+  const lockfile = await readFile(lockfileUrl, 'utf8');
+  const require = createRequire(import.meta.url);
+  for (const [parent, packageName, minimum, advisory] of [
+    ['express', 'body-parser', '2.4.0', 'GHSA-27r3-jxmh-p828'],
+    ['express-rate-limit', 'ip-address', '10.7.4', 'GHSA-rxp7-6hxx-x8q5'],
+  ]) {
+    const versions = lockfileVersions(lockfile, packageName);
+    assert.ok(versions.length >= 2, `${packageName} package and snapshot records must be present`);
+    const parentRequire = createRequire(require.resolve(parent));
+    versions.push(parentRequire(`${packageName}/package.json`).version);
+    for (const version of versions) {
+      assert.ok(atLeast(parseVersion(version, packageName), parseVersion(minimum, packageName)),
+        `${packageName}@${version} regresses ${advisory}`);
     }
   }
 });
