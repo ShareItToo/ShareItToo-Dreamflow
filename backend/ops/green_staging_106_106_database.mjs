@@ -45,3 +45,35 @@ export function assertSuccessorStartup(before, after, options = {}) {
     && equal(before.data.newTables, []) && equal(after.data.newTables, []));
   return assertStartupHeartbeat(before, after, { ...options, code: 'green_106_106_startup_drift' });
 }
+
+// Recovery may be delayed after the source is sealed. Permit only successful,
+// alert-free watchdog runs between its bound rehearsal snapshot and the fresh
+// pre-start snapshot; all application/schema/readiness facts stay byte-exact.
+export function assertRecoveryBaseline(before, current, now = Date.now()) {
+  requireState(before?.schemaVersion === 2 && current?.schemaVersion === 2
+    && before?.data?.schema === 106 && current?.data?.schema === 106
+    && equal(before.data.newTables, []) && equal(current.data.newTables, []));
+  const { watchdog: prior, ...priorFacts } = before;
+  const { watchdog: observed, ...observedFacts } = current;
+  requireState(equal(priorFacts, observedFacts));
+  validateWatchdog(prior); validateWatchdog(observed);
+  const time = key => Date.parse(observed[key]), priorTime = key => Date.parse(prior[key]);
+  const attempts = observed.attempt_count - prior.attempt_count;
+  const successes = observed.success_count - prior.success_count;
+  requireState(prior.singleton === observed.singleton && prior.worker_version === observed.worker_version
+    && prior.attempt_count === prior.success_count && observed.attempt_count === observed.success_count
+    && prior.last_error_code === null && observed.last_error_code === null
+    && prior.last_failed_at === null && observed.last_failed_at === null
+    && prior.last_alert_count === 0 && observed.last_alert_count === 0
+    && observed.last_inspected_count === prior.last_inspected_count
+    && attempts >= 0 && attempts === successes
+    && ['last_started_at', 'last_succeeded_at', 'updated_at'].every(k => time(k) >= priorTime(k))
+    && time('last_started_at') <= time('last_succeeded_at') && time('last_succeeded_at') <= time('updated_at')
+    && Number.isFinite(now) && time('updated_at') <= now
+    && (attempts === 0
+      ? ['last_started_at', 'last_succeeded_at', 'updated_at'].every(k => observed[k] === prior[k])
+      : time('last_started_at') > Math.max(priorTime('last_started_at'), priorTime('last_succeeded_at'), priorTime('updated_at'))
+        && time('last_succeeded_at') > priorTime('last_succeeded_at')
+        && observed.last_started_at === observed.last_succeeded_at && observed.last_succeeded_at === observed.updated_at));
+  return true;
+}

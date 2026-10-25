@@ -92,6 +92,7 @@ export async function main(args, dependencies) {
           execFileSync('git', ['merge-base', '--is-ancestor', inputs.binding.opsCommit, currentOpsCommit], { cwd: root });
           execFileSync('git', ['diff', '--quiet', 'HEAD', '--', 'backend/ops/green_staging_106_106_promotion.mjs',
             'backend/ops/green_staging_106_106_binding.mjs', 'backend/ops/green_staging_106_106_preflight.mjs',
+            'backend/ops/green_staging_106_106_database.mjs',
             'tool/validate_green_staging_106_106_runtime.mjs'], { cwd: root });
         }
         const result = await runSuccessorPromotion(inputs, { execute: true, rehearsalSha256: options['rehearsal-sha256'],

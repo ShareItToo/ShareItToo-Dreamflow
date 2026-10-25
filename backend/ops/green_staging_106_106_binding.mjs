@@ -39,6 +39,7 @@ export function validateSuccessorSource(binding, { root = repositoryRoot, git = 
   requireBinding(binding.sourceInventory && equal(Object.keys(binding.sourceInventory).sort(), paths), 'source_inventory');
   const recoveryCode = new Set(['backend/ops/green_staging_106_106_promotion.mjs',
     'backend/ops/green_staging_106_106_binding.mjs', 'backend/ops/green_staging_106_106_preflight.mjs',
+    'backend/ops/green_staging_106_106_database.mjs',
     'tool/validate_green_staging_106_106_runtime.mjs']);
   for (const relative of paths) {
     const expected = binding.sourceInventory[relative];

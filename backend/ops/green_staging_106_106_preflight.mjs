@@ -8,6 +8,7 @@ import { requireBinding as require, validateSuccessorSource } from './green_stag
 import { validateSuccessorImage, validateSuccessorPublication } from './green_staging_106_106_contract.mjs';
 import { readCandidateArchive } from './green_staging_106_106_image.mjs';
 import { decodeSnapshot, snapshotSql } from './green_staging_106_106_database.mjs';
+import { assertRecoveryBaseline } from './green_staging_106_106_database.mjs';
 import { strictSupplementalGroups } from './green_staging_106_106_resources.mjs';
 
 const hash = v => typeof v === 'string' && /^[a-f0-9]{64}$/u.test(v);
@@ -213,7 +214,9 @@ export async function executionPreflight({ binding, publicationBytes, target, co
     const schema = String(await command({ args, input: physicalSchemaSql })).trim();
     require(hash(schema) && schema === manifest.physicalSchemaSha256, 'physical_schema');
     require(String(await command({ args, input: constraintsSql })).trim() === '0', 'physical_constraints');
-    require(equal(decodeSnapshot(await command({ args, input: snapshotSql })), target.database), 'preflight_database');
+    const database = decodeSnapshot(await command({ args, input: snapshotSql }));
+    if (recoveryCandidateId) assertRecoveryBaseline(target.database, database, now());
+    else require(equal(database, target.database), 'preflight_database');
     held.recheck(); await inspectState(); held.recheck();
     require(String(await command({ args, input: physicalSchemaSql })).trim() === schema, 'physical_schema');
     require(String(await command({ args, input: constraintsSql })).trim() === '0', 'physical_constraints');

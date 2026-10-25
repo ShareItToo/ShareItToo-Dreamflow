@@ -73,7 +73,8 @@ export async function promotionFixture(directory, policies) {
     } else if (e.phase === 'promotion_start') {
       f.calls.push(e); const r = f.records[a[1]]; r.State.Running = true;
       for (const n of Object.values(r.NetworkSettings.Networks)) f.records[n.NetworkID].Containers[r.Id] = { Name: r.Name.slice(1) };
-      const w = f.states.get(f.dbSource.Id)[2][0]; w.last_started_at = w.last_succeeded_at = w.updated_at = '2020-01-01T00:00:01.000Z'; w.attempt_count++; w.success_count++;
+      const w = f.states.get(f.dbSource.Id)[2][0], at = new Date(Date.parse(w.updated_at) + 1000).toISOString();
+      w.last_started_at = w.last_succeeded_at = w.updated_at = at; w.attempt_count++; w.success_count++;
       result = r.Id;
     } else if (e.phase === 'promotion_attach') {
       f.calls.push(e); const n = f.records[a[2]], r = f.records[a[3]];

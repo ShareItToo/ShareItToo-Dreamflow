@@ -6,7 +6,7 @@ import { assertArtifactFamily, exclusiveArtifact, openArtifact, verifyArtifact, 
 import { requireBinding as require } from './green_staging_106_106_binding.mjs';
 import { executionPreflight, bindExecutionMaterials, physicalSchemaSql, constraintsSql, writersSql } from './green_staging_106_106_preflight.mjs';
 import { rehearsalCommand, auxiliarySql, readinessScript } from './green_staging_106_106_rehearsal.mjs';
-import { decodeSnapshot, snapshotSql, assertSuccessorStartup } from './green_staging_106_106_database.mjs';
+import { decodeSnapshot, snapshotSql, assertSuccessorStartup, assertRecoveryBaseline } from './green_staging_106_106_database.mjs';
 import { strictSupplementalGroups, dockerObject, supportedCanonicalRestartPolicy, assertSuccessorContainerSpec, canonicalPersistence } from './green_staging_106_106_resources.mjs';
 import { buildReleaseMetadata } from '../src/release.js';
 
@@ -133,7 +133,7 @@ export async function runSuccessorPromotion(inputs, options = {}, dependencies =
   const one = async (kind, id) => dockerObject(await command({ phase: 'promotion_inspect', args: kind === 'container' ? ['inspect', id] : [kind, 'inspect', id] }));
   const source = inputs.target.containers[0], db = inputs.binding.scope.database;
   const temporaryName = temporaryPromotionName(inputs); let candidateName = temporaryName, renameReconciled = false;
-  let originalRecord, persistence, persistenceRollbackVerified = null;
+  let originalRecord, persistence, persistenceRollbackVerified = null, recoveryStartBaseline, latestRecoveryBaseline;
   const inventory = async () => {
     const actual = String(await command({ phase: 'promotion_inventory', args: ['ps', '-aq', '--no-trunc', '--filter', 'label=com.shareittoo.sit.green=true'] })).trim().split(/\s+/u).filter(Boolean).sort();
     const expected = [...inputs.target.containers.map(c => c.id), ...(hash(candidateId) ? [candidateId] : [])].sort();
@@ -226,9 +226,14 @@ export async function runSuccessorPromotion(inputs, options = {}, dependencies =
     try { require(bound.bytes.subarray(0, 5).toString() === 'PGDMP', 'promotion_backup'); } finally { bound.bytes.fill(0); }
     const baseline = async () => {
       await sourceCas(); await databaseCas(); held.recheck(); await membership(false); await inventory();
-      require(await sql(writersSql) === '0' && equal(await snapshot(), receipt.source)
+      const observed = await snapshot();
+      if (recovering) {
+        assertRecoveryBaseline(latestRecoveryBaseline ?? receipt.source, observed, now()); latestRecoveryBaseline = observed;
+      }
+      require(await sql(writersSql) === '0' && (recovering || equal(observed, receipt.source))
         && await auxiliary() === receipt.auxiliarySha256 && await sql(physicalSchemaSql) === receipt.physicalSchemaSha256
         && await sql(constraintsSql) === '0', 'promotion_baseline');
+      return observed;
     };
     await baseline();
     const lookup = async (name = temporaryName) => String(await command({ phase: 'promotion_lookup', args: ['ps', '--all', '--no-trunc', '--filter', `name=^/${name}$`, '--format', '{{.ID}}'] })).trim();
@@ -258,6 +263,7 @@ export async function runSuccessorPromotion(inputs, options = {}, dependencies =
     spec.networks[provider.name] = provider.id;
     await command({ phase: 'promotion_attach', args: ['network', 'connect', provider.id, candidateId] });
     await candidate(); await membership(false); require(await lookup(source.name) === '', 'promotion_collision');
+    if (recovering) recoveryStartBaseline = await baseline();
     stage = 'start';
     await command({ phase: 'promotion_start', args: ['start', candidateId] });
     require((await candidate()).State.Running === true, 'promotion_started'); await membership(true);
@@ -270,7 +276,7 @@ export async function runSuccessorPromotion(inputs, options = {}, dependencies =
       if (!ready && attempt < 29) await (dependencies.delay ?? (ms => new Promise(r => setTimeout(r, ms))))(1000);
     }
     require(ready, 'promotion_readiness');
-    const after = await snapshot(); assertSuccessorStartup(receipt.source, after);
+    const after = await snapshot(); assertSuccessorStartup(recovering ? recoveryStartBaseline : receipt.source, after, { now: now() });
     require(await auxiliary() === receipt.auxiliarySha256 && await sql(physicalSchemaSql) === receipt.physicalSchemaSha256
       && await sql(constraintsSql) === '0', 'promotion_schema');
     await sourceCas(); held.recheck(); await candidate(); await membership(true);

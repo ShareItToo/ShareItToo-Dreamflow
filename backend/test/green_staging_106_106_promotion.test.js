@@ -10,6 +10,7 @@ import { digest, objectDigest } from '../ops/green_staging_98_106_contract.mjs';
 import { constraintsSql } from '../ops/green_staging_106_106_preflight.mjs';
 import { runCli } from '../../tool/validate_green_staging_106_106_runtime.mjs';
 import { validateSuccessorSource } from '../ops/green_staging_106_106_binding.mjs';
+import { assertRecoveryBaseline } from '../ops/green_staging_106_106_database.mjs';
 
 const scoped = async (fn, policies) => {
   const directory = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'sit-promotion-')); fs.chmodSync(directory, 0o700);
@@ -81,6 +82,9 @@ test('one-shot recovery resumes only the captured stopped create-stage candidate
   const lockBytes = fs.readFileSync(path.join(f.options.evidenceDirectory, 'synthetic-run.promotion-lock.json'));
   const failureBytes = fs.readFileSync(path.join(f.options.evidenceDirectory, 'synthetic-run.promotion-failure.json'));
   const promotionLockSha256 = digest(lockBytes), promotionFailureSha256 = digest(failureBytes);
+  const progressed = f.states.get(f.dbSource.Id)[2][0], advancedTime = new Date(Date.parse(f.receipt.source.watchdog.updated_at) + 3000).toISOString();
+  progressed.last_started_at = progressed.last_succeeded_at = progressed.updated_at = advancedTime;
+  progressed.attempt_count += 3; progressed.success_count += 3;
   f.calls.length = 0;
   f.dependencies.command = command;
   f.dependencies.now = () => Date.now() + 3600001;
@@ -123,7 +127,7 @@ test('one-shot recovery resumes only the captured stopped create-stage candidate
     '--promotion-lock-sha256', promotionLockSha256, '--promotion-failure-sha256', promotionFailureSha256,
     '--confirm', recoveryOptions.confirmation];
   const exitCode = await runCli(argv, { dependencies: f.dependencies, stdout: { write: s => output.push(s) }, stderr: { write: s => errors.push(s) } });
-  assert.equal(exitCode, 0, errors.join(''));
+  assert.equal(exitCode, 0, `${errors.join('')}${output.join('')}`);
   const result = JSON.parse(output.join(''));
   assert.equal(result.status, 'promoted_owner_smoke_pending', JSON.stringify(result)); assert.equal(result.candidateId, id);
   assert.equal(f.calls.filter(e => e.phase === 'promotion_create').length, 0);
@@ -141,6 +145,44 @@ test('recovery rejects current-ops-commit mismatch before any command', async ()
   await assert.rejects(runSuccessorPromotion(f.data, options, f.dependencies), /promotion_recovery_ops_commit/u);
   assert.equal(f.calls.length, 0);
 }));
+test('recovery rejects non-watchdog drift and unhealthy or mismatched watchdog progress before attach/start', async t => {
+  for (const kind of ['business', 'readiness', 'ledger', 'failure_error', 'alert', 'count_delta', 'inspected', 'future']) {
+    await t.test(kind, () => scoped(async f => {
+      const command = f.dependencies.command;
+      f.dependencies.command = async e => {
+        const result = await command(e);
+        if (e.phase === 'promotion_create') f.records[result].HostConfig.Dns = ['8.8.8.8'];
+        return result;
+      };
+      const failed = await runSuccessorPromotion(f.data, f.options, f.dependencies), id = failed.candidateId;
+      assert.equal(failed.status, 'forward_recovery_required'); f.records[id].HostConfig.Dns = null; f.records[id].HostConfig.OomKillDisable = false;
+      const rows = f.states.get(f.dbSource.Id), w = rows[2][0], prior = f.receipt.source.watchdog;
+      if (kind === 'business') rows[1].users.count++;
+      if (kind === 'readiness') rows[3].paymentRecoveryNeedsReview.push({ source: 'dispute', id_hash: 'a'.repeat(64), cause: 'payout_failed', status: 'pending', time_class: 'derived' });
+      if (kind === 'ledger') rows[0][0].checksum = 'b'.repeat(64);
+      if (kind === 'failure_error') { w.attempt_count++; w.last_error_code = 'synthetic_failure'; w.last_failed_at = new Date(Date.parse(prior.updated_at) + 1000).toISOString(); w.updated_at = w.last_failed_at; }
+      if (kind === 'alert') { w.last_alert_count++; w.updated_at = new Date(Date.parse(prior.updated_at) + 1000).toISOString(); }
+      if (kind === 'count_delta') w.attempt_count++;
+      if (kind === 'inspected') w.last_inspected_count++;
+      if (kind === 'future') w.last_started_at = w.last_succeeded_at = w.updated_at = '2099-01-01T00:00:00.000Z';
+      const lockSha = digest(fs.readFileSync(path.join(f.options.evidenceDirectory, 'synthetic-run.promotion-lock.json')));
+      const failureSha = digest(fs.readFileSync(path.join(f.options.evidenceDirectory, 'synthetic-run.promotion-failure.json')));
+      const recoveryOpsCommit = 'a'.repeat(40); f.dependencies.currentOpsCommit = recoveryOpsCommit;
+      const sourceGit = f.dependencies.sourceOptions.git;
+      f.dependencies.sourceOptions = { git: (args, root) => {
+        if (args[0] === 'rev-parse' && args[1] === 'HEAD') return recoveryOpsCommit;
+        if (args[0] === 'show' && args[1].startsWith(`${recoveryOpsCommit}:`)) return fs.readFileSync(path.join(root, args[1].slice(41)));
+        return sourceGit(args, root);
+      } };
+      const options = { execute: true, evidenceDirectory: f.options.evidenceDirectory, rehearsalSha256: f.options.rehearsalSha256,
+        recoverCandidateId: id, recoveryOpsCommit, promotionLockSha256: lockSha, promotionFailureSha256: failureSha,
+        confirmation: `recover:${f.data.binding.runtimeCommit}:${f.data.binding.opsCommit}:${recoveryOpsCommit}:${f.options.rehearsalSha256}:${id}:${lockSha}:${failureSha}` };
+      const result = await runSuccessorPromotion(f.data, options, f.dependencies);
+      assert.equal(result.status, 'forward_recovery_required');
+      assert.ok(!f.calls.some(e => ['promotion_attach', 'promotion_start'].includes(e.phase)));
+    }, { promotionDockerDefaults: true }));
+  }
+});
 test('persistent source and database support repeat rehearsal/promotion without weakening disposable policies', async () => scoped(async f => {
   assert.equal(f.source.State.Running, false); assert.equal(f.source.HostConfig.RestartPolicy.Name, 'unless-stopped');
   const result = await runSuccessorPromotion(f.data, f.options, f.dependencies);
@@ -211,6 +253,20 @@ test('receipt rejects wrong commit/hash/snapshot/probes/freshness and payment-mo
   assert.throws(() => validatePromotionReceipt(future, f.data, Date.now(), { allowExpired: true }), /promotion_freshness/u);
   const source = structuredClone(f.source); source.Config.Env = source.Config.Env.map(e => e.startsWith('PAYMENT_TRANSPORT=') ? 'PAYMENT_TRANSPORT=stripe' : e);
   assert.throws(() => canonicalSuccessorSpec(source, f.c.image, f.data), /provider_modes/u);
+}));
+test('recovery baseline requires equal historical counters and equal timestamps for healthy progressed ticks', async () => scoped(async f => {
+  const prior = structuredClone(f.receipt.source), current = structuredClone(prior);
+  current.watchdog.attempt_count++; current.watchdog.success_count++;
+  current.watchdog.last_started_at = current.watchdog.last_succeeded_at = current.watchdog.updated_at =
+    new Date(Date.parse(prior.watchdog.updated_at) + 1000).toISOString();
+  assert.equal(assertRecoveryBaseline(prior, current, Date.parse(current.watchdog.updated_at) + 1000), true);
+  current.watchdog.last_succeeded_at = new Date(Date.parse(current.watchdog.updated_at) + 1000).toISOString();
+  assert.throws(() => assertRecoveryBaseline(prior, current, Date.parse(current.watchdog.updated_at) + 1000));
+  const historicalGap = structuredClone(prior); historicalGap.watchdog.attempt_count++;
+  const afterGap = structuredClone(historicalGap); afterGap.watchdog.attempt_count++; afterGap.watchdog.success_count++;
+  afterGap.watchdog.last_started_at = afterGap.watchdog.last_succeeded_at = afterGap.watchdog.updated_at =
+    new Date(Date.parse(prior.watchdog.updated_at) + 1000).toISOString();
+  assert.throws(() => assertRecoveryBaseline(historicalGap, afterGap, Date.parse(afterGap.watchdog.updated_at) + 1000));
 }));
 test('post-create/start/attach response loss isolates captured successor, retains lock and never claims rollback', async t => {
   for (const phase of ['promotion_create', 'promotion_start', 'promotion_attach']) await t.test(phase, () => scoped(async (f, directory) => {
