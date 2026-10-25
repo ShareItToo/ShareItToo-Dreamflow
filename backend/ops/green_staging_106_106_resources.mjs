@@ -1,7 +1,72 @@
 import { OwnedDocker, dockerObject, validId } from './green_staging_98_106_resources.mjs';
 import { assertContainerSpec } from './green_staging_98_106_execution.mjs';
 import { equal, networkMembers } from './green_staging_98_106_contract.mjs';
+import { containerFingerprint } from './green_staging_98_106_promotion.mjs';
 import { requireBinding as require } from './green_staging_106_106_binding.mjs';
+
+// Unlike always, unless-stopped preserves an explicit stop across daemon reboot.
+// Disposable rehearsal resources retain no; only the accepted canonical pair
+// receives persistence, after readiness and visibility have been verified.
+export function supportedCanonicalRestartPolicy(policy) {
+  return ['no', 'unless-stopped'].includes(policy?.Name)
+    && equal(Object.keys(policy).sort(), ['MaximumRetryCount', 'Name']) && policy.MaximumRetryCount === 0;
+}
+export function assertSuccessorContainerSpec(record, spec) {
+  require(equal(record.HostConfig?.RestartPolicy, { Name: spec.restartPolicy ?? 'no', MaximumRetryCount: 0 }), 'canonical_restart_policy');
+  // Keep the historical/disposable validator's no-only contract unchanged.
+  assertContainerSpec({ ...record, HostConfig: { ...record.HostConfig,
+    RestartPolicy: { Name: 'no', MaximumRetryCount: 0 } } }, spec);
+}
+export function canonicalPersistence(records, command) {
+  require(Array.isArray(records) && records.length === 2 && new Set(records.map(r => r.Id)).size === 2, 'persistence_pair');
+  const entries = records.map(record => {
+    require(validId(record.Id) && /^\/[a-zA-Z0-9][a-zA-Z0-9_.-]+$/u.test(record.Name)
+      && supportedCanonicalRestartPolicy(record.HostConfig?.RestartPolicy)
+      && record.State?.Running === true && record.State.Paused === false, 'persistence_source');
+    return { before: structuredClone(record), attempted: false };
+  });
+  const inspect = async entry => {
+    const record = dockerObject(await command({ phase: 'persistence_inspect', args: ['inspect', entry.before.Id] }));
+    const normalized = { ...record, HostConfig: { ...record.HostConfig, RestartPolicy: entry.before.HostConfig.RestartPolicy } };
+    require(record.Id === entry.before.Id && record.Name === entry.before.Name && record.Image === entry.before.Image
+      && record.State?.Running === true && record.State.Paused === false
+      && supportedCanonicalRestartPolicy(record.HostConfig?.RestartPolicy)
+      && containerFingerprint(normalized) === containerFingerprint(entry.before)
+      && equal(record.NetworkSettings, entry.before.NetworkSettings), 'persistence_cas');
+    return record.HostConfig.RestartPolicy.Name;
+  };
+  let applied = false;
+  return {
+    async apply() {
+      require(!applied, 'persistence_replay'); applied = true;
+      // Validate the complete pair before the first mutation.
+      for (const entry of entries) require(await inspect(entry) === entry.before.HostConfig.RestartPolicy.Name, 'persistence_drift');
+      for (const entry of entries) {
+        require(await inspect(entry) === entry.before.HostConfig.RestartPolicy.Name, 'persistence_drift');
+        if (entry.before.HostConfig.RestartPolicy.Name === 'unless-stopped') continue;
+        entry.attempted = true;
+        await command({ phase: 'persistence_update', args: ['update', '--restart', 'unless-stopped', entry.before.Id] });
+        require(await inspect(entry) === 'unless-stopped', 'persistence_readback');
+      }
+      for (const entry of entries) require(await inspect(entry) === 'unless-stopped', 'persistence_readback');
+    },
+    async rollback() {
+      let verified = true;
+      for (const entry of [...entries].reverse()) if (entry.attempted) try {
+        const policy = await inspect(entry);
+        if (policy !== entry.before.HostConfig.RestartPolicy.Name) {
+          try { await command({ phase: 'persistence_rollback', args: ['update', '--restart', entry.before.HostConfig.RestartPolicy.Name, entry.before.Id] }); }
+          catch { /* No mutation replay; exact readback alone verifies rollback. */ }
+        }
+        require(await inspect(entry) === entry.before.HostConfig.RestartPolicy.Name, 'persistence_rollback');
+      } catch { verified = false; }
+      for (const entry of entries) try {
+        require(await inspect(entry) === entry.before.HostConfig.RestartPolicy.Name, 'persistence_rollback');
+      } catch { verified = false; }
+      return verified;
+    },
+  };
+}
 
 // Reuse the reviewed exact-ID transitions and cleanup mechanics unchanged.
 // Only successor naming/labels/create and exact active membership are adapted.

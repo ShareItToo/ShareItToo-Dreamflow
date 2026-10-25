@@ -34,6 +34,7 @@ test('isolated lifecycle seals by exact ID, verifies backup/restore106/startup/p
   assert.deepEqual(groupAdds(f.calls.find(c => c.phase === 'create_materials')), ['65532']);
   assert.deepEqual(groupAdds(f.calls.find(c => c.phase === 'create_database')), []);
   assert.deepEqual(groupAdds(f.calls.find(c => c.phase === 'create_candidate')), []);
+  for (const call of f.calls.filter(c => c.args[0] === 'create')) assert.equal(call.args[call.args.indexOf('--restart') + 1], 'no');
 }));
 test('candidate receives exactly the supplemental gid required by its mounted material', async () => scoped(async f => {
   const [mfa, firebase] = f.config.materials;

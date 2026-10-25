@@ -9,9 +9,9 @@ import { canonicalMounts } from '../ops/green_staging_98_106_promotion.mjs';
 import { objectDigest } from '../ops/green_staging_98_106_contract.mjs';
 import { constraintsSql } from '../ops/green_staging_106_106_preflight.mjs';
 
-const scoped = async fn => {
+const scoped = async (fn, policies) => {
   const directory = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'sit-promotion-')); fs.chmodSync(directory, 0o700);
-  try { await fn(await promotionFixture(directory), directory); } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  try { await fn(await promotionFixture(directory, policies), directory); } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 };
 test('promotion defaults to a read-only plan with no dependencies', async () => {
   assert.equal((await runSuccessorPromotion({}, {}, { command: () => assert.fail() })).status, 'read_only_promotion_plan');
@@ -24,7 +24,7 @@ test('exact rehearsed schema106 successor preserves canonical resources and stop
   assert.deepEqual(canonicalMounts(r.Mounts), canonicalMounts(f.source.Mounts)); assert.deepEqual(r.HostConfig.GroupAdd, f.source.HostConfig.GroupAdd);
   assert.equal(result.intentionalProviderCalls, 0);
   assert.equal(f.source.State.Running, false);
-  for (const name of ['promotion-lock.json', 'canonical-started.json', 'promotion.json', 'pgdump', 'rehearsal.json']) {
+  for (const name of ['promotion-lock.json', 'canonical-started.json', 'promotion.json', 'pgdump', 'rehearsal.json', 'persistence-intent.json']) {
     assert.ok(fs.existsSync(path.join(directory, `synthetic-run.${name}`)));
   }
   assert.ok(!f.calls.some(e => e.args[0] === 'rm' || e.args.includes('--volumes')));
@@ -36,9 +36,73 @@ test('exact rehearsed schema106 successor preserves canonical resources and stop
   const gateway = await f.dependencies.publicReadback();
   assert.equal(result.gatewayVersionSha256, objectDigest(gateway.version));
   assert.equal(result.gatewayReadbackSha256, objectDigest(gateway));
+  assert.equal(result.schemaVersion, 2); assert.equal(result.canonicalRestartPolicyVerified, true);
+  assert.equal(result.hostRebootVerified, false);
+  for (const record of [r, f.dbSource]) assert.deepEqual(record.HostConfig.RestartPolicy, { Name: 'unless-stopped', MaximumRetryCount: 0 });
+  const updates = f.calls.filter(e => e.phase === 'persistence_update');
+  assert.deepEqual(updates.map(e => e.args), [r, f.dbSource].map(c => ['update', '--restart', 'unless-stopped', c.Id]));
+  assert.ok(f.routing.findIndex(e => e.phase === 'gateway') < f.routing.findIndex(e => e.phase === 'persistence_update'));
   const evidence = JSON.parse(fs.readFileSync(path.join(directory, 'synthetic-run.promotion.json')));
   assert.equal(evidence.gatewayReadbackSha256, result.gatewayReadbackSha256);
   assert.ok(!f.calls.some(e => e.args[0] === 'start' && e.args[1] === f.source.Id));
+}));
+test('persistent source and database support repeat rehearsal/promotion without weakening disposable policies', async () => scoped(async f => {
+  assert.equal(f.source.State.Running, false); assert.equal(f.source.HostConfig.RestartPolicy.Name, 'unless-stopped');
+  const result = await runSuccessorPromotion(f.data, f.options, f.dependencies);
+  assert.equal(result.status, 'promoted_owner_smoke_pending');
+  assert.deepEqual(f.calls.filter(e => e.phase === 'persistence_update').map(e => e.args.at(-1)), [result.candidateId]);
+  assert.equal(f.dbSource.HostConfig.RestartPolicy.Name, 'unless-stopped');
+  assert.equal(f.source.State.Running, false);
+}, { restartPolicy: 'unless-stopped', databaseRestartPolicy: 'unless-stopped' }));
+test('persistence before-effect and lost-reply failures restore exact prior policies and isolate successor without replay', async t => {
+  for (const target of ['api', 'database']) for (const afterEffect of [false, true]) await t.test(`${target} afterEffect=${afterEffect}`, () => scoped(async (f, directory) => {
+    const command = f.dependencies.command; let updates = 0;
+    f.dependencies.command = async e => {
+      if (e.phase === 'persistence_update' && ++updates === (target === 'api' ? 1 : 2)) {
+        if (afterEffect) await command(e); else f.calls.push(e);
+        throw Error('synthetic persistence failure');
+      }
+      return command(e);
+    };
+    const result = await runSuccessorPromotion(f.data, f.options, f.dependencies);
+    assert.equal(result.status, 'forward_recovery_required'); assert.equal(result.stage, 'persistence');
+    assert.equal(result.persistenceRollbackVerified, true); assert.equal(result.successorIsolationVerified, true);
+    assert.equal(f.records[result.candidateId].State.Running, false); assert.equal(f.dbSource.State.Running, true);
+    for (const r of [f.records[result.candidateId], f.dbSource]) assert.equal(r.HostConfig.RestartPolicy.Name, 'no');
+    assert.equal(f.source.State.Running, false); assert.ok(!fs.existsSync(path.join(directory, 'synthetic-run.promotion.json')));
+    assert.equal(f.calls.filter(e => e.phase === 'persistence_update').length, target === 'api' ? 1 : 2);
+  }));
+});
+test('failed policy rollback stays explicit while exact successor is stopped', async () => scoped(async f => {
+  const command = f.dependencies.command; let updates = 0;
+  f.dependencies.command = async e => {
+    if (e.phase === 'persistence_update' && ++updates === 2) throw Error('database refused');
+    if (e.phase === 'persistence_rollback') throw Error('rollback refused');
+    return command(e);
+  };
+  const result = await runSuccessorPromotion(f.data, f.options, f.dependencies);
+  assert.equal(result.persistenceRollbackVerified, false); assert.equal(result.successorIsolationVerified, true);
+  assert.equal(f.records[result.candidateId].HostConfig.RestartPolicy.Name, 'unless-stopped');
+  assert.equal(f.records[result.candidateId].State.Running, false);
+}));
+test('protected intent binds both prior policies before the first exact-ID update', async () => scoped(async (f, directory) => {
+  const command = f.dependencies.command;
+  f.dependencies.command = async e => {
+    if (e.phase === 'persistence_update') {
+      const filename = path.join(directory, 'synthetic-run.persistence-intent.json'), intent = JSON.parse(fs.readFileSync(filename));
+      assert.equal(fs.statSync(filename).mode & 0o777, 0o600);
+      assert.equal(intent.policy, 'unless-stopped'); assert.equal(intent.rehearsalSha256, f.options.rehearsalSha256);
+      assert.equal(intent.containers.length, 2);
+      assert.ok(intent.containers.some(c => c.id === e.args.at(-1)));
+      for (const c of intent.containers) {
+        assert.match(c.configSha256, /^[a-f0-9]{64}$/u);
+        assert.deepEqual(c.previousPolicy, { Name: 'no', MaximumRetryCount: 0 });
+        assert.equal(c.imageId, f.records[c.id].Image); assert.equal(c.name, f.records[c.id].Name);
+      }
+    }
+    return command(e);
+  };
+  assert.equal((await runSuccessorPromotion(f.data, f.options, f.dependencies)).status, 'promoted_owner_smoke_pending');
 }));
 test('receipt rejects wrong commit/hash/snapshot/probes/freshness and payment-mode drift', async () => scoped(async f => {
   for (const mutate of [r => { r.opsCommit = '0'.repeat(40); }, r => { r.backupSha256 = 'bad'; },

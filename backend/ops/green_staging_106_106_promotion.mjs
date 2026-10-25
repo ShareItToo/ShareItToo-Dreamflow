@@ -2,13 +2,12 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { equal, objectDigest, networkMembers } from './green_staging_98_106_contract.mjs';
 import { canonicalMounts, containerFingerprint, requiredEnvironment } from './green_staging_98_106_promotion.mjs';
-import { assertContainerSpec } from './green_staging_98_106_execution.mjs';
 import { assertArtifactFamily, exclusiveArtifact, openArtifact, verifyArtifact, closeArtifact, privateDirectory, writeArtifact } from './green_staging_98_106_evidence.mjs';
 import { requireBinding as require } from './green_staging_106_106_binding.mjs';
 import { executionPreflight, bindExecutionMaterials, physicalSchemaSql, constraintsSql, writersSql } from './green_staging_106_106_preflight.mjs';
 import { rehearsalCommand, auxiliarySql, readinessScript } from './green_staging_106_106_rehearsal.mjs';
 import { decodeSnapshot, snapshotSql, assertSuccessorStartup } from './green_staging_106_106_database.mjs';
-import { strictSupplementalGroups, dockerObject } from './green_staging_106_106_resources.mjs';
+import { strictSupplementalGroups, dockerObject, supportedCanonicalRestartPolicy, assertSuccessorContainerSpec, canonicalPersistence } from './green_staging_106_106_resources.mjs';
 import { buildReleaseMetadata } from '../src/release.js';
 
 const hash = v => typeof v === 'string' && /^[a-f0-9]{64}$/u.test(v);
@@ -72,7 +71,7 @@ export function validatePromotionReceipt(receipt, inputs, now) {
 // mounts/groups/environment are never guessed or silently dropped.
 export function canonicalSuccessorSpec(source, image, inputs) {
   const h = source.HostConfig, internal = inputs.target.networks.find(n => n.internal);
-  require(h?.RestartPolicy?.Name === 'no' && !h.Privileged && !h.AutoRemove
+  require(supportedCanonicalRestartPolicy(h?.RestartPolicy) && !h.Privileged && !h.AutoRemove
     && Object.keys(h.PortBindings ?? {}).length === 0
     && ['CapAdd', 'Devices', 'VolumesFrom', 'DeviceRequests'].every(k => !(h[k]?.length))
     && (!h.PidMode || h.PidMode === 'private'), 'promotion_source_profile');
@@ -111,14 +110,14 @@ export async function runSuccessorPromotion(inputs, options = {}, dependencies =
   const now = dependencies.now ?? Date.now, command = dependencies.command ?? rehearsalCommand;
   require(hash(options.rehearsalSha256) && options.confirmation === `promote:${inputs.binding.runtimeCommit}:${inputs.binding.opsCommit}:${options.rehearsalSha256}`, 'promotion_confirmation');
   const directory = privateDirectory(options.evidenceDirectory), base = inputs.config.runId;
-  const names = ['promotion-lock', 'canonical-started', 'promotion', 'promotion-failure'].map(s => `${base}.${s}.json`);
+  const names = ['promotion-lock', 'canonical-started', 'promotion', 'promotion-failure', 'persistence-intent'].map(s => `${base}.${s}.json`);
   assertArtifactFamily(directory, names);
   const receiptHandle = openArtifact(path.join(directory.directory, `${base}.rehearsal.json`));
   let backup, held, lock, locked = false, candidateId = null, spec, stage = 'preflight', boundary = false, error, isolated = false, result;
   const one = async (kind, id) => dockerObject(await command({ phase: 'promotion_inspect', args: kind === 'container' ? ['inspect', id] : [kind, 'inspect', id] }));
   const source = inputs.target.containers[0], db = inputs.binding.scope.database;
   const temporaryName = temporaryPromotionName(inputs); let candidateName = temporaryName, renameReconciled = false;
-  let originalRecord;
+  let originalRecord, persistence, persistenceRollbackVerified = null;
   const inventory = async () => {
     const actual = String(await command({ phase: 'promotion_inventory', args: ['ps', '-aq', '--no-trunc', '--filter', 'label=com.shareittoo.sit.green=true'] })).trim().split(/\s+/u).filter(Boolean).sort();
     const expected = [...inputs.target.containers.map(c => c.id), ...(hash(candidateId) ? [candidateId] : [])].sort();
@@ -143,14 +142,14 @@ export async function runSuccessorPromotion(inputs, options = {}, dependencies =
   const candidate = async () => {
     require(hash(candidateId), 'promotion_candidate_id'); const r = await one('container', candidateId);
     require(r.Id === candidateId && r.Name === `/${candidateName}` && r.Config.Labels['com.shareittoo.green.106_106.promotion'] === base, 'promotion_candidate_identity');
-    assertContainerSpec(r, spec);
+    assertSuccessorContainerSpec(r, spec);
     require(equal(r.Config.Labels, spec.labels), 'promotion_candidate_labels');
     for (const endpoint of Object.values(r.NetworkSettings.Networks)) {
       const aliases = [...(endpoint.Aliases ?? []), ...(endpoint.DNSNames ?? [])];
       require(aliases.every(name => [temporaryName, candidateId, candidateId.slice(0, 12), ...(candidateName === source.name ? [source.name] : [])].includes(name)), 'promotion_dns_alias');
     }
     require(objectDigest(canonicalMounts(r.Mounts)) === inputs.target.mountsSha256, 'promotion_complete_mounts');
-    for (const [key, value] of Object.entries(originalRecord.HostConfig)) if (!['NetworkMode', 'Binds', 'Mounts'].includes(key)) {
+    for (const [key, value] of Object.entries(originalRecord.HostConfig)) if (!['NetworkMode', 'Binds', 'Mounts', 'RestartPolicy'].includes(key)) {
       require(equal(r.HostConfig[key], value), 'promotion_host_preservation');
     }
     for (const [key, value] of Object.entries(originalRecord.Config)) if (!['Env', 'Labels', 'Image', 'Hostname'].includes(key)) {
@@ -262,22 +261,40 @@ export async function runSuccessorPromotion(inputs, options = {}, dependencies =
     await candidate(); await membership(true); await inventory(); await sourceCas(); await databaseCas(); held.recheck();
     require(equal(await snapshot(), after) && await auxiliary() === receipt.auxiliarySha256
       && await sql(physicalSchemaSql) === receipt.physicalSchemaSha256 && await sql(constraintsSql) === '0', 'promotion_post_boundary_database');
-    result = { status: 'promoted_owner_smoke_pending', schemaVersion: 1, kind: 'sit-green-staging-106-106-promotion',
+    stage = 'persistence';
+    const persistentDatabase = await one('container', db.id);
+    require(persistentDatabase.Id === db.id && persistentDatabase.Name === `/${db.name}` && persistentDatabase.Image === db.imageId
+      && containerFingerprint(persistentDatabase) === inputs.target.containers[1].configSha256, 'promotion_database_identity');
+    const persistentRecords = [await candidate(), persistentDatabase];
+    persistence = canonicalPersistence(persistentRecords, command);
+    writeArtifact(directory, names[4], { kind: 'sit-green-staging-106-106-persistence-intent', schemaVersion: 1,
+      policy: 'unless-stopped', rehearsalSha256: options.rehearsalSha256,
+      containers: persistentRecords.map(r => ({ id: r.Id, name: r.Name, imageId: r.Image,
+        configSha256: containerFingerprint(r), previousPolicy: r.HostConfig.RestartPolicy })) });
+    await persistence.apply(); spec.restartPolicy = 'unless-stopped';
+    await candidate(); await membership(true); await sourceCas(); held.recheck();
+    result = { status: 'promoted_owner_smoke_pending', schemaVersion: 2, kind: 'sit-green-staging-106-106-promotion',
       candidateId, sourceId: source.id, runtimeCommit: inputs.binding.runtimeCommit, opsCommit: inputs.binding.opsCommit,
       rehearsalSha256: options.rehearsalSha256, backupSha256: receipt.backupSha256,
       ownerSmokePassed: false, publicReleaseComplete: false, oldImageRestarted: false, lockRetained: true,
       intentionalProviderCalls: 0, gatewayVerified: true, gatewayVersionSha256: objectDigest(gateway.version),
-      gatewayReadbackSha256: objectDigest(gateway), visibilityBoundary: 'captured_id_rename', renameReconciled };
+      gatewayReadbackSha256: objectDigest(gateway), visibilityBoundary: 'captured_id_rename', renameReconciled,
+      canonicalRestartPolicy: 'unless-stopped', canonicalRestartPolicyVerified: true, hostRebootVerified: false };
     verifyArtifact(backup, { expectedDigest: receipt.backupSha256 }).bytes.fill(0);
     verifyArtifact(receiptHandle, { expectedDigest: options.rehearsalSha256 }).bytes.fill(0);
     closeArtifact(backup); closeArtifact(receiptHandle); closeArtifact(lock); held.close(); held = null;
     writeArtifact(directory, names[2], result);
   } catch (failure) { error = failure; }
   finally {
+    if (error && persistence) {
+      persistenceRollbackVerified = await persistence.rollback();
+      if (persistenceRollbackVerified) spec.restartPolicy = 'no';
+    }
     if (error && candidateId) try {
       // A lost attachment reply permits only subsets of the approved networks.
       const r = await one('container', candidateId), actual = r.NetworkSettings?.Networks ?? {};
       require([`/${temporaryName}`, `/${source.name}`].includes(r.Name), 'promotion_recovery_name'); candidateName = r.Name.slice(1);
+      if (persistence && supportedCanonicalRestartPolicy(r.HostConfig?.RestartPolicy)) spec.restartPolicy = r.HostConfig.RestartPolicy.Name;
       require(Object.entries(actual).every(([name, n]) => inputs.target.networks.some(t => t.name === name && t.id === n.NetworkID)), 'promotion_recovery_network');
       spec.networks = Object.fromEntries(Object.entries(actual).map(([name, n]) => [name, n.NetworkID]));
       const checked = await candidate();
@@ -291,7 +308,8 @@ export async function runSuccessorPromotion(inputs, options = {}, dependencies =
     const failure = { status: locked ? 'forward_recovery_required' : 'preflight_rejected', stage,
       candidateId: hash(candidateId) ? candidateId : null, sourceId: source.id, canonicalStarted: boundary,
       successorIsolationVerified: isolated, oldImageRestarted: false, automaticRestoreAttempted: false,
-      lockRetained: locked, publicReleaseComplete: false };
+      lockRetained: locked, publicReleaseComplete: false,
+      persistenceRollbackVerified };
     if (locked) writeArtifact(directory, names[3], failure);
     return failure;
   }

@@ -9,11 +9,13 @@ import { hex } from './green_106106_readonly.js';
 import { buildReleaseMetadata } from '../../src/release.js';
 
 // Strict stateful Docker/SQL adapter; synthetic proof only, no daemon calls.
-export async function rehearsalFixture(directory) {
+export async function rehearsalFixture(directory, { restartPolicy = 'no', databaseRestartPolicy = 'no' } = {}) {
   const s = await inputs(), records = s.f.records, source = records[hex(1)], dbSource = records[hex(2)];
-  source.HostConfig.RestartPolicy = { Name: 'no', MaximumRetryCount: 0 };
+  source.HostConfig.RestartPolicy = { Name: restartPolicy, MaximumRetryCount: 0 };
+  dbSource.HostConfig.RestartPolicy = { Name: databaseRestartPolicy, MaximumRetryCount: 0 };
   s.config.materials[0].destination = source.Mounts[1].Destination = '/run/secrets/mfa-encryption-key';
   s.target.containers[0].configSha256 = containerFingerprint(source);
+  s.target.containers[1].configSha256 = containerFingerprint(dbSource);
   s.target.mountsSha256 = objectDigest(canonicalMounts(source.Mounts));
   s.manifest.targetSha256 = objectDigest(s.target); s.manifest.configSha256 = objectDigest(s.config);
   const postgres = records[dbSource.Image];

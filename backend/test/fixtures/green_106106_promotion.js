@@ -8,8 +8,8 @@ import { candidateArchive } from './green_106106_archive.js';
 import { rehearsalFixture } from './green_106106_rehearsal.js';
 import { buildReleaseMetadata } from '../../src/release.js';
 
-export async function promotionFixture(directory) {
-  const f = await rehearsalFixture(directory);
+export async function promotionFixture(directory, policies) {
+  const f = await rehearsalFixture(directory, policies);
   f.f.binding.scope.api.name = 'shareittoo-staging-api'; f.source.Name = '/shareittoo-staging-api';
   f.source.Config.Labels['com.shareittoo.sit.green.run_id'] = 'synthetic-source-run';
   for (const n of f.f.binding.scope.networks) f.records[n.id].Containers[f.source.Id].Name = 'shareittoo-staging-api';
@@ -62,6 +62,11 @@ export async function promotionFixture(directory) {
         Mounts: fields.mounts, State: { Running: false, Paused: false }, NetworkSettings: { Networks: { [n.Name]: {
           NetworkID: n.Id, Aliases: [fields.name], DNSNames: [fields.name, id.slice(0, 12)] } } } };
       result = id;
+    } else if (e.phase === 'persistence_update' || e.phase === 'persistence_rollback') {
+      f.calls.push(e);
+      if (a.length !== 4 || a[0] !== 'update' || a[1] !== '--restart' || !['no', 'unless-stopped'].includes(a[2])
+        || !/^[a-f0-9]{64}$/u.test(a[3]) || !f.records[a[3]]) throw Error('unmodeled persistence update');
+      f.records[a[3]].HostConfig.RestartPolicy = { Name: a[2], MaximumRetryCount: 0 }; result = a[3];
     } else if (e.phase === 'promotion_start') {
       f.calls.push(e); const r = f.records[a[1]]; r.State.Running = true;
       for (const n of Object.values(r.NetworkSettings.Networks)) f.records[n.NetworkID].Containers[r.Id] = { Name: r.Name.slice(1) };

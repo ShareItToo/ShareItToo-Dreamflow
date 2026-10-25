@@ -9,7 +9,7 @@ import { runMfaProbe } from './staging_controlled_acceptance.mjs';
 import { requireBinding as require } from './green_staging_106_106_binding.mjs';
 import { bindExecutionMaterials, executionPreflight, physicalSchemaSql, constraintsSql, writersSql, preflightRead } from './green_staging_106_106_preflight.mjs';
 import { assertSuccessorStartup, decodeSnapshot, snapshotSql } from './green_staging_106_106_database.mjs';
-import { SuccessorDocker, dockerObject, isolatedSpec } from './green_staging_106_106_resources.mjs';
+import { SuccessorDocker, dockerObject, isolatedSpec, supportedCanonicalRestartPolicy } from './green_staging_106_106_resources.mjs';
 import { buildReleaseMetadata } from '../src/release.js';
 
 // These mutable data classes are not ordinary pg_tables. Keep them separately
@@ -77,7 +77,7 @@ export async function runSuccessorRehearsal(inputs, options, dependencies = {}) 
     const record = await inspect(source.id);
     require(record.Id === source.id && record.Name === `/${name}` && record.Image === source.imageId
       && record.State?.Running === running && record.State.Paused === false
-      && record.HostConfig.RestartPolicy?.Name === 'no' && containerFingerprint(record) === source.configSha256, 'rehearsal_source_cas');
+      && supportedCanonicalRestartPolicy(record.HostConfig.RestartPolicy) && containerFingerprint(record) === source.configSha256, 'rehearsal_source_cas');
     return record;
   };
   let backup, materials, error, cleanupError, result, stage = 'namespace_prerequisites';
