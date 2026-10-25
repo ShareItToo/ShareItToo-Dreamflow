@@ -4,13 +4,16 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash, generateKeyPairSync } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { collectGoogleWebBindingV2, GOOGLE_WEB_BINDING_V2_READS, GOOGLE_WEB_BINDING_V2_SOURCE_PATHS,
   googleWebBindingV2ReadSources, googleWebBindingV2ExpectedSources } from '../ops/staging_google_web_binding_v2.mjs';
 import { createGoogleWebBindingV2Readers } from '../ops/staging_google_web_binding_v2_adapter.mjs';
 import { runGoogleWebBindingV2Cli } from '../ops/staging_google_web_binding_v2_cli.mjs';
 import { runGoogleWebReattestationV2Cli } from '../ops/staging_google_web_reattestation_v2_cli.mjs';
+import { runGoogleWebReattestationCli } from '../ops/staging_google_web_reattestation_cli.mjs';
+import { sha256, validateArtifact } from '../../tool/staging_web_contract.mjs';
+import { syntheticListingAiWebEvidence } from '../../test/tool/staging_listing_ai_web_readiness_fixture.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const hash = (value = '') => createHash('sha256').update(value).digest('hex');
@@ -20,6 +23,8 @@ function fixture(t) {
   for (const file of GOOGLE_WEB_BINDING_V2_SOURCE_PATHS) {
     fs.mkdirSync(path.dirname(path.join(repo, file)), { recursive: true }); fs.copyFileSync(path.join(root, file), path.join(repo, file));
   }
+  fs.writeFileSync(path.join(repo, 'pubspec.yaml'), 'version: 1.2.3+20261025\n');
+  fs.writeFileSync(path.join(repo, '.gitignore'), 'build/\n');
   execFileSync('git', ['init', '-q'], { cwd: repo }); execFileSync('git', ['add', '.'], { cwd: repo });
   execFileSync('git', ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'fixture'], { cwd: repo });
   const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' }).trim();
@@ -67,16 +72,16 @@ for (const [label, mutate] of [
   const f = fixture(t); mutate(f.values); await assert.rejects(collectGoogleWebBindingV2(f.args), { message: 'google_web_binding_v2_denied' });
 });
 
-test('binding and reattestation CLIs seal evidence; provider reader treats only FB/Apple 404 as absent', async (t) => {
+test('v2 binding/collect composes through v1 review into schema-8 Google and Listing-AI web build', async (t) => {
   const f = fixture(t);
-  const now = Date.parse('2026-10-25T12:00:00Z'); const pair = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const now = Date.now(); const privateKey = generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({ type: 'pkcs8', format: 'pem' });
   const project = 'shareittoo-staging'; const number = '214007794438'; const appId = '1:214007794438:web:aefec13f9f030f46eaac87';
   const keyId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'; const apiKey = `AIza${'b'.repeat(35)}`;
   const restrictions = { browserKeyRestrictions: { allowedReferrers: ['https://staging.shareittoo.com/*'] }, apiTargets: [{ service: 'identitytoolkit.googleapis.com' }, { service: 'securetoken.googleapis.com' }] };
   const key = { name: `projects/${number}/locations/global/keys/staging-key`, uid: keyId, displayName: 'Staging Web', restrictions };
   const app = { name: `projects/${project}/webApps/${appId}`, appId, projectId: project, apiKeyId: keyId, state: 'ACTIVE' };
   const sdk = { projectId: project, appId, projectNumber: number, messagingSenderId: number, apiKey, authDomain: `${project}.firebaseapp.com` };
-  const svcBytes = JSON.stringify({ type: 'service_account', project_id: project, client_email: 'test@shareittoo-staging.iam.gserviceaccount.com', private_key: pair.privateKey.export({ type: 'pkcs8', format: 'pem' }), token_uri: 'https://oauth2.googleapis.com/token' });
+  const svcBytes = JSON.stringify({ type: 'service_account', project_id: project, client_email: 'test@shareittoo-staging.iam.gserviceaccount.com', private_key: privateKey, token_uri: 'https://oauth2.googleapis.com/token' });
   const userBytes = JSON.stringify({ user: { email: 'operator@example.invalid' }, tokens: { access_token: 'user-access-token', expires_at: now + 600000 } });
   let idp = new Map([['facebook.com', 404], ['apple.com', 404]]); let paginationCycle = false; const calls = [];
   const respond = (value, status = 200) => ({ status, text: async () => JSON.stringify(value) });
@@ -140,6 +145,58 @@ test('binding and reattestation CLIs seal evidence; provider reader treats only 
   assert.equal(JSON.stringify(attest).includes(apiKey), false); assert.equal(JSON.stringify(attest).includes('service-access-token'), false);
   assert.equal(candidateText.includes('user-access-token'), false); assert.equal(candidateText.includes('BEGIN PRIVATE KEY'), false);
   for (const file of attest.files) assert.equal(fs.statSync(file.path).mode & 0o777, 0o600);
+  const readiness = candidate.readiness;
+  const decision = { schemaVersion: 1, kind: 'sit-google-web-prerequisite-activation-decision',
+    evidenceClass: 'independent-release-review', syntheticFixture: false, decision: 'approved',
+    sourceCommit: readiness.sourceCommit, prerequisiteJournalSha256: readiness.prerequisiteJournalSha256,
+    prerequisiteFinalRecordSha256: readiness.prerequisiteFinalRecordSha256,
+    configurationSha256: candidate.configurationSha256, readinessSha256: candidate.readinessSha256,
+    projectId: readiness.projectId, projectNumber: readiness.projectNumber, webAppId: readiness.webAppId,
+    authorizedDomain: readiness.authorizedDomain, firebaseProviderId: readiness.firebaseProviderId,
+    decidedAtUtc: new Date(now).toISOString(), validUntilUtc: new Date(now + 60_000).toISOString() };
+  const decisionBytes = JSON.stringify(decision); const decisionPath = path.join(protectedRoot, 'decision.json');
+  fs.writeFileSync(decisionPath, decisionBytes, { mode: 0o600, flag: 'wx' });
+  const composedOut = path.join(protectedRoot, 'composed'); fs.mkdirSync(composedOut, { mode: 0o700 });
+  const candidateFile = attest.files.find((x) => x.kind === 'candidate'); const journalFile = attest.files.find((x) => x.kind === 'journal');
+  const composed = await runGoogleWebReattestationCli(['compose', '--candidate', candidateFile.path, '--candidate-sha256', candidateFile.sha256,
+    '--journal', journalFile.path, '--journal-sha256', journalFile.sha256, '--decision', decisionPath,
+    '--decision-sha256', hash(decisionBytes), '--output-dir', composedOut, '--run-id', 'v2-compose'],
+  { repositoryRoot: f.repo, fetchImpl: async () => { throw new Error('compose must perform no network read'); },
+    execute: () => { throw new Error('compose must perform no Docker read'); }, now: () => now });
+  assert.equal(composed.status, 'readiness-composed-not-activated');
+  const readinessArtifact = composed.files[0]; assert.equal(fs.statSync(readinessArtifact.path).mode & 0o777, 0o600);
+  const listingAi = syntheticListingAiWebEvidence(f.commit, '1.2.3+20261025', { now: new Date(now) });
+  const listingRoot = path.join(protectedRoot, 'listing-ai'); fs.mkdirSync(listingRoot, { mode: 0o700 });
+  const listingPath = path.join(listingRoot, 'readiness.json');
+  fs.writeFileSync(listingPath, JSON.stringify(listingAi.evidence), { mode: 0o600, flag: 'wx' });
+  const buildRoot = path.join(protectedRoot, 'build-tools'); fs.mkdirSync(buildRoot, { mode: 0o700 });
+  const fakeProgram = `#!${process.execPath}\nimport fs from 'node:fs';import path from 'node:path';
+const name=path.basename(process.argv[1]);
+if(name==='flutter')console.log(JSON.stringify({frameworkVersion:'synthetic',frameworkRevision:'fixture',dartSdkVersion:'fixture'}));
+if(name==='bash'){
+ const file=process.argv.find(x=>x.startsWith('--dart-define-from-file=')).split('=')[1];
+ const p=JSON.parse(fs.readFileSync(file));
+ if(p.SIT_SOCIAL_GOOGLE_ENABLED!=='true'||p.SIT_SOCIAL_FACEBOOK_ENABLED!=='false'||p.SIT_SOCIAL_APPLE_ENABLED!=='false')process.exit(2);
+ fs.mkdirSync('build/web',{recursive:true});
+ for(const [file,text] of Object.entries({'index.html':'<script src="flutter_bootstrap.js" async></script>','main.dart.js':'mock build','manifest.json':'{}','flutter_bootstrap.js':'bootstrap();'}))fs.writeFileSync(path.join('build/web',file),text);
+}\n`;
+  for (const name of ['flutter', 'bash', 'python3']) fs.writeFileSync(path.join(buildRoot, name), fakeProgram, { mode: 0o700 });
+  const artifactDir = path.join(protectedRoot, 'artifact');
+  const build = spawnSync(process.execPath, [path.join(root, 'tool/build_staging_web.mjs'), f.repo, f.commit, artifactDir,
+    '--google-web-readiness', readinessArtifact.path, readinessArtifact.sha256,
+    '--listing-ai-web-readiness', listingPath, listingAi.digest],
+  { encoding: 'utf8', env: { ...process.env, PATH: `${buildRoot}${path.delimiter}${process.env.PATH}` } });
+  assert.equal(build.status, 0, build.stderr);
+  const buildResult = JSON.parse(build.stdout.trim()); const manifest = validateArtifact(artifactDir, buildResult.manifestHash, f.commit);
+  assert.equal(manifest.schemaVersion, 8); assert.equal(manifest.listingAiWebProviderSchemaVersion, 6);
+  assert.equal(manifest.profileContractVersion, 'staging-google-web-v2');
+  assert.equal(manifest.profile.SIT_SOCIAL_GOOGLE_ENABLED, 'true');
+  assert.equal(manifest.profile.SIT_SOCIAL_FACEBOOK_ENABLED, 'false'); assert.equal(manifest.profile.SIT_SOCIAL_APPLE_ENABLED, 'false');
+  const artifactText = Object.entries(manifest.files).map(([file]) => fs.readFileSync(path.join(artifactDir, 'web', file), 'utf8')).join('\n');
+  assert.equal(artifactText.includes('BEGIN PRIVATE KEY'), false); assert.equal(artifactText.includes(privateKey), false);
+  assert.equal(artifactText.includes('user-access-token'), false);
+  assert.equal(artifactText.includes('service-access-token'), false);
+  assert.equal(`${build.stdout}${build.stderr}`.includes(apiKey), false);
   assert.equal(calls.filter((x) => x.method === 'POST').length >= 1, true);
   assert.ok(calls.filter((x) => x.method === 'POST').every((x) => x.url === 'https://oauth2.googleapis.com/token'));
   assert.ok(calls.every((x) => x.redirect === 'error' && x.credentials === 'omit'));
