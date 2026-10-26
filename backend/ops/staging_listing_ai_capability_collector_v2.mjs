@@ -48,8 +48,14 @@ function validateActivation(activation, now) {
     && activation.providerConfiguration?.model === 'gpt-4o-mini-2024-07-18'
     && activation.providerConfiguration?.promptVersion === 'listing-ai-prompt-v1'
     && activation.providerConfiguration?.schemaVersion === 'listing-ai-draft-v1'
-    && Number.isSafeInteger(activation.providerConfiguration?.budgetCents)
-    && activation.providerConfiguration.budgetCents >= 2 && activation.providerConfiguration.budgetCents <= 500
+    && activation.providerConfiguration?.budgetCents === 10_000
+    && activation.providerConfiguration?.budgetScope === 'lifetime'
+    && Number.isSafeInteger(activation.providerConfiguration?.stagingSmokeBudgetCents)
+    && activation.providerConfiguration.stagingSmokeBudgetCents >= 4
+    && activation.providerConfiguration.stagingSmokeBudgetCents <= 500
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
+      .test(activation.providerConfiguration?.stagingSmokeActivationId ?? '')
+    && activation.providerConfiguration?.runMaxProviderCalls === 5
     && activation.providerConfiguration?.externalProviderExecutionAllowed === true
     && activation.providerConfiguration?.automaticPublicationAllowed === false
     && ['greenPromotionReceiptSha256', 'deploymentReportSha256', 'providerConfigurationSha256',

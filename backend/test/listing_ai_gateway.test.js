@@ -362,7 +362,9 @@ test('zero budget and missing paid-provider authority block before any external 
   const budgetPresent = readListingAiGatewayConfiguration({
     SIT_LISTING_AI_PROVIDER: 'openai',
     SIT_LISTING_AI_MODEL: listingAiOpenAiModel,
-    SIT_LISTING_AI_BUDGET_CENTS: '5',
+    SIT_LISTING_AI_BUDGET_CENTS: '10000',
+    SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: '500',
+    SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: '11111111-1111-4111-8111-111111111111',
   });
   const unauthorized = await createListingAiGateway({
     configuration: budgetPresent,
@@ -391,7 +393,9 @@ test('openai requires exact stripped derivatives and binds only their digest to 
   const configuration = readListingAiGatewayConfiguration({
     SIT_LISTING_AI_PROVIDER: 'openai',
     SIT_LISTING_AI_MODEL: listingAiOpenAiModel,
-    SIT_LISTING_AI_BUDGET_CENTS: '5',
+    SIT_LISTING_AI_BUDGET_CENTS: '10000',
+    SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: '500',
+    SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: '11111111-1111-4111-8111-111111111111',
     SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '1',
   }, { deploymentEnvironment: 'staging' });
   const gateway = createListingAiGateway({
@@ -456,7 +460,9 @@ test('openai usage must be complete and cannot silently become zero cost', async
   const configuration = readListingAiGatewayConfiguration({
     SIT_LISTING_AI_PROVIDER: 'openai',
     SIT_LISTING_AI_MODEL: listingAiOpenAiModel,
-    SIT_LISTING_AI_BUDGET_CENTS: '5',
+    SIT_LISTING_AI_BUDGET_CENTS: '10000',
+    SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: '500',
+    SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: '11111111-1111-4111-8111-111111111111',
     SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '1',
   }, { deploymentEnvironment: 'staging' });
   const gateway = createListingAiGateway({

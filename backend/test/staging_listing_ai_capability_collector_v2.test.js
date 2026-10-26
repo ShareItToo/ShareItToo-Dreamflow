@@ -33,7 +33,9 @@ const imageId = `sha256:${'d'.repeat(64)}`;
 const repoDigest = `ghcr.io/shareittoo/shareittoo-api@sha256:${'e'.repeat(64)}`;
 const timestamp = '2026-10-25T10:00:00.000Z', token = `sit_test_${'x'.repeat(32)}`;
 const providerConfiguration = { provider: 'openai', model: 'gpt-4o-mini-2024-07-18', promptVersion: 'listing-ai-prompt-v1',
-  schemaVersion: 'listing-ai-draft-v1', budgetCents: 250, externalProviderExecutionAllowed: true,
+  schemaVersion: 'listing-ai-draft-v1', budgetCents: 10000, budgetScope: 'lifetime',
+  stagingSmokeBudgetCents: 250, stagingSmokeActivationId: '11111111-1111-4111-8111-111111111111',
+  runMaxProviderCalls: 5, externalProviderExecutionAllowed: true,
   automaticPublicationAllowed: false };
 const activation = {
   schemaVersion: 1, kind: 'sit-staging-listing-ai-external-activation', status: 'verified', environment: 'staging',
@@ -134,6 +136,25 @@ test('fails closed on runtime/receipt/source drift and stale activation', async 
     activationReceiptBytes: activationBytes, runtimeReader: () => runtime, fetchImpl, now: () => clock,
     sourceCommit, clientVersion, sourceInventory: inventory.slice(1) }),
   /staging_listing_ai_capability_not_verified/u);
+});
+
+test('activation budget drift fails closed at lifetime, smoke-cap and activation-ID boundaries', () => {
+  for (const change of [
+    { budgetCents: 250 },
+    { budgetScope: 'activation' },
+    { stagingSmokeBudgetCents: 3 },
+    { stagingSmokeActivationId: 'not-a-uuid' },
+  ]) {
+    const changed = { ...activation, providerConfiguration: {
+      ...providerConfiguration, ...change,
+    } };
+    changed.providerConfigurationSha256 = sha(JSON.stringify(changed.providerConfiguration));
+    assert.throws(() => createStagingListingAiCapabilityCollectorV2({ token,
+      expectedUserId: 'qa_user_12345', activationReceiptBytes: Buffer.from(JSON.stringify(changed)),
+      runtimeReader: () => runtime, fetchImpl: fetchMock().fetchImpl, now: () => clock,
+      sourceCommit, clientVersion, sourceInventory: inventory }),
+    /staging_listing_ai_capability_not_verified/u);
+  }
 });
 
 test('capability collection near receipt expiry fails and cannot extend receipt lifetime', async () => {
