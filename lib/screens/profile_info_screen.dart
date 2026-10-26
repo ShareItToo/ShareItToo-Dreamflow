@@ -183,6 +183,7 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
   Future<void> _load() async {
     final revision = ++_loadRevision;
     final photoDraftRevision = _photoDraftRevision;
+    final photoDraftOwnerId = _user?.id;
     try {
       final profileContext = await _profileMutationService.loadCurrentContext();
       if (!mounted || revision != _loadRevision) return;
@@ -202,7 +203,12 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
           _birthYearCtrl.text = u.birthDate?.year.toString() ?? '';
           _cityCtrl.text = u.city ?? '';
           _bioCtrl.text = u.bio ?? '';
-          if (photoDraftRevision == _photoDraftRevision) {
+          final localPhotoDraft = _photoDraft?.trim() ?? '';
+          final preserveSamePrincipalPhotoDraft =
+              localPhotoDraft.startsWith('data:image/') &&
+                  photoDraftOwnerId == u.id;
+          if (photoDraftRevision == _photoDraftRevision &&
+              !preserveSamePrincipalPhotoDraft) {
             _photoDraft = (u.photoURL != null && u.photoURL!.trim().isNotEmpty)
                 ? u.photoURL
                 : null;
@@ -659,9 +665,13 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
           !_samePickerPrincipal(owner.context, current)) {
         return false;
       }
-      return await _profileMutationService
-          .isContextCurrent(current)
-          .timeout(const Duration(seconds: 3), onTimeout: () => false);
+      // loadCurrentContext already verifies its freshly captured exact owner
+      // after reading the profile. Rechecking that new owner here creates a
+      // second epoch-sensitive await: a same-principal refresh between those
+      // awaits drops the local preview even though no account transition
+      // occurred. Every persisted Save still uses its separately captured,
+      // exact owner and the strict mutation guards below.
+      return true;
     } catch (_) {
       return false;
     }

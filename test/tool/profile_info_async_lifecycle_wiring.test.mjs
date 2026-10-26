@@ -99,7 +99,7 @@ test('successful profile patch rechecks exact owner and refreshes local state', 
 test('late same-principal profile reload preserves a newer photo draft', () => {
   assert.match(
     compactSource,
-    /Future<void> _load\(\) async \{ final revision = \+\+_loadRevision; final photoDraftRevision = _photoDraftRevision;[\s\S]*?if \(photoDraftRevision == _photoDraftRevision\) \{ _photoDraft = \(u\.photoURL != null && u\.photoURL!\.trim\(\)\.isNotEmpty\) \? u\.photoURL : null; \}/u,
+    /Future<void> _load\(\) async \{ final revision = \+\+_loadRevision; final photoDraftRevision = _photoDraftRevision; final photoDraftOwnerId = _user\?\.id;[\s\S]*?localPhotoDraft\.startsWith\('data:image\/'\) && photoDraftOwnerId == u\.id[\s\S]*?photoDraftRevision == _photoDraftRevision && !preserveSamePrincipalPhotoDraft/u,
   );
   assert.match(
     compactSource,
@@ -163,7 +163,15 @@ test('Web gallery picker starts in the tap gesture before dismissing the sheet',
   );
   assert.match(
     pickerRoutine,
-    /Future<bool> _isPickerPrincipalCurrent\([\s\S]*?loadCurrentContext\(\)[\s\S]*?_samePickerPrincipal\(owner\.context, current\)[\s\S]*?isContextCurrent\(current\)/u,
+    /Future<bool> _isPickerPrincipalCurrent\([\s\S]*?loadCurrentContext\(\)[\s\S]*?_samePickerPrincipal\(owner\.context, current\)[\s\S]*?return true;/u,
+  );
+  assert.doesNotMatch(
+    pickerRoutine.slice(
+      pickerRoutine.indexOf('Future<bool> _isPickerPrincipalCurrent('),
+      pickerRoutine.indexOf('bool _samePickerPrincipal('),
+    ),
+    /isContextCurrent\(current\)/u,
+    'a second exact-owner await cannot reject a same-principal local preview',
   );
   const samePrincipal = pickerRoutine.slice(
     pickerRoutine.indexOf('bool _samePickerPrincipal('),
@@ -178,6 +186,24 @@ test('Web gallery picker starts in the tap gesture before dismissing the sheet',
     /authOwner\.email|context\.user\.email/u,
     'email aliases do not override a stable bound user id',
   );
+});
+
+test('same-principal profile refresh preserves an unsaved local image draft', () => {
+  const load = compactSource.slice(
+    compactSource.indexOf('Future<void> _load() async {'),
+    compactSource.indexOf('Future<void> _loadMembershipStats('),
+  );
+  assert.match(
+    load,
+    /final photoDraftOwnerId = _user\?\.id;[\s\S]*?final localPhotoDraft = _photoDraft\?\.trim\(\) \?\? '';[\s\S]*?localPhotoDraft\.startsWith\('data:image\/'\)[\s\S]*?photoDraftOwnerId == u\.id[\s\S]*?!preserveSamePrincipalPhotoDraft/u,
+    'only a same-id refresh preserves a local image data URL over stale server photoURL',
+  );
+  const securityTransition = compactSource.slice(
+    compactSource.indexOf('key != SharedPersistenceSync.accountSecurityStateKey'),
+    compactSource.indexOf('Future<void> _load() async {'),
+  );
+  assert.match(securityTransition, /_clearDraft\(\)/u,
+    'account-security transitions still clear private photo drafts');
 });
 
 test('remote profile save cannot report success while a data URI remains unuploaded', () => {

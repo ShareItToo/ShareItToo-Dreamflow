@@ -150,9 +150,11 @@ test('location awaits revalidate the captured action owner and media awaits reva
   );
   assert.match(
     pickerPrincipalCheck,
-    /if \(!mounted\) return false;[\s\S]*?loadCurrentContext\(\)[\s\S]*?_samePickerPrincipal\(owner\.context, current\)[\s\S]*?\.isContextCurrent\(current\)[\s\S]*?\.timeout\(const Duration\(seconds: 3\), onTimeout: \(\) => false\)/u,
-    'picker revalidation recaptures and exact-validates the owner after principal check',
+    /if \(!mounted\) return false;[\s\S]*?loadCurrentContext\(\)[\s\S]*?_samePickerPrincipal\(owner\.context, current\)[\s\S]*?return true;/u,
+    'fresh context load exact-validates its owner, then local preview remains bound to the same stable principal',
   );
+  assert.doesNotMatch(pickerPrincipalCheck, /isContextCurrent\(current\)/u,
+    'a second exact-epoch await cannot discard a valid same-principal preview');
   assert.doesNotMatch(
     pickerPrincipalCheck,
     /_profileActions\.(?:isCurrent|isSynchronouslyCurrent)|actionEpoch/u,

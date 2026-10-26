@@ -91,6 +91,44 @@ void main() {
     },
   );
 
+  testWidgets(
+      'refresh started after preview preserves same-principal data photo draft',
+      (tester) async {
+    final uploadProbe = _UploadProbe();
+    final service = _PickerProfileService(uploadProbe);
+    final pendingRefresh = Completer<ProfileMutationContext?>();
+    service.pendingRefresh = pendingRefresh;
+    await _openProfile(tester, service, (_) async => _MemoryXFile());
+
+    await _openGalleryPicker(tester);
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(
+      find.byType(Image),
+      findsOneWidget,
+      reason: 'the selected photo is visible before the refresh starts',
+    );
+
+    // This refresh begins after the local data URL draft exists, so the
+    // revision captured at load start alone cannot protect it.
+    service.holdNextLoad();
+    SharedPersistenceSync.notify(SharedPersistenceSync.profileStateKey);
+    await tester.pump();
+    expect(service.pendingLoadCalls, 1);
+    pendingRefresh.complete(service.refreshedContext());
+    await _pumpUi(tester);
+
+    expect(
+      find.byType(Image),
+      findsOneWidget,
+      reason: 'same-principal server photoURL null must not erase local draft',
+    );
+    await tester.tap(find.text('Speichern'));
+    await _pumpUi(tester);
+    expect(uploadProbe.calls, 1);
+    expect(service.profilePatchCalls, 1);
+    expect(service.patchedPhotoUrl, _managedAvatar);
+  });
+
   testWidgets('picker result is discarded when the authenticated owner changes',
       (tester) async {
     final uploadProbe = _UploadProbe();
