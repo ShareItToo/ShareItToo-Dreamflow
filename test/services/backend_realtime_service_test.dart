@@ -130,6 +130,12 @@ void main() {
       );
       expect(
         BackendRealtimeService.sharedPersistenceKeysForEvent(
+          const {'type': 'changed', 'resource': 'profiles'},
+        ),
+        {'profile_state_v1'},
+      );
+      expect(
+        BackendRealtimeService.sharedPersistenceKeysForEvent(
           const {'type': 'unknown'},
         ),
         isEmpty,

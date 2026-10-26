@@ -478,12 +478,17 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     _safetyService = widget.safetyActionService ?? const SafetyActionService();
     _load();
     _sessionSubscription = SharedPersistenceSync.changes.listen((key) {
-      if (!mounted || key != SharedPersistenceSync.accountSecurityStateKey) {
-        return;
+      if (!mounted) return;
+      if (key == SharedPersistenceSync.accountSecurityStateKey) {
+        _safetyActions.invalidate();
+        _loadRevision += 1;
+        unawaited(_load());
+      } else if (key == SharedPersistenceSync.profileStateKey) {
+        // The backend may have changed this profile on another tab/device.
+        // Reload the screen's explicit userId so it cannot substitute the
+        // current viewer's cached profile for a different public profile.
+        unawaited(_load());
       }
-      _safetyActions.invalidate();
-      _loadRevision += 1;
-      unawaited(_load());
     });
   }
 

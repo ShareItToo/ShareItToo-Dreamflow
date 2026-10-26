@@ -76,6 +76,8 @@ class BackendRealtimeService {
             return const {SharedPersistenceSync.rentalRequestsKey};
           case 'message_threads':
             return const {SharedPersistenceSync.messageThreadsKey};
+          case 'profiles':
+            return const {SharedPersistenceSync.profileStateKey};
         }
     }
     return const {};
@@ -237,6 +239,11 @@ class BackendRealtimeService {
         _authenticatedReadyEvents.add(null);
       }
       final prefs = await SharedPreferences.getInstance();
+      if (decoded['type'] == 'changed' && resource == 'profiles') {
+        // The notification must reach other tabs only after the cached owner
+        // profile has been removed, so their reload cannot observe stale data.
+        await prefs.remove('currentUser');
+      }
       final syncKeys = sharedPersistenceKeysForEvent(decoded);
       for (final key in syncKeys) {
         await prefs.remove(key);
@@ -250,9 +257,6 @@ class BackendRealtimeService {
       switch (resource) {
         case 'listings':
           await prefs.remove('items');
-          break;
-        case 'profiles':
-          await prefs.remove('currentUser');
           break;
       }
     } catch (error) {

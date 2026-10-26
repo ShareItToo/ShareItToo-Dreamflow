@@ -8,6 +8,7 @@ import 'package:lendify/screens/public_profile_screen.dart';
 import 'package:lendify/services/localization_service.dart';
 import 'package:lendify/services/safety_action_service.dart';
 import 'package:lendify/services/shared_persistence_sync.dart';
+import 'package:lendify/widgets/user_avatar.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -92,6 +93,97 @@ void main() {
     expect(find.text('Profil konnte nicht geladen werden'), findsNothing);
     expect(find.byIcon(Icons.more_vert), findsOneWidget);
     expect(find.byTooltip('Mehr Optionen'), findsOneWidget);
+  });
+
+  testWidgets('profile state refreshes the mounted public avatar by user id',
+      (tester) async {
+    var calls = 0;
+    final loadedIds = <String>[];
+    final initial = buildTestUser(
+      'profile-under-test',
+      name: 'Öffentliches Profil',
+    ).copyWith(photoURL: 'https://example.invalid/avatar-before.webp');
+    final refreshed = initial.copyWith(
+      photoURL: 'https://example.invalid/avatar-after.webp',
+    );
+
+    await tester.pumpWidget(app(loadUser: (id) async {
+      loadedIds.add(id);
+      calls += 1;
+      return calls == 1 ? initial : refreshed;
+    }));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<SitUserAvatar>(find.byType(SitUserAvatar).first).url,
+      'https://example.invalid/avatar-before.webp',
+    );
+
+    SharedPersistenceSync.notify(SharedPersistenceSync.profileStateKey);
+    await tester.pumpAndSettle();
+
+    expect(calls, 2);
+    expect(loadedIds, ['profile-under-test', 'profile-under-test']);
+    expect(
+      tester.widget<SitUserAvatar>(find.byType(SitUserAvatar).first).url,
+      'https://example.invalid/avatar-after.webp',
+    );
+  });
+
+  testWidgets(
+      'profile refresh cannot leak the viewer avatar into another profile',
+      (tester) async {
+    var calls = 0;
+    final loadedIds = <String>[];
+    final other = buildTestUser('other-profile', name: 'Anderes Profil')
+        .copyWith(photoURL: 'https://example.invalid/other-avatar.webp');
+    final refreshedOther = other.copyWith(
+      photoURL: 'https://example.invalid/other-avatar-refreshed.webp',
+    );
+    final viewerAvatar =
+        'https://example.invalid/viewer-avatar-must-not-appear.webp';
+
+    await tester.pumpWidget(ChangeNotifierProvider(
+      create: (_) => LocalizationController(),
+      child: MaterialApp(
+        home: PublicProfileScreen(
+          userId: 'other-profile',
+          safetyActionService: const _GuestSafetyActionService(),
+          loadUser: (id) async {
+            loadedIds.add(id);
+            calls += 1;
+            return calls == 1 ? other : refreshedOther;
+          },
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    SharedPersistenceSync.notify(SharedPersistenceSync.profileStateKey);
+    await tester.pumpAndSettle();
+
+    expect(loadedIds, ['other-profile', 'other-profile']);
+    final avatarUrl =
+        tester.widget<SitUserAvatar>(find.byType(SitUserAvatar).first).url;
+    expect(avatarUrl, 'https://example.invalid/other-avatar-refreshed.webp');
+    expect(avatarUrl, isNot(viewerAvatar));
+  });
+
+  testWidgets('disposed public profile ignores later profile notifications',
+      (tester) async {
+    var calls = 0;
+    await tester.pumpWidget(app(loadUser: (_) async {
+      calls += 1;
+      return buildTestUser('profile-under-test', name: 'Profil');
+    }));
+    await tester.pumpAndSettle();
+    expect(calls, 1);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    SharedPersistenceSync.notify(SharedPersistenceSync.profileStateKey);
+    await tester.pump();
+
+    expect(calls, 1);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('session refresh clears the old profile before the next await',
