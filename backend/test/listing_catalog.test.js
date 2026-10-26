@@ -121,6 +121,53 @@ test('drafts may omit the photo-truth attestation, but active listings may not',
   );
 });
 
+test('incomplete private-pilot drafts can persist without invented place metadata', () => {
+  const draft = normalizeListingPayload({
+    ...validListing,
+    status: 'draft',
+    isActive: false,
+    locationText: '',
+    city: '',
+    lat: 0,
+    lng: 0,
+    photos: [],
+    privateStatusConfirmed: false,
+    photoTruthPolicyVersion: undefined,
+    photoTruthAttestation: undefined,
+    photoTruthClassifications: undefined,
+  }, {
+    id: 'listing-unlocated-draft',
+    ownerId: 'owner',
+    privatePilot: true,
+    privatePilotAllowedRegions: ['berlin'],
+  });
+  assert.equal(draft.status, 'draft');
+  assert.equal(draft.locationText, '');
+  assert.equal(draft.city, '');
+  assert.equal(draft.lat, 0);
+  assert.equal(draft.lng, 0);
+  assert.equal(draft.pilotRegionCode, '');
+
+  assert.throws(
+    () => normalizeListingPayload({
+      ...validListing,
+      status: 'active',
+      locationText: '',
+      city: 'Berlin',
+      lat: 0,
+      lng: 0,
+      privateStatusConfirmed: true,
+    }, {
+      id: 'listing-unlocated-active',
+      ownerId: 'owner',
+      privatePilot: true,
+      privatePilotAllowedRegions: ['berlin'],
+    }),
+    (error) => error instanceof ListingValidationError
+      && error.code === 'listing_location_required',
+  );
+});
+
 test('activation cannot bypass the required exact policy attestation', () => {
   assert.throws(
     () => assertListingPhotoTruthPolicy({

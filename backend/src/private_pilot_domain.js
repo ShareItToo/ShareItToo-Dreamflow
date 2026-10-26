@@ -130,7 +130,10 @@ export function privatePilotCatalogKey(categoryId, subcategory) {
   return `${String(categoryId ?? '').trim()}\u001f${String(subcategory ?? '').trim()}`;
 }
 
-export function assertPrivatePilotCatalogEntry(raw, { allowedRegions = [] } = {}) {
+export function assertPrivatePilotCatalogEntry(raw, {
+  allowedRegions = [],
+  allowUnboundDraft = false,
+} = {}) {
   const categoryId = String(raw?.categoryId ?? '').trim();
   if (!privatePilotAllowedCategoryIds.has(categoryId)) {
     throw new PrivatePilotValidationError('private_pilot_category_not_allowed');
@@ -145,6 +148,9 @@ export function assertPrivatePilotCatalogEntry(raw, { allowedRegions = [] } = {}
     throw new PrivatePilotValidationError('private_pilot_country_not_allowed');
   }
   const regionCode = normalizePrivatePilotRegion(raw?.city);
+  if (!regionCode && allowUnboundDraft && raw?.status === 'draft') {
+    return Object.freeze({ categoryId, regionCode: '' });
+  }
   if (!regionCode || !allowedRegionSet(allowedRegions).has(regionCode)) {
     throw new PrivatePilotValidationError('private_pilot_region_not_allowed');
   }
@@ -172,7 +178,10 @@ export function assertPrivatePilotStoredListing(raw, {
   if (requireDeclaration && !raw?.privateStatusConfirmedAt) {
     throw new PrivatePilotValidationError('private_pilot_listing_declaration_required');
   }
-  const { regionCode } = assertPrivatePilotCatalogEntry(raw, { allowedRegions });
+  const { regionCode } = assertPrivatePilotCatalogEntry(raw, {
+    allowedRegions,
+    allowUnboundDraft: raw?.status === 'draft',
+  });
   if (String(raw?.pilotRegionCode ?? '') !== regionCode) {
     throw new PrivatePilotValidationError('private_pilot_listing_region_unbound');
   }
@@ -193,7 +202,10 @@ export function assertPrivatePilotListing(raw, {
   if (requireDeclaration && raw?.privateStatusConfirmed !== true) {
     throw new PrivatePilotValidationError('private_status_confirmation_required');
   }
-  assertPrivatePilotCatalogEntry(raw, { allowedRegions });
+  assertPrivatePilotCatalogEntry(raw, {
+    allowedRegions,
+    allowUnboundDraft: raw?.status === 'draft',
+  });
   if (raw?.offersDeliveryAtDropoff === true
       || raw?.offersPickupAtReturn === true
       || raw?.offersExpressAtDropoff === true
@@ -205,7 +217,10 @@ export function assertPrivatePilotListing(raw, {
 }
 
 export function privatePilotListingFields(raw, { allowedRegions = [] } = {}) {
-  const { regionCode } = assertPrivatePilotCatalogEntry(raw, { allowedRegions });
+  const { regionCode } = assertPrivatePilotCatalogEntry(raw, {
+    allowedRegions,
+    allowUnboundDraft: raw?.status === 'draft',
+  });
   return Object.freeze({
     privateStatusConfirmed: raw?.privateStatusConfirmed === true,
     pilotRegionCode: regionCode,

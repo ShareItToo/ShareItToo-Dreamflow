@@ -1190,7 +1190,7 @@ async function requirePrivatePilotStoredListing(
   const result = await client.query(
     `SELECT listing.category_id, listing.subcategory, listing.city,
             listing.country, listing.private_status_confirmed_at,
-            listing.private_pilot_region_code,
+            listing.private_pilot_region_code, listing.status,
             owner.private_use_confirmed_at,
             owner.private_marketplace_review_status
        FROM listings AS listing
@@ -1207,6 +1207,7 @@ async function requirePrivatePilotStoredListing(
       subcategory: row.subcategory,
       city: row.city,
       country: row.country,
+      status: row.status,
       privateStatusConfirmedAt: row.private_status_confirmed_at,
       pilotRegionCode: row.private_pilot_region_code,
       ownerPrivateUseConfirmedAt: row.private_use_confirmed_at,

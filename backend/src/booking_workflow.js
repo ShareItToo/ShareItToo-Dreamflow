@@ -322,6 +322,7 @@ async function assertPrivatePilotBookingEligibility(client, {
       subcategory: listing.subcategory,
       city: listing.city,
       country: listing.country,
+      status: listing.status,
       privateStatusConfirmedAt: listing.private_status_confirmed_at,
       pilotRegionCode: listing.private_pilot_region_code,
       ownerPrivateUseConfirmedAt: listing.owner_private_use_confirmed_at,

@@ -19,23 +19,37 @@ void main() {
     );
   });
 
-  test('listing payload city uses the derived city over the Berlin fallback',
+  test('selected Places text and coordinates yield the same canonical city',
       () {
     expect(
       resolveListingPayloadCity(
-        locationText: 'Übergabeort Heilbronn',
-        registeredCity: null,
+        locationText: 'Marktplatz, 74072 Heilbronn, Deutschland',
+        latitude: 49.1427,
+        longitude: 9.2109,
         availableCities: DataService.getCities(),
       ),
       'Heilbronn',
     );
+  });
+
+  test('no unrelated profile, default, or guessed city is used', () {
     expect(
       resolveListingPayloadCity(
-        locationText: 'Heilbronn, Innenstadt',
-        registeredCity: 'Berlin',
+        locationText: 'Unbekannter Ort, Deutschland',
+        latitude: 50.1,
+        longitude: 8.6,
         availableCities: DataService.getCities(),
       ),
-      'Heilbronn',
+      isNull,
+    );
+    expect(
+      resolveListingPayloadCity(
+        locationText: 'Heilbronn',
+        latitude: null,
+        longitude: null,
+        availableCities: DataService.getCities(),
+      ),
+      isNull,
     );
   });
 }

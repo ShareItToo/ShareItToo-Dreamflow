@@ -64,6 +64,7 @@ bool isExplicitListingSearchLocation({
     longitude != null &&
     latitude.isFinite &&
     longitude.isFinite &&
+    !(latitude == 0 && longitude == 0) &&
     latitude >= -90 &&
     latitude <= 90 &&
     longitude >= -180 &&
@@ -92,16 +93,21 @@ bool isActionableBlueOceanAssistant(Map<String, dynamic>? assistant) {
 }
 
 @visibleForTesting
-String resolveListingPayloadCity({
+String? resolveListingPayloadCity({
   required String locationText,
-  required String? registeredCity,
+  required double? latitude,
+  required double? longitude,
   required Map<String, (double lat, double lng)> availableCities,
 }) {
-  var city = registeredCity ??
-      (availableCities.isNotEmpty ? availableCities.keys.first : 'Berlin');
+  if (!isExplicitListingSearchLocation(
+    latitude: latitude,
+    longitude: longitude,
+  )) {
+    return null;
+  }
   final derived = DataService.deriveCityFromAddress(locationText);
-  if (derived.isNotEmpty) city = derived;
-  return city;
+  if (derived.isEmpty || !availableCities.containsKey(derived)) return null;
+  return derived;
 }
 
 @visibleForTesting
@@ -182,6 +188,25 @@ class _CreateListingScreenState extends State<CreateListingScreen>
   double? _selectedAddrLng;
   String? _selectedAddrQuery;
   bool get _isEdit => widget.existing != null;
+  bool get _hasPublishableSelectedPlace {
+    final selectedQuery = _selectedAddrQuery?.trim() ?? '';
+    if (selectedQuery.isEmpty || selectedQuery != _addressCtrl.text.trim()) {
+      return false;
+    }
+    if (!isExplicitListingSearchLocation(
+      latitude: _selectedAddrLat,
+      longitude: _selectedAddrLng,
+    )) {
+      return false;
+    }
+    return resolveListingPayloadCity(
+          locationText: selectedQuery,
+          latitude: _selectedAddrLat,
+          longitude: _selectedAddrLng,
+          availableCities: DataService.getCities(),
+        ) !=
+        null;
+  }
 
   // Address suggestions are routed through the authenticated SIT backend.
   Timer? _debounce;
@@ -1515,7 +1540,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
     return 'image/jpeg';
   }
 
-  String? _validateListingStep(int step) {
+  String? _validateListingStep(int step, {bool requirePlace = true}) {
     if (step == 0) {
       if (_titleCtrl.text.trim().length < 3) {
         return 'Titel ist erforderlich und muss mindestens 3 Zeichen haben.';
@@ -1539,10 +1564,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
       if (price == null || price <= 0) {
         return 'Gib einen gültigen Tagespreis ein.';
       }
-      if (!isExplicitListingSearchLocation(
-        latitude: _selectedAddrLat,
-        longitude: _selectedAddrLng,
-      )) {
+      if (requirePlace && !_hasPublishableSelectedPlace) {
         return 'Wähle einen Suchort aus den Ortsvorschlägen für die Übergabe.';
       }
     }
@@ -1566,12 +1588,13 @@ class _CreateListingScreenState extends State<CreateListingScreen>
     }
   }
 
-  String? _validateAllListingFields() {
-    return _validateListingStep(0) ?? _validateListingStep(1);
+  String? _validateAllListingFields({bool requirePlace = true}) {
+    return _validateListingStep(0) ??
+        _validateListingStep(1, requirePlace: requirePlace);
   }
 
   void _advanceListingStep() {
-    final error = _validateListingStep(_listingStep);
+    final error = _validateListingStep(_listingStep, requirePlace: false);
     if (error != null) {
       setState(() => _listingStepError = error);
       return;
@@ -1740,7 +1763,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
     ListingMutationActionOwner owner, {
     bool forceInactive = false,
   }) async {
-    if (_validateAllListingFields() != null) {
+    if (_validateAllListingFields(requirePlace: !forceInactive) != null) {
       if (mounted) {
         await _showOwnedListingMessage(
           owner,
@@ -1849,17 +1872,22 @@ class _CreateListingScreenState extends State<CreateListingScreen>
     }
 
     final allCities = DataService.getCities();
-    final locationText = _addressCtrl.text.trim().isNotEmpty
-        ? _addressCtrl.text.trim()
-        : 'Übergabeort';
-    final city = resolveListingPayloadCity(
-      locationText: locationText,
-      registeredCity: _registeredCity,
-      availableCities: allCities,
-    );
-    // Publication uses only coordinates returned for an explicitly selected
-    // search suggestion. Typed or profile-derived addresses have no geo truth.
-    final pos = (_selectedAddrLat!, _selectedAddrLng!);
+    final locationText = _addressCtrl.text.trim();
+    final selectedPlace = _hasPublishableSelectedPlace;
+    final city = selectedPlace
+        ? resolveListingPayloadCity(
+            locationText: _selectedAddrQuery!,
+            latitude: _selectedAddrLat,
+            longitude: _selectedAddrLng,
+            availableCities: allCities,
+          )!
+        : '';
+    // Item's legacy model requires numeric coordinates. An unlocated draft
+    // stores the documented 0,0 sentinel and is marked approximate; the
+    // publication validator rejects this sentinel.
+    final pos = selectedPlace
+        ? (_selectedAddrLat!, _selectedAddrLng!)
+        : (0.0, 0.0);
 
     final raw = double.tryParse(_priceCtrl.text.replaceAll(',', '.')) ?? 0.0;
     double pricePerDay;
@@ -1962,6 +1990,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
           LongRentalDiscount(days: _tier3Days, discountPercent: _tier3Pct),
         ]..sort((a, b) => a.days.compareTo(b.days))),
         privateStatusConfirmed: !forceInactive,
+        approximateLocation: !selectedPlace,
       );
 
       final result = await _listingMutationService.execute(
@@ -2051,6 +2080,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
         LongRentalDiscount(days: _tier3Days, discountPercent: _tier3Pct),
       ]..sort((a, b) => a.days.compareTo(b.days))),
       privateStatusConfirmed: !forceInactive,
+        approximateLocation: !selectedPlace,
       catalogRevision: ex.catalogRevision,
     );
 
@@ -4024,9 +4054,20 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                 Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      if (!_hasPublishableSelectedPlace)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Text(
+                            'Dieser Entwurf ist noch nicht veröffentlichbar. Wähle einen Suchort aus den Ortsvorschlägen; eingegebener Text allein reicht nicht.',
+                            style: TextStyle(color: colorScheme.error),
+                          ),
+                        ),
                       FilledButton.icon(
-                        onPressed:
-                            _submitBusy || _blueOceanBusy ? null : _submit,
+                        onPressed: _submitBusy ||
+                                _blueOceanBusy ||
+                                !_hasPublishableSelectedPlace
+                            ? null
+                            : _submit,
                         icon: const Icon(Icons.add_business),
                         label: const Text('Anzeige veröffentlichen'),
                         style: FilledButton.styleFrom(

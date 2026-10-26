@@ -11,13 +11,21 @@ const compact = source.replace(/\s+/gu, ' ');
 test('new listing publication requires a chosen place with valid coordinates', () => {
   assert.match(
     compact,
-    /if \(!isExplicitListingSearchLocation\( latitude: _selectedAddrLat, longitude: _selectedAddrLng, \)\) \{ return 'Wähle einen Suchort aus den Ortsvorschlägen für die Übergabe\.';/u,
+    /_validateAllListingFields\(requirePlace: !forceInactive\)/u,
   );
   assert.match(
     compact,
-    /final pos = \(_selectedAddrLat!, _selectedAddrLng!\);/u,
-    'published coordinates come only from the selected suggestion',
+    /bool get _hasPublishableSelectedPlace \{ final selectedQuery = _selectedAddrQuery\?\.trim\(\) \?\? ''; if \(selectedQuery\.isEmpty \|\| selectedQuery != _addressCtrl\.text\.trim\(\)\) \{ return false; \} if \(!isExplicitListingSearchLocation\( latitude: _selectedAddrLat, longitude: _selectedAddrLng, \)\) \{ return false; \} return resolveListingPayloadCity\( locationText: selectedQuery, latitude: _selectedAddrLat, longitude: _selectedAddrLng, availableCities: DataService\.getCities\(\), \) != null;/u,
+    'publication requires the exact selected text, valid coordinates, and a canonical city',
   );
+  assert.match(
+    compact,
+    /final pos = selectedPlace \? \(_selectedAddrLat!, _selectedAddrLng!\) : \(0\.0, 0\.0\);/u,
+    'unlocated drafts use the documented unknown sentinel, never unrelated city coordinates',
+  );
+  assert.match(compact, /approximateLocation: !selectedPlace/u);
+  assert.match(compact, /onPressed: _submitBusy \|\| _blueOceanBusy \|\| !_hasPublishableSelectedPlace \? null : _submit/u);
+  assert.match(compact, /_validateListingStep\(_listingStep, requirePlace: false\)/u);
   assert.doesNotMatch(source, /allCities\[city\] \?\? \(52\.52, 13\.405\)/u);
   assert.doesNotMatch(source, /resolveListingEditorProfilePlace/u);
 });

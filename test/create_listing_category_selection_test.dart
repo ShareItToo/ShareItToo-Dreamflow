@@ -86,9 +86,27 @@ void main() {
         await tester.ensureVisible(price);
         await tester.enterText(price, '10');
         await tapVisible(tester, find.widgetWithText(FilledButton, 'Weiter'));
+        expect(
+          tester
+              .widget<FilledButton>(
+                  find.widgetWithText(FilledButton, 'Anzeige veröffentlichen'))
+              .onPressed,
+          isNull,
+          reason: 'publication stays disabled without a selected search place',
+        );
+        expect(
+          find.textContaining('Dieser Entwurf ist noch nicht veröffentlichbar'),
+          findsOneWidget,
+        );
         await tapVisible(
             tester, find.widgetWithText(OutlinedButton, 'Entwurf speichern'));
         expect(service.operations, isNotEmpty);
+        final savedDraft = await service.read();
+        expect(savedDraft.status, 'draft');
+        expect(savedDraft.city, isEmpty);
+        expect(savedDraft.lat, 0);
+        expect(savedDraft.lng, 0);
+        expect(savedDraft.approximateLocation, isTrue);
       }
 
       await open();

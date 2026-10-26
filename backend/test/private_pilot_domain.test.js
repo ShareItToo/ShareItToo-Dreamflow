@@ -219,6 +219,18 @@ test('stored account and listing eligibility is persistent and review-aware', ()
     ownerPrivateUseConfirmedAt: '2026-08-20T00:00:00Z',
     ownerPrivateMarketplaceReviewStatus: 'clear',
   }, { allowedRegions: ['berlin'] }), true);
+  assert.equal(assertPrivatePilotStoredListing({
+    categoryId: 'cat8',
+    subcategory: 'Bohrmaschinen',
+    country: 'Deutschland',
+    city: '',
+    status: 'draft',
+    privateStatusConfirmedAt: null,
+    pilotRegionCode: '',
+    ownerPrivateUseConfirmedAt: '2026-08-20T00:00:00Z',
+    ownerPrivateMarketplaceReviewStatus: 'clear',
+  }, { allowedRegions: ['berlin'], requireDeclaration: false }), true,
+  'unlocated drafts remain owner-readable without invented region metadata');
   assert.throws(
     () => assertPrivatePilotAccountState({
       privateUseConfirmedAt: '2026-08-20T00:00:00Z',

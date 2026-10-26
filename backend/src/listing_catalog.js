@@ -144,9 +144,18 @@ export function normalizeListingPayload(raw, {
   if (priceRaw === null || priceRaw <= 0 || priceRaw > 7_000_000) {
     throw new ListingValidationError('invalid_listing_price');
   }
-  if (!locationText || !city || !country) throw new ListingValidationError('listing_location_required');
-  if (latitude === null || latitude < -90 || latitude > 90
-      || longitude === null || longitude < -180 || longitude > 180) {
+  if (status === 'active') {
+    if (!locationText || !city || !country) {
+      throw new ListingValidationError('listing_location_required');
+    }
+    if (latitude === null || latitude < -90 || latitude > 90
+        || longitude === null || longitude < -180 || longitude > 180) {
+      throw new ListingValidationError('invalid_listing_coordinates');
+    }
+  } else if (
+    (latitude !== null && (latitude < -90 || latitude > 90))
+      || (longitude !== null && (longitude < -180 || longitude > 180))
+  ) {
     throw new ListingValidationError('invalid_listing_coordinates');
   }
   if (status === 'active' && photos.length === 0) {
@@ -215,6 +224,7 @@ export function normalizeListingPayload(raw, {
     privateStatusConfirmed:
       pilotFields?.privateStatusConfirmed ?? raw.privateStatusConfirmed === true,
     pilotRegionCode: pilotFields?.pilotRegionCode ?? '',
+    approximateLocation: raw.approximateLocation === true,
     cancellationPolicy: ['flexible', 'moderate', 'strict', 'unified'].includes(raw.cancellationPolicy)
       ? raw.cancellationPolicy
       : 'unified',
