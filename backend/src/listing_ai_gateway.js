@@ -759,7 +759,9 @@ export function createListingAiGateway({
             return result;
           }
           const estimatedCostCents = configuration.provider === 'openai' ? 1 : 0;
-          if (estimatedCostCents > configuration.budgetCents) {
+          if (estimatedCostCents > configuration.budgetCents
+              || (configuration.provider === 'openai'
+                && estimatedCostCents > configuration.stagingSmokeBudgetCents)) {
             const result = manualFallback('listing_ai_budget_exhausted');
             safeAudit(audit, { ...baseAudit, event: 'fallback', outcome: result.reasonCode, providerCallCount: 0 });
             return result;
@@ -854,7 +856,9 @@ export function createListingAiGateway({
             });
             return result;
           }
-          if (usage.estimatedCostCents > configuration.budgetCents) {
+          if (usage.estimatedCostCents > configuration.budgetCents
+              || (configuration.provider === 'openai'
+                && usage.estimatedCostCents > configuration.stagingSmokeBudgetCents)) {
             const result = manualFallback('listing_ai_budget_exhausted_after_call', {
               providerCallCount: 1,
               paidCallPerformed: configuration.provider === 'openai',

@@ -10,6 +10,7 @@ import {
 import { createPostgresListingAiBudgetGuard } from '../src/listing_ai_budget_guard.js';
 
 const { Client, Pool } = pg;
+const smokeBudget = { stagingSmokeBudgetCents: 500, stagingSmokeActivationId: '12345678-1234-4234-8234-123456789abc' };
 
 test('WP260-D PostgreSQL attempt, reservation and unknown replay are owner-bound', {
   skip: !process.env.TEST_DATABASE_URL?.trim(),
@@ -51,6 +52,7 @@ test('WP260-D PostgreSQL attempt, reservation and unknown replay are owner-bound
         maxCostCents: 12,
         maxCallCount: 6,
         budgetCents: 10000,
+      ...smokeBudget,
       }),
       (error) => error.code === 'listing_ai_attempt_cost_bound_invalid',
     );
@@ -64,6 +66,7 @@ test('WP260-D PostgreSQL attempt, reservation and unknown replay are owner-bound
       maxCostCents: 4,
       maxCallCount: 2,
       budgetCents: 10000,
+      ...smokeBudget,
     });
     assert.equal(first.claimed, true);
     assert.equal(first.status, 'reserved');
@@ -83,6 +86,7 @@ test('WP260-D PostgreSQL attempt, reservation and unknown replay are owner-bound
       maxCostCents: 2,
       maxCallCount: 1,
       budgetCents: 10000,
+      ...smokeBudget,
       leaseMs: 1,
     });
     await client.query(
@@ -99,6 +103,7 @@ test('WP260-D PostgreSQL attempt, reservation and unknown replay are owner-bound
       maxCostCents: 2,
       maxCallCount: 1,
       budgetCents: 10000,
+      ...smokeBudget,
     });
     assert.equal(staleReclaimed.claimed, true);
     const guard = createPostgresListingAiBudgetGuard({ client, budgetCents: 10000 });
@@ -108,13 +113,25 @@ test('WP260-D PostgreSQL attempt, reservation and unknown replay are owner-bound
       draftId, ownerId: userId, generationKey, model: 'gpt-test',
       consent: { accepted: true, disclosureVersion: 'listing-ai-image-disclosure-v1' },
       images, maxCostCents: 4, maxCallCount: 2, budgetCents: 10000,
+      ...smokeBudget,
     });
     assert.equal(duplicate.pending, true);
+    await assert.rejects(
+      claimListingAiAttempt(client, {
+        draftId, ownerId: userId, generationKey, model: 'gpt-test',
+        consent: { accepted: true, disclosureVersion: 'listing-ai-image-disclosure-v1' },
+        images, maxCostCents: 4, maxCallCount: 2, budgetCents: 10000,
+        stagingSmokeBudgetCents: 500,
+        stagingSmokeActivationId: 'abcdefab-cdef-4abc-8def-abcdefabcdef',
+      }),
+      (error) => error.code === 'listing_ai_attempt_payload_conflict',
+    );
     await assert.rejects(
       claimListingAiAttempt(client, {
         draftId, ownerId: 'foreign-owner', generationKey, model: 'gpt-test',
         consent: { accepted: true, disclosureVersion: 'listing-ai-image-disclosure-v1' },
         images, maxCostCents: 4, maxCallCount: 2, budgetCents: 10000,
+      ...smokeBudget,
       }),
       (error) => error.code === 'listing_ai_attempt_payload_conflict',
     );
@@ -150,6 +167,7 @@ test('WP260-D PostgreSQL attempt, reservation and unknown replay are owner-bound
       draftId, ownerId: userId, generationKey, model: 'gpt-test',
       consent: { accepted: true, disclosureVersion: 'listing-ai-image-disclosure-v1' },
       images, maxCostCents: 4, maxCallCount: 2, budgetCents: 10000,
+      ...smokeBudget,
     });
     assert.equal(blocked.retryBlocked, true);
     await assert.rejects(
@@ -176,7 +194,7 @@ test('WP260-D independent clients prove one claim, bounded calls, lost COMMIT re
   const draftId = `listing_ai_draft_${suffix.slice(0, 8)}-1234-4123-8123-${suffix.slice(8, 20)}`;
   const images = [{ imageReference: 'listing_image_concurrent', sha256: 'c'.repeat(64), byteSize: 12 }];
   const consent = { accepted: true, disclosureVersion: 'listing-ai-image-disclosure-v1' };
-  const base = { draftId, ownerId: userId, model: 'gpt-test', consent, images, budgetCents: 10000 };
+  const base = { draftId, ownerId: userId, model: 'gpt-test', consent, images, budgetCents: 10000, ...smokeBudget };
   const generation = (letter) => letter.repeat(64);
   const aggregateLockKey = 'listing_ai_budget_aggregates:lifetime:openai:wp260d';
   let priorAggregate = null;

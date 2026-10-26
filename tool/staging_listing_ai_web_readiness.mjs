@@ -11,6 +11,7 @@ const envelopeKeys = ['schemaVersion', 'kind', 'evidenceClass', 'syntheticFixtur
 const webKeys = ['sourceCommit', 'clientVersion'];
 const configurationKeys = ['environment', 'pilotId', 'runtimeCommit', 'imageDigest',
   'promotionKind', 'promotionReceiptSha256', 'promotedAtUtc', 'provider', 'model', 'budgetCents',
+  'budgetScope', 'stagingSmokeBudgetCents', 'stagingSmokeActivationId', 'runMaxProviderCalls',
   'externalExecutionApproved', 'automaticPublicationAllowed',
   'providerSecretMetadataValidated', 'providerSecretMetadataReceiptSha256',
   'providerSecretMode', 'providerSecretOwnerUid', 'providerSecretGroupGid',
@@ -18,7 +19,8 @@ const configurationKeys = ['environment', 'pilotId', 'runtimeCommit', 'imageDige
   'providerSecretOutsideRepository', 'providerSecretReadOnlyMount',
   'rollbackToMockVerified', 'rollbackToMockProofSha256'];
 const capabilityKeys = ['authenticatedReadback', 'available', 'provider', 'mode',
-  'supportedClientVersion', 'imageLimit', 'disclosureVersion', 'disclosureHash',
+  'budgetScope', 'lifetimeBudgetCents', 'stagingSmokeBudgetCents',
+  'stagingSmokeActivationId', 'supportedClientVersion', 'imageLimit', 'disclosureVersion', 'disclosureHash',
   'configRevision', 'configurationSha256', 'readAtUtc'];
 const decisionKeys = ['schemaVersion', 'kind', 'evidenceClass', 'reviewerRole',
   'decision', 'gateId', 'sourceCommit', 'clientVersion', 'runtimeCommit',
@@ -145,7 +147,12 @@ export function bindListingAiWebReadiness(evidence, evidenceDigest,
     && config.promotionKind === 'green-staging-106-106'
     && hashPattern.test(config.promotionReceiptSha256)
     && config.provider === 'openai' && config.model === LISTING_AI_WEB_MODEL
-    && Number.isSafeInteger(config.budgetCents) && config.budgetCents >= 2 && config.budgetCents <= 500
+    && config.budgetCents === 10_000 && config.budgetScope === 'lifetime'
+    && Number.isSafeInteger(config.stagingSmokeBudgetCents)
+    && config.stagingSmokeBudgetCents >= 2 && config.stagingSmokeBudgetCents <= 500
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
+      .test(config.stagingSmokeActivationId)
+    && config.runMaxProviderCalls === 5
     && config.externalExecutionApproved === true && config.automaticPublicationAllowed === false,
   'listing_ai_web_configuration_invalid');
   check(config.providerSecretMetadataValidated === true
@@ -166,6 +173,10 @@ export function bindListingAiWebReadiness(evidence, evidenceDigest,
   const capability = value.capability;
   check(capability.authenticatedReadback === true && capability.available === true
     && capability.provider === 'openai' && capability.mode === 'external'
+    && capability.budgetScope === 'lifetime'
+    && capability.lifetimeBudgetCents === config.budgetCents
+    && capability.stagingSmokeBudgetCents === config.stagingSmokeBudgetCents
+    && capability.stagingSmokeActivationId === config.stagingSmokeActivationId
     && capability.supportedClientVersion === web.clientVersion
     && Number.isSafeInteger(capability.imageLimit) && capability.imageLimit > 0
     && capability.imageLimit <= 4 && typeof capability.disclosureVersion === 'string'

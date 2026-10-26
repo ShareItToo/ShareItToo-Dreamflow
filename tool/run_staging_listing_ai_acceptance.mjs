@@ -229,9 +229,15 @@ export async function runStagingListingAiAcceptance({
       || readiness.listingAi.model !== reviewedModel
       || readiness.listingAi.promptVersion !== 'listing-ai-prompt-v1'
       || readiness.listingAi.schemaVersion !== 'listing-ai-draft-v1'
-      || !Number.isSafeInteger(readiness.listingAi.budgetCents)
-      || readiness.listingAi.budgetCents < 4
-      || readiness.listingAi.budgetCents > 500
+      || readiness.listingAi.budgetScope !== 'lifetime'
+      || readiness.listingAi.budgetCents !== 10_000
+      || !Number.isSafeInteger(readiness.listingAi.stagingSmokeBudgetCents)
+      || readiness.listingAi.stagingSmokeBudgetCents < 4
+      || readiness.listingAi.stagingSmokeBudgetCents > 500
+      || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
+        readiness.listingAi.stagingSmokeActivationId ?? '',
+      )
+      || readiness.listingAi.runMaxProviderCalls !== 5
       || readiness.listingAi.externalProviderExecutionAllowed !== true
       || readiness.listingAi.automaticPublicationAllowed !== false) {
     fail('The Staging backend does not expose the exact approved Listing-AI provider boundary.');
@@ -251,6 +257,23 @@ export async function runStagingListingAiAcceptance({
   if (typeof me?.user?.id !== 'string'
       || String(me.user.email ?? '').toLowerCase() !== owner.email.toLowerCase()) {
     fail('The Staging session is not bound to the exact acceptance owner.');
+  }
+
+  const capability = await apiRequest(
+    fetchImpl,
+    '/blue-ocean/listing-drafts/capabilities',
+    { token: session.accessToken },
+  );
+  if (capability?.available !== true
+      || capability.provider !== 'openai'
+      || capability.mode !== 'external'
+      || capability.budgetScope !== 'lifetime'
+      || capability.lifetimeBudgetCents !== readiness.listingAi.budgetCents
+      || capability.stagingSmokeBudgetCents !== readiness.listingAi.stagingSmokeBudgetCents
+      || capability.stagingSmokeActivationId !== readiness.listingAi.stagingSmokeActivationId
+      || capability.configRevision == null
+      || capability.supportedClientVersion == null) {
+    fail('The authenticated Listing-AI capability readback does not match the current budget readback.');
   }
 
   const beforeIds = exactListingIds(await apiRequest(
@@ -283,6 +306,7 @@ export async function runStagingListingAiAcceptance({
     body: {
       draftId,
       generationKey,
+      capabilityHandshake: capability,
       photoUrls: [upload.url],
       consent: {
         explicitlyInitiated: true,
@@ -312,7 +336,9 @@ export async function runStagingListingAiAcceptance({
     backendCommit: commit,
     provider: 'openai',
     model: reviewedModel,
-    budgetCents: readiness.listingAi.budgetCents,
+    lifetimeBudgetCents: readiness.listingAi.budgetCents,
+    stagingSmokeBudgetCents: readiness.listingAi.stagingSmokeBudgetCents,
+    stagingSmokeActivationId: readiness.listingAi.stagingSmokeActivationId,
     fixtureSha256,
     catalogPair: providerDraft.catalogPair,
     titleSuggested: providerDraft.titleSuggested,

@@ -17,6 +17,7 @@ const ownerPassword = ['private', 'test', 'password', 'not', 'real'].join('-');
 const renterPassword = ['second', 'private', 'test', 'password', 'not', 'real'].join('-');
 const token = ['test', 'access', 'token', 'not', 'real'].join('-');
 const imageReference = 'listing_image_wp08_opaque_reference';
+const activationId = '11111111-1111-4111-8111-111111111111';
 
 function response(status, value) {
   return new Response(JSON.stringify(value), {
@@ -138,8 +139,24 @@ async function privateVault(t) {
   return path;
 }
 
-function successfulFetch({ changeInventory = false } = {}) {
+function successfulFetch({ changeInventory = false, capabilityOverrides = {} } = {}) {
   let inventoryReads = 0;
+  const capability = {
+    available: true,
+    provider: 'openai',
+    mode: 'external',
+    budgetScope: 'lifetime',
+    lifetimeBudgetCents: 10_000,
+    stagingSmokeBudgetCents: 500,
+    stagingSmokeActivationId: activationId,
+    disclosureVersion: 'listing-ai-image-disclosure-v1',
+    disclosureHash: 'c'.repeat(64),
+    policyRevision: 'listing-ai-policy-v1',
+    configRevision: 'd'.repeat(64),
+    supportedClientVersion: '1.0.0+2026092905',
+    imageLimit: 4,
+    ...capabilityOverrides,
+  };
   return async (url, options = {}) => {
     const path = testPath(url);
     if (path === '/version') return response(200, { commit });
@@ -151,7 +168,11 @@ function successfulFetch({ changeInventory = false } = {}) {
           model: 'gpt-4o-mini-2024-07-18',
           promptVersion: 'listing-ai-prompt-v1',
           schemaVersion: 'listing-ai-draft-v1',
-          budgetCents: 500,
+          budgetCents: 10_000,
+          budgetScope: 'lifetime',
+          stagingSmokeBudgetCents: 500,
+          stagingSmokeActivationId: activationId,
+          runMaxProviderCalls: 5,
           externalProviderExecutionAllowed: true,
           automaticPublicationAllowed: false,
         },
@@ -167,6 +188,10 @@ function successfulFetch({ changeInventory = false } = {}) {
     assert.equal(options.headers.authorization, `Bearer ${token}`);
     if (path === '/auth/me') {
       return response(200, { user: { id: 'wp08-owner-principal', email: ownerEmail } });
+    }
+    if (path === '/blue-ocean/listing-drafts/capabilities') {
+      assert.equal(options.method ?? 'GET', 'GET');
+      return response(200, capability);
     }
     if (path === '/listings/mine') {
       inventoryReads += 1;
@@ -189,6 +214,7 @@ function successfulFetch({ changeInventory = false } = {}) {
       assert.equal(body.consent.accepted, true);
       assert.equal(body.consent.disclosureVersion, 'listing-ai-image-disclosure-v1');
       assert.equal(Object.hasOwn(body, 'explicitAction'), false);
+      assert.deepEqual(body.capabilityHandshake, capability);
       return response(201, { assistant: assistant(body.draftId), replayed: false });
     }
     throw new Error(`Unexpected test request: ${path}`);
@@ -208,7 +234,9 @@ test('accepts one real-provider-shaped Staging draft without publication or secr
     backendCommit: commit,
     provider: 'openai',
     model: 'gpt-4o-mini-2024-07-18',
-    budgetCents: 500,
+    lifetimeBudgetCents: 10_000,
+    stagingSmokeBudgetCents: 500,
+    stagingSmokeActivationId: activationId,
     fixtureSha256: '85458cb5bc4777c587bfb8994ff0f960c8549f5423df9cc33b4c90fc65ffd420',
     catalogPair: 'cat8/Bohrmaschinen',
     titleSuggested: true,
@@ -232,6 +260,22 @@ test('accepts one real-provider-shaped Staging draft without publication or secr
   assert.equal(serialized.includes(ownerEmail), false);
   assert.equal(serialized.includes(ownerPassword), false);
   assert.equal(serialized.includes(token), false);
+});
+
+test('refuses external analysis when the current authenticated budget capability differs from health', async (t) => {
+  let analysisCalls = 0;
+  const fetchImpl = successfulFetch({ capabilityOverrides: { stagingSmokeBudgetCents: 499 } });
+  const countedFetch = async (...args) => {
+    if (testPath(args[0]) === '/blue-ocean/listing-drafts/analyze') analysisCalls += 1;
+    return fetchImpl(...args);
+  };
+  await assert.rejects(runStagingListingAiAcceptance({
+    vaultFile: await privateVault(t),
+    expectedCommit: commit,
+    fetchImpl: countedFetch,
+    random: () => Buffer.alloc(16, 9),
+  }), /authenticated Listing-AI capability readback does not match/u);
+  assert.equal(analysisCalls, 0);
 });
 
 test('rejects a mock Staging provider before authenticating an owner', async (t) => {

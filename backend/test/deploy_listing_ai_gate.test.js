@@ -108,7 +108,9 @@ test('Staging listing-AI validates its private key before Compose can run', asyn
       SIT_STAGING_PILOT_ID: 'heilbronn_wave0',
       CONFIRM_STAGING_LISTING_AI: commit,
       SIT_LISTING_AI_MODEL: 'gpt-4o-mini-2024-07-18',
-      SIT_LISTING_AI_BUDGET_CENTS: '5',
+      SIT_LISTING_AI_BUDGET_CENTS: '10000',
+      SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: '500',
+      SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: '12345678-1234-4234-8234-123456789abc',
       SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '1',
       OPENAI_API_KEY_HOST_FILE: join(fixture.root, 'missing-secret'),
       DOCKER_CAPTURE: fixture.capture,
@@ -131,8 +133,10 @@ test('deployment source keeps listing-AI opt-in, bounded and sanitized', async (
   ]);
   assert.match(deploy, /ENABLE_STAGING_LISTING_AI:-0/u);
   assert.match(deploy, /CONFIRM_STAGING_LISTING_AI/u);
-  assert.match(deploy, /task_listing_ai_budget_cents < 2/u);
-  assert.match(deploy, /task_listing_ai_budget_cents > 500/u);
+  assert.match(deploy, /task_listing_ai_smoke_budget_cents < 2/u);
+  assert.match(deploy, /task_listing_ai_smoke_budget_cents > 500/u);
+  assert.match(deploy, /SIT_LISTING_AI_BUDGET_CENTS must remain the fixed 10000-cent lifetime cap/u);
+  assert.match(deploy, /SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID/u);
   assert.match(deploy, /SIT_LISTING_AI_PROVIDER: mock/u);
   assert.match(deploy, /Staging listing-AI health does not confirm/u);
   assert.equal((deploy.match(/payload\?\.checks\?\.listingAi/gu) ?? []).length, 2);

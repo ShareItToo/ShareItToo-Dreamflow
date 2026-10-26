@@ -27,8 +27,47 @@ function canonical(value) {
   return JSON.stringify(value);
 }
 
+const stagingSmokeMetadataKey = '__sitStagingSmokeActivationId';
+
+function persistedResult(result, activationId) {
+  const value = result && typeof result === 'object' && !Array.isArray(result)
+    ? { ...result }
+    : {};
+  if (Object.hasOwn(value, stagingSmokeMetadataKey)) {
+    fail(500, 'listing_ai_attempt_result_metadata_conflict');
+  }
+  if (activationId) value[stagingSmokeMetadataKey] = activationId;
+  return value;
+}
+
+function publicResult(result) {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return result;
+  const { [stagingSmokeMetadataKey]: _private, ...value } = result;
+  return value;
+}
+
+async function assertStagingSmokeBudget(client, { budgetCents }) {
+  const used = await client.query(
+    `SELECT COALESCE(SUM(CASE WHEN reservation.status = 'active'
+                              THEN reservation.reserved_cents
+                              ELSE reservation.consumed_cents END), 0) AS used_cents
+       FROM listing_ai_budget_reservations AS reservation
+       JOIN listing_ai_analysis_attempts AS attempt ON attempt.id = reservation.attempt_id
+      WHERE reservation.provider = 'openai'
+        AND attempt.result ->> '__sitStagingSmokeActivationId' IS NOT NULL`,
+  );
+  if (used.rowCount !== 1 || !Number.isSafeInteger(Number(used.rows[0].used_cents))) {
+    fail(503, 'listing_ai_staging_smoke_budget_readback_failed');
+  }
+  if (Number(used.rows[0].used_cents) > budgetCents) {
+    fail(503, 'listing_ai_staging_smoke_budget_exhausted');
+  }
+}
+
 export function listingAiAttemptHashes({
   draftId, ownerId, generationKey, model, consent, images, maxCostCents,
+  budgetCents = 10_000, stagingSmokeBudgetCents = null,
+  stagingSmokeActivationId = null,
   capabilityHandshake = null,
 }) {
   const imageSha256 = sha256(JSON.stringify(images.map((entry) => ({
@@ -44,6 +83,9 @@ export function listingAiAttemptHashes({
     model,
     consent,
     capabilityHandshake,
+    budgetCents,
+    stagingSmokeBudgetCents,
+    stagingSmokeActivationId,
     images,
     maxCostCents,
   }));
@@ -53,6 +95,9 @@ export function listingAiAttemptHashes({
       imageSha256,
       consentSha256,
       capabilityHandshake,
+      budgetCents,
+      stagingSmokeBudgetCents,
+      stagingSmokeActivationId,
       model,
       maxCostCents,
     })),
@@ -73,7 +118,7 @@ function rowView(row) {
     providerCallCount: Number(row.provider_call_count),
     estimatedCostCents: row.estimated_cost_cents == null ? null : Number(row.estimated_cost_cents),
     billedCostCents: row.billed_cost_cents == null ? null : Number(row.billed_cost_cents),
-    result: row.result,
+    result: publicResult(row.result),
   });
 }
 
@@ -89,12 +134,18 @@ const attemptSelect = `id, draft_id, owner_id, generation_key, request_sha256,
 
 export async function claimListingAiAttempt(client, {
   draftId, ownerId, generationKey, model, consent, images,
-  maxCostCents, maxCallCount, budgetCents, capabilityHandshake = null,
+  maxCostCents, maxCallCount, budgetCents, stagingSmokeBudgetCents,
+  stagingSmokeActivationId, capabilityHandshake = null,
   leaseMs = 30_000,
 }) {
   if (!client || typeof client.query !== 'function') fail(500, 'listing_ai_attempt_store_invalid');
   assertAttemptCost({ maxCostCents, maxCallCount });
-  if (!Number.isSafeInteger(budgetCents) || budgetCents < maxCostCents) fail(503, 'listing_ai_budget_exhausted');
+  if (budgetCents !== 10_000) fail(503, 'listing_ai_lifetime_budget_configuration_invalid');
+  if (!Number.isSafeInteger(stagingSmokeBudgetCents)
+      || stagingSmokeBudgetCents < maxCostCents || stagingSmokeBudgetCents > 500
+      || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(stagingSmokeActivationId ?? '')) {
+    fail(503, 'listing_ai_staging_smoke_budget_configuration_invalid');
+  }
   const hashes = listingAiAttemptHashes({
     draftId,
     ownerId,
@@ -103,19 +154,24 @@ export async function claimListingAiAttempt(client, {
     consent,
     images,
     maxCostCents,
+    budgetCents,
+    stagingSmokeBudgetCents,
+    stagingSmokeActivationId,
     capabilityHandshake,
   });
   const inserted = await client.query(
     `INSERT INTO listing_ai_analysis_attempts (
        draft_id, owner_id, generation_key, request_sha256,
        payload_sha256, image_sha256, model, consent_sha256, max_cost_cents,
-       status, reserved_cost_cents, reserved_call_count, lease_expires_at
+       status, reserved_cost_cents, reserved_call_count, lease_expires_at, result
      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
-               'reserved', $9, $10, now() + ($11 * interval '1 millisecond'))
+               'reserved', $9, $10, now() + ($11 * interval '1 millisecond'),
+               jsonb_build_object('__sitStagingSmokeActivationId', $12))
      ON CONFLICT (draft_id, generation_key) DO NOTHING
      RETURNING ${attemptSelect}`,
     [draftId, ownerId, generationKey, hashes.requestSha256, hashes.payloadSha256,
-      hashes.imageSha256, model, hashes.consentSha256, maxCostCents, maxCallCount, leaseMs],
+      hashes.imageSha256, model, hashes.consentSha256, maxCostCents, maxCallCount, leaseMs,
+      stagingSmokeActivationId],
   );
   if (inserted.rowCount === 1) {
     const row = inserted.rows[0];
@@ -137,6 +193,9 @@ export async function claimListingAiAttempt(client, {
       [maxCostCents, maxCallCount, budgetCents],
     );
     if (held.rowCount !== 1) fail(503, 'listing_ai_budget_exhausted');
+    await assertStagingSmokeBudget(client, {
+      budgetCents: stagingSmokeBudgetCents,
+    });
     return Object.freeze({ ...rowView(row), claimed: true, replayed: false });
   }
   const existing = await client.query(
@@ -153,6 +212,9 @@ export async function claimListingAiAttempt(client, {
       || row.model !== model || row.consent_sha256 !== hashes.consentSha256
       || Number(row.max_cost_cents) !== maxCostCents) {
     fail(409, 'listing_ai_attempt_payload_conflict');
+  }
+  if (row.result?.[stagingSmokeMetadataKey] !== stagingSmokeActivationId) {
+    fail(409, 'listing_ai_staging_smoke_activation_mismatch');
   }
   if (row.status === 'unknown') return Object.freeze({ ...rowView(row), claimed: false, retryBlocked: true });
   if (row.status === 'succeeded') return Object.freeze({ ...rowView(row), claimed: false, replayed: true });
@@ -194,6 +256,9 @@ export async function claimListingAiAttempt(client, {
       [maxCostCents, maxCallCount, budgetCents],
     );
     if (held.rowCount !== 1) fail(503, 'listing_ai_budget_exhausted');
+    await assertStagingSmokeBudget(client, {
+      budgetCents: stagingSmokeBudgetCents,
+    });
     const refreshed = await client.query(
       `UPDATE listing_ai_analysis_attempts
           SET lease_expires_at = now() + ($3 * interval '1 millisecond'), updated_at = now()
@@ -212,11 +277,12 @@ export async function claimListingAiAttempt(client, {
       `UPDATE listing_ai_analysis_attempts
           SET status = 'reserved', provider_call_count = 0,
               estimated_cost_cents = NULL, billed_cost_cents = NULL,
-              result = '{}'::jsonb, lease_expires_at = now() + ($3 * interval '1 millisecond'),
+              result = jsonb_build_object('__sitStagingSmokeActivationId', $4),
+              lease_expires_at = now() + ($3 * interval '1 millisecond'),
               updated_at = now()
         WHERE id = $1 AND owner_id = $2 AND status = 'failed'
         RETURNING ${attemptSelect}`,
-      [row.id, ownerId, leaseMs],
+      [row.id, ownerId, leaseMs, stagingSmokeActivationId],
     );
     if (retry.rowCount !== 1) fail(503, 'listing_ai_attempt_claim_lost');
     const reservation = await client.query(
@@ -237,6 +303,9 @@ export async function claimListingAiAttempt(client, {
       [maxCostCents, maxCallCount, budgetCents],
     );
     if (held.rowCount !== 1) fail(503, 'listing_ai_budget_exhausted');
+    await assertStagingSmokeBudget(client, {
+      budgetCents: stagingSmokeBudgetCents,
+    });
     return Object.freeze({ ...rowView(retry.rows[0]), claimed: true, replayed: false });
   }
   fail(409, 'listing_ai_attempt_state_invalid');
@@ -272,7 +341,7 @@ async function finalize(client, {
     && (currentRow.billed_cost_cents == null
       ? billedCostCents == null
       : Number(currentRow.billed_cost_cents) === billedCostCents)
-    && canonical(currentRow.result) === canonical(result ?? {});
+    && canonical(publicResult(currentRow.result)) === canonical(result ?? {});
   if (sameFinal) return rowView(currentRow);
   if (currentRow.status !== 'egress_started') fail(409, 'listing_ai_attempt_finalize_conflict');
   const reservation = await client.query(
@@ -290,7 +359,8 @@ async function finalize(client, {
               result = $6::jsonb, updated_at = now()
         WHERE id = $1 AND owner_id = $2 AND status = 'egress_started'
         RETURNING ${attemptSelect}`,
-      [attemptId, ownerId, providerCallCount, estimatedCostCents, billedCostCents, JSON.stringify(result ?? {})],
+      [attemptId, ownerId, providerCallCount, estimatedCostCents, billedCostCents,
+        JSON.stringify(persistedResult(result, currentRow.result?.[stagingSmokeMetadataKey]))],
     );
     if (unknown.rowCount !== 1) fail(409, 'listing_ai_attempt_finalize_conflict');
     const unknownReason = String(result?.reasonCode ?? '').includes('timeout')
@@ -334,7 +404,8 @@ async function finalize(client, {
             billed_cost_cents = $6, result = $7::jsonb, updated_at = now()
       WHERE id = $1 AND owner_id = $2 AND status = 'egress_started'
       RETURNING ${attemptSelect}`,
-    [attemptId, ownerId, status, providerCallCount, spent, billedCostCents, JSON.stringify(result ?? {})],
+    [attemptId, ownerId, status, providerCallCount, spent, billedCostCents,
+      JSON.stringify(persistedResult(result, currentRow.result?.[stagingSmokeMetadataKey]))],
   );
   if (updated.rowCount !== 1) fail(409, 'listing_ai_attempt_finalize_conflict');
   const settled = await client.query(
@@ -369,7 +440,7 @@ export async function markListingAiAttemptFailed(client, { attemptId, ownerId, r
   );
   if (existing.rowCount !== 1) fail(503, 'listing_ai_attempt_readback_failed');
   if (existing.rows[0].status === 'failed'
-      && canonical(existing.rows[0].result) === canonical(result ?? {})) {
+      && canonical(publicResult(existing.rows[0].result)) === canonical(result ?? {})) {
     return rowView(existing.rows[0]);
   }
   if (existing.rows[0].status !== 'reserved') fail(409, 'listing_ai_attempt_finalize_conflict');
@@ -379,7 +450,10 @@ export async function markListingAiAttemptFailed(client, { attemptId, ownerId, r
             billed_cost_cents = 0, result = $3::jsonb, updated_at = now()
       WHERE id = $1 AND owner_id = $2 AND status = 'reserved'
       RETURNING ${attemptSelect}`,
-    [attemptId, ownerId, JSON.stringify(result ?? {})],
+    [attemptId, ownerId, JSON.stringify(persistedResult(
+      result,
+      existing.rows[0].result?.[stagingSmokeMetadataKey],
+    ))],
   );
   if (updated.rowCount !== 1) fail(409, 'listing_ai_attempt_finalize_conflict');
   const reservation = await client.query(

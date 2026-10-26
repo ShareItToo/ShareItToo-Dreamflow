@@ -63,7 +63,9 @@ test('openai execution requires the pinned model, budget and explicit external g
   const held = readListingAiGatewayConfiguration({
     SIT_LISTING_AI_PROVIDER: 'openai',
     SIT_LISTING_AI_MODEL: listingAiOpenAiModel,
-    SIT_LISTING_AI_BUDGET_CENTS: '5',
+    SIT_LISTING_AI_BUDGET_CENTS: '10000',
+    SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: '500',
+    SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: '11111111-1111-4111-8111-111111111111',
   }, { deploymentEnvironment: 'staging' });
   assert.equal(held.enabled, false);
   assert.equal(held.providerExecutionAllowed, false);
@@ -72,12 +74,19 @@ test('openai execution requires the pinned model, budget and explicit external g
   const enabled = readListingAiGatewayConfiguration({
     SIT_LISTING_AI_PROVIDER: 'openai',
     SIT_LISTING_AI_MODEL: listingAiOpenAiModel,
-    SIT_LISTING_AI_BUDGET_CENTS: '5',
+    SIT_LISTING_AI_BUDGET_CENTS: '10000',
+    SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: '500',
+    SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: '11111111-1111-4111-8111-111111111111',
     SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '1',
   }, { deploymentEnvironment: 'staging' });
   assert.equal(enabled.enabled, true);
   assert.equal(enabled.providerExecutionAllowed, true);
   assert.equal(enabled.externalProviderExecutionAllowed, true);
+  assert.equal(enabled.budgetCents, 10_000);
+  assert.equal(enabled.budgetScope, 'lifetime');
+  assert.equal(enabled.stagingSmokeBudgetCents, 500);
+  assert.equal(enabled.stagingSmokeActivationId, '11111111-1111-4111-8111-111111111111');
+  assert.equal(enabled.runMaxProviderCalls, 5);
   assert.equal(enabled.providerPublicationAllowed, false);
   assert.equal(enabled.authoritativeProviderPriceAllowed, false);
   assert.equal(enabled.secretConfiguredInClient, false);
@@ -99,15 +108,42 @@ test('production, version drift, invalid bounds and non-paid budgets fail closed
     [{
       SIT_LISTING_AI_PROVIDER: 'openai',
       SIT_LISTING_AI_MODEL: listingAiOpenAiModel,
-      SIT_LISTING_AI_BUDGET_CENTS: '1',
+      SIT_LISTING_AI_BUDGET_CENTS: '10000',
+      SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: '1',
+      SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: '11111111-1111-4111-8111-111111111111',
       SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '1',
-    }, {}, /two-cent safety reservation/u],
+    }, {}, /explicit lifetime and scoped smoke budgets/u],
     [{
       SIT_LISTING_AI_PROVIDER: 'openai',
       SIT_LISTING_AI_MODEL: listingAiOpenAiModel,
-      SIT_LISTING_AI_BUDGET_CENTS: '2',
+      SIT_LISTING_AI_BUDGET_CENTS: '10000',
+      SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: '500',
+      SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: '11111111-1111-4111-8111-111111111111',
       SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '1',
     }, { deploymentEnvironment: 'development' }, /restricted to staging or test/u],
+    [{
+      SIT_LISTING_AI_PROVIDER: 'openai',
+      SIT_LISTING_AI_MODEL: listingAiOpenAiModel,
+      SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '1',
+      SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: '500',
+      SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: '11111111-1111-4111-8111-111111111111',
+    }, { deploymentEnvironment: 'staging' }, /explicit lifetime and scoped smoke budgets/u],
+    [{
+      SIT_LISTING_AI_PROVIDER: 'openai',
+      SIT_LISTING_AI_MODEL: listingAiOpenAiModel,
+      SIT_LISTING_AI_BUDGET_CENTS: '500',
+      SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: '500',
+      SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: '11111111-1111-4111-8111-111111111111',
+      SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '1',
+    }, { deploymentEnvironment: 'staging' }, /fixed 10000-cent lifetime cap/u],
+    [{
+      SIT_LISTING_AI_PROVIDER: 'openai',
+      SIT_LISTING_AI_MODEL: listingAiOpenAiModel,
+      SIT_LISTING_AI_BUDGET_CENTS: '10000',
+      SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: '501',
+      SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: '11111111-1111-4111-8111-111111111111',
+      SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '1',
+    }, { deploymentEnvironment: 'staging' }, /must be between 0 and 500/u],
     [{ SIT_LISTING_AI_TIMEOUT_MS: '31' }, {}, /TIMEOUT_MS/u],
   ]) {
     assert.throws(

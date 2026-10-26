@@ -13,10 +13,12 @@ import { listingAiAttemptHashes } from '../src/listing_ai_attempt_workflow.js';
 function configFor(provider) {
   const env = {
     SIT_LISTING_AI_PROVIDER: provider,
-    SIT_LISTING_AI_BUDGET_CENTS: provider === 'openai' ? '5' : '0',
+    SIT_LISTING_AI_BUDGET_CENTS: provider === 'openai' ? '10000' : '0',
   };
   if (provider === 'openai') {
     env.SIT_LISTING_AI_MODEL = listingAiOpenAiModel;
+    env.SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS = '500';
+    env.SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID = '11111111-1111-4111-8111-111111111111';
     env.SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED = '1';
   }
   return readListingAiGatewayConfiguration(env, { deploymentEnvironment: 'staging' });

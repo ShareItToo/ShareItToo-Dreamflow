@@ -17,6 +17,7 @@ const receiptKeys = ['schemaVersion', 'kind', 'status', 'environment', 'canonica
   'healthReadbackSha256', 'secretMetadataReceiptSha256',
   'recordedAtUtc', 'rollbackTarget'];
 const configKeys = ['provider', 'model', 'promptVersion', 'schemaVersion', 'budgetCents',
+  'budgetScope', 'stagingSmokeBudgetCents', 'stagingSmokeActivationId', 'runMaxProviderCalls',
   'externalProviderExecutionAllowed', 'automaticPublicationAllowed'];
 const rollbackKeys = ['containerId', 'containerName', 'imageId', 'runtimeCommit'];
 
@@ -36,7 +37,14 @@ export function validateStagingListingAiActivationReceipt(receipt, expected = {}
     && receipt.providerConfiguration.promptVersion === 'listing-ai-prompt-v1'
     && receipt.providerConfiguration.schemaVersion === 'listing-ai-draft-v1'
     && Number.isSafeInteger(receipt.providerConfiguration.budgetCents)
-    && receipt.providerConfiguration.budgetCents >= 2 && receipt.providerConfiguration.budgetCents <= 500
+    && receipt.providerConfiguration.budgetCents === 10_000
+    && receipt.providerConfiguration.budgetScope === 'lifetime'
+    && Number.isSafeInteger(receipt.providerConfiguration.stagingSmokeBudgetCents)
+    && receipt.providerConfiguration.stagingSmokeBudgetCents >= 2
+    && receipt.providerConfiguration.stagingSmokeBudgetCents <= 500
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
+      .test(receipt.providerConfiguration.stagingSmokeActivationId)
+    && receipt.providerConfiguration.runMaxProviderCalls === 5
     && receipt.providerConfiguration.externalProviderExecutionAllowed === true
     && receipt.providerConfiguration.automaticPublicationAllowed === false
     && exact(receipt.rollbackTarget, rollbackKeys)
@@ -116,7 +124,14 @@ export function composeStagingListingAiActivationReceipt({ runtime, rollbackTarg
     && health.checks.listingAi.promptVersion === 'listing-ai-prompt-v1'
     && health.checks.listingAi.schemaVersion === 'listing-ai-draft-v1'
     && Number.isSafeInteger(health.checks.listingAi.budgetCents)
-    && health.checks.listingAi.budgetCents >= 2 && health.checks.listingAi.budgetCents <= 500
+    && health.checks.listingAi.budgetCents === 10_000
+    && health.checks.listingAi.budgetScope === 'lifetime'
+    && Number.isSafeInteger(health.checks.listingAi.stagingSmokeBudgetCents)
+    && health.checks.listingAi.stagingSmokeBudgetCents >= 2
+    && health.checks.listingAi.stagingSmokeBudgetCents <= 500
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
+      .test(health.checks.listingAi.stagingSmokeActivationId)
+    && health.checks.listingAi.runMaxProviderCalls === 5
     && health.checks.listingAi.externalProviderExecutionAllowed === true
     && health.checks.listingAi.automaticPublicationAllowed === false, 'readback_mismatch');
   const providerConfiguration = Object.fromEntries(configKeys.map((key) => [key,

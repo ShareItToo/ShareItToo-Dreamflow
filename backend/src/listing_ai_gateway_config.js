@@ -11,6 +11,7 @@ import {
 export const listingAiGatewayVersion = 'N3-2026-08-23.1';
 export const listingAiLifetimeBudgetScope = 'lifetime';
 export const listingAiLifetimeBudgetMaxCents = 10_000;
+export const listingAiStagingSmokeBudgetMaxCents = 500;
 export const listingAiRunMaxProviderCalls = 5;
 export const listingAiPerCallReservationCents = 2;
 export const listingAiMockModel = 'listing-ai-mock-v1';
@@ -88,6 +89,18 @@ export function readListingAiGatewayConfiguration(
     maximum: listingAiLifetimeBudgetMaxCents,
     code: 'SIT_LISTING_AI_BUDGET_CENTS must be a bounded non-negative integer',
   });
+  const stagingSmokeBudgetCents = integer(env.SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS, 0, {
+    minimum: 0,
+    maximum: listingAiStagingSmokeBudgetMaxCents,
+    code: 'SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS must be between 0 and 500',
+  });
+  const stagingSmokeActivationId = String(
+    env.SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID ?? '',
+  ).trim();
+  if (stagingSmokeActivationId !== ''
+      && !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(stagingSmokeActivationId)) {
+    fail('SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID must be a UUIDv4');
+  }
   const externalProviderExecutionApproved = exactFlag(
     env.SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED,
     'SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED',
@@ -129,17 +142,29 @@ export function readListingAiGatewayConfiguration(
   if (provider !== 'openai' && budgetCents !== 0) {
     fail('non-paid listing AI providers must have a zero-cent budget');
   }
+  if (provider === 'openai' && budgetCents !== 0
+      && budgetCents !== listingAiLifetimeBudgetMaxCents) {
+    fail('SIT_LISTING_AI_BUDGET_CENTS must equal the fixed 10000-cent lifetime cap');
+  }
+  if (provider !== 'openai' && (stagingSmokeBudgetCents !== 0 || stagingSmokeActivationId !== '')) {
+    fail('non-paid listing AI providers must have zero staging smoke budget and no activation id');
+  }
   if (externalProviderExecutionApproved && provider !== 'openai') {
     fail('external listing AI approval requires the openai provider');
   }
-  if (externalProviderExecutionApproved && budgetCents < 2) {
-    fail('external listing AI approval requires at least a two-cent safety reservation');
+  if (externalProviderExecutionApproved
+      && (budgetCents !== listingAiLifetimeBudgetMaxCents
+        || stagingSmokeBudgetCents < listingAiPerCallReservationCents
+        || stagingSmokeActivationId === '')) {
+    fail('external listing AI approval requires explicit lifetime and scoped smoke budgets');
   }
   if (externalProviderExecutionApproved && !['staging', 'test'].includes(normalizedEnvironment)) {
     fail('external listing AI execution is restricted to staging or test');
   }
   const openAiExecutionAllowed = provider === 'openai'
-    && budgetCents > 0
+    && budgetCents === listingAiLifetimeBudgetMaxCents
+    && stagingSmokeBudgetCents >= listingAiPerCallReservationCents
+    && stagingSmokeActivationId !== ''
     && externalProviderExecutionApproved;
 
   const result = {
@@ -150,6 +175,8 @@ export function readListingAiGatewayConfiguration(
     schemaVersion,
     budgetCents,
     budgetScope: listingAiLifetimeBudgetScope,
+    stagingSmokeBudgetCents,
+    stagingSmokeActivationId: stagingSmokeActivationId || null,
     runMaxProviderCalls: listingAiRunMaxProviderCalls,
     timeoutMs,
     rateLimitWindowMs,
@@ -173,6 +200,8 @@ export function readListingAiGatewayConfiguration(
     schemaVersion: result.schemaVersion,
     budgetCents: result.budgetCents,
     budgetScope: result.budgetScope,
+    stagingSmokeBudgetCents: result.stagingSmokeBudgetCents,
+    stagingSmokeActivationId: result.stagingSmokeActivationId,
     runMaxProviderCalls: result.runMaxProviderCalls,
     timeoutMs: result.timeoutMs,
     rateLimitWindowMs: result.rateLimitWindowMs,
@@ -199,6 +228,10 @@ export function listingAiCapability(configuration) {
     disclosureHash: crypto.createHash('sha256').update(disclosure.text, 'utf8').digest('hex'),
     policyRevision: listingAiPolicyRevision,
     configRevision: configuration?.configRevision ?? null,
+    budgetScope: configuration?.budgetScope ?? listingAiLifetimeBudgetScope,
+    lifetimeBudgetCents: configuration?.budgetCents ?? 0,
+    stagingSmokeBudgetCents: configuration?.stagingSmokeBudgetCents ?? 0,
+    stagingSmokeActivationId: configuration?.stagingSmokeActivationId ?? null,
     supportedClientVersion: listingAiSupportedClientVersion,
     imageLimit: listingAiImageLimit,
   });

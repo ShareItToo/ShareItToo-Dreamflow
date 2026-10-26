@@ -146,7 +146,7 @@ rollback_failed_deployment() {
       printf '    environment:\n' >> "$task_rollback_override"
     fi
     if [[ "$task_staging_listing_ai_enabled" == true ]]; then
-      printf '      SIT_LISTING_AI_PROVIDER: mock\n      SIT_LISTING_AI_MODEL: listing-ai-mock-v1\n      SIT_LISTING_AI_BUDGET_CENTS: "0"\n      SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: "0"\n      OPENAI_API_KEY: ""\n      OPENAI_API_KEY_FILE: ""\n' \
+      printf '      SIT_LISTING_AI_PROVIDER: mock\n      SIT_LISTING_AI_MODEL: listing-ai-mock-v1\n      SIT_LISTING_AI_BUDGET_CENTS: "0"\n      SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: "0"\n      SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: ""\n      SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: "0"\n      OPENAI_API_KEY: ""\n      OPENAI_API_KEY_FILE: ""\n' \
         >> "$task_rollback_override"
     fi
     if [[ "$task_staging_stripe_enabled" == true ]]; then
@@ -437,13 +437,21 @@ else
       echo "SIT_LISTING_AI_MODEL must equal the reviewed Staging listing-AI model." >&2
       exit 1
     fi
-    if [[ ! "${SIT_LISTING_AI_BUDGET_CENTS:-}" =~ ^[0-9]+$ ]]; then
-      echo "SIT_LISTING_AI_BUDGET_CENTS must be an integer from 2 to 500." >&2
+    if [[ -n "${SIT_LISTING_AI_BUDGET_CENTS:-}" && "${SIT_LISTING_AI_BUDGET_CENTS}" != 10000 ]]; then
+      echo "SIT_LISTING_AI_BUDGET_CENTS must remain the fixed 10000-cent lifetime cap." >&2
       exit 1
     fi
-    task_listing_ai_budget_cents=$((10#${SIT_LISTING_AI_BUDGET_CENTS}))
-    if (( task_listing_ai_budget_cents < 2 || task_listing_ai_budget_cents > 500 )); then
-      echo "SIT_LISTING_AI_BUDGET_CENTS must be an integer from 2 to 500." >&2
+    if [[ ! "${SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS:-}" =~ ^[0-9]+$ ]]; then
+      echo "SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS must be an integer from 2 to 500." >&2
+      exit 1
+    fi
+    task_listing_ai_smoke_budget_cents=$((10#${SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS}))
+    if (( task_listing_ai_smoke_budget_cents < 2 || task_listing_ai_smoke_budget_cents > 500 )); then
+      echo "SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS must be an integer from 2 to 500." >&2
+      exit 1
+    fi
+    if [[ ! "${SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID:-}" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$ ]]; then
+      echo "SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID must be a UUIDv4." >&2
       exit 1
     fi
     if [[ "${SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED:-}" != 1 ]]; then
@@ -637,7 +645,11 @@ if [[ "$task_staging_external_listing_ai_enabled" == true ]] &&
        && boundary.model === "gpt-4o-mini-2024-07-18"
        && boundary.promptVersion === "listing-ai-prompt-v1"
        && boundary.schemaVersion === "listing-ai-draft-v1"
-       && boundary.budgetCents === Number(process.env.SIT_LISTING_AI_BUDGET_CENTS)
+       && boundary.budgetCents === 10000
+       && boundary.budgetScope === "lifetime"
+       && boundary.stagingSmokeBudgetCents === Number(process.env.SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS)
+       && boundary.stagingSmokeActivationId === process.env.SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID
+       && boundary.runMaxProviderCalls === 5
        && boundary.externalProviderExecutionAllowed === true
        && boundary.automaticPublicationAllowed === false;
      process.exitCode = valid ? 0 : 1;

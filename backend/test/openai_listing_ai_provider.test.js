@@ -23,11 +23,13 @@ import {
 const secretFixture = `sk-test-${'x'.repeat(32)}`;
 const imageReference = 'analysis_image_00000001';
 
-function configuration(budgetCents = 5) {
+function configuration(stagingSmokeBudgetCents = 500) {
   return readListingAiGatewayConfiguration({
     SIT_LISTING_AI_PROVIDER: 'openai',
     SIT_LISTING_AI_MODEL: listingAiOpenAiModel,
-    SIT_LISTING_AI_BUDGET_CENTS: String(budgetCents),
+    SIT_LISTING_AI_BUDGET_CENTS: '10000',
+    SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: String(stagingSmokeBudgetCents),
+    SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: '11111111-1111-4111-8111-111111111111',
     SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '1',
   }, { deploymentEnvironment: 'staging' });
 }

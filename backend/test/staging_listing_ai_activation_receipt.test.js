@@ -38,7 +38,9 @@ function evidence(overrides = {}) {
   const report = Buffer.from(JSON.stringify({ environment: 'staging', commit,
     stagingListingAi: true, stagingPilotId: 'heilbronn_wave0' }));
   const listingAi = { status: 'enabled', provider: 'openai', model: 'gpt-4o-mini-2024-07-18',
-    promptVersion: 'listing-ai-prompt-v1', schemaVersion: 'listing-ai-draft-v1', budgetCents: 250,
+    promptVersion: 'listing-ai-prompt-v1', schemaVersion: 'listing-ai-draft-v1', budgetCents: 10000,
+    budgetScope: 'lifetime', stagingSmokeBudgetCents: 250,
+    stagingSmokeActivationId: '11111111-1111-4111-8111-111111111111', runMaxProviderCalls: 5,
     externalProviderExecutionAllowed: true, automaticPublicationAllowed: false };
   const health = Buffer.from(JSON.stringify({ status: 'ok', checks: { listingAi } }));
   const runtime = { containerId: newId, containerName: '/shareittoo-staging-api', running: true, green: true,
@@ -167,7 +169,9 @@ test('activation CLI reads only mocked Docker identities and emits protected rec
     repoDigest, runtimeCommit: commit };
   const health = { status: 'ok', checks: { listingAi: { status: 'enabled', provider: 'openai',
     model: 'gpt-4o-mini-2024-07-18', promptVersion: 'listing-ai-prompt-v1',
-    schemaVersion: 'listing-ai-draft-v1', budgetCents: 250,
+    schemaVersion: 'listing-ai-draft-v1', budgetCents: 10000, budgetScope: 'lifetime',
+    stagingSmokeBudgetCents: 250,
+    stagingSmokeActivationId: '11111111-1111-4111-8111-111111111111', runMaxProviderCalls: 5,
     externalProviderExecutionAllowed: true, automaticPublicationAllowed: false } } };
   fs.writeFileSync(greenFile, JSON.stringify(green), { mode: 0o600 });
   fs.writeFileSync(reportFile, JSON.stringify({ environment: 'staging', commit,

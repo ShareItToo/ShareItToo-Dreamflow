@@ -210,6 +210,8 @@ export function createOpenAiListingAiProvider({
   const secret = normalizedApiKey(apiKey);
   const costGuard = budgetGuard ?? createMemoryListingAiBudgetGuard({
     budgetCents: configuration.budgetCents,
+    stagingSmokeBudgetCents: configuration.stagingSmokeBudgetCents,
+    maxCallCount: configuration.runMaxProviderCalls,
   });
   if (typeof costGuard.reserve !== 'function') {
     throw new ListingAiGatewayError(500, 'listing_ai_budget_store_invalid');
@@ -219,7 +221,9 @@ export function createOpenAiListingAiProvider({
 
   async function invoke({ instructions, content, format, signal, outputTokens, attemptId = null }) {
     if (estimatedSpentCents + reservedCents + listingAiPerCallReservationCents
-        > configuration.budgetCents) {
+        > configuration.budgetCents
+        || estimatedSpentCents + reservedCents + listingAiPerCallReservationCents
+          > configuration.stagingSmokeBudgetCents) {
       throw new ListingAiGatewayError(
         502,
         'listing_ai_budget_exhausted',
@@ -284,6 +288,9 @@ export function createOpenAiListingAiProvider({
       estimatedSpentCents += measuredUsage.estimatedCostCents;
       if (estimatedSpentCents > configuration.budgetCents) {
         fail('listing_ai_budget_exhausted_after_call');
+      }
+      if (estimatedSpentCents > configuration.stagingSmokeBudgetCents) {
+        fail('listing_ai_staging_smoke_budget_exhausted_after_call');
       }
       return Object.freeze({ body, usage: measuredUsage });
     } catch (error) {

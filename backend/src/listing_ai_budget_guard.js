@@ -38,8 +38,10 @@ function reservation({ reservedCents, settleOperation, releaseOperation }) {
   });
 }
 
-export function createMemoryListingAiBudgetGuard({ budgetCents, maxCallCount = Number.POSITIVE_INFINITY } = {}) {
+export function createMemoryListingAiBudgetGuard({ budgetCents,
+  stagingSmokeBudgetCents = budgetCents, maxCallCount = Number.POSITIVE_INFINITY } = {}) {
   cents(budgetCents, 'listing_ai_budget_configuration_invalid');
+  cents(stagingSmokeBudgetCents, 'listing_ai_budget_configuration_invalid');
   if (maxCallCount !== Number.POSITIVE_INFINITY
       && (!Number.isSafeInteger(maxCallCount) || maxCallCount < 1 || maxCallCount > listingAiRunMaxCalls)) {
     fail('listing_ai_budget_call_limit_invalid');
@@ -48,26 +50,33 @@ export function createMemoryListingAiBudgetGuard({ budgetCents, maxCallCount = N
   let reservedCents = 0;
   let callCount = 0;
   let reservedCalls = 0;
+  let smokeSpentCents = 0;
+  let smokeReservedCents = 0;
   return Object.freeze({
     version: listingAiBudgetGuardVersion,
     async reserve(requestedCents, _options = {}) {
       cents(requestedCents, 'listing_ai_budget_reservation_invalid', { minimum: 1 });
       if (spentCents + reservedCents + requestedCents > budgetCents
+          || smokeSpentCents + smokeReservedCents + requestedCents > stagingSmokeBudgetCents
           || (Number.isFinite(maxCallCount) && callCount + reservedCalls + 1 > maxCallCount)) {
         fail('listing_ai_budget_exhausted');
       }
       reservedCents += requestedCents;
+      smokeReservedCents += requestedCents;
       reservedCalls += 1;
       return reservation({
         reservedCents: requestedCents,
         settleOperation: async (settledCents) => {
           reservedCents -= requestedCents;
           spentCents += settledCents;
+          smokeReservedCents -= requestedCents;
+          smokeSpentCents += settledCents;
           reservedCalls -= 1;
           callCount += 1;
         },
         releaseOperation: async () => {
           reservedCents -= requestedCents;
+          smokeReservedCents -= requestedCents;
           reservedCalls -= 1;
         },
       });
@@ -79,6 +88,8 @@ export function createPostgresListingAiBudgetGuard({
   client,
   provider = 'openai',
   budgetCents,
+  stagingSmokeBudgetCents = 0,
+  stagingSmokeActivationId = null,
   maxCallCount = Number.POSITIVE_INFINITY,
   now = () => new Date(),
 } = {}) {
@@ -86,6 +97,7 @@ export function createPostgresListingAiBudgetGuard({
     fail('listing_ai_budget_store_invalid');
   }
   cents(budgetCents, 'listing_ai_budget_configuration_invalid', { minimum: 1 });
+  cents(stagingSmokeBudgetCents, 'listing_ai_budget_configuration_invalid');
   if (maxCallCount !== Number.POSITIVE_INFINITY
       && (!Number.isSafeInteger(maxCallCount) || maxCallCount < 1 || maxCallCount > listingAiRunMaxCalls)) {
     fail('listing_ai_budget_call_limit_invalid');
@@ -94,6 +106,11 @@ export function createPostgresListingAiBudgetGuard({
     version: listingAiBudgetGuardVersion,
     async reserve(requestedCents, { attemptId = null } = {}) {
       cents(requestedCents, 'listing_ai_budget_reservation_invalid', { minimum: 1 });
+      if (stagingSmokeBudgetCents > 0
+          && (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(stagingSmokeActivationId ?? '')
+            || attemptId === null)) {
+        fail('listing_ai_staging_smoke_readback_required');
+      }
       if (attemptId !== null) {
         const tx = typeof client.totalCount === 'number' && typeof client.connect === 'function'
           ? await client.connect()

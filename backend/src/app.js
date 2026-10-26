@@ -1331,7 +1331,10 @@ function assertBlueOceanListingTechnicalAccess() {
     && config.listingAi.budgetCents === 0
     && config.listingAi.externalProviderExecutionAllowed === false;
   const openAiAllowed = config.listingAi.provider === 'openai'
-    && config.listingAi.budgetCents > 0
+    && config.listingAi.budgetCents === 10_000
+    && config.listingAi.stagingSmokeBudgetCents >= 2
+    && config.listingAi.stagingSmokeBudgetCents <= 500
+    && typeof config.listingAi.stagingSmokeActivationId === 'string'
     && config.listingAi.externalProviderExecutionAllowed === true;
   if (config.listingAi.enabled !== true
       || config.listingAi.providerExecutionAllowed !== true
@@ -1354,6 +1357,10 @@ function assertBlueOceanListingCapabilityHandshake(raw) {
     'disclosureHash',
     'policyRevision',
     'configRevision',
+    'budgetScope',
+    'lifetimeBudgetCents',
+    'stagingSmokeBudgetCents',
+    'stagingSmokeActivationId',
     'supportedClientVersion',
     'imageLimit',
   ];
@@ -2388,6 +2395,8 @@ export function createApp({
       budgetGuard: createPostgresListingAiBudgetGuard({
         client: pool,
         budgetCents: config.listingAi.budgetCents,
+        stagingSmokeBudgetCents: config.listingAi.stagingSmokeBudgetCents,
+        stagingSmokeActivationId: config.listingAi.stagingSmokeActivationId,
       }),
     }))
     : null;
@@ -2417,6 +2426,8 @@ export function createApp({
     schemaVersion: config.listingAi.schemaVersion,
     budgetCents: config.listingAi.budgetCents,
     budgetScope: config.listingAi.budgetScope,
+    stagingSmokeBudgetCents: config.listingAi.stagingSmokeBudgetCents,
+    stagingSmokeActivationId: config.listingAi.stagingSmokeActivationId,
     runMaxProviderCalls: config.listingAi.runMaxProviderCalls,
     externalProviderExecutionAllowed: config.listingAi.externalProviderExecutionAllowed,
     automaticPublicationAllowed: false,
@@ -4954,6 +4965,8 @@ export function createApp({
           maxCostCents: Math.min(10_000, listingAiPerCallReservationCents * (images.length + 1)),
           maxCallCount: Math.min(config.listingAi.runMaxProviderCalls, images.length + 1),
           budgetCents: config.listingAi.budgetCents,
+          stagingSmokeBudgetCents: config.listingAi.stagingSmokeBudgetCents,
+          stagingSmokeActivationId: config.listingAi.stagingSmokeActivationId,
           capabilityHandshake: capability,
         });
       });

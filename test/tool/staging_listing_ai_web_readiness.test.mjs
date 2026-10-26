@@ -182,6 +182,26 @@ test('rejects unsupported client, expired evidence, and a widened external bound
   assert.throws(() => bindListingAiWebReadiness(widened, sha(JSON.stringify(widened)), {
     now, expectedSource: source, expectedVersion: version,
   }), /listing_ai_web_configuration_invalid/u);
+  for (const [field, value] of [
+    ['budgetCents', 500],
+    ['stagingSmokeBudgetCents', 501],
+    ['runMaxProviderCalls', 6],
+  ]) {
+    const changed = structuredClone(fixture.evidence);
+    changed.configuration[field] = value;
+    const changedDigest = refreshEvidence(changed);
+    assert.throws(() => bindListingAiWebReadiness(changed, changedDigest, {
+      now, expectedSource: source, expectedVersion: version,
+    }), /listing_ai_web_configuration_invalid/u, field);
+  }
+  const mismatchedCapability = structuredClone(fixture.evidence);
+  mismatchedCapability.capability.stagingSmokeActivationId =
+    '22222222-2222-4222-8222-222222222222';
+  assert.throws(() => bindListingAiWebReadiness(
+    mismatchedCapability,
+    refreshEvidence(mismatchedCapability),
+    { now, expectedSource: source, expectedVersion: version },
+  ), /listing_ai_web_capability_invalid/u);
   for (const [field, expectedError] of [
     ['providerSecretMetadataValidated', /listing_ai_web_secret_or_rollback_proof_invalid/u],
     ['rollbackToMockVerified', /listing_ai_web_secret_or_rollback_proof_invalid/u],
