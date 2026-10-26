@@ -44,7 +44,30 @@ test('technical regression permanently executes the complete enabled payment pro
 });
 
 test('runner drives actual adapter contract through UI steps and proves replay, unchanged booking and cleanup', async () => {
-  const lane = createSyntheticCloneBookingLane({ enabled: true, deploymentEnvironment: 'test', datasetId: 'wp255-green-clone-ui-test', runId, ownerId, renterId, secret: 'synthetic-only-test-secret-long-enough', paymentTestEnvelope: { requested: '1', cloneEnabled: true, localQa: true, deploymentEnvironment: 'test', bindHost: '127.0.0.1', transport: 'memory', livemode: false } });
+  const laneOptions = {
+    enabled: true,
+    deploymentEnvironment: 'test',
+    datasetId: 'wp255-green-clone-ui-test',
+    runId,
+    ownerId,
+    renterId,
+    secret: 'synthetic-only-test-secret-long-enough',
+    paymentTestEnvelope: {
+      requested: '1',
+      cloneEnabled: true,
+      localQa: true,
+      deploymentEnvironment: 'test',
+      bindHost: '127.0.0.1',
+      transport: 'memory',
+      livemode: false,
+    },
+  };
+  assert.throws(
+    () => createSyntheticCloneBookingLane(laneOptions),
+    /synthetic_clone_stage_a_required/u,
+    'the adapter contract remains unavailable without explicit Stage-A authorization',
+  );
+  const lane = createSyntheticCloneBookingLane({ ...laneOptions, stageANonBindingPilot: true });
   const booking = lane.createBooking({ actorId: renterId, listingId: 'synthetic_clone_listing_wp255' });
   const readBooking = () => lane.getBooking({ actorId: ownerId, bookingId: booking.id });
   const readPayment = () => lane.paymentTest.read({ actorId: ownerId, bookingId: booking.id, requestedRunId: runId });
