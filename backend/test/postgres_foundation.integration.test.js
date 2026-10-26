@@ -3067,6 +3067,7 @@ if (!databaseUrl) {
 
       const { createApp } = await import('../src/app.js');
       const { inTransaction, pool } = await import('../src/db.js');
+      const { createActionToken } = await import('../src/account_actions.js');
       const { reconcileSupportDeadlinesWithClient } = await import(
         '../src/support_deadline_watchdog.js'
       );
@@ -12513,7 +12514,6 @@ if (!databaseUrl) {
         assert.equal(pushRegistration.status, 200);
       }
 
-      const { createActionToken } = await import('../src/account_actions.js');
       const recoveryToken = await inTransaction((client) => createActionToken(client, {
         userId: 'recovery-user',
         kind: 'reset_password',
@@ -13115,6 +13115,22 @@ if (!databaseUrl) {
         privateUseConfirmed: true,
         registrationActionLabel: 'Kostenlos registrieren',
       };
+      const deliveredVerificationTokens = [];
+      let deliveredPasswordResetToken = null;
+      const captureVerificationDelivery = async (user) => {
+        deliveredVerificationTokens.push({
+          userId: user.id,
+          token: await inTransaction((client) => createActionToken(
+            client,
+            { userId: user.id, kind: 'verify_email' },
+          )),
+        });
+      };
+      applicationOptions.deliverVerification = captureVerificationDelivery;
+      applicationOptions.deliverPasswordReset = async ({ token }) => {
+        deliveredPasswordResetToken = token;
+      };
+      await restartApplicationServer();
       const register = (body = registrationBody) => fetch(`${baseUrl}/v1/auth/register`, {
         method: 'POST',
         headers: {
@@ -13128,6 +13144,8 @@ if (!databaseUrl) {
       assert.equal(registrationResponse.accepted, true);
       assert.equal(registrationResponse.verificationPending, true);
       assert.equal(registrationResponse.verificationEmailSent, true);
+      assert.equal(deliveredVerificationTokens.length, 1);
+      assert.equal(JSON.stringify(registrationResponse).includes(deliveredVerificationTokens[0].token), false);
       assert.equal(registrationResponse.session.user.emailVerified, false);
       assert.equal(registrationResponse.session.user.capabilities.limitedSession, true);
       const emailBundle = await setupPool.query(
@@ -13242,7 +13260,7 @@ if (!databaseUrl) {
       assert.equal(unavailableRegistrationResponse.verificationEmailSent, false);
       assert.equal(unavailableRegistrationResponse.session.user.capabilities.limitedSession, true);
 
-      applicationOptions.deliverVerification = undefined;
+      applicationOptions.deliverVerification = captureVerificationDelivery;
       await restartApplicationServer();
       const recoveredRegistration = await fetch(`${baseUrl}/v1/auth/register`, {
         method: 'POST',
@@ -13273,6 +13291,10 @@ if (!databaseUrl) {
       assert.equal(unverifiedLoginResponse.user.capabilities.canPublish, false);
       const unverifiedAccessToken = unverifiedLoginResponse.accessToken;
       const unverifiedUserId = unverifiedLoginResponse.user.id;
+      const unverifiedBrowse = await fetch(`${baseUrl}/v1/listings`, {
+        headers: { Authorization: `Bearer ${unverifiedAccessToken}` },
+      });
+      assert.equal(unverifiedBrowse.status, 200);
       const unverifiedPaymentCapabilities = await fetch(`${baseUrl}/v1/payments/capabilities`, {
         headers: { Authorization: `Bearer ${unverifiedAccessToken}` },
       });
@@ -13296,17 +13318,68 @@ if (!databaseUrl) {
           Authorization: `Bearer ${unverifiedAccessToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({}),
+        body: JSON.stringify({
+          title: 'Synthetic active listing request',
+          description: 'An unverified account must not publish this listing.',
+          categoryId: 'electronics',
+          subcategory: 'other',
+          condition: 'good',
+          pricePerDay: 5,
+          city: 'Heilbronn',
+          country: 'Deutschland',
+          status: 'active',
+        }),
       });
       assert.equal(blockedImplicitActiveListing.status, 403);
       assert.equal((await blockedImplicitActiveListing.json()).error, 'email_verification_required');
-      await setupPool.query(
-        `UPDATE users
-         SET email_verified_at = now(),
-             profile = jsonb_set(profile, '{emailVerified}', 'true'::jsonb, true)
-         WHERE id = $1`,
-        [unverifiedUserId],
+      const blockedRentalRequest = await fetch(`${baseUrl}/v1/bookings`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${unverifiedAccessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      });
+      assert.equal(blockedRentalRequest.status, 403);
+      assert.equal((await blockedRentalRequest.json()).error, 'email_verification_required');
+      const verificationResend = await fetch(`${baseUrl}/v1/auth/email-verification/request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: registrationBody.email }),
+      });
+      assert.equal(verificationResend.status, 202);
+      assert.deepEqual(await verificationResend.json(), { accepted: true });
+      const accountVerificationDeliveries = deliveredVerificationTokens.filter(
+        (entry) => entry.userId === unverifiedUserId,
       );
+      assert.equal(accountVerificationDeliveries.length, 3);
+      const latestVerificationToken = accountVerificationDeliveries.at(-1).token;
+      const verificationTokenRow = await setupPool.query(
+        `SELECT token_hash, consumed_at, expires_at > now() AS unexpired FROM auth_action_tokens
+          WHERE user_id = $1 AND kind = 'verify_email' AND token_hash = $2`,
+        [unverifiedUserId, hashActionToken(latestVerificationToken)],
+      );
+      assert.equal(verificationTokenRow.rowCount, 1);
+      assert.notEqual(verificationTokenRow.rows[0].token_hash, latestVerificationToken);
+      assert.equal(verificationTokenRow.rows[0].consumed_at, null);
+      assert.equal(verificationTokenRow.rows[0].unexpired, true);
+      const confirmedEmail = await fetch(`${baseUrl}/v1/auth/email-verification/confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: latestVerificationToken }),
+      });
+      assert.equal(confirmedEmail.status, 200, await confirmedEmail.clone().text());
+      assert.deepEqual(await confirmedEmail.json(), { verified: true });
+      await restartApplicationServer();
+      const replayedEmailConfirmation = await fetch(
+        `${baseUrl}/v1/auth/email-verification/confirm`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: latestVerificationToken }),
+        },
+      );
+      assert.equal(replayedEmailConfirmation.status, 400);
       const refreshedAfterVerification = await fetch(`${baseUrl}/v1/auth/me`, {
         headers: { Authorization: `Bearer ${unverifiedAccessToken}` },
       });
@@ -13314,6 +13387,82 @@ if (!databaseUrl) {
       const refreshedAfterVerificationResponse = await refreshedAfterVerification.json();
       assert.equal(refreshedAfterVerificationResponse.user.emailVerified, true);
       assert.equal(refreshedAfterVerificationResponse.user.capabilities.limitedSession, false);
+
+      const verificationLogout = await fetch(`${baseUrl}/v1/auth/logout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: unverifiedLoginResponse.refreshToken }),
+      });
+      assert.equal(verificationLogout.status, 204);
+      const loggedOutReadback = await fetch(`${baseUrl}/v1/auth/me`, {
+        headers: { Authorization: `Bearer ${unverifiedAccessToken}` },
+      });
+      assert.equal(loggedOutReadback.status, 401);
+      const verifiedLogin = await fetch(`${baseUrl}/v1/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: registrationBody.email, password: registrationBody.password }),
+      });
+      assert.equal(verifiedLogin.status, 200);
+      const verifiedLoginBody = await verifiedLogin.json();
+      assert.equal(verifiedLoginBody.user.emailVerified, true);
+      const passwordResetRequest = await fetch(`${baseUrl}/v1/auth/password-reset/request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: registrationBody.email }),
+      });
+      assert.equal(passwordResetRequest.status, 202);
+      const passwordResetRequestBody = await passwordResetRequest.json();
+      assert.deepEqual(passwordResetRequestBody, { accepted: true });
+      assert.ok(deliveredPasswordResetToken);
+      assert.equal(JSON.stringify(passwordResetRequestBody).includes(deliveredPasswordResetToken), false);
+      const resetTokenRow = await setupPool.query(
+        `SELECT token_hash FROM auth_action_tokens
+          WHERE user_id = $1 AND kind = 'reset_password' AND token_hash = $2`,
+        [unverifiedUserId, hashActionToken(deliveredPasswordResetToken)],
+      );
+      assert.equal(resetTokenRow.rowCount, 1);
+      assert.notEqual(resetTokenRow.rows[0].token_hash, deliveredPasswordResetToken);
+      const replacementPassword = createEphemeralAcceptancePassword();
+      const passwordReset = await fetch(`${baseUrl}/v1/auth/password-reset/confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: deliveredPasswordResetToken, password: replacementPassword }),
+      });
+      assert.equal(passwordReset.status, 200);
+      assert.deepEqual(await passwordReset.json(), { changed: true });
+      await restartApplicationServer();
+      const passwordResetReplay = await fetch(`${baseUrl}/v1/auth/password-reset/confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: deliveredPasswordResetToken, password: replacementPassword }),
+      });
+      assert.equal(passwordResetReplay.status, 400);
+      const resetRevokedOldSession = await fetch(`${baseUrl}/v1/auth/me`, {
+        headers: { Authorization: `Bearer ${verifiedLoginBody.accessToken}` },
+      });
+      assert.equal(resetRevokedOldSession.status, 401);
+      const oldPasswordLogin = await fetch(`${baseUrl}/v1/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: registrationBody.email, password: registrationBody.password }),
+      });
+      assert.equal(oldPasswordLogin.status, 401);
+      const finalLogin = await fetch(`${baseUrl}/v1/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: registrationBody.email, password: replacementPassword }),
+      });
+      assert.equal(finalLogin.status, 200);
+      const finalLoginBody = await finalLogin.json();
+      assert.equal(finalLoginBody.user.emailVerified, true);
+      const finalAuthenticatedReadback = await fetch(`${baseUrl}/v1/auth/me`, {
+        headers: { Authorization: `Bearer ${finalLoginBody.accessToken}` },
+      });
+      assert.equal(finalAuthenticatedReadback.status, 200);
+      const finalUser = (await finalAuthenticatedReadback.json()).user;
+      assert.equal(finalUser.id, unverifiedUserId);
+      assert.equal(finalUser.emailVerified, true);
 
       const socialRequest = (token, consents = false, registrationActionLabel = 'Mit Google registrieren') =>
         fetch(`${baseUrl}/v1/auth/social`, {

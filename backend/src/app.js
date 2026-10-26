@@ -2334,6 +2334,7 @@ export function createApp({
   verifySocialToken = verifyFirebaseSocialToken,
   verifyPhoneToken = verifyFirebasePhoneToken,
   deliverVerification = createAndSendVerification,
+  deliverPasswordReset = sendPasswordResetEmail,
   deletePhoneIdentity = deleteFirebasePhoneIdentity,
   drainFirebaseIdentityDeletions = (ids) => drainFirebaseIdentityDeletionOutbox({
     client: pool,
@@ -4302,7 +4303,7 @@ export function createApp({
           }
         });
         if (prepared) {
-          await sendPasswordResetEmail({
+          await deliverPasswordReset({
             email: prepared.email,
             displayName: prepared.displayName,
             token: prepared.token,
