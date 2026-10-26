@@ -333,6 +333,12 @@ function fail(message) {
   throw new Error(message);
 }
 
+function firebaseDeliveryMetricsExportDisabled(source) {
+  const calls = [...source.matchAll(/\bsetDeliveryMetricsExportToBigQuery\s*\(([^)]*)\)/gu)];
+  return calls.length > 0 && calls.every(([, argument]) =>
+    argument.trim().replace(/,\s*$/u, '').trim() === 'false');
+}
+
 function object(value, label) {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) fail(`${label} must be an object.`);
   return value;
@@ -1269,11 +1275,13 @@ function assertSourceContracts(root, sourceTexts, { requireAppleOwnershipContrac
     'FirebaseCrashlytics.instance.deleteUnsentReports()',
     'FirebaseInstallations.instance.delete()',
     'deleteCurrentSessionPushDevices(',
-    'setDeliveryMetricsExportToBigQuery(false)',
   ]) {
     if (!firebaseRuntime.includes(marker)) {
       fail(`Firebase service readiness is missing runtime control: ${marker}.`);
     }
+  }
+  if (!firebaseDeliveryMetricsExportDisabled(firebaseRuntime)) {
+    fail('Firebase service readiness requires only setDeliveryMetricsExportToBigQuery(false).');
   }
   const firebasePreferences = text(
     root,

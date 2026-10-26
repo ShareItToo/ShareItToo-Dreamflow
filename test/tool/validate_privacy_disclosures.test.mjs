@@ -58,6 +58,23 @@ test('privacy inventory binds Web router bytes and rejects omission or drift', (
     /sourceInventory hash is stale: lib\/navigation\/web_app_router.dart/u);
 });
 
+test('Firebase delivery metrics export remains disabled across Dart formatter whitespace', () => {
+  const path = 'lib/services/firebase_runtime.dart';
+  const runtime = readFileSync(resolve(repositoryRoot, path), 'utf8');
+  assert.doesNotThrow(() => validate({ sourceTexts: { [path]: runtime } }));
+  const invocation = /setDeliveryMetricsExportToBigQuery\s*\(\s*false\s*,?\s*\)/u;
+  for (const changed of [
+    runtime.replace(invocation, 'setDeliveryMetricsExportToBigQuery(true)'),
+    runtime.replace(invocation, 'setDeliveryMetricsExportToBigQuery(null)'),
+    runtime.replace(invocation, ''),
+  ]) {
+    const privacyManifest = clone(basePrivacyManifest);
+    privacyManifest.sourceInventory.find((entry) => entry.path === path).sha256 = sha256(changed);
+    assert.throws(() => validate({ privacyManifest, sourceTexts: { [path]: changed } }),
+      /V5\.2 Push must open only the authenticated identifier-free notification center/u);
+  }
+});
+
 test('privacy inventory binds the owner participation API workflow', () => {
   const privacyManifest = clone(basePrivacyManifest);
   privacyManifest.sourceInventory = privacyManifest.sourceInventory.filter(

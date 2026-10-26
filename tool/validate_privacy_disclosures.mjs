@@ -441,6 +441,12 @@ function fail(message) {
   throw new Error(message);
 }
 
+function firebaseDeliveryMetricsExportDisabled(source) {
+  const calls = [...source.matchAll(/\bsetDeliveryMetricsExportToBigQuery\s*\(([^)]*)\)/gu)];
+  return calls.length > 0 && calls.every(([, argument]) =>
+    argument.trim().replace(/,\s*$/u, '').trim() === 'false');
+}
+
 function object(value, label) {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     fail(`${label} must be an object.`);
@@ -1865,8 +1871,7 @@ function assertSourceContracts({
   );
   if (!firebaseRuntime.includes("data.length != 2")
       || !firebaseRuntime.includes("Uri.parse('shareittoo://notifications')")
-      || !firebaseRuntime.includes('setDeliveryMetricsExportToBigQuery(false)')
-      || firebaseRuntime.includes('setDeliveryMetricsExportToBigQuery(true)')
+      || !firebaseDeliveryMetricsExportDisabled(firebaseRuntime)
       || firebaseRuntime.includes('FirebaseAnalytics')
       || !appLinks.includes("case 'notifications':")
       || !appLinkDestination.includes('return const NotificationsScreen();')

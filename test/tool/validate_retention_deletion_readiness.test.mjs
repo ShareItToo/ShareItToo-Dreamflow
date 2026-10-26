@@ -31,6 +31,27 @@ test('retention inventory binds Web router bytes and rejects omission or drift',
     /sourceInventory hash is stale: lib\/navigation\/web_app_router.dart/u);
 });
 
+test('Firebase delivery metrics export check tolerates formatter whitespace but requires false only', () => {
+  const path = 'lib/services/firebase_runtime.dart';
+  const runtime = readFileSync(resolve(root, path), 'utf8');
+  assert.doesNotThrow(() => validate({ sourceTexts: { [path]: runtime } }));
+  const invocation = /setDeliveryMetricsExportToBigQuery\s*\(\s*false\s*,?\s*\)/u;
+  for (const changed of [
+    runtime.replace(invocation, 'setDeliveryMetricsExportToBigQuery(true)'),
+    runtime.replace(invocation, 'setDeliveryMetricsExportToBigQuery(null)'),
+    runtime.replace(invocation, ''),
+  ]) {
+    const retentionManifest = clone(baseRetention);
+    const privacyManifest = clone(basePrivacy);
+    for (const manifest of [retentionManifest, privacyManifest]) {
+      manifest.sourceInventory.find((entry) => entry.path === path).sha256 = sha256(changed);
+    }
+    assert.throws(() => validate({ retentionManifest, privacyManifest,
+      sourceTexts: { [path]: changed } }),
+    /Firebase service readiness requires only setDeliveryMetricsExportToBigQuery\(false\)/u);
+  }
+});
+
 test('retention inventory binds the owner participation API workflow', () => {
   const retentionManifest = clone(baseRetention);
   retentionManifest.sourceInventory = retentionManifest.sourceInventory.filter(
