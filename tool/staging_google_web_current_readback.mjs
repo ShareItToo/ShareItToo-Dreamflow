@@ -54,7 +54,8 @@ const bindingKeys = Object.freeze([
 const hashPattern = /^[a-f0-9]{64}$/u;
 const sourcePattern = /^[a-f0-9]{40}$/u;
 const apiKeyResourcePattern = /^projects\/[0-9]{6,20}\/locations\/global\/keys\/[A-Za-z0-9_-]{16,64}$/u;
-const imagePattern = /^[A-Za-z0-9._:/-]+@sha256:[a-f0-9]{64}$/u;
+const imagePattern = /^ghcr\.io\/shareittoo\/shareittoo-api@sha256:[a-f0-9]{64}$/u;
+const runtimeIdentityPattern = /^[a-f0-9]{64}$/u;
 const approvedOperatorAccountEmailSha256 = 'ab40c92847d70810d0da6d819491307bbaf5989e3d835ee0eb1b3d4443bad776';
 const maximumAgeMs = 2 * 60 * 60 * 1000;
 const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
@@ -132,8 +133,8 @@ function bindEvidence(evidence, evidenceDigest, { now = new Date(), expectedSour
     && service.firebaseEmulatorEnabled === false && serviceUntil > serviceAt
     && serviceUntil - serviceAt <= maximumAgeMs, 'google_web_current_service_readback');
   exact(service.runtime, runtimeKeys, 'google_web_current_runtime');
-  check(typeof service.runtime.service === 'string' && service.runtime.service.length > 0
-    && typeof service.runtime.identity === 'string' && service.runtime.identity.length > 0
+  check(service.runtime.service === '/shareittoo-staging-api'
+    && typeof service.runtime.identity === 'string' && runtimeIdentityPattern.test(service.runtime.identity)
     && service.runtime.environment === 'staging' && service.runtime.projectId === evidence.configuration.projectId
     && service.runtime.green === true && service.runtime.running === true
     && sourcePattern.test(service.runtime.commit) && imagePattern.test(service.runtime.image),

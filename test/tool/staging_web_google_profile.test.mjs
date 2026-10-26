@@ -159,6 +159,9 @@ test('current-readback v3 rejects stale, wrong-build or drifted provider/runtime
     e => { e.serviceAccountReadback.facebookProviderEnabled = true; },
     e => { e.serviceAccountReadback.firebaseAuthEnabled = false; },
     e => { e.serviceAccountReadback.firebaseEmulatorEnabled = true; },
+    e => { e.serviceAccountReadback.runtime.service = 'shareittoo-staging-api'; },
+    e => { e.serviceAccountReadback.runtime.identity = 'staging-api-container-123'; },
+    e => { e.serviceAccountReadback.runtime.commit = 'C'.repeat(40); },
     e => { e.serviceAccountReadback.runtime.image = 'mutable:tag'; },
     e => { e.cloudConsoleReadback.operatorAccountEmailSha256 = '0'.repeat(64); },
     e => { e.cloudConsoleReadback.apiKeyResourceId = 'projects/999999999999/locations/global/keys/not-bound'; },
@@ -331,6 +334,13 @@ for(const [file,text] of Object.entries({'index.html':'<script src="flutter_boot
   const expectedCurrent = bindGoogleWebCurrentReadback(currentEvidence.envelope, currentEvidence.digest,
     { now: currentEvidence.now, expectedSource: exactSource, expectedVersion: version });
   assert.equal(currentManifest.schemaVersion, 9);
+  const expectedBuilderDigest = sha256(Buffer.concat([
+    'build_staging_web.mjs', 'staging_web_contract.mjs', 'staging_google_web_readiness.mjs',
+    'staging_google_web_current_readback.mjs', 'staging_apple_web_readiness.mjs',
+    'staging_facebook_web_readiness.mjs', 'staging_password_enrollment_web_readiness.mjs',
+    'staging_listing_ai_web_readiness.mjs',
+  ].map((name) => fs.readFileSync(path.join(repo, 'tool', name)))));
+  assert.equal(currentManifest.builderDigest, expectedBuilderDigest);
   assert.deepEqual(currentManifest.profile, profile(exactSource, version, expectedCurrent));
   const conflictArgs = [...currentArgs, '--google-web-readiness', file, evidence.evidenceDigest];
   const conflict = spawnSync(process.execPath, conflictArgs, { encoding: 'utf8' });

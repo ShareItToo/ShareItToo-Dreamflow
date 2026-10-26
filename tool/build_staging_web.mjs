@@ -76,6 +76,7 @@ try {
     'build_staging_web.mjs',
     'staging_web_contract.mjs',
     'staging_google_web_readiness.mjs',
+    'staging_google_web_current_readback.mjs',
     'staging_apple_web_readiness.mjs',
     'staging_facebook_web_readiness.mjs',
     'staging_password_enrollment_web_readiness.mjs',

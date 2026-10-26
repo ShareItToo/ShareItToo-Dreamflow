@@ -26,10 +26,10 @@ export function syntheticGoogleCurrentEvidence(source, version = '1.2.3+20261026
     authorizedDomains: ['staging.shareittoo.com', 'staging-shareittoo.firebaseapp.com'],
     googleProviderEnabled: true, appleProviderEnabled: false, facebookProviderEnabled: false,
     firebaseAuthEnabled: true, firebaseEmulatorEnabled: false,
-    runtime: { service: 'shareittoo-staging-api', identity: 'staging-api-container-123',
+    runtime: { service: '/shareittoo-staging-api', identity: 'c'.repeat(64),
       environment: 'staging', projectId: config.projectId, green: true, running: true,
       commit: 'c904aed9f58691176a30aadb222f0cb3635f167e',
-      image: `ghcr.io/shareittoo/shareittoo-api:staging@sha256:${'b'.repeat(64)}` },
+      image: `ghcr.io/shareittoo/shareittoo-api@sha256:${'b'.repeat(64)}` },
   };
   const serviceAccountReadbackSha256 = hash(JSON.stringify(service));
   const consoleRead = {

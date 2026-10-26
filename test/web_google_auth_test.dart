@@ -167,6 +167,7 @@ GoogleEvidenceFixture googleCurrentReadbackEvidence(
   String sourceCommit = googleFixtureSource,
   bool wrongOperator = false,
   bool wrongApiRestriction = false,
+  void Function(Map<String, Object?> runtime)? mutateRuntime,
 }) {
   final now = (at ?? googleFixtureNow).toUtc();
   final configMap = <String, String>{
@@ -205,6 +206,18 @@ GoogleEvidenceFixture googleCurrentReadbackEvidence(
     'ML Kit API',
     'Token Service API',
   ]..sort();
+  final runtime = <String, Object?>{
+    'service': '/shareittoo-staging-api',
+    'identity': List.filled(64, 'c').join(),
+    'environment': 'staging',
+    'projectId': candidate.projectId,
+    'green': true,
+    'running': true,
+    'commit': 'c904aed9f58691176a30aadb222f0cb3635f167e',
+    'image':
+        'ghcr.io/shareittoo/shareittoo-api@sha256:${List.filled(64, 'b').join()}',
+  };
+  mutateRuntime?.call(runtime);
   final origins = <String>[
     'https://shareittoo-staging.firebaseapp.com/*',
     'https://shareittoo-staging.web.app/*',
@@ -232,17 +245,7 @@ GoogleEvidenceFixture googleCurrentReadbackEvidence(
     'facebookProviderEnabled': false,
     'firebaseAuthEnabled': true,
     'firebaseEmulatorEnabled': false,
-    'runtime': <String, Object?>{
-      'service': 'shareittoo-staging-api',
-      'identity': 'staging-api-container-123',
-      'environment': 'staging',
-      'projectId': candidate.projectId,
-      'green': true,
-      'running': true,
-      'commit': 'c904aed9f58691176a30aadb222f0cb3635f167e',
-      'image':
-          'ghcr.io/shareittoo/shareittoo-api:staging@sha256:${List.filled(64, 'b').join()}',
-    },
+    'runtime': runtime,
   };
   final serviceDigest = googleFixtureDigest(jsonEncode(service));
   final console = <String, Object?>{
@@ -375,6 +378,45 @@ void main() {
       expect(
         optionsFor(
           googleCurrentReadbackEvidence(candidate, wrongApiRestriction: true),
+        ),
+        isNull,
+      );
+      expect(
+        optionsFor(
+          googleCurrentReadbackEvidence(
+            candidate,
+            mutateRuntime: (runtime) =>
+                runtime['service'] = 'shareittoo-staging-api',
+          ),
+        ),
+        isNull,
+      );
+      expect(
+        optionsFor(
+          googleCurrentReadbackEvidence(
+            candidate,
+            mutateRuntime: (runtime) =>
+                runtime['identity'] = 'staging-api-container-123',
+          ),
+        ),
+        isNull,
+      );
+      expect(
+        optionsFor(
+          googleCurrentReadbackEvidence(
+            candidate,
+            mutateRuntime: (runtime) => runtime['commit'] = 'C' * 40,
+          ),
+        ),
+        isNull,
+      );
+      expect(
+        optionsFor(
+          googleCurrentReadbackEvidence(
+            candidate,
+            mutateRuntime: (runtime) => runtime['image'] =
+                'ghcr.io/shareittoo/other-api@sha256:${'b' * 64}',
+          ),
         ),
         isNull,
       );

@@ -527,8 +527,9 @@ class WebGooglePublicConfig {
         r['firebaseEmulatorEnabled'] != false ||
         runtimeMap == null ||
         !exactKeys(runtimeMap, _googleCurrentRuntimeKeys) ||
-        runtimeMap['service'] is! String ||
+        runtimeMap['service'] != '/shareittoo-staging-api' ||
         runtimeMap['identity'] is! String ||
+        !hashPattern.hasMatch(runtimeMap['identity'] as String) ||
         runtimeMap['environment'] != 'staging' ||
         runtimeMap['projectId'] != projectId ||
         runtimeMap['green'] != true ||
@@ -537,7 +538,7 @@ class WebGooglePublicConfig {
         !sourcePattern.hasMatch(runtimeMap['commit'] as String) ||
         runtimeMap['image'] is! String ||
         !RegExp(
-          r'^[A-Za-z0-9._:/-]+@sha256:[a-f0-9]{64}$',
+          r'^ghcr\.io/shareittoo/shareittoo-api@sha256:[a-f0-9]{64}$',
         ).hasMatch(runtimeMap['image'] as String) ||
         c['schemaVersion'] != 1 ||
         c['kind'] != 'sit-google-web-cloud-console-api-key-readback' ||
