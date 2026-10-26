@@ -495,7 +495,6 @@ class WebGooglePublicConfig {
     final consoleUntil = utc(c['validUntilUtc']);
     final decided = utc(d['decidedAtUtc']);
     final decisionUntil = utc(d['validUntilUtc']);
-    final runtime = r['runtime'];
     final resource = c['apiKeyResourceId'];
     final apis = c['apiRestrictions'];
     final origins = c['websiteRestrictions'];
