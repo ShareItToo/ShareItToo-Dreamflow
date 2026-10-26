@@ -160,8 +160,13 @@ test('location awaits revalidate the captured action owner and media awaits reva
   );
   assert.match(
     profileInfo.slice(profileInfo.indexOf('bool _samePickerPrincipal(')),
-    /authOwner\.userId\?\.trim\(\)[\s\S]*?authOwner\.email\.trim\(\)\.toLowerCase\(\)/u,
-    'principal identity uses normalized user id and email',
+    /authOwner\.userId\?\.trim\(\)[\s\S]*?context\.user\.id\.trim\(\)[\s\S]*?sessionId != profileId[\s\S]*?profileUserId\?\.trim\(\)[\s\S]*?capturedId == currentId/u,
+    'principal identity uses matching nonempty auth/profile ids and optional owner binding',
+  );
+  assert.doesNotMatch(
+    profileInfo.slice(profileInfo.indexOf('bool _samePickerPrincipal('), profileInfo.indexOf('Future<Set<String>?> _showMultiSelect(')),
+    /authOwner\.email|context\.user\.email/u,
+    'email aliases do not invalidate a same-id local preview',
   );
   const isContextCurrent = method(
     coordinator,

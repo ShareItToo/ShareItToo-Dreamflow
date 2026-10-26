@@ -165,9 +165,18 @@ test('Web gallery picker starts in the tap gesture before dismissing the sheet',
     pickerRoutine,
     /Future<bool> _isPickerPrincipalCurrent\([\s\S]*?loadCurrentContext\(\)[\s\S]*?_samePickerPrincipal\(owner\.context, current\)[\s\S]*?isContextCurrent\(current\)/u,
   );
+  const samePrincipal = pickerRoutine.slice(
+    pickerRoutine.indexOf('bool _samePickerPrincipal('),
+  );
   assert.match(
-    pickerRoutine,
-    /_samePickerPrincipal\([\s\S]*?userId\?\.trim\(\)[\s\S]*?email\.trim\(\)\.toLowerCase\(\)/u,
+    samePrincipal,
+    /authOwner\.userId\?\.trim\(\)[\s\S]*?context\.user\.id\.trim\(\)[\s\S]*?sessionId != profileId[\s\S]*?profileUserId\?\.trim\(\)[\s\S]*?capturedId == currentId/u,
+    'same-principal preview identity is bound to matching nonempty user ids',
+  );
+  assert.doesNotMatch(
+    samePrincipal,
+    /authOwner\.email|context\.user\.email/u,
+    'email aliases do not override a stable bound user id',
   );
 });
 

@@ -136,7 +136,48 @@ void main() {
 
     expect(service.contextCheckCalls, greaterThan(0));
     expect(find.byType(Image), findsOneWidget,
-        reason: 'same user id and normalized email retain local preview');
+        reason: 'same stable user id retains local preview across epoch drift');
+  });
+
+  testWidgets('same user id retains preview across auth/profile email aliases',
+      (tester) async {
+    final service = _PickerProfileService(_UploadProbe())
+      ..authEmailOverride = 'login-alias@example.invalid';
+    final pickerResult = Completer<XFile?>();
+    await _openProfile(tester, service, (_) => pickerResult.future);
+    await _openGalleryPicker(tester);
+
+    pickerResult.complete(_MemoryXFile());
+    await _pumpUi(tester);
+
+    expect(find.byType(Image), findsOneWidget,
+        reason: 'same bound user id is authoritative despite email aliases');
+    expect(service.profilePatchCalls, 0,
+        reason: 'local preview does not persist a profile mutation');
+  });
+
+  testWidgets('missing or inconsistent ids discard selection before reading',
+      (tester) async {
+    for (final invalidBinding in ['missing auth id', 'profile id mismatch']) {
+      final service = _PickerProfileService(_UploadProbe());
+      if (invalidBinding == 'missing auth id') {
+        service.clearSessionUserId = true;
+      } else {
+        service.profileUserIdOverride = _userB.id;
+      }
+      final pickerResult = Completer<XFile?>();
+      final file = _MemoryXFile();
+      await _openProfile(tester, service, (_) => pickerResult.future);
+      await _openGalleryPicker(tester);
+
+      pickerResult.complete(file);
+      await _pumpUi(tester);
+
+      expect(file.readCalls, 0, reason: invalidBinding);
+      expect(find.byType(Image), findsNothing, reason: invalidBinding);
+      expect(service.profilePatchCalls, 0, reason: invalidBinding);
+      await tester.pumpWidget(const SizedBox.shrink());
+    }
   });
 
   testWidgets('principal switch or logout before bytes discards selection',
@@ -313,6 +354,9 @@ class _PickerProfileService extends ProfileMutationService {
   bool _accountBActive = false;
   bool _signedOut = false;
   int sessionEpoch = 9;
+  String? authEmailOverride;
+  bool clearSessionUserId = false;
+  String? profileUserIdOverride;
   Completer<ProfileMutationContext?>? pendingRefresh;
   bool _holdNextLoad = false;
   int pendingLoadCalls = 0;
@@ -348,13 +392,13 @@ class _PickerProfileService extends ProfileMutationService {
       // principal with a refreshed session owner and epoch.
       owner: SessionTransitionOwner(
         authOwner: AuthSessionOwner(
-          userId: selectedUser.id,
+          userId: clearSessionUserId ? null : selectedUser.id,
           sessionId: 'profile-picker-session-$selectedEpoch',
-          email: selectedUser.email,
+          email: authEmailOverride ?? selectedUser.email,
           createdAt: _authOwner.createdAt,
           epoch: selectedEpoch,
         ),
-        profileUserId: selectedUser.id,
+        profileUserId: profileUserIdOverride ?? selectedUser.id,
       ),
     );
   }

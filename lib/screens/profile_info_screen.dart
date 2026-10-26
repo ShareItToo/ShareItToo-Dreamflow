@@ -686,25 +686,9 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
       return sessionId;
     }
 
-    String normalizedEmail(ProfileMutationContext context) {
-      final sessionEmail = context.owner.authOwner.email.trim().toLowerCase();
-      final profileEmail = context.user.email.trim().toLowerCase();
-      if (sessionEmail.isEmpty ||
-          profileEmail.isEmpty ||
-          sessionEmail != profileEmail) {
-        return '';
-      }
-      return sessionEmail;
-    }
-
     final capturedId = normalizedId(captured);
     final currentId = normalizedId(current);
-    final capturedEmail = normalizedEmail(captured);
-    final currentEmail = normalizedEmail(current);
-    return capturedId.isNotEmpty &&
-        capturedId == currentId &&
-        capturedEmail.isNotEmpty &&
-        capturedEmail == currentEmail;
+    return capturedId.isNotEmpty && capturedId == currentId;
   }
 
   Future<Set<String>?> _showMultiSelect({
