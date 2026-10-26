@@ -136,6 +136,7 @@ function safeBooking(state, workflowStatus) {
 function stagingApi(accounts) {
   const state = {
     listing: null,
+    listingStatusPatches: [],
     bookingId: null,
     bookingStatus: null,
     bookingFields: undefined,
@@ -194,6 +195,10 @@ function stagingApi(accounts) {
     }
     if (/^\/listings\/[^/]+\/status$/u.test(path) && method === 'PATCH') {
       const body = JSON.parse(options.body);
+      state.listingStatusPatches.push(body);
+      if (body.status === 'active' && body.privateStatusConfirmed !== true) {
+        return response(400, { error: 'private_status_confirmation_required' });
+      }
       state.listing.status = body.status;
       state.listing.isActive = body.status === 'active';
       return response(200, { listing: { ...state.listing } });
@@ -352,6 +357,9 @@ test('activates and retires an exact isolated search fixture without money', asy
   assert.equal(activated.status, 'isolated-product-journey-fixture-active');
   assert.equal(activated.publicCatalogVisible, true);
   assert.equal(activated.monetaryEffectMinor, 0);
+  assert.deepEqual(api.state.listingStatusPatches, [
+    { status: 'active', privateStatusConfirmed: true },
+  ]);
   const vault = JSON.parse(readFileSync(prepared.vaultFile, 'utf8'));
   assert.equal(vault.realTwoRoleJourney.status, 'synthetic-fixture-active');
   assert.equal(vault.realTwoRoleJourney.listingStatus, 'active');
@@ -363,6 +371,10 @@ test('activates and retires an exact isolated search fixture without money', asy
   assert.equal(retired.status, 'email-verified-two-role-product-journey-retired');
   assert.equal(retired.listingEnded, true);
   assert.equal(retired.monetaryEffectMinor, 0);
+  assert.deepEqual(api.state.listingStatusPatches, [
+    { status: 'active', privateStatusConfirmed: true },
+    { status: 'ended' },
+  ]);
 });
 
 async function activeJourneyFixture() {

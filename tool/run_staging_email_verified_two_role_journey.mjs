@@ -506,7 +506,7 @@ export async function activateStagingEmailVerifiedJourneyFixture({
     {
       method: 'PATCH',
       token: owner.token,
-      body: { status: 'active' },
+      body: { status: 'active', privateStatusConfirmed: true },
     },
   );
   if (activated.value?.listing?.id !== vault.realTwoRoleJourney.listingId
