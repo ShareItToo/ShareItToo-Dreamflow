@@ -267,20 +267,22 @@ class _PrivatePilotCheckoutScreenState
 
   Future<void> _submitRequest() async {
     if (!_canSubmit) return;
-    final quote = _displayQuote;
-    final current = await DataService.getCurrentUser();
-    if (!mounted) return;
-    if (current == null) {
-      await AppPopup.error(
-        context,
-        title: 'Anmeldung erforderlich',
-        message:
-            'Bitte melde dich erneut an und öffne den Checkout danach noch einmal.',
-      );
-      return;
-    }
+    // Close the tap window before the first asynchronous lookup. Otherwise two
+    // rapid taps can both pass _canSubmit and create parallel requests.
     setState(() => _submitting = true);
+    final quote = _displayQuote;
     try {
+      final current = await DataService.getCurrentUser();
+      if (!mounted) return;
+      if (current == null) {
+        await AppPopup.error(
+          context,
+          title: 'Anmeldung erforderlich',
+          message:
+              'Bitte melde dich erneut an und öffne den Checkout danach noch einmal.',
+        );
+        return;
+      }
       final declarationTime = DateTime.now();
       final simulationOnly = _stageANonBindingPilot;
       final request = RentalRequest(
