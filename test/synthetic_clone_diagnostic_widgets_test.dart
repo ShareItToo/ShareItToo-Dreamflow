@@ -3,6 +3,25 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lendify/screens/synthetic_clone_diagnostic_screen.dart';
 
 void main() {
+  test('persisted booking ID is scoped to the active clone run', () {
+    expect(
+      syntheticCloneBookingIdForRun(
+        storedRunId: 'wp255-run-old',
+        storedBookingId: 'booking-old',
+        activeRunId: 'wp255-run-new',
+      ),
+      isNull,
+    );
+    expect(
+      syntheticCloneBookingIdForRun(
+        storedRunId: 'wp255-run-current',
+        storedBookingId: 'booking-current',
+        activeRunId: 'wp255-run-current',
+      ),
+      'booking-current',
+    );
+  });
+
   testWidgets(
     'incomplete presenter slot card exposes all eight actions on a small surface',
     (tester) async {
@@ -35,7 +54,8 @@ void main() {
     },
   );
 
-  testWidgets('verifier entry remains available without a persisted challenge ID',
+  testWidgets(
+      'verifier entry remains available without a persisted challenge ID',
       (tester) async {
     final challenge = TextEditingController();
     final payload = TextEditingController();

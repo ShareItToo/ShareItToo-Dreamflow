@@ -101,6 +101,19 @@ export function safeStaticPath(root, requestPath) {
   return target;
 }
 
+export function webCloneProxyAccessRecord(method, requestPath, status) {
+  const path = typeof requestPath === 'string' ? requestPath.split(/[?#]/u, 1)[0] : '';
+  return { event: 'web_clone_proxy_access', method, path, status };
+}
+
+export function isAllowedWebCloneRealtimeUpgrade(requestPath, requestOrigin, origin = WEB_CLONE_ORIGIN) {
+  validateLocalWebOrigin(origin);
+  let path;
+  try { path = new URL(requestPath, origin).pathname; }
+  catch { return false; }
+  return path === '/api/v1/realtime' && requestOrigin === origin;
+}
+
 function run(command, args, { cwd, env } = {}) {
   return new Promise((resolvePromise, reject) => {
     const child = spawn(command, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -156,6 +169,7 @@ async function waitReady(url, child) {
 }
 
 function createWebCloneServer({ origin, backendPort, webRoot }) {
+  const sockets = new Set();
   const server = http.createServer(async (request, response) => {
     const requestPath = request.url ?? '/';
     if (requestPath.startsWith(API_PREFIX)) {
@@ -164,6 +178,9 @@ function createWebCloneServer({ origin, backendPort, webRoot }) {
         host: '127.0.0.1', port: backendPort, method: request.method,
         path: upstreamPath, headers: { ...request.headers, host: `127.0.0.1:${backendPort}` },
       }, (upstreamResponse) => {
+        process.stdout.write(`${JSON.stringify(webCloneProxyAccessRecord(
+          request.method, upstreamPath, upstreamResponse.statusCode ?? 502,
+        ))}\n`);
         response.writeHead(upstreamResponse.statusCode ?? 502, upstreamResponse.headers);
         upstreamResponse.pipe(response);
       });
@@ -208,6 +225,57 @@ function createWebCloneServer({ origin, backendPort, webRoot }) {
     if (request.method === 'HEAD') { response.end(); return; }
     createReadStream(filePath).pipe(response);
   });
+  server.on('connection', (socket) => {
+    sockets.add(socket);
+    socket.once('close', () => sockets.delete(socket));
+  });
+  server.on('upgrade', (request, clientSocket, head) => {
+    if (!isAllowedWebCloneRealtimeUpgrade(request.url ?? '/', request.headers.origin, origin)) {
+      process.stdout.write(`${JSON.stringify(webCloneProxyAccessRecord(request.method, request.url ?? '/', 403))}\n`);
+      clientSocket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
+      return;
+    }
+    const handshakeHeaders = {
+      host: `127.0.0.1:${backendPort}`,
+      connection: 'Upgrade', upgrade: 'websocket',
+      origin,
+      'sec-websocket-key': request.headers['sec-websocket-key'],
+      'sec-websocket-version': request.headers['sec-websocket-version'],
+    };
+    if (typeof request.headers['sec-websocket-extensions'] === 'string') {
+      handshakeHeaders['sec-websocket-extensions'] = request.headers['sec-websocket-extensions'];
+    }
+    const upstream = http.request({ host: '127.0.0.1', port: backendPort,
+      method: 'GET', path: '/v1/realtime', headers: handshakeHeaders });
+    upstream.on('upgrade', (upstreamResponse, upstreamSocket, upstreamHead) => {
+      process.stdout.write(`${JSON.stringify(webCloneProxyAccessRecord(request.method, request.url ?? '/', upstreamResponse.statusCode ?? 101))}\n`);
+      clientSocket.write(`HTTP/1.1 ${upstreamResponse.statusCode ?? 101} Switching Protocols\r\n`);
+      for (let index = 0; index < upstreamResponse.rawHeaders.length; index += 2) {
+        clientSocket.write(`${upstreamResponse.rawHeaders[index]}: ${upstreamResponse.rawHeaders[index + 1]}\r\n`);
+      }
+      clientSocket.write('\r\n');
+      if (head.length) upstreamSocket.write(head);
+      if (upstreamHead.length) clientSocket.write(upstreamHead);
+      clientSocket.pipe(upstreamSocket);
+      upstreamSocket.pipe(clientSocket);
+      sockets.add(clientSocket);
+      sockets.add(upstreamSocket);
+      clientSocket.on('error', () => upstreamSocket.destroy());
+      upstreamSocket.on('error', () => clientSocket.destroy());
+      clientSocket.on('close', () => { sockets.delete(clientSocket); upstreamSocket.destroy(); });
+      upstreamSocket.on('close', () => { sockets.delete(upstreamSocket); clientSocket.destroy(); });
+    });
+    upstream.on('response', (upstreamResponse) => {
+      process.stdout.write(`${JSON.stringify(webCloneProxyAccessRecord(request.method, request.url ?? '/', upstreamResponse.statusCode ?? 502))}\n`);
+      clientSocket.end('HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n');
+    });
+    upstream.on('error', () => {
+      process.stdout.write(`${JSON.stringify(webCloneProxyAccessRecord(request.method, request.url ?? '/', 502))}\n`);
+      clientSocket.end('HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n');
+    });
+    upstream.end();
+  });
+  server.syntheticCloneSockets = sockets;
   return server;
 }
 
@@ -226,6 +294,8 @@ function closeServer(server) {
   return new Promise((resolvePromise, reject) => {
     server.close((error) => error ? reject(error) : resolvePromise());
     server.closeIdleConnections?.();
+    server.closeAllConnections?.();
+    for (const socket of server.syntheticCloneSockets ?? []) socket.destroy();
   });
 }
 

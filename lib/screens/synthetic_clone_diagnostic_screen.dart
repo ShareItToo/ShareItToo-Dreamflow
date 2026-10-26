@@ -16,6 +16,14 @@ import '../services/synthetic_clone_booking_service.dart';
 import '../widgets/synthetic_clone_lifecycle_panels.dart';
 import '../widgets/synthetic_clone_non_binding_banner.dart';
 
+@visibleForTesting
+String? syntheticCloneBookingIdForRun({
+  required String? storedRunId,
+  required String? storedBookingId,
+  required String activeRunId,
+}) =>
+    storedRunId == activeRunId ? storedBookingId : null;
+
 class SyntheticCloneDiagnosticScreen extends StatefulWidget {
   const SyntheticCloneDiagnosticScreen({super.key});
 
@@ -27,6 +35,7 @@ class SyntheticCloneDiagnosticScreen extends StatefulWidget {
 class _SyntheticCloneDiagnosticScreenState
     extends State<SyntheticCloneDiagnosticScreen> {
   static const _bookingKey = 'synthetic_clone_diagnostic_booking_id';
+  static const _bookingRunKey = 'synthetic_clone_diagnostic_booking_run_id';
 
   final _bookingIdController = TextEditingController();
   final _challengeIdController = TextEditingController();
@@ -69,7 +78,16 @@ class _SyntheticCloneDiagnosticScreenState
           : userId == status.renterId
               ? 'renter'
               : null;
-      final bookingId = prefs.getString(_bookingKey)?.trim() ?? '';
+      final bookingId = syntheticCloneBookingIdForRun(
+            storedRunId: prefs.getString(_bookingRunKey),
+            storedBookingId: prefs.getString(_bookingKey)?.trim(),
+            activeRunId: status.runId,
+          ) ??
+          '';
+      if (bookingId.isEmpty) {
+        await prefs.remove(_bookingKey);
+        await prefs.remove(_bookingRunKey);
+      }
       SyntheticCloneBooking? booking;
       if (bookingId.isNotEmpty) {
         booking = await SyntheticCloneBookingService.getBooking(bookingId);
@@ -107,6 +125,7 @@ class _SyntheticCloneDiagnosticScreenState
         final booking = await SyntheticCloneBookingService.createBooking();
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString(_bookingKey, booking.id);
+        await prefs.setString(_bookingRunKey, _status!.runId);
         _bookingIdController.text = booking.id;
         if (!mounted) return;
         setState(() => _booking = booking);
@@ -118,6 +137,7 @@ class _SyntheticCloneDiagnosticScreenState
         final booking = await SyntheticCloneBookingService.getBooking(id);
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString(_bookingKey, booking.id);
+        await prefs.setString(_bookingRunKey, _status!.runId);
         if (!mounted) return;
         setState(() => _booking = booking);
       });
@@ -270,6 +290,7 @@ class _SyntheticCloneDiagnosticScreenState
         }
         final prefs = await SharedPreferences.getInstance();
         await prefs.remove(_bookingKey);
+        await prefs.remove(_bookingRunKey);
         if (!mounted) return;
         setState(() {
           _booking = null;

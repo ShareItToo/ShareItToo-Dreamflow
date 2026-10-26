@@ -5,6 +5,8 @@ import {
   assertWebCloneEnvironment,
   safeStaticPath,
   validateLocalWebOrigin,
+  webCloneProxyAccessRecord,
+  isAllowedWebCloneRealtimeUpgrade,
   WEB_CLONE_ORIGIN,
 } from '../../tool/run_local_qa_web_clone.mjs';
 
@@ -81,4 +83,15 @@ test('static app serving confines resolved paths to the selected build root', ()
   assert.equal(safeStaticPath(root, '/assets/flutter.js'), `${root}/assets/flutter.js`);
   assert.throws(() => safeStaticPath(root, '/%2e%2e/private/secrets'), /web_clone_static_path_invalid/u);
   assert.throws(() => safeStaticPath(root, '/%2fprivate/secrets'), /web_clone_static_path_invalid/u);
+});
+
+test('proxy access diagnostics record only method, query-free path and status', () => {
+  assert.deepEqual(
+    webCloneProxyAccessRecord('POST', '/v1/auth/login?email=synthetic&token=secret', 200),
+    { event: 'web_clone_proxy_access', method: 'POST', path: '/v1/auth/login', status: 200 },
+  );
+  assert.equal(isAllowedWebCloneRealtimeUpgrade('/api/v1/realtime', validOrigin), true);
+  assert.equal(isAllowedWebCloneRealtimeUpgrade('/api/v1/realtime?secret=x', validOrigin), true);
+  assert.equal(isAllowedWebCloneRealtimeUpgrade('/v1/realtime', validOrigin), false);
+  assert.equal(isAllowedWebCloneRealtimeUpgrade('/api/v1/realtime', 'https://example.invalid'), false);
 });
