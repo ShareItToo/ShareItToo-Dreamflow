@@ -12,7 +12,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:lendify/models/item.dart';
 import 'package:lendify/models/category.dart';
 import 'package:lendify/models/supply_enrichment.dart';
-import 'package:lendify/models/user.dart';
 import 'package:lendify/services/data_service.dart';
 import 'package:lendify/services/listing_mutation_service.dart';
 import 'package:lendify/services/shared_persistence_sync.dart';
@@ -57,23 +56,18 @@ String resolveListingEditorCity({
 }
 
 @visibleForTesting
-String resolveListingEditorProfilePlace(User user) {
-  final homeLocation = user.homeLocation?.trim() ?? '';
-  if (homeLocation.isNotEmpty) return homeLocation;
-  String firstNonEmpty(Iterable<String?> values) {
-    for (final value in values) {
-      final trimmed = value?.trim() ?? '';
-      if (trimmed.isNotEmpty) return trimmed;
-    }
-    return '';
-  }
-
-  final city = firstNonEmpty([user.addressCity, user.city]);
-  final country = firstNonEmpty([user.addressCountry, user.country]);
-  return <String>[city, country]
-      .where((part) => part.isNotEmpty)
-      .join(', ');
-}
+bool isExplicitListingSearchLocation({
+  required double? latitude,
+  required double? longitude,
+}) =>
+    latitude != null &&
+    longitude != null &&
+    latitude.isFinite &&
+    longitude.isFinite &&
+    latitude >= -90 &&
+    latitude <= 90 &&
+    longitude >= -180 &&
+    longitude <= 180;
 
 @visibleForTesting
 bool isActionableBlueOceanAssistant(Map<String, dynamic>? assistant) {
@@ -186,6 +180,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
   String? _registeredCity;
   double? _selectedAddrLat;
   double? _selectedAddrLng;
+  String? _selectedAddrQuery;
   bool get _isEdit => widget.existing != null;
 
   // Address suggestions are routed through the authenticated SIT backend.
@@ -354,6 +349,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
       _addressCtrl.text = ex.locationText;
       _selectedAddrLat = ex.lat;
       _selectedAddrLng = ex.lng;
+      _selectedAddrQuery = ex.locationText.trim();
       _existingPhotos = List<String>.from(ex.photos);
       // Prefill discount tiers: map first three thresholds ascending
       _autoApplyDiscounts = ex.autoApplyDiscounts;
@@ -381,6 +377,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
       _addressCtrl.text = prefill.locationText;
       _selectedAddrLat = prefill.latitude;
       _selectedAddrLng = prefill.longitude;
+      _selectedAddrQuery = prefill.locationText.trim();
     }
   }
 
@@ -396,16 +393,6 @@ class _CreateListingScreenState extends State<CreateListingScreen>
     if (widget.existing != null && widget.existing!.ownerId != user!.id) {
       _listingActions.invalidate();
       return;
-    }
-    if (user != null &&
-        widget.existing == null &&
-        widget.supplyPrefill == null &&
-        _addressCtrl.text.trim().isEmpty) {
-      final profilePlace = resolveListingEditorProfilePlace(user);
-      if (profilePlace.isNotEmpty) {
-        _addressCtrl.text = profilePlace;
-        _registeredCity ??= user.addressCity ?? user.city;
-      }
     }
     // Build coarse/top-level groups in fixed order, limited to those present
     final present = <String>{
@@ -1552,8 +1539,11 @@ class _CreateListingScreenState extends State<CreateListingScreen>
       if (price == null || price <= 0) {
         return 'Gib einen gültigen Tagespreis ein.';
       }
-      if (_addressCtrl.text.trim().isEmpty) {
-        return 'Wähle einen Profilstandort für die persönliche Übergabe.';
+      if (!isExplicitListingSearchLocation(
+        latitude: _selectedAddrLat,
+        longitude: _selectedAddrLng,
+      )) {
+        return 'Wähle einen Suchort aus den Ortsvorschlägen für die Übergabe.';
       }
     }
     return null;
@@ -1867,12 +1857,9 @@ class _CreateListingScreenState extends State<CreateListingScreen>
       registeredCity: _registeredCity,
       availableCities: allCities,
     );
-    (double, double) pos = allCities[city] ?? (52.52, 13.405);
-
-    // Always use address mode now
-    if (_selectedAddrLat != null && _selectedAddrLng != null) {
-      pos = (_selectedAddrLat!, _selectedAddrLng!);
-    }
+    // Publication uses only coordinates returned for an explicitly selected
+    // search suggestion. Typed or profile-derived addresses have no geo truth.
+    final pos = (_selectedAddrLat!, _selectedAddrLng!);
 
     final raw = double.tryParse(_priceCtrl.text.replaceAll(',', '.')) ?? 0.0;
     double pricePerDay;
@@ -3414,6 +3401,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                                     d.formattedAddress ?? d.description;
                                 _selectedAddrLat = d.lat;
                                 _selectedAddrLng = d.lng;
+                                _selectedAddrQuery = _addressCtrl.text.trim();
                                 _invalidateBlueOceanReviewState(
                                   confirmations: const <String>[
                                     'pickup_region'
@@ -3424,6 +3412,11 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                               _schedulePriceRecalc();
                             },
                             onQueryChanged: (q) {
+                              if (q.trim() != _selectedAddrQuery) {
+                                _selectedAddrLat = null;
+                                _selectedAddrLng = null;
+                                _selectedAddrQuery = null;
+                              }
                               _onAddressQueryChanged(q);
                               setState(() {
                                 _invalidateBlueOceanReviewState(
@@ -3441,7 +3434,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                             Padding(
                               padding: const EdgeInsets.only(top: 8),
                               child: Text(
-                                  'Vorschläge sind gerade nicht verfügbar. Du kannst den Ort trotzdem manuell eingeben.',
+                                  'Suchort-Vorschläge sind gerade nicht verfügbar. Die Veröffentlichung erfordert einen ausgewählten Suchort mit bestätigten Koordinaten; bitte versuche es später erneut.',
                                   style: TextStyle(
                                       color: Theme.of(context).brightness ==
                                               Brightness.dark
