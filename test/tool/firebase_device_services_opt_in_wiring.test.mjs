@@ -76,7 +76,9 @@ test('push registration is exact-session bound and retries on authenticated reco
   assert.match(runtime, /_pushOperationQueue/u);
   assert.match(runtime, /registerPushDevice\([\s\S]*?expectedSessionEpoch: expectedSessionEpoch/u);
   assert.match(runtime, /return await _syncPushRegistrationOnce\(requestedEpoch\)/u);
-  assert.match(runtime, /onTokenRefresh\.listen[\s\S]*?_registerRefreshedToken/u);
+  const tokenRefreshRegistration = /onTokenRefresh\s*\.listen[\s\S]*?_registerRefreshedToken/u;
+  assert.match(runtime, tokenRefreshRegistration);
+  assert.doesNotMatch('onTokenRefresh.listen(_registerToken)', tokenRefreshRegistration);
   assert.match(foregroundHost, /WidgetsBindingObserver/u);
   assert.match(foregroundHost, /AppLifecycleState\.resumed/u);
   assert.match(foregroundHost, /BackendRealtimeService\.authenticatedReadyEvents/u);
@@ -85,9 +87,13 @@ test('push registration is exact-session bound and retries on authenticated reco
 
 test('push cleanup is exact-session owned and cannot drift to a successor account', () => {
   assert.match(runtime, /setPushBackendCleanupPending\([\s\S]*?ownerToken: cleanupOwnerToken/u);
-  assert.match(runtime, /preferences\.pushBackendCleanupOwnerTokens[\s\S]*?contains\(currentOwnerToken\)/u);
+  const currentOwnerOwnsCleanup = /preferences\.pushBackendCleanupOwnerTokens\s*\.contains\s*\(\s*currentOwnerToken\s*,?\s*\)/u;
+  assert.match(runtime, currentOwnerOwnsCleanup);
+  assert.doesNotMatch('preferences.pushBackendCleanupOwnerTokens.clear()', currentOwnerOwnsCleanup);
   assert.match(runtime, /deleteCurrentSessionPushDevices\([\s\S]*?expectedSessionEpoch: expectedSessionEpoch/u);
-  assert.match(runtime, /return _pushOperationQueue\.run\([\s\S]*?_setPushEnabledOnce/u);
+  const serializedToggle = /return\s+_pushOperationQueue\s*\.run\s*\([\s\S]*?_setPushEnabledOnce/u;
+  assert.match(runtime, serializedToggle);
+  assert.doesNotMatch('return _pushOperationQueue.execute(_setPushEnabledOnce)', serializedToggle);
 });
 
 test('device-service consent dialog is route-owned and account-epoch guarded', () => {

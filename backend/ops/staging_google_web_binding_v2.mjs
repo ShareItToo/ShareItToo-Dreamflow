@@ -23,7 +23,8 @@ export const GOOGLE_WEB_BINDING_V2_SOURCE_PATHS = Object.freeze([
   'backend/ops/staging_google_web_live_adapter.mjs',
   'backend/ops/staging_google_web_read_adapter.mjs',
   'backend/ops/staging_google_web_prerequisites.mjs',
-  'tool/staging_web_contract.mjs', 'tool/staging_google_web_readiness.mjs',
+  'tool/staging_web_contract.mjs', 'tool/staging_google_web_current_readback.mjs',
+  'tool/staging_google_web_readiness.mjs',
   'tool/staging_listing_ai_web_readiness.mjs', 'tool/staging_apple_web_readiness.mjs',
   'tool/staging_facebook_web_readiness.mjs', 'tool/staging_password_enrollment_web_readiness.mjs',
 ]);

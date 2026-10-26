@@ -36,10 +36,9 @@ test('push opt-out closes local gate before provider initialization and preserve
     /setPushBackendCleanupPending\(\s*false\s*\)/u,
   );
   assert.match(disableBranch, /setPushLocalCleanupPending\(true\)/u);
-  assert.match(
-    runtime,
-    /pushBackendCleanupOwnerTokens[\s\S]*?contains\(currentOwnerToken\)/u,
-  );
+  const ownerBoundCleanup = /pushBackendCleanupOwnerTokens\s*\.contains\s*\(\s*currentOwnerToken\s*,?\s*\)/u;
+  assert.match(runtime, ownerBoundCleanup);
+  assert.doesNotMatch('pushBackendCleanupOwnerTokens.clear()', ownerBoundCleanup);
 });
 
 test('crash opt-out is persisted immediately and cleanup retries separately', () => {
@@ -63,7 +62,9 @@ test('local/debug crash consent cannot be reported as active collection', () => 
   assert.match(runtime, /crashDiagnosticsCollectionAllowed\(/u);
   assert.match(runtime, /setCrashDiagnosticsCleanupPending\(\s*false/u);
   const initialize = slice(runtime, 'static Future<bool> _initialize(', 'static void recordFlutterFatalError');
-  assert.match(initialize, /^static Future<bool> _initialize\(\s*\{Future<void> Function\(\)\? prepareWebAuth\}\) async/u);
+  const initializeSignature = /^static Future<bool> _initialize\(\s*\{\s*Future<void> Function\(\)\? prepareWebAuth,?\s*\}\)\s*async/u;
+  assert.match(initialize, initializeSignature);
+  assert.doesNotMatch('static Future<bool> _initialize({bool prepareWebAuth}) async', initializeSignature);
   const web = slice(initialize, 'if (kIsWeb)', 'await _initializeNativeActionLinks();');
   assert.match(web, /return false;/u);
   assert.doesNotMatch(web, /FirebaseMessaging|FirebaseCrashlytics|_initialized\s*=\s*true|_pushEnabled\s*=\s*true|_crashDiagnosticsEnabled\s*=\s*true/u);
