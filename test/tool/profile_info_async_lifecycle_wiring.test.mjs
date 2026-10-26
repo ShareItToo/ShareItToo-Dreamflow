@@ -84,7 +84,7 @@ test('successful profile patch rechecks exact owner and refreshes local state', 
   );
   assert.match(
     compactSource,
-    /return result; \}\)\(\)\.timeout[\s\S]*?setState\(\(\) \{ _user = result\.user; _photoDraft = result\.user\.photoURL;/u,
+    /return result; \}\)\(\)\.timeout[\s\S]*?setState\(\(\) \{ _user = result\.user; _photoDraftRevision \+= 1; _photoDraft = result\.user\.photoURL;/u,
   );
   assert.match(
     compactSource,
@@ -94,6 +94,17 @@ test('successful profile patch rechecks exact owner and refreshes local state', 
   assert.doesNotMatch(source, /DataService\.updateCurrentUserProfile\(/u);
   assert.doesNotMatch(source, /Navigator\.of\(context\)\.maybePop\(\);/u);
   assert.doesNotMatch(source, /DataService\.setCurrentUser\(/u);
+});
+
+test('late same-principal profile reload preserves a newer photo draft', () => {
+  assert.match(
+    compactSource,
+    /Future<void> _load\(\) async \{ final revision = \+\+_loadRevision; final photoDraftRevision = _photoDraftRevision;[\s\S]*?if \(photoDraftRevision == _photoDraftRevision\) \{ _photoDraft = \(u\.photoURL != null && u\.photoURL!\.trim\(\)\.isNotEmpty\) \? u\.photoURL : null; \}/u,
+  );
+  assert.match(
+    compactSource,
+    /void _clearDraft\(\) \{[\s\S]*?_photoDraftRevision \+= 1; _photoDraft = null;/u,
+  );
 });
 
 test('profile lifecycle fix contains no timing or lint accommodation', () => {

@@ -36,6 +36,8 @@ void main() {
     (tester) async {
       final uploadProbe = _UploadProbe();
       final service = _PickerProfileService(uploadProbe);
+      final pendingRefresh = Completer<ProfileMutationContext?>();
+      service.pendingRefresh = pendingRefresh;
       final pickerResult = Completer<XFile?>();
       var pickerCalls = 0;
       await _openProfile(tester, service, (source) {
@@ -50,10 +52,10 @@ void main() {
       await _pumpUi(tester);
       expect(pickerCalls, 1);
 
-      // The picker is still pending while the profile screen performs the
-      // same-principal current-user refresh seen after Auth refresh/readback.
+      // Model the focus refresh racing the browser picker: the same-principal
+      // reload starts first but remains pending while the picker resolves.
       SharedPersistenceSync.notify(SharedPersistenceSync.profileStateKey);
-      await _pumpUi(tester);
+      await tester.pump();
       expect(service.loadCalls, 2);
 
       pickerResult.complete(_MemoryXFile());
@@ -62,6 +64,13 @@ void main() {
       expect(service.contextCheckCalls, greaterThan(0));
       expect(find.byType(Image), findsOneWidget,
           reason: 'the selected PNG should be visible as the local preview');
+
+      // A late /auth/me response contains the stale server avatar. It may
+      // refresh the rest of the profile but must not erase the newer draft.
+      pendingRefresh.complete(service.refreshedContext());
+      await _pumpUi(tester);
+      expect(find.byType(Image), findsOneWidget,
+          reason: 'late same-session refresh must preserve the selected photo');
 
       await tester.tap(find.text('Speichern'));
       await _pumpUi(tester);
@@ -108,6 +117,43 @@ void main() {
     expect(uploadProbe.calls, 0);
     expect(service.profilePatchCalls, 0);
     expect(find.text('Kein Benutzer geladen'), findsOneWidget);
+  });
+
+  testWidgets(
+      'late profile refresh cannot restore photo draft after account change',
+      (tester) async {
+    final uploadProbe = _UploadProbe();
+    final service = _PickerProfileService(uploadProbe);
+    final pendingRefresh = Completer<ProfileMutationContext?>();
+    service.pendingRefresh = pendingRefresh;
+    await _openProfile(tester, service, (_) async => _MemoryXFile());
+
+    await tester.tap(find.text('Foto ändern'));
+    await _pumpUi(tester);
+    await tester.tap(find.text('Foto aus Galerie wählen'));
+    await _pumpUi(tester);
+    await tester.pump(const Duration(milliseconds: 50));
+
+    SharedPersistenceSync.notify(SharedPersistenceSync.profileStateKey);
+    await tester.pump();
+    expect(service.loadCalls, 2);
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.byType(Image), findsOneWidget,
+        reason: 'selected photo is visible before the security transition');
+
+    service.switchPrincipal();
+    SharedPersistenceSync.notify(SharedPersistenceSync.accountSecurityStateKey);
+    await _pumpUi(tester);
+    expect(find.text('Kein Benutzer geladen'), findsOneWidget);
+
+    pendingRefresh.complete(service.refreshedContext());
+    await _pumpUi(tester);
+    expect(find.byType(Image), findsNothing,
+        reason:
+            'a previous owner refresh must not restore private photo state');
+    expect(find.text('Kein Benutzer geladen'), findsOneWidget);
+    expect(uploadProbe.calls, 0);
+    expect(service.profilePatchCalls, 0);
   });
 }
 
@@ -169,6 +215,7 @@ class _PickerProfileService extends ProfileMutationService {
   int profilePatchCalls = 0;
   String? patchedPhotoUrl;
   bool _principalChanged = false;
+  Completer<ProfileMutationContext?>? pendingRefresh;
 
   _PickerProfileService(_UploadProbe uploadProbe)
       : super(
@@ -180,17 +227,37 @@ class _PickerProfileService extends ProfileMutationService {
   Future<ProfileMutationContext?> loadCurrentContext() async {
     loadCalls += 1;
     if (_principalChanged) return null;
-    return ProfileMutationContext(
-      user: _user,
-      owner: SessionTransitionOwner(
-          authOwner: _authOwner, profileUserId: _user.id),
-    );
+    final context = refreshedContext();
+    if (loadCalls == 2 && pendingRefresh != null) return pendingRefresh!.future;
+    return context;
   }
+
+  ProfileMutationContext refreshedContext() => ProfileMutationContext(
+        user: _user,
+        // Auth refresh/readback can create a new owner value for the same
+        // authenticated session. Equality is by session identity, not object.
+        owner: SessionTransitionOwner(
+          authOwner: AuthSessionOwner(
+            userId: _authOwner.userId,
+            sessionId: _authOwner.sessionId,
+            email: _authOwner.email,
+            createdAt: _authOwner.createdAt,
+            epoch: _authOwner.epoch,
+          ),
+          profileUserId: _user.id,
+        ),
+      );
 
   @override
   Future<bool> isContextCurrent(ProfileMutationContext context) async {
     contextCheckCalls += 1;
-    return !_principalChanged && identical(context.owner.authOwner, _authOwner);
+    final owner = context.owner.authOwner;
+    return !_principalChanged &&
+        owner.userId == _authOwner.userId &&
+        owner.sessionId == _authOwner.sessionId &&
+        owner.email == _authOwner.email &&
+        owner.createdAt == _authOwner.createdAt &&
+        owner.epoch == _authOwner.epoch;
   }
 
   @override

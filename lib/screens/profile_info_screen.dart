@@ -142,6 +142,7 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
   final _profileActions = ProfileMutationInteractionController();
   StreamSubscription<String>? _persistenceSubscription;
   int _loadRevision = 0;
+  int _photoDraftRevision = 0;
   bool _profileRefreshPending = false;
 
   ProfileMutationService get _profileMutationService =>
@@ -181,6 +182,7 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
 
   Future<void> _load() async {
     final revision = ++_loadRevision;
+    final photoDraftRevision = _photoDraftRevision;
     try {
       final profileContext = await _profileMutationService.loadCurrentContext();
       if (!mounted || revision != _loadRevision) return;
@@ -200,9 +202,11 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
           _birthYearCtrl.text = u.birthDate?.year.toString() ?? '';
           _cityCtrl.text = u.city ?? '';
           _bioCtrl.text = u.bio ?? '';
-          _photoDraft = (u.photoURL != null && u.photoURL!.trim().isNotEmpty)
-              ? u.photoURL
-              : null;
+          if (photoDraftRevision == _photoDraftRevision) {
+            _photoDraft = (u.photoURL != null && u.photoURL!.trim().isNotEmpty)
+                ? u.photoURL
+                : null;
+          }
           _languages
             ..clear()
             ..addAll(u.languages);
@@ -291,6 +295,7 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
     _birthYearCtrl.clear();
     _cityCtrl.clear();
     _bioCtrl.clear();
+    _photoDraftRevision += 1;
     _photoDraft = null;
     _languages.clear();
     _interests.clear();
@@ -383,6 +388,7 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
       })().timeout(const Duration(seconds: 15));
       setState(() {
         _user = result.user;
+        _photoDraftRevision += 1;
         _photoDraft = result.user.photoURL;
       });
       // The returned user is the authenticated projection read back after the
@@ -412,7 +418,10 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
         return;
       }
       if (mounted && _profileActions.isSynchronouslyCurrent(owner)) {
-        setState(() => _photoDraft = u.photoURL);
+        setState(() {
+          _photoDraftRevision += 1;
+          _photoDraft = u.photoURL;
+        });
       }
       await _showOwnedStatus(
         owner,
@@ -431,7 +440,12 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
       debugPrint('[ProfileInfo] save failed: $e');
       if (remoteMutationMayHaveStarted) _profileRefreshPending = true;
       if (await _isActionCurrentForFeedback(owner)) {
-        if (mounted) setState(() => _photoDraft = u.photoURL);
+        if (mounted) {
+          setState(() {
+            _photoDraftRevision += 1;
+            _photoDraft = u.photoURL;
+          });
+        }
         await _showOwnedStatus(
           owner,
           title: e is TimeoutException
@@ -581,7 +595,10 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
         break;
       case _ProfilePhotoChoice.remove:
         if (_profileActions.isSynchronouslyCurrent(owner)) {
-          setState(() => _photoDraft = null);
+          setState(() {
+            _photoDraftRevision += 1;
+            _photoDraft = null;
+          });
         }
         break;
     }
@@ -610,7 +627,10 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
       }
       final b64 = base64Encode(bytes);
       final mime = _guessImageMime(shot.name);
-      setState(() => _photoDraft = 'data:$mime;base64,$b64');
+      setState(() {
+        _photoDraftRevision += 1;
+        _photoDraft = 'data:$mime;base64,$b64';
+      });
     } catch (e) {
       debugPrint('[ProfileInfo] pick photo failed: $e');
       if (await _profileActions.isCurrent(_profileMutationService, owner)) {
