@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lendify/config/private_pilot_config.dart';
 import 'package:lendify/models/item.dart';
 import 'package:lendify/services/data_service.dart';
 import 'package:lendify/services/backend_config.dart';
@@ -156,6 +157,29 @@ void main() {
     expect(results, hasLength(1));
     expect(results.single.categoryId, 'cat3');
     expect(results.single.subcategory, 'Sonstiges');
+  });
+
+  test('Sonstiges search returns the fallback pair for every allowed category',
+      () async {
+    final sources = PrivatePilotConfig.allowedCategoryIds.map((categoryId) {
+      final source = buildTestItem(
+        id: 'other-$categoryId',
+        ownerId: 'owner-a',
+      ).toJson()
+        ..['categoryId'] = categoryId
+        ..['subcategory'] = 'Sonstiges';
+      return Item.fromJson(source);
+    }).toList(growable: false);
+    SharedPreferences.setMockInitialValues({
+      'items': jsonEncode(sources.map((item) => item.toJson()).toList()),
+    });
+
+    final results = await DataService.searchPublicItems(query: 'sonstiges');
+
+    expect(results.map((item) => item.categoryId).toSet(),
+        PrivatePilotConfig.allowedCategoryIds);
+    expect(results, hasLength(PrivatePilotConfig.allowedCategoryIds.length));
+    expect(results.every((item) => item.subcategory == 'Sonstiges'), isTrue);
   });
 
   test('public catalog feed and search preserve guest and current auth tokens',

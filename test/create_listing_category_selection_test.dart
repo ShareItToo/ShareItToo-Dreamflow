@@ -170,10 +170,10 @@ void main() {
           tester.state<FormFieldState<String>>(field('Unterkategorie')).value,
           'Sonstiges');
       await choose(tester, 'Produktbereich', 'Computer & IT');
-      await choose(tester, 'Unterkategorie', 'Monitore');
+      await choose(tester, 'Unterkategorie', 'Sonstiges');
       await save();
       final edited = await service.read();
-      expect((edited.categoryId, edited.subcategory), ('cat2', 'Monitore'));
+      expect((edited.categoryId, edited.subcategory), ('cat2', 'Sonstiges'));
       expect(service.operations,
           [ListingMutationOperation.create, ListingMutationOperation.update]);
       await open(existing: edited);
@@ -182,7 +182,7 @@ void main() {
           'cat2');
       expect(
           tester.state<FormFieldState<String>>(field('Unterkategorie')).value,
-          'Monitore');
+          'Sonstiges');
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pumpAndSettle();

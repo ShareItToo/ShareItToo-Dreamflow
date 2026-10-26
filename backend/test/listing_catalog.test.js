@@ -13,6 +13,7 @@ import {
   listingPhotoTruthPolicyText,
   listingPhotoTruthPolicyVersion,
 } from '../src/listing_photo_truth_policy.js';
+import { privatePilotAllowedCategoryIds } from '../src/private_pilot_domain.js';
 
 const validListing = {
   title: 'Bosch Bohrmaschine',
@@ -232,6 +233,26 @@ test('Privat-Pilot persists the normalized region binding and rejects unconfigur
     }),
     (error) => error.code === 'private_pilot_region_not_allowed',
   );
+});
+
+test('every allowed private-pilot category normalizes Sonstiges without changing its pair', () => {
+  for (const categoryId of privatePilotAllowedCategoryIds) {
+    const listing = normalizeListingPayload({
+      ...validListing,
+      categoryId,
+      subcategory: 'Sonstiges',
+      status: 'draft',
+      privateStatusConfirmed: false,
+    }, {
+      id: `listing-other-${categoryId}`,
+      ownerId: 'owner',
+      privatePilot: true,
+      privatePilotAllowedRegions: ['berlin'],
+    });
+    assert.equal(listing.categoryId, categoryId);
+    assert.equal(listing.subcategory, 'Sonstiges');
+    assert.equal(listing.pilotRegionCode, 'berlin');
+  }
 });
 
 test('active listings require an image while drafts may remain private without one', () => {
