@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lendify/models/item.dart';
 import 'package:lendify/models/rental_request.dart';
 import 'package:lendify/screens/bookings_screen.dart';
 import 'package:lendify/services/data_service.dart';
@@ -11,6 +12,19 @@ import 'support/test_builders.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  Future<void> pumpUntilVisible(WidgetTester tester, Finder finder) async {
+    for (var attempt = 0; attempt < 20; attempt += 1) {
+      await tester.pump(const Duration(milliseconds: 100));
+      if (finder.evaluate().isNotEmpty) return;
+    }
+    fail('Expected UI content did not appear after bounded pumps: $finder');
+  }
+
+  Future<void> pumpTabTransition(WidgetTester tester) async {
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+  }
 
   testWidgets(
     'new pending renter request appears in Ausstehend, not Kommend',
@@ -25,11 +39,14 @@ void main() {
         name: 'Pending UI Owner',
         email: 'pending-ui-owner@example.invalid',
       );
-      final item = buildTestItem(
-        id: 'pending-ui-listing',
-        ownerId: owner.id,
-        title: 'Synthetischer Pending-Projektor',
-      );
+      final item = Item.fromJson({
+        ...buildTestItem(
+          id: 'pending-ui-listing',
+          ownerId: owner.id,
+          title: 'Synthetischer Pending-Projektor',
+        ).toJson(),
+        'photos': <String>[],
+      });
 
       SharedPreferences.setMockInitialValues({
         'currentUser': jsonEncode(renter.toJson()),
@@ -60,7 +77,10 @@ void main() {
       await tester.pumpWidget(
         const MaterialApp(home: BookingsScreen(initialTabIndex: 2)),
       );
-      await tester.pumpAndSettle();
+      await pumpUntilVisible(
+        tester,
+        find.text('Synthetischer Pending-Projektor'),
+      );
 
       expect(find.text('Meine Buchungen'), findsOneWidget);
       expect(find.text('Synthetischer Pending-Projektor'), findsOneWidget);
@@ -68,12 +88,12 @@ void main() {
       expect(find.text('Du hast keine ausstehenden Buchungen'), findsNothing);
 
       await tester.tap(find.text('Kommend'));
-      await tester.pumpAndSettle();
+      await pumpTabTransition(tester);
       expect(find.text('Du hast keine kommenden Buchungen'), findsOneWidget);
       expect(find.text('Synthetischer Pending-Projektor'), findsNothing);
 
       await tester.tap(find.text('Ausstehend'));
-      await tester.pumpAndSettle();
+      await pumpTabTransition(tester);
       expect(find.text('Synthetischer Pending-Projektor'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox.shrink());
