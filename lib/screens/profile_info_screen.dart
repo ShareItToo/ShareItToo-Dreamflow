@@ -19,10 +19,12 @@ enum _ProfilePhotoChoice { camera, gallery, remove }
 
 class ProfileInfoScreen extends StatefulWidget {
   final ProfileMutationService profileMutationService;
+  final Future<XFile?> Function(ImageSource source)? imagePicker;
 
   const ProfileInfoScreen({
     super.key,
     this.profileMutationService = const ProfileMutationService(),
+    this.imagePicker,
   });
   @override
   State<ProfileInfoScreen> createState() => _ProfileInfoScreenState();
@@ -596,15 +598,14 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
       if (!_profileActions.isSynchronouslyCurrent(owner)) {
         return;
       }
-      final picker = ImagePicker();
-      final XFile? shot =
-          await picker.pickImage(source: source, imageQuality: 85);
-      if (shot == null ||
-          !await _profileActions.isCurrent(_profileMutationService, owner)) {
+      final XFile? shot = widget.imagePicker != null
+          ? await widget.imagePicker!(source)
+          : await ImagePicker().pickImage(source: source, imageQuality: 85);
+      if (shot == null || !await _isPickerOwnerCurrent(owner)) {
         return;
       }
       final bytes = await shot.readAsBytes();
-      if (!await _profileActions.isCurrent(_profileMutationService, owner)) {
+      if (!await _isPickerOwnerCurrent(owner)) {
         return;
       }
       final b64 = base64Encode(bytes);
@@ -618,6 +619,21 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
           title: 'Foto konnte nicht geladen werden',
         );
       }
+    }
+  }
+
+  Future<bool> _isPickerOwnerCurrent(ProfileMutationActionOwner owner) async {
+    if (!mounted) return false;
+    try {
+      // A persistence refresh may replace the screen action context while the
+      // browser file chooser is open. Keep the selection only when its exact
+      // authenticated session/principal is still current; action-epoch drift
+      // alone must not discard the user's file.
+      return await _profileMutationService
+          .isContextCurrent(owner.context)
+          .timeout(const Duration(seconds: 3), onTimeout: () => false);
+    } catch (_) {
+      return false;
     }
   }
 
