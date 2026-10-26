@@ -442,12 +442,12 @@ else
       exit 1
     fi
     if [[ ! "${SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS:-}" =~ ^[0-9]+$ ]]; then
-      echo "SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS must be an integer from 2 to 500." >&2
+      echo "SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS must be an integer from 4 to 500." >&2
       exit 1
     fi
     task_listing_ai_smoke_budget_cents=$((10#${SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS}))
-    if (( task_listing_ai_smoke_budget_cents < 2 || task_listing_ai_smoke_budget_cents > 500 )); then
-      echo "SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS must be an integer from 2 to 500." >&2
+    if (( task_listing_ai_smoke_budget_cents < 4 || task_listing_ai_smoke_budget_cents > 500 )); then
+      echo "SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS must be an integer from 4 to 500." >&2
       exit 1
     fi
     if [[ ! "${SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID:-}" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$ ]]; then

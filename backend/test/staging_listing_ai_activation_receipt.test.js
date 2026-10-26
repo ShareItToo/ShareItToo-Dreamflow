@@ -67,6 +67,12 @@ test('composes a sanitized receipt bound to exact runtime, Green receipt, report
 
 test('wrong container/image/commit, changed report, failed health and invalid Green lineage fail closed', () => {
   const cases = [
+    ['smoke budget below a single-image reservation', { healthReadbackBytes: Buffer.from(JSON.stringify({
+      status: 'ok', checks: { listingAi: {
+        ...JSON.parse(evidence().healthReadbackBytes).checks.listingAi,
+        stagingSmokeBudgetCents: 3,
+      } },
+    })) }],
     ['container identity', { runtime: { ...evidence().runtime, containerId: oldId } }],
     ['image repository identity', { runtime: { ...evidence().runtime,
       repoDigest: `ghcr.io/attacker/shareittoo-api@sha256:${'1'.repeat(64)}` } }],

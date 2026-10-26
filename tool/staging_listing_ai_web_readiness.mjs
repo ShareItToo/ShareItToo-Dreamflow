@@ -149,7 +149,7 @@ export function bindListingAiWebReadiness(evidence, evidenceDigest,
     && config.provider === 'openai' && config.model === LISTING_AI_WEB_MODEL
     && config.budgetCents === 10_000 && config.budgetScope === 'lifetime'
     && Number.isSafeInteger(config.stagingSmokeBudgetCents)
-    && config.stagingSmokeBudgetCents >= 2 && config.stagingSmokeBudgetCents <= 500
+    && config.stagingSmokeBudgetCents >= 4 && config.stagingSmokeBudgetCents <= 500
     && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
       .test(config.stagingSmokeActivationId)
     && config.runMaxProviderCalls === 5

@@ -184,6 +184,7 @@ test('rejects unsupported client, expired evidence, and a widened external bound
   }), /listing_ai_web_configuration_invalid/u);
   for (const [field, value] of [
     ['budgetCents', 500],
+    ['stagingSmokeBudgetCents', 3],
     ['stagingSmokeBudgetCents', 501],
     ['runMaxProviderCalls', 6],
   ]) {

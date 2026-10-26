@@ -112,7 +112,15 @@ test('production, version drift, invalid bounds and non-paid budgets fail closed
       SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: '1',
       SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: '11111111-1111-4111-8111-111111111111',
       SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '1',
-    }, {}, /explicit lifetime and scoped smoke budgets/u],
+    }, {}, /4-to-500-cent scoped smoke budget/u],
+    ...[2, 3].map((amount) => [{
+      SIT_LISTING_AI_PROVIDER: 'openai',
+      SIT_LISTING_AI_MODEL: listingAiOpenAiModel,
+      SIT_LISTING_AI_BUDGET_CENTS: '10000',
+      SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: String(amount),
+      SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: '11111111-1111-4111-8111-111111111111',
+      SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '1',
+    }, { deploymentEnvironment: 'staging' }, /4-to-500-cent scoped smoke budget/u]),
     [{
       SIT_LISTING_AI_PROVIDER: 'openai',
       SIT_LISTING_AI_MODEL: listingAiOpenAiModel,
@@ -127,7 +135,7 @@ test('production, version drift, invalid bounds and non-paid budgets fail closed
       SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '1',
       SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: '500',
       SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: '11111111-1111-4111-8111-111111111111',
-    }, { deploymentEnvironment: 'staging' }, /explicit lifetime and scoped smoke budgets/u],
+    }, { deploymentEnvironment: 'staging' }, /4-to-500-cent scoped smoke budget/u],
     [{
       SIT_LISTING_AI_PROVIDER: 'openai',
       SIT_LISTING_AI_MODEL: listingAiOpenAiModel,

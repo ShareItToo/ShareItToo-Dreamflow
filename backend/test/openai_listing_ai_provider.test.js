@@ -171,7 +171,7 @@ test('openai adapter fails closed on credentials, HTTP errors and process budget
 
   let calls = 0;
   const bounded = createOpenAiListingAiProvider({
-    configuration: configuration(2),
+    configuration: configuration(4),
     apiKey: secretFixture,
     fetchImpl: async () => {
       calls += 1;

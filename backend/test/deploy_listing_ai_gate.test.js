@@ -124,6 +124,37 @@ test('Staging listing-AI validates its private key before Compose can run', asyn
   assert.equal(calls.split('\n').filter(Boolean).length, 3);
 });
 
+test('Staging listing-AI rejects a smoke budget below one image reservation before Docker', async (t) => {
+  const fixture = await dockerFixture();
+  t.after(() => rm(fixture.root, { recursive: true, force: true }));
+  const result = spawnSync('bash', [deployScript, 'staging', commit], {
+    cwd: backendRoot,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      PATH: `${fixture.root}:${process.env.PATH}`,
+      SIT_STAGING_CONTROLLED_RELEASE: '1',
+      SIT_STAGING_REHEARSAL_OPS_COMMIT: 'c'.repeat(40),
+      SIT_STAGING_PUBLIC_RELEASE_CONFIRM: commit,
+      SIT_STAGING_ACCEPTANCE_EVIDENCE_FILE: fixture.acceptanceEvidence,
+      ENABLE_STAGING_LISTING_AI: '1',
+      SIT_STAGING_PILOT_ID: 'heilbronn_wave0',
+      CONFIRM_STAGING_LISTING_AI: commit,
+      SIT_LISTING_AI_MODEL: 'gpt-4o-mini-2024-07-18',
+      SIT_LISTING_AI_BUDGET_CENTS: '10000',
+      SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: '3',
+      SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: '12345678-1234-4234-8234-123456789abc',
+      SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '1',
+      DOCKER_CAPTURE: fixture.capture,
+      MOCK_COMMIT: commit,
+    },
+  });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /must be an integer from 4 to 500/u);
+  const calls = await readFile(fixture.capture, 'utf8');
+  assert.equal(calls.includes(' compose '), false);
+});
+
 test('deployment source keeps listing-AI opt-in, bounded and sanitized', async () => {
   const [deploy, overlay, app, receiptWriter] = await Promise.all([
     readFile(deployScript, 'utf8'),
@@ -133,7 +164,7 @@ test('deployment source keeps listing-AI opt-in, bounded and sanitized', async (
   ]);
   assert.match(deploy, /ENABLE_STAGING_LISTING_AI:-0/u);
   assert.match(deploy, /CONFIRM_STAGING_LISTING_AI/u);
-  assert.match(deploy, /task_listing_ai_smoke_budget_cents < 2/u);
+  assert.match(deploy, /task_listing_ai_smoke_budget_cents < 4/u);
   assert.match(deploy, /task_listing_ai_smoke_budget_cents > 500/u);
   assert.match(deploy, /SIT_LISTING_AI_BUDGET_CENTS must remain the fixed 10000-cent lifetime cap/u);
   assert.match(deploy, /SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID/u);

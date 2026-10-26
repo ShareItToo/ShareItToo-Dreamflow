@@ -40,7 +40,7 @@ export function validateStagingListingAiActivationReceipt(receipt, expected = {}
     && receipt.providerConfiguration.budgetCents === 10_000
     && receipt.providerConfiguration.budgetScope === 'lifetime'
     && Number.isSafeInteger(receipt.providerConfiguration.stagingSmokeBudgetCents)
-    && receipt.providerConfiguration.stagingSmokeBudgetCents >= 2
+    && receipt.providerConfiguration.stagingSmokeBudgetCents >= 4
     && receipt.providerConfiguration.stagingSmokeBudgetCents <= 500
     && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
       .test(receipt.providerConfiguration.stagingSmokeActivationId)
@@ -127,7 +127,7 @@ export function composeStagingListingAiActivationReceipt({ runtime, rollbackTarg
     && health.checks.listingAi.budgetCents === 10_000
     && health.checks.listingAi.budgetScope === 'lifetime'
     && Number.isSafeInteger(health.checks.listingAi.stagingSmokeBudgetCents)
-    && health.checks.listingAi.stagingSmokeBudgetCents >= 2
+    && health.checks.listingAi.stagingSmokeBudgetCents >= 4
     && health.checks.listingAi.stagingSmokeBudgetCents <= 500
     && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
       .test(health.checks.listingAi.stagingSmokeActivationId)

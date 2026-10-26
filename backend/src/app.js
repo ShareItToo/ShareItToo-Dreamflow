@@ -1332,7 +1332,7 @@ function assertBlueOceanListingTechnicalAccess() {
     && config.listingAi.externalProviderExecutionAllowed === false;
   const openAiAllowed = config.listingAi.provider === 'openai'
     && config.listingAi.budgetCents === 10_000
-    && config.listingAi.stagingSmokeBudgetCents >= 2
+    && config.listingAi.stagingSmokeBudgetCents >= 4
     && config.listingAi.stagingSmokeBudgetCents <= 500
     && typeof config.listingAi.stagingSmokeActivationId === 'string'
     && config.listingAi.externalProviderExecutionAllowed === true;

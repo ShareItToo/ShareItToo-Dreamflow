@@ -13,7 +13,7 @@ export const listingAiLifetimeBudgetScope = 'lifetime';
 export const listingAiLifetimeBudgetMaxCents = 10_000;
 export const listingAiStagingSmokeBudgetMaxCents = 500;
 export const listingAiRunMaxProviderCalls = 5;
-export const listingAiPerCallReservationCents = 2;
+export const listingAiPerCallReservationCents = 4;
 export const listingAiMockModel = 'listing-ai-mock-v1';
 export const listingAiOnDeviceModel = 'mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1';
 export const listingAiOpenAiModel = 'gpt-4o-mini-2024-07-18';
@@ -156,7 +156,7 @@ export function readListingAiGatewayConfiguration(
       && (budgetCents !== listingAiLifetimeBudgetMaxCents
         || stagingSmokeBudgetCents < listingAiPerCallReservationCents
         || stagingSmokeActivationId === '')) {
-    fail('external listing AI approval requires explicit lifetime and scoped smoke budgets');
+    fail('external listing AI approval requires the 10000-cent lifetime cap and a 4-to-500-cent scoped smoke budget');
   }
   if (externalProviderExecutionApproved && !['staging', 'test'].includes(normalizedEnvironment)) {
     fail('external listing AI execution is restricted to staging or test');
