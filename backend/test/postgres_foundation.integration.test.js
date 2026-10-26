@@ -8177,13 +8177,15 @@ if (!databaseUrl) {
       assert.equal((await returnVerified.json()).confirmation.verificationVersion, 3);
       const returnPersisted = (await setupPool.query(
         `SELECT payload->'returnConfirmation' AS confirmation,
-                payload->>'returnState' AS return_state
+                payload->>'returnState' AS return_state,
+                payload->>'returnT0' AS return_t0
            FROM rental_requests WHERE id = 'b8-payment-flow'`,
       )).rows[0];
       assert.equal(returnPersisted.confirmation.method, 'server_challenge');
       assert.equal(returnPersisted.confirmation.presenterRole, 'renter');
       assert.equal(returnPersisted.confirmation.confirmedByRole, 'owner');
       assert.equal(returnPersisted.return_state, 'reportWindowOpen');
+      assert.ok(Number.isFinite(Date.parse(returnPersisted.return_t0)));
       await b8AssertParticipantState('active');
 
       const b8Complete = await fetch(`${baseUrl}/v1/bookings/b8-payment-flow/transitions`, {
@@ -8361,11 +8363,29 @@ if (!databaseUrl) {
           ],
         );
       }
-      const syntheticQuoteId = 'b8-v52-contract-quote';
+      const syntheticQuoteId = 'quote_80000000-0000-4000-8000-000000000008';
       const syntheticQuoteHash = crypto.createHash('sha256')
         .update('b8-v52-contract-quote-binding')
         .digest('hex');
       const syntheticClientBuild = 'b8-v52-contract-integration';
+      await setupPool.query(
+        `INSERT INTO booking_quotes (
+           id, renter_id, listing_id, rental_start_date, rental_end_date,
+           rental_timezone, starts_at, ends_at, catalog_revision,
+           availability_revision, quote_version, currency, total_minor,
+           quote_payload, quote_hash, issued_at, expires_at
+         ) VALUES (
+           $1, 'renter-a', 'listing-1', '2027-01-10', '2027-01-12',
+           'Europe/Berlin', '2027-01-10T10:00:00Z', '2027-01-12T10:00:00Z',
+           1, 1, 1, 'EUR', 3300, '{"synthetic":true}'::jsonb, $2, $3, $4
+         )`,
+        [
+          syntheticQuoteId,
+          syntheticQuoteHash,
+          new Date(contractAcceptedAt.getTime() - 60_000),
+          new Date(contractAcceptedAt.getTime() + (9 * 60_000)),
+        ],
+      );
       const staleContractInput = {
         userId: 'renter-a',
         bookingId: 'b8-payment-flow',
@@ -8479,6 +8499,254 @@ if (!databaseUrl) {
         boundContractHealth.contractBlocked,
         missingContractHealth.contractBlocked - 1,
       );
+
+      // Exercise the authenticated return-report endpoint against a synthetic
+      // V5.2-bound booking. Its private evidence stays in the ephemeral store;
+      // no payout or external provider path is invoked by opening the case.
+      const b8CaseProbeId = 'b8-return-case-probe';
+      const b8ActualReturnT0 = new Date(Date.now() - (60 * 60 * 1000));
+      const b8CaseStart = new Date(b8ActualReturnT0.getTime() - (2 * 24 * 60 * 60 * 1000));
+      const b8CaseProbePayload = {
+        id: b8CaseProbeId,
+        itemId: 'listing-1',
+        ownerId: 'owner',
+        renterId: 'renter-a',
+        status: 'completed',
+        start: b8CaseStart.toISOString(),
+        end: b8ActualReturnT0.toISOString(),
+        returnT0: b8ActualReturnT0.toISOString(),
+        returnState: 'reportWindowOpen',
+      };
+      await setupPool.query(
+        `INSERT INTO rental_requests (id, item_id, owner_id, renter_id, status, payload)
+         VALUES ($1, 'listing-1', 'owner', 'renter-a', 'completed', $2::jsonb)`,
+        [b8CaseProbeId, JSON.stringify(b8CaseProbePayload)],
+      );
+      await setupPool.query(
+        `INSERT INTO bookings (
+           id, listing_id, owner_id, renter_id, status, workflow_status,
+           workflow_version, starts_at, ends_at, currency,
+           rental_subtotal_minor, platform_fee_minor, owner_payout_minor,
+           quoted_total_minor, security_deposit_minor, return_t0,
+           return_state, return_report_deadline, payout_instruction_due_at
+         ) VALUES (
+           $1, 'listing-1', 'owner', 'renter-a', 'completed', 'completed',
+           1, $2, $3, 'EUR', 3000, 300, 3000, 3300, 0, $3,
+           'reportWindowOpen', $4, $4
+         )`,
+        [
+          b8CaseProbeId,
+          b8CaseStart,
+          b8ActualReturnT0,
+          new Date(b8ActualReturnT0.getTime() + (48 * 60 * 60 * 1000)),
+        ],
+      );
+
+      const b8CaseProbeQuoteId = 'quote_90000000-0000-4000-8000-000000000009';
+      const b8CaseProbeQuoteHash = crypto.createHash('sha256')
+        .update('synthetic-return-case-probe-quote')
+        .digest('hex');
+      const b8CaseProbeContractAcceptedAt = new Date(Date.now() - 30_000);
+      const b8CaseProbeQuoteIssuedAt = new Date(b8CaseProbeContractAcceptedAt.getTime() - 60_000);
+      const b8CaseProbeQuoteExpiresAt = new Date(b8CaseProbeContractAcceptedAt.getTime() + (9 * 60_000));
+      const b8CaseProbeStartDate = b8CaseStart.toISOString().slice(0, 10);
+      const b8CaseProbeEndDate = b8ActualReturnT0.toISOString().slice(0, 10);
+      await setupPool.query(
+        `INSERT INTO booking_quotes (
+           id, renter_id, listing_id, rental_start_date, rental_end_date,
+           rental_timezone, starts_at, ends_at, catalog_revision,
+           availability_revision, quote_version, currency, total_minor,
+           quote_payload, quote_hash, issued_at, expires_at
+         ) VALUES (
+           $1, 'renter-a', 'listing-1', $2, $3, 'Europe/Berlin', $4, $5,
+           1, 1, 1, 'EUR', 3300, '{"synthetic":true}'::jsonb, $6, $7, $8
+         )`,
+        [
+          b8CaseProbeQuoteId,
+          b8CaseProbeStartDate,
+          b8CaseProbeEndDate,
+          b8CaseStart,
+          b8ActualReturnT0,
+          b8CaseProbeQuoteHash,
+          b8CaseProbeQuoteIssuedAt,
+          b8CaseProbeQuoteExpiresAt,
+        ],
+      );
+      const b8CaseProbeAcceptance = 'Synthetic V5.2 return-case acceptance fixture.';
+      await setupPool.query(
+        `INSERT INTO platform_contracts (
+           user_id, booking_id, quote_id, quote_hash, contract_version,
+           platform_terms_snapshot_id, private_rental_terms_snapshot_id,
+           cancellation_refund_snapshot_id, handover_return_damage_snapshot_id,
+           payment_payout_snapshot_id, community_safety_snapshot_id,
+           reporting_moderation_review_snapshot_id, privacy_snapshot_id,
+           imprint_withdrawal_shorttexts_snapshot_id, sit_acceptance_wording,
+           sit_acceptance_sha256, locale, client_build, accepted_at, created_at,
+           idempotency_key
+         ) VALUES (
+           'renter-a', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+           $14, $15, $16, 'b8-return-case-probe', $17, $17, 'b8-return-case-probe-contract'
+         )`,
+        [
+          b8CaseProbeId,
+          b8CaseProbeQuoteId,
+          b8CaseProbeQuoteHash,
+          v52ContractDocument.version,
+          historicalSnapshotIds.platform_terms,
+          historicalSnapshotIds.private_rental_terms,
+          historicalSnapshotIds.cancellation_refund,
+          historicalSnapshotIds.handover_return_damage,
+          historicalSnapshotIds.payment_payout,
+          historicalSnapshotIds.community_safety,
+          historicalSnapshotIds.reporting_moderation_review,
+          historicalSnapshotIds.privacy,
+          historicalSnapshotIds.imprint_withdrawal_shorttexts,
+          b8CaseProbeAcceptance,
+          crypto.createHash('sha256').update(b8CaseProbeAcceptance).digest('hex'),
+          v52ContractDocument.locale,
+          b8CaseProbeContractAcceptedAt,
+        ],
+      );
+      const b8ReportDeadline = new Date(b8ActualReturnT0.getTime() + (48 * 60 * 60 * 1000));
+      await setupPool.query(
+        `UPDATE rental_requests
+            SET payload = jsonb_set(
+              jsonb_set(
+                jsonb_set(payload, '{returnState}', '"reportWindowOpen"'::jsonb),
+                '{returnT0}', to_jsonb($2::timestamptz::text)
+              ),
+              '{returnReportDeadline}', to_jsonb($3::timestamptz::text)
+            )
+          WHERE id = $1`,
+        [b8CaseProbeId, b8ActualReturnT0, b8ReportDeadline],
+      );
+      const b8DamageImage = await sharp({
+        create: { width: 640, height: 480, channels: 3, background: { r: 170, g: 45, b: 35 } },
+      }).jpeg({ quality: 80 }).toBuffer();
+      const b8DamageForm = new FormData();
+      b8DamageForm.append('purpose', 'report_evidence');
+      b8DamageForm.append(
+        'file',
+        new Blob([b8DamageImage], { type: 'image/jpeg' }),
+        'synthetic-return-condition.jpg',
+      );
+      const b8DamageUploadResponse = await fetch(`${baseUrl}/v1/uploads`, {
+        method: 'POST',
+        headers: { Authorization: ownerHeaders.Authorization },
+        body: b8DamageForm,
+      });
+      assert.equal(b8DamageUploadResponse.status, 201);
+      const b8DamageUpload = await b8DamageUploadResponse.json();
+      const b8DamageStoredUpload = (await setupPool.query(
+        `SELECT owner_id, purpose, visibility, content_scan_status, content_sha256
+           FROM uploads WHERE id = $1::uuid`,
+        [b8DamageUpload.id],
+      )).rows[0];
+      assert.equal(b8DamageStoredUpload.owner_id, 'owner');
+      assert.equal(b8DamageStoredUpload.purpose, 'report_evidence');
+      assert.equal(b8DamageStoredUpload.visibility, 'private');
+      assert.equal(b8DamageStoredUpload.content_scan_status, 'passed');
+      assert.match(b8DamageStoredUpload.content_sha256, /^[0-9a-f]{64}$/u);
+      const b8DamageBody = {
+        reasonCode: 'damage',
+        details: 'Synthetic damage report for the returned camera body.',
+        evidenceUploadIds: [b8DamageUpload.id],
+        contestedAuthorizedMinor: 1200,
+      };
+      const outsiderDamageCase = await fetch(
+        `${baseUrl}/v1/bookings/${b8CaseProbeId}/return-cases`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${tokenFor('outsider')}`,
+            'Content-Type': 'application/json',
+            'Idempotency-Key': 'b8-outsider-return-case',
+          },
+          body: JSON.stringify(b8DamageBody),
+        },
+      );
+      assert.equal(outsiderDamageCase.status, 403, JSON.stringify(await outsiderDamageCase.json()));
+      assert.equal((await setupPool.query(
+        `SELECT count(*)::int AS count FROM v52_return_cases WHERE booking_id = $1`,
+        [b8CaseProbeId],
+      )).rows[0].count, 0);
+      await setupPool.query(
+        `UPDATE bookings SET return_t0 = now() - INTERVAL '49 hours'
+          WHERE id = $1`,
+        [b8CaseProbeId],
+      );
+      const expiredDamageCase = await fetch(
+        `${baseUrl}/v1/bookings/${b8CaseProbeId}/return-cases`,
+        {
+          method: 'POST',
+          headers: {
+            ...ownerHeaders,
+            'Idempotency-Key': 'b8-expired-return-case',
+          },
+          body: JSON.stringify(b8DamageBody),
+        },
+      );
+      assert.equal(expiredDamageCase.status, 409);
+      assert.equal((await expiredDamageCase.json()).error, 'v52_return_report_window_closed');
+      await setupPool.query(
+        `UPDATE bookings SET return_t0 = $2, return_report_deadline = $3,
+                payout_instruction_due_at = $3, return_state = 'reportWindowOpen'
+          WHERE id = $1`,
+        [b8CaseProbeId, b8ActualReturnT0, b8ReportDeadline],
+      );
+      const openDamageCase = () => fetch(
+        `${baseUrl}/v1/bookings/${b8CaseProbeId}/return-cases`,
+        {
+          method: 'POST',
+          headers: { ...ownerHeaders, 'Idempotency-Key': 'b8-owner-return-case' },
+          body: JSON.stringify(b8DamageBody),
+        },
+      );
+      const b8OpenDamageCaseResponse = await openDamageCase();
+      assert.equal(b8OpenDamageCaseResponse.status, 201);
+      const b8OpenDamageCase = (await b8OpenDamageCaseResponse.json()).returnCase;
+      assert.equal(b8OpenDamageCase.status, 'needsReview');
+      assert.equal(b8OpenDamageCase.contestedAuthorizedMinor, 1200);
+      assert.equal(b8OpenDamageCase.undisputedReleasableMinor, 2100);
+      assert.equal(b8OpenDamageCase.additionalChargeMinor, 0);
+      const b8OpenDamageCaseReplay = await openDamageCase();
+      assert.equal(b8OpenDamageCaseReplay.status, 200);
+      assert.equal((await b8OpenDamageCaseReplay.json()).replayed, true);
+      const b8PersistedDamageCase = (await setupPool.query(
+        `SELECT return_case.id, return_case.report_id,
+                return_case.opened_by, return_case.opened_by_role,
+                return_case.booking_case_id,
+                return_case.contested_authorized_minor,
+                return_case.undisputed_releasable_minor,
+                return_case.additional_charge_minor,
+                booking_case.status AS booking_case_status,
+                evidence.upload_id, evidence.upload_purpose, evidence.upload_sha256
+           FROM v52_return_cases AS return_case
+           JOIN booking_cases AS booking_case ON booking_case.id = return_case.booking_case_id
+           JOIN v52_return_case_evidence AS evidence ON evidence.return_case_id = return_case.id
+          WHERE return_case.booking_id = $1`,
+        [b8CaseProbeId],
+      )).rows[0];
+      assert.equal(b8PersistedDamageCase.id, b8OpenDamageCase.id);
+      assert.equal(b8PersistedDamageCase.opened_by, 'owner');
+      assert.equal(b8PersistedDamageCase.opened_by_role, 'owner');
+      assert.equal(Number(b8PersistedDamageCase.contested_authorized_minor), 1200);
+      assert.equal(Number(b8PersistedDamageCase.undisputed_releasable_minor), 2100);
+      assert.equal(Number(b8PersistedDamageCase.additional_charge_minor), 0);
+      assert.equal(b8PersistedDamageCase.booking_case_status, 'needsReview');
+      assert.equal(b8PersistedDamageCase.upload_id, b8DamageUpload.id);
+      assert.equal(b8PersistedDamageCase.upload_purpose, 'report_evidence');
+      assert.equal(b8PersistedDamageCase.upload_sha256, b8DamageStoredUpload.content_sha256);
+      assert.equal((await setupPool.query(
+        `SELECT return_state FROM bookings WHERE id = $1`,
+        [b8CaseProbeId],
+      )).rows[0].return_state, 'needsReview');
+      const b8NoPayoutDuringDamageReport = (await setupPool.query(
+        `SELECT count(*)::int AS payouts FROM payouts
+          WHERE payment_id IN (SELECT id FROM payments WHERE booking_id = $1)`,
+        [b8CaseProbeId],
+      )).rows[0].payouts;
+      assert.equal(b8NoPayoutDuringDamageReport, 0);
 
       // V51 must acquire the booking lock before it reads refund truth. This
       // forces a fresh READ COMMITTED snapshot after a concurrent refund
@@ -11741,18 +12009,44 @@ if (!databaseUrl) {
       });
       assert.equal(duplicateReview.status, 200);
       assert.equal((await duplicateReview.json()).replayed, true);
+      assert.deepEqual((await setupPool.query(
+        `SELECT reviewer_id, count(*)::int AS review_count
+           FROM reviews WHERE booking_id = 'b6-flow'
+           GROUP BY reviewer_id ORDER BY reviewer_id`,
+      )).rows.map((row) => [row.reviewer_id, row.review_count]), [
+        ['owner', 1],
+        ['renter-a', 1],
+      ]);
       const ownerPublicReviews = await fetch(`${baseUrl}/v1/users/owner/reviews`);
       assert.equal(ownerPublicReviews.status, 200);
       assert.equal((await ownerPublicReviews.json()).reviews[0].rating, 4.5);
+      assert.deepEqual((await setupPool.query(
+        `SELECT profile->>'avgRating' AS average_rating,
+                (profile->>'reviewCount')::int AS review_count
+           FROM users WHERE id = 'owner'`,
+      )).rows[0], { average_rating: '4.5', review_count: 1 });
       const outsiderReview = await fetch(`${baseUrl}/v1/bookings/b6-flow/reviews`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${tokenFor('outsider')}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ direction: 'owner_to_renter', criteria: [] }),
+        body: JSON.stringify({
+          direction: 'renter_to_owner',
+          criteria: [
+            { key: 'communication', stars: 5 },
+            { key: 'reliability', stars: 5 },
+            { key: 'article_as_described', stars: 5 },
+            { key: 'handover_return', stars: 5 },
+          ],
+        }),
       });
-      assert.equal(outsiderReview.status, 400);
+      assert.equal(outsiderReview.status, 403);
+      assert.equal((await outsiderReview.json()).error, 'booking_forbidden');
+      const outsiderReviewReadback = await fetch(`${baseUrl}/v1/bookings/b6-flow/reviews`, {
+        headers: { Authorization: `Bearer ${tokenFor('outsider')}` },
+      });
+      assert.equal(outsiderReviewReadback.status, 403);
 
       const b9Overview = await fetch(`${baseUrl}/v1/admin/overview`, { headers: adminHeaders });
       assert.equal(b9Overview.status, 200);
