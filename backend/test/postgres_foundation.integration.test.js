@@ -7599,6 +7599,105 @@ if (!databaseUrl) {
       assert.equal(b8Accept.status, 200);
       assert.equal((await b8Accept.json()).booking.workflowStatus, 'accepted');
 
+      // Pickup evidence belongs to the accepted pre-handover stage. Use the
+      // production upload/message/confirmation/challenge routes before checkout.
+      const b8ThreadResponse = await fetch(
+        `${baseUrl}/v1/message-threads/booking/b8-payment-flow`,
+        { method: 'POST', headers: ownerHeaders },
+      );
+      assert.equal(b8ThreadResponse.status, 201);
+      const b8ThreadId = (await b8ThreadResponse.json()).thread.id;
+      const b8PresenterSlots = ['overview', 'detail', 'accessories', 'critical'];
+      for (const slot of b8PresenterSlots) {
+        const image = await sharp({
+          create: {
+            width: 960, height: 640, channels: 3,
+            background: { r: slot.length * 19, g: 80, b: 120 },
+          },
+        }).jpeg({ quality: 85 }).toBuffer();
+        const form = new FormData();
+        form.append('purpose', 'handover_evidence');
+        form.append('threadId', b8ThreadId);
+        form.append('file', new Blob([image], { type: 'image/jpeg' }), `pickup-${slot}.jpg`);
+        const uploaded = await fetch(`${baseUrl}/v1/uploads`, {
+          method: 'POST', headers: { Authorization: ownerHeaders.Authorization }, body: form,
+        });
+        assert.equal(uploaded.status, 201);
+        const media = await uploaded.json();
+        assert.deepEqual((await setupPool.query(
+          `SELECT owner_id, purpose, visibility, thread_id, content_scan_status
+             FROM uploads WHERE id = $1::uuid`,
+          [media.id],
+        )).rows[0], {
+          owner_id: 'owner',
+          purpose: 'handover_evidence',
+          visibility: 'private',
+          thread_id: b8ThreadId,
+          content_scan_status: 'passed',
+        });
+        const message = await fetch(`${baseUrl}/v1/message-threads/${b8ThreadId}/messages`, {
+          method: 'POST',
+          headers: { ...ownerHeaders, 'Idempotency-Key': `b8-pickup-${slot}-condition-photo` },
+          body: JSON.stringify({
+            text: `Synthetic pickup condition photo: ${slot}.`,
+            attachmentIds: [media.id],
+            conditionEvidence: {
+              segment: 'pickup', kind: 'presenter_photo',
+              source: 'browser_picker', semanticSlot: slot,
+            },
+          }),
+        });
+        assert.equal(message.status, 201, JSON.stringify(await message.json()));
+        assert.deepEqual((await setupPool.query(
+          `SELECT actor_id, actor_role, segment, evidence_kind, upload_id
+             FROM booking_condition_evidence WHERE upload_id = $1::uuid`,
+          [media.id],
+        )).rows[0], {
+          actor_id: 'owner',
+          actor_role: 'owner',
+          segment: 'pickup',
+          evidence_kind: 'presenter_photo',
+          upload_id: media.id,
+        });
+      }
+      const pickupConfirmation = await fetch(
+        `${baseUrl}/v1/bookings/b8-payment-flow/condition-confirmations`,
+        {
+          method: 'POST', headers: renterAHeaders,
+          body: JSON.stringify({ segment: 'pickup', decision: 'confirmed' }),
+        },
+      );
+      assert.equal(pickupConfirmation.status, 201);
+      const pickupChallengeResponse = await fetch(
+        `${baseUrl}/v1/bookings/b8-payment-flow/confirmation-challenges`,
+        {
+          method: 'POST',
+          headers: { ...ownerHeaders, 'Idempotency-Key': 'b8-pickup-challenge' },
+          body: JSON.stringify({ segment: 'pickup' }),
+        },
+      );
+      assert.equal(pickupChallengeResponse.status, 201);
+      const pickupChallenge = (await pickupChallengeResponse.json()).challenge;
+      assert.match(pickupChallenge.qrPayload, /^shareittoo:v3:pickup:owner:/u);
+      const pickupSelfVerify = await fetch(
+        `${baseUrl}/v1/bookings/b8-payment-flow/confirmation-challenges/verify`,
+        {
+          method: 'POST', headers: ownerHeaders,
+          body: JSON.stringify({ qrPayload: pickupChallenge.qrPayload }),
+        },
+      );
+      assert.equal(pickupSelfVerify.status, 403);
+      assert.equal((await pickupSelfVerify.json()).error, 'confirmation_counterparty_required');
+      const pickupVerified = await fetch(
+        `${baseUrl}/v1/bookings/b8-payment-flow/confirmation-challenges/verify`,
+        {
+          method: 'POST', headers: renterAHeaders,
+          body: JSON.stringify({ qrPayload: pickupChallenge.qrPayload }),
+        },
+      );
+      assert.equal(pickupVerified.status, 200);
+      assert.equal((await pickupVerified.json()).confirmation.verificationVersion, 3);
+
       const b8CheckoutRequest = () => fetch(`${baseUrl}/v1/bookings/b8-payment-flow/payment/checkout`, {
         method: 'POST',
         headers: { ...renterAHeaders, 'Idempotency-Key': 'b8-checkout-payment-booking' },
@@ -7775,6 +7874,112 @@ if (!databaseUrl) {
       assert.equal(b8Paid.payment.status, 'captured');
       assert.equal(b8Paid.payment.capturedMinor, 3300);
 
+      // Continue the authenticated renter/owner journey with private synthetic
+      // condition photos and server-issued counterparty QR challenges. The
+      // upload, message, evidence, challenge, and status readbacks all use the
+      // same ephemeral PostgreSQL-backed HTTP app and memory payment transport.
+      const b8RecordPhoto = async ({ segment, slot, owner }) => {
+        const headers = owner ? ownerHeaders : renterAHeaders;
+        const purpose = segment === 'pickup' ? 'handover_evidence' : 'return_evidence';
+        const image = await sharp({
+          create: {
+            width: 960,
+            height: 640,
+            channels: 3,
+            background: {
+              r: (slot.length * 19) % 255,
+              g: (segment === 'pickup' ? 80 : 160),
+              b: owner ? 120 : 200,
+            },
+          },
+        }).jpeg({ quality: 85 }).toBuffer();
+        const form = new FormData();
+        form.append('purpose', purpose);
+        form.append('threadId', b8ThreadId);
+        form.append('file', new Blob([image], { type: 'image/jpeg' }), `${segment}-${slot}.jpg`);
+        const uploaded = await fetch(`${baseUrl}/v1/uploads`, {
+          method: 'POST',
+          headers: { Authorization: headers.Authorization },
+          body: form,
+        });
+        assert.equal(uploaded.status, 201);
+        const media = await uploaded.json();
+        const persistedUpload = await setupPool.query(
+          `SELECT owner_id, purpose, visibility, thread_id, content_scan_status
+             FROM uploads WHERE id = $1::uuid`,
+          [media.id],
+        );
+        assert.deepEqual(persistedUpload.rows[0], {
+          owner_id: owner ? 'owner' : 'renter-a',
+          purpose,
+          visibility: 'private',
+          thread_id: b8ThreadId,
+          content_scan_status: 'passed',
+        });
+        const message = await fetch(`${baseUrl}/v1/message-threads/${b8ThreadId}/messages`, {
+          method: 'POST',
+          headers: {
+            ...headers,
+            'Idempotency-Key': `b8-${segment}-${slot}-condition-photo`,
+          },
+          body: JSON.stringify({
+            text: `Synthetic ${segment} condition photo: ${slot}.`,
+            attachmentIds: [media.id],
+            conditionEvidence: {
+              segment,
+              kind: 'presenter_photo',
+              source: 'browser_picker',
+              semanticSlot: slot,
+            },
+          }),
+        });
+        assert.equal(message.status, 201, JSON.stringify(await message.json()));
+        const persistedEvidence = await setupPool.query(
+          `SELECT evidence.actor_id, evidence.actor_role, evidence.segment,
+                  evidence.evidence_kind, evidence.upload_id
+             FROM booking_condition_evidence AS evidence
+            WHERE evidence.upload_id = $1::uuid`,
+          [media.id],
+        );
+        assert.equal(persistedEvidence.rowCount, 1);
+        assert.deepEqual(persistedEvidence.rows[0], {
+          actor_id: owner ? 'owner' : 'renter-a',
+          actor_role: owner ? 'owner' : 'renter',
+          segment,
+          evidence_kind: 'presenter_photo',
+          upload_id: media.id,
+        });
+        return media.id;
+      };
+      const b8ReadConditionEvidence = async (actorHeaders, segment) => {
+        const response = await fetch(
+          `${baseUrl}/v1/bookings/b8-payment-flow/condition-evidence?segment=${segment}`,
+          { headers: actorHeaders },
+        );
+        assert.equal(response.status, 200);
+        return (await response.json()).summary;
+      };
+      const b8AssertParticipantState = async (workflowStatus) => {
+        for (const headers of [ownerHeaders, renterAHeaders]) {
+          const response = await fetch(`${baseUrl}/v1/rental-requests`, { headers });
+          assert.equal(response.status, 200);
+          const request = (await response.json()).requests.find(
+            (entry) => entry.id === 'b8-payment-flow',
+          );
+          assert.ok(request);
+          assert.equal(request.workflowStatus, workflowStatus);
+        }
+      };
+      await b8AssertParticipantState('confirmed');
+      const pickupPersisted = (await setupPool.query(
+        `SELECT payload->'handoverConfirmation' AS confirmation
+           FROM rental_requests WHERE id = 'b8-payment-flow'`,
+      )).rows[0].confirmation;
+      assert.equal(pickupPersisted.method, 'server_challenge');
+      assert.equal(pickupPersisted.presenterRole, 'owner');
+      assert.equal(pickupPersisted.confirmedByRole, 'renter');
+      await b8AssertParticipantState('confirmed');
+
       const capturedProviderPayment = await setupPool.query(
         'SELECT provider_charge_id FROM payments WHERE id = $1',
         [paymentId],
@@ -7836,12 +8041,121 @@ if (!databaseUrl) {
         body: JSON.stringify({ status: 'active' }),
       });
       assert.equal(b8Activate.status, 200);
+      await b8AssertParticipantState('active');
+
+      // The return path mirrors pickup: the renter presents a complete private
+      // photo set, the owner records the condition decision, then the owner
+      // verifies the server-issued renter challenge before completion.
+      for (const slot of b8PresenterSlots) {
+        await b8RecordPhoto({ segment: 'return', slot, owner: false });
+      }
+      const returnConfirmation = await fetch(
+        `${baseUrl}/v1/bookings/b8-payment-flow/condition-confirmations`,
+        {
+          method: 'POST',
+          headers: ownerHeaders,
+          body: JSON.stringify({ segment: 'return', decision: 'confirmed' }),
+        },
+      );
+      assert.equal(returnConfirmation.status, 201);
+      const returnEvidenceOwner = await b8ReadConditionEvidence(ownerHeaders, 'return');
+      const returnEvidenceRenter = await b8ReadConditionEvidence(renterAHeaders, 'return');
+      for (const summary of [returnEvidenceOwner, returnEvidenceRenter]) {
+        assert.equal(summary.presenterPhotos, 4);
+        assert.equal(summary.counterpartyConfirmation.verifierUserId, 'owner');
+        assert.equal(summary.counterpartyConfirmation.decision, 'confirmed');
+      }
+      const returnChallengeResponse = await fetch(
+        `${baseUrl}/v1/bookings/b8-payment-flow/confirmation-challenges`,
+        {
+          method: 'POST',
+          headers: { ...renterAHeaders, 'Idempotency-Key': 'b8-return-challenge' },
+          body: JSON.stringify({ segment: 'return' }),
+        },
+      );
+      assert.equal(returnChallengeResponse.status, 201);
+      const returnChallenge = (await returnChallengeResponse.json()).challenge;
+      assert.match(returnChallenge.qrPayload, /^shareittoo:v3:return:renter:/u);
+      const returnSelfVerify = await fetch(
+        `${baseUrl}/v1/bookings/b8-payment-flow/confirmation-challenges/verify`,
+        {
+          method: 'POST',
+          headers: renterAHeaders,
+          body: JSON.stringify({ qrPayload: returnChallenge.qrPayload }),
+        },
+      );
+      assert.equal(returnSelfVerify.status, 403);
+      assert.equal((await returnSelfVerify.json()).error, 'confirmation_counterparty_required');
+      const returnVerified = await fetch(
+        `${baseUrl}/v1/bookings/b8-payment-flow/confirmation-challenges/verify`,
+        {
+          method: 'POST',
+          headers: ownerHeaders,
+          body: JSON.stringify({ qrPayload: returnChallenge.qrPayload }),
+        },
+      );
+      assert.equal(returnVerified.status, 200);
+      assert.equal((await returnVerified.json()).confirmation.verificationVersion, 3);
+      const returnPersisted = (await setupPool.query(
+        `SELECT payload->'returnConfirmation' AS confirmation,
+                payload->>'returnState' AS return_state
+           FROM rental_requests WHERE id = 'b8-payment-flow'`,
+      )).rows[0];
+      assert.equal(returnPersisted.confirmation.method, 'server_challenge');
+      assert.equal(returnPersisted.confirmation.presenterRole, 'renter');
+      assert.equal(returnPersisted.confirmation.confirmedByRole, 'owner');
+      assert.equal(returnPersisted.return_state, 'reportWindowOpen');
+      await b8AssertParticipantState('active');
+
       const b8Complete = await fetch(`${baseUrl}/v1/bookings/b8-payment-flow/transitions`, {
         method: 'POST',
         headers: { ...ownerHeaders, 'Idempotency-Key': 'b8-complete-payment-booking' },
         body: JSON.stringify({ status: 'completed' }),
       });
       assert.equal(b8Complete.status, 200);
+      await b8AssertParticipantState('completed');
+      // This existing payment-reconciliation scenario runs after the lifecycle
+      // assertions below. Advance only its synthetic database clock so the
+      // confirmed return's 48-hour report window has elapsed without sleeping.
+      await setupPool.query(
+        `UPDATE rental_requests
+            SET payload = jsonb_set(
+              jsonb_set(
+                jsonb_set(
+                  jsonb_set(payload, '{returnState}', '"payoutEligible"'::jsonb),
+                  '{returnT0}', to_jsonb((now() - INTERVAL '3 days')::text)
+                ),
+                '{returnReportDeadline}', to_jsonb((now() - INTERVAL '1 day')::text)
+              ),
+              '{payoutInstructionDueAt}', to_jsonb((now() - INTERVAL '1 minute')::text)
+            )
+          WHERE id = 'b8-payment-flow'`,
+      );
+      await setupPool.query(
+        `UPDATE bookings
+            SET return_state = 'payoutEligible',
+                return_t0 = now() - INTERVAL '3 days',
+                return_report_deadline = now() - INTERVAL '1 day',
+                payout_instruction_due_at = now() - INTERVAL '1 minute'
+          WHERE id = 'b8-payment-flow'`,
+      );
+      const b8NoRealMoneyEffects = (await setupPool.query(
+        `SELECT
+           (SELECT count(*)::int FROM payouts WHERE payment_id = $1) AS payouts,
+           (SELECT count(*)::int FROM ledger_transactions
+             WHERE payment_id = $1 AND transaction_type = 'owner_transfer') AS transfers,
+           (SELECT count(*)::int FROM notifications
+             WHERE booking_id = 'b8-payment-flow' AND kind = 'payout_sent') AS notifications,
+           (SELECT count(*)::int FROM notification_outbox
+             WHERE booking_id = 'b8-payment-flow' AND kind = 'payout_sent') AS outbox`,
+        [paymentId],
+      )).rows[0];
+      assert.deepEqual(b8NoRealMoneyEffects, {
+        payouts: 0,
+        transfers: 0,
+        notifications: 0,
+        outbox: 0,
+      });
 
       const b8MoneyMutationCounts = async () => (await setupPool.query(
         `SELECT
