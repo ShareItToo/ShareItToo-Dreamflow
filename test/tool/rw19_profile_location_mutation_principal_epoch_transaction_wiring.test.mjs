@@ -136,27 +136,32 @@ test('location awaits revalidate the captured action owner and media awaits reva
   const pickPhoto = method(
     profileInfo,
     'Future<void> _pickPhoto(',
-    'Future<bool> _isPickerOwnerCurrent(',
+    'Future<bool> _isPickerPrincipalCurrent(',
   ).replace(/\s+/gu, ' ');
   assert.match(
     pickPhoto,
-    /final XFile\? shot = widget\.imagePicker != null[\s\S]*?if \(shot == null \|\| !await _isPickerOwnerCurrent\(owner\)\) \{ return; \} final bytes = await shot\.readAsBytes\(\); if \(!await _isPickerOwnerCurrent\(owner\)\) \{ return; \}/u,
-    'the selected image and bytes are each discarded when the captured session is no longer current',
+    /final XFile\? shot = widget\.imagePicker != null[\s\S]*?if \(shot == null \|\| !await _isPickerPrincipalCurrent\(owner\)\) \{ return; \} final bytes = await shot\.readAsBytes\(\); if \(!await _isPickerPrincipalCurrent\(owner\)\) \{ return; \}/u,
+    'the selection and bytes each require a freshly captured same principal',
   );
-  const pickerOwnerCheck = method(
+  const pickerPrincipalCheck = method(
     profileInfo,
-    'Future<bool> _isPickerOwnerCurrent(',
+    'Future<bool> _isPickerPrincipalCurrent(',
     'Future<Set<String>?> _showMultiSelect(',
   );
   assert.match(
-    pickerOwnerCheck,
-    /if \(!mounted\) return false;[\s\S]*?\.isContextCurrent\(owner\.context\)[\s\S]*?\.timeout\(const Duration\(seconds: 3\), onTimeout: \(\) => false\)/u,
-    'picker revalidation uses the captured auth context and fails closed on timeout',
+    pickerPrincipalCheck,
+    /if \(!mounted\) return false;[\s\S]*?loadCurrentContext\(\)[\s\S]*?_samePickerPrincipal\(owner\.context, current\)[\s\S]*?\.isContextCurrent\(current\)[\s\S]*?\.timeout\(const Duration\(seconds: 3\), onTimeout: \(\) => false\)/u,
+    'picker revalidation recaptures and exact-validates the owner after principal check',
   );
   assert.doesNotMatch(
-    pickerOwnerCheck,
+    pickerPrincipalCheck,
     /_profileActions\.(?:isCurrent|isSynchronouslyCurrent)|actionEpoch/u,
-    'same-principal UI epoch refreshes do not invalidate an in-flight file selection',
+    'same-principal owner epoch refreshes do not invalidate local preview',
+  );
+  assert.match(
+    profileInfo.slice(profileInfo.indexOf('bool _samePickerPrincipal(')),
+    /authOwner\.userId\?\.trim\(\)[\s\S]*?authOwner\.email\.trim\(\)\.toLowerCase\(\)/u,
+    'principal identity uses normalized user id and email',
   );
   const isContextCurrent = method(
     coordinator,

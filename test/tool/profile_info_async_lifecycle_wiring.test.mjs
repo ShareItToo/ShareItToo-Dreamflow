@@ -158,8 +158,16 @@ test('Web gallery picker starts in the tap gesture before dismissing the sheet',
   );
   assert.match(
     pickerRoutine,
-    /if \(!_profileActions\.isSynchronouslyCurrent\(owner\)\) \{ return; \} final XFile\? shot = widget\.imagePicker != null \? await widget\.imagePicker!\(source\) : await ImagePicker\(\)\.pickImage\(source: source, imageQuality: 85\); if \(shot == null \|\| !await _isPickerOwnerCurrent\(owner\)\) \{ return; \} final bytes = await shot\.readAsBytes\(\); if \(!await _isPickerOwnerCurrent\(owner\)\) \{ return; \}/u,
-    'picker activation is synchronous, then its result and bytes each require a current session check',
+    /if \(!_profileActions\.isSynchronouslyCurrent\(owner\)\) \{ return; \} final XFile\? shot = widget\.imagePicker != null \? await widget\.imagePicker!\(source\) : await ImagePicker\(\)\.pickImage\(source: source, imageQuality: 85\); if \(shot == null \|\| !await _isPickerPrincipalCurrent\(owner\)\) \{ return; \} final bytes = await shot\.readAsBytes\(\); if \(!await _isPickerPrincipalCurrent\(owner\)\) \{ return; \}/u,
+    'picker activation is synchronous, then a freshly captured same principal is required before and after reading bytes',
+  );
+  assert.match(
+    pickerRoutine,
+    /Future<bool> _isPickerPrincipalCurrent\([\s\S]*?loadCurrentContext\(\)[\s\S]*?_samePickerPrincipal\(owner\.context, current\)[\s\S]*?isContextCurrent\(current\)/u,
+  );
+  assert.match(
+    pickerRoutine,
+    /_samePickerPrincipal\([\s\S]*?userId\?\.trim\(\)[\s\S]*?email\.trim\(\)\.toLowerCase\(\)/u,
   );
 });
 

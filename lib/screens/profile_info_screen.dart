@@ -618,11 +618,11 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
       final XFile? shot = widget.imagePicker != null
           ? await widget.imagePicker!(source)
           : await ImagePicker().pickImage(source: source, imageQuality: 85);
-      if (shot == null || !await _isPickerOwnerCurrent(owner)) {
+      if (shot == null || !await _isPickerPrincipalCurrent(owner)) {
         return;
       }
       final bytes = await shot.readAsBytes();
-      if (!await _isPickerOwnerCurrent(owner)) {
+      if (!await _isPickerPrincipalCurrent(owner)) {
         return;
       }
       final b64 = base64Encode(bytes);
@@ -642,19 +642,69 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
     }
   }
 
-  Future<bool> _isPickerOwnerCurrent(ProfileMutationActionOwner owner) async {
+  Future<bool> _isPickerPrincipalCurrent(
+    ProfileMutationActionOwner owner,
+  ) async {
     if (!mounted) return false;
     try {
-      // A persistence refresh may replace the screen action context while the
-      // browser file chooser is open. Keep the selection only when its exact
-      // authenticated session/principal is still current; action-epoch drift
-      // alone must not discard the user's file.
+      // A browser focus/token refresh may replace the action's owner epoch
+      // while the file chooser is open. Preview is local UI state, so recapture
+      // the current context and bind it to the same normalized principal.
+      // Persistence still uses the exact owner captured when Save is pressed.
+      final current = await _profileMutationService
+          .loadCurrentContext()
+          .timeout(const Duration(seconds: 3), onTimeout: () => null);
+      if (!mounted ||
+          current == null ||
+          !_samePickerPrincipal(owner.context, current)) {
+        return false;
+      }
       return await _profileMutationService
-          .isContextCurrent(owner.context)
+          .isContextCurrent(current)
           .timeout(const Duration(seconds: 3), onTimeout: () => false);
     } catch (_) {
       return false;
     }
+  }
+
+  bool _samePickerPrincipal(
+    ProfileMutationContext captured,
+    ProfileMutationContext current,
+  ) {
+    String normalizedId(ProfileMutationContext context) {
+      final sessionId = context.owner.authOwner.userId?.trim() ?? '';
+      final profileId = context.user.id.trim();
+      if (sessionId.isEmpty || profileId.isEmpty || sessionId != profileId) {
+        return '';
+      }
+      final boundProfileId = context.owner.profileUserId?.trim();
+      if (boundProfileId != null &&
+          boundProfileId.isNotEmpty &&
+          boundProfileId != profileId) {
+        return '';
+      }
+      return sessionId;
+    }
+
+    String normalizedEmail(ProfileMutationContext context) {
+      final sessionEmail = context.owner.authOwner.email.trim().toLowerCase();
+      final profileEmail = context.user.email.trim().toLowerCase();
+      if (sessionEmail.isEmpty ||
+          profileEmail.isEmpty ||
+          sessionEmail != profileEmail) {
+        return '';
+      }
+      return sessionEmail;
+    }
+
+    final capturedId = normalizedId(captured);
+    final currentId = normalizedId(current);
+    final capturedEmail = normalizedEmail(captured);
+    final currentEmail = normalizedEmail(current);
+    return capturedId.isNotEmpty &&
+        capturedId == currentId &&
+        capturedEmail.isNotEmpty &&
+        capturedEmail == currentEmail;
   }
 
   Future<Set<String>?> _showMultiSelect({

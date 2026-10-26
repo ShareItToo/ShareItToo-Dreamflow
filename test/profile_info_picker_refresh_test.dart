@@ -116,7 +116,91 @@ void main() {
 
     expect(uploadProbe.calls, 0);
     expect(service.profilePatchCalls, 0);
-    expect(find.text('Kein Benutzer geladen'), findsOneWidget);
+    expect(find.byType(Image), findsNothing);
+  });
+
+  testWidgets('same principal preview survives a refreshed session epoch',
+      (tester) async {
+    final service = _PickerProfileService(_UploadProbe());
+    final pickerResult = Completer<XFile?>();
+    await _openProfile(tester, service, (_) => pickerResult.future);
+    await _openGalleryPicker(tester);
+
+    final staleOwner = service.refreshedContext(epoch: service.sessionEpoch);
+    service.sessionEpoch += 1;
+    expect(await service.isContextCurrent(staleOwner), isFalse,
+        reason: 'the original session epoch is now stale');
+
+    pickerResult.complete(_MemoryXFile());
+    await _pumpUi(tester);
+
+    expect(service.contextCheckCalls, greaterThan(0));
+    expect(find.byType(Image), findsOneWidget,
+        reason: 'same user id and normalized email retain local preview');
+  });
+
+  testWidgets('principal switch or logout before bytes discards selection',
+      (tester) async {
+    for (final transition in ['account switch', 'logout']) {
+      final service = _PickerProfileService(_UploadProbe());
+      final pickerResult = Completer<XFile?>();
+      final file = _MemoryXFile();
+      await _openProfile(tester, service, (_) => pickerResult.future);
+      await _openGalleryPicker(tester);
+
+      if (transition == 'account switch') {
+        service.switchPrincipal();
+      } else {
+        service.signOut();
+      }
+      SharedPersistenceSync.notify(
+        SharedPersistenceSync.accountSecurityStateKey,
+      );
+      pickerResult.complete(file);
+      await _pumpUi(tester);
+
+      expect(file.readCalls, 0, reason: '$transition must fail before reading');
+      expect(find.byType(Image), findsNothing);
+      expect(service.profilePatchCalls, 0);
+      await tester.pumpWidget(const SizedBox.shrink());
+    }
+  });
+
+  testWidgets('principal switch or logout during bytes discards selection',
+      (tester) async {
+    for (final transition in ['account switch', 'logout']) {
+      final service = _PickerProfileService(_UploadProbe());
+      final pickerResult = Completer<XFile?>();
+      final bytesRead = Completer<void>();
+      final bytes = Completer<Uint8List>();
+      final file = _MemoryXFile(
+        bytesFuture: bytes.future,
+        onRead: () => bytesRead.complete(),
+      );
+      await _openProfile(tester, service, (_) => pickerResult.future);
+      await _openGalleryPicker(tester);
+
+      pickerResult.complete(file);
+      await tester.pump();
+      await bytesRead.future;
+      expect(file.readCalls, 1);
+
+      if (transition == 'account switch') {
+        service.switchPrincipal();
+      } else {
+        service.signOut();
+      }
+      SharedPersistenceSync.notify(
+        SharedPersistenceSync.accountSecurityStateKey,
+      );
+      bytes.complete(Uint8List.fromList(_png));
+      await _pumpUi(tester);
+
+      expect(find.byType(Image), findsNothing,
+          reason: '$transition during byte read must discard local preview');
+      expect(service.profilePatchCalls, 0);
+      await tester.pumpWidget(const SizedBox.shrink());
+    }
   });
 
   testWidgets(
@@ -134,9 +218,10 @@ void main() {
     await _pumpUi(tester);
     await tester.pump(const Duration(milliseconds: 50));
 
+    service.holdNextLoad();
     SharedPersistenceSync.notify(SharedPersistenceSync.profileStateKey);
     await tester.pump();
-    expect(service.loadCalls, 2);
+    expect(service.pendingLoadCalls, 1);
     await tester.pump(const Duration(milliseconds: 50));
     expect(find.byType(Image), findsOneWidget,
         reason: 'selected photo is visible before the security transition');
@@ -144,14 +229,13 @@ void main() {
     service.switchPrincipal();
     SharedPersistenceSync.notify(SharedPersistenceSync.accountSecurityStateKey);
     await _pumpUi(tester);
-    expect(find.text('Kein Benutzer geladen'), findsOneWidget);
+    expect(find.byType(Image), findsNothing);
 
     pendingRefresh.complete(service.refreshedContext());
     await _pumpUi(tester);
     expect(find.byType(Image), findsNothing,
         reason:
             'a previous owner refresh must not restore private photo state');
-    expect(find.text('Kein Benutzer geladen'), findsOneWidget);
     expect(uploadProbe.calls, 0);
     expect(service.profilePatchCalls, 0);
   });
@@ -189,6 +273,13 @@ Future<void> _openProfile(
   expect(find.byType(ProfileInfoScreen), findsOneWidget);
 }
 
+Future<void> _openGalleryPicker(WidgetTester tester) async {
+  await tester.tap(find.text('Foto ändern'));
+  await _pumpUi(tester);
+  await tester.tap(find.text('Foto aus Galerie wählen'));
+  await _pumpUi(tester);
+}
+
 Future<void> _pumpUi(WidgetTester tester) async {
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 350));
@@ -199,6 +290,11 @@ final _user = buildTestUser(
   'profile-picker-owner',
   name: 'Picker Owner',
   email: 'profile-picker@example.invalid',
+).copyWith(photoURL: null);
+final _userB = buildTestUser(
+  'profile-picker-owner-b',
+  name: 'Picker Owner B',
+  email: 'profile-picker-b@example.invalid',
 ).copyWith(photoURL: null);
 
 final _authOwner = AuthSessionOwner(
@@ -214,8 +310,12 @@ class _PickerProfileService extends ProfileMutationService {
   int contextCheckCalls = 0;
   int profilePatchCalls = 0;
   String? patchedPhotoUrl;
-  bool _principalChanged = false;
+  bool _accountBActive = false;
+  bool _signedOut = false;
+  int sessionEpoch = 9;
   Completer<ProfileMutationContext?>? pendingRefresh;
+  bool _holdNextLoad = false;
+  int pendingLoadCalls = 0;
 
   _PickerProfileService(_UploadProbe uploadProbe)
       : super(
@@ -226,38 +326,55 @@ class _PickerProfileService extends ProfileMutationService {
   @override
   Future<ProfileMutationContext?> loadCurrentContext() async {
     loadCalls += 1;
-    if (_principalChanged) return null;
+    if (_signedOut) return null;
     final context = refreshedContext();
-    if (loadCalls == 2 && pendingRefresh != null) return pendingRefresh!.future;
+    if (_holdNextLoad && pendingRefresh != null) {
+      _holdNextLoad = false;
+      pendingLoadCalls += 1;
+      return pendingRefresh!.future;
+    }
     return context;
   }
 
-  ProfileMutationContext refreshedContext() => ProfileMutationContext(
-        user: _user,
-        // Auth refresh/readback can create a new owner value for the same
-        // authenticated session. Equality is by session identity, not object.
-        owner: SessionTransitionOwner(
-          authOwner: AuthSessionOwner(
-            userId: _authOwner.userId,
-            sessionId: _authOwner.sessionId,
-            email: _authOwner.email,
-            createdAt: _authOwner.createdAt,
-            epoch: _authOwner.epoch,
-          ),
-          profileUserId: _user.id,
+  ProfileMutationContext refreshedContext({
+    int? epoch,
+    bool? accountB,
+  }) {
+    final selectedUser = (accountB ?? _accountBActive) ? _userB : _user;
+    final selectedEpoch = epoch ?? sessionEpoch;
+    return ProfileMutationContext(
+      user: selectedUser,
+      // Auth refresh/readback can create a new owner value for the same
+      // principal with a refreshed session owner and epoch.
+      owner: SessionTransitionOwner(
+        authOwner: AuthSessionOwner(
+          userId: selectedUser.id,
+          sessionId: 'profile-picker-session-$selectedEpoch',
+          email: selectedUser.email,
+          createdAt: _authOwner.createdAt,
+          epoch: selectedEpoch,
         ),
-      );
+        profileUserId: selectedUser.id,
+      ),
+    );
+  }
 
   @override
   Future<bool> isContextCurrent(ProfileMutationContext context) async {
     contextCheckCalls += 1;
+    if (_signedOut) return false;
+    final current = refreshedContext();
     final owner = context.owner.authOwner;
-    return !_principalChanged &&
-        owner.userId == _authOwner.userId &&
-        owner.sessionId == _authOwner.sessionId &&
-        owner.email == _authOwner.email &&
-        owner.createdAt == _authOwner.createdAt &&
-        owner.epoch == _authOwner.epoch;
+    final currentOwner = current.owner.authOwner;
+    return context.user.id == current.user.id &&
+        context.user.email.trim().toLowerCase() ==
+            current.user.email.trim().toLowerCase() &&
+        owner.userId == currentOwner.userId &&
+        owner.sessionId == currentOwner.sessionId &&
+        owner.email.trim().toLowerCase() ==
+            currentOwner.email.trim().toLowerCase() &&
+        owner.createdAt == currentOwner.createdAt &&
+        owner.epoch == currentOwner.epoch;
   }
 
   @override
@@ -268,14 +385,20 @@ class _PickerProfileService extends ProfileMutationService {
     profilePatchCalls += 1;
     patchedPhotoUrl = updates[CurrentUserProfileField.photoURL] as String?;
     return AccountProfileMutationResult(
-      user: _user.copyWith(photoURL: patchedPhotoUrl),
+      user: context.user.copyWith(photoURL: patchedPhotoUrl),
       remoteAccepted: true,
     );
   }
 
   void switchPrincipal() {
-    _principalChanged = true;
+    _accountBActive = true;
   }
+
+  void signOut() {
+    _signedOut = true;
+  }
+
+  void holdNextLoad() => _holdNextLoad = true;
 }
 
 class _UploadProbe {
@@ -299,11 +422,19 @@ class _UploadProbe {
 }
 
 class _MemoryXFile extends XFile {
-  _MemoryXFile() : super.fromData(_png);
+  final Future<Uint8List>? bytesFuture;
+  final VoidCallback? onRead;
+  int readCalls = 0;
+
+  _MemoryXFile({this.bytesFuture, this.onRead}) : super.fromData(_png);
 
   @override
   String get name => 'synthetic.png';
 
   @override
-  Future<Uint8List> readAsBytes() async => Uint8List.fromList(_png);
+  Future<Uint8List> readAsBytes() async {
+    readCalls += 1;
+    onRead?.call();
+    return bytesFuture == null ? Uint8List.fromList(_png) : await bytesFuture!;
+  }
 }
