@@ -96,6 +96,12 @@ test('Apple ownership is included in standard PG execution and has a focused rou
   assert.equal(integrationTestPlan().flat().filter((entry) => entry === target).length, 1);
 });
 
+test('private-pilot listing activation suite is available through its focused route', () => {
+  const target = 'backend/test/private_pilot_listing_activation.integration.test.js';
+  assert.deepEqual(integrationTestPlan({ focusedPrivateListing: true }), [[target]]);
+  assert.equal(integrationTestPlan().flat().filter((entry) => entry === target).length, 0);
+});
+
 test('notifications use the standard PG plan and their focused environment route', async (t) => {
   const target = 'backend/test/notification_lifecycle_postgres.integration.test.js';
   assert.deepEqual(integrationTestPlan({ focusedNotifications: true }), [[target]]);
