@@ -13,9 +13,19 @@ class WebFirebaseAuthSelection {
   final bool apple;
   final WebAppleDirectConfig? appleDirect;
   const WebFirebaseAuthSelection._(
-      this.options, this.google, this.facebook, this.apple, this.appleDirect);
-  static const unavailable =
-      WebFirebaseAuthSelection._(null, false, false, false, null);
+    this.options,
+    this.google,
+    this.facebook,
+    this.apple,
+    this.appleDirect,
+  );
+  static const unavailable = WebFirebaseAuthSelection._(
+    null,
+    false,
+    false,
+    false,
+    null,
+  );
 }
 
 bool sameWebFirebaseApp(FirebaseOptions a, FirebaseOptions b) =>
@@ -40,6 +50,7 @@ WebFirebaseAuthSelection selectWebFirebaseAuth({
   String googleDecisionDigest = '',
   String googleEvidenceDigest = '',
   String googleSourceCommit = '',
+  String googleBuildVersion = '',
   required String facebookReadinessJson,
   required String facebookReadinessDigest,
   required DateTime now,
@@ -60,6 +71,7 @@ WebFirebaseAuthSelection selectWebFirebaseAuth({
     approvedDecisionDigest: googleDecisionDigest,
     approvedEvidenceDigest: googleEvidenceDigest,
     expectedSourceCommit: googleSourceCommit,
+    expectedBuildVersion: googleBuildVersion,
     now: now,
   );
   final facebook = facebookConfig.optionsFor(
@@ -88,8 +100,14 @@ WebFirebaseAuthSelection selectWebFirebaseAuth({
   // disable another valid provider. Configured identity fields still bind the
   // one shared app even if that provider's approval has expired. Empty fields
   // grant nothing; contradictory nonempty fields fail the entire app closed.
-  bool conflicts(String project, String backendProject, String app,
-      String sender, String key, String domain) {
+  bool conflicts(
+    String project,
+    String backendProject,
+    String app,
+    String sender,
+    String key,
+    String domain,
+  ) {
     bool differs(String value, String? expected) =>
         value.isNotEmpty && value != expected;
     return differs(project, options.projectId) ||
@@ -102,28 +120,31 @@ WebFirebaseAuthSelection selectWebFirebaseAuth({
 
   if ((googleEnabled &&
           conflicts(
-              googleConfig.projectId,
-              googleConfig.backendProjectId,
-              googleConfig.appId,
-              googleConfig.messagingSenderId,
-              googleConfig.apiKey,
-              googleConfig.authDomain)) ||
+            googleConfig.projectId,
+            googleConfig.backendProjectId,
+            googleConfig.appId,
+            googleConfig.messagingSenderId,
+            googleConfig.apiKey,
+            googleConfig.authDomain,
+          )) ||
       (facebookEnabled &&
           conflicts(
-              facebookConfig.projectId,
-              facebookConfig.backendProjectId,
-              facebookConfig.appId,
-              facebookConfig.messagingSenderId,
-              facebookConfig.apiKey,
-              facebookConfig.authDomain)) ||
+            facebookConfig.projectId,
+            facebookConfig.backendProjectId,
+            facebookConfig.appId,
+            facebookConfig.messagingSenderId,
+            facebookConfig.apiKey,
+            facebookConfig.authDomain,
+          )) ||
       (appleEnabled &&
           conflicts(
-              appleConfig.projectId,
-              appleConfig.backendProjectId,
-              appleConfig.appId,
-              appleConfig.messagingSenderId,
-              appleConfig.apiKey,
-              appleConfig.authDomain))) {
+            appleConfig.projectId,
+            appleConfig.backendProjectId,
+            appleConfig.appId,
+            appleConfig.messagingSenderId,
+            appleConfig.apiKey,
+            appleConfig.authDomain,
+          ))) {
     return WebFirebaseAuthSelection.unavailable;
   }
   return WebFirebaseAuthSelection._(
@@ -139,9 +160,8 @@ Future<bool> prepareWebFirebaseAuth({
   required WebFirebaseAuthSelection selection,
   required Future<void> Function(FirebaseOptions options) initializeBoundApp,
   required Future<void> Function() useMemoryPersistence,
-}) =>
-    prepareWebGoogleAuth(
-      options: selection.options,
-      initializeBoundApp: () => initializeBoundApp(selection.options!),
-      useMemoryPersistence: useMemoryPersistence,
-    );
+}) => prepareWebGoogleAuth(
+  options: selection.options,
+  initializeBoundApp: () => initializeBoundApp(selection.options!),
+  useMemoryPersistence: useMemoryPersistence,
+);

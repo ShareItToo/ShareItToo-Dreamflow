@@ -49,8 +49,7 @@ bool controlledCrashDiagnosticCustomValueAllowed(String key, Object value) {
 bool crashDiagnosticsCollectionAllowed({
   required bool releaseMode,
   required bool userEnabled,
-}) =>
-    releaseMode && userEnabled;
+}) => releaseMode && userEnabled;
 
 Future<void> _setControlledCrashDiagnosticCustomKey(
   FirebaseCrashlytics crashlytics,
@@ -83,16 +82,14 @@ bool controlledCrashDiagnosticAllowed({
 String controlledCrashDiagnosticAttemptKey({
   required String buildNumber,
   required String runId,
-}) =>
-    'sit_controlled_crash_diagnostic_attempted_${buildNumber}_$runId';
+}) => 'sit_controlled_crash_diagnostic_attempted_${buildNumber}_$runId';
 
 @visibleForTesting
 bool controlledCrashDiagnosticCanStart({
   required bool allowed,
   required bool alreadyAttempted,
   required bool inFlight,
-}) =>
-    allowed && !alreadyAttempted && !inFlight;
+}) => allowed && !alreadyAttempted && !inFlight;
 
 @visibleForTesting
 bool shouldRecordUnhandledErrorAsFatal(Object error) {
@@ -108,8 +105,9 @@ class FirebaseRuntimeConfig {
     appId: String.fromEnvironment('SIT_APPLE_WEB_APP_ID'),
     apiKey: String.fromEnvironment('SIT_APPLE_WEB_API_KEY'),
     authDomain: String.fromEnvironment('SIT_APPLE_WEB_AUTH_DOMAIN'),
-    backendProjectId:
-        String.fromEnvironment('SIT_APPLE_WEB_BACKEND_PROJECT_ID'),
+    backendProjectId: String.fromEnvironment(
+      'SIT_APPLE_WEB_BACKEND_PROJECT_ID',
+    ),
     authorizedOrigin: String.fromEnvironment('SIT_APPLE_WEB_ORIGIN'),
     clientId: String.fromEnvironment('SIT_APPLE_WEB_CLIENT_ID'),
     redirectUri: String.fromEnvironment('SIT_APPLE_WEB_REDIRECT_URI'),
@@ -123,55 +121,68 @@ class FirebaseRuntimeConfig {
     appId: String.fromEnvironment('SIT_FACEBOOK_WEB_APP_ID'),
     apiKey: String.fromEnvironment('SIT_FACEBOOK_WEB_API_KEY'),
     authDomain: String.fromEnvironment('SIT_FACEBOOK_WEB_AUTH_DOMAIN'),
-    backendProjectId:
-        String.fromEnvironment('SIT_FACEBOOK_WEB_BACKEND_PROJECT_ID'),
+    backendProjectId: String.fromEnvironment(
+      'SIT_FACEBOOK_WEB_BACKEND_PROJECT_ID',
+    ),
     authorizedOrigin: String.fromEnvironment('SIT_FACEBOOK_WEB_ORIGIN'),
     approvedDigest: String.fromEnvironment('SIT_FACEBOOK_WEB_CONFIG_SHA256'),
   );
   static WebFirebaseAuthSelection get webAuthSelection => selectWebFirebaseAuth(
-        googleConfig: webGoogleConfig,
-        facebookConfig: webFacebookConfig,
-        googleEnabled: const bool.fromEnvironment('SIT_SOCIAL_GOOGLE_ENABLED'),
-        facebookEnabled:
-            const bool.fromEnvironment('SIT_SOCIAL_FACEBOOK_ENABLED'),
-        activationValidated: const bool.fromEnvironment(
-            'SIT_SOCIAL_PROVIDER_ACTIVATION_VALIDATED'),
-        backendEnabled: BackendConfig.enabled,
-        apiBaseUrl: BackendConfig.apiBaseUrl,
-        origin: Uri.base.origin,
-        googleReadinessJson:
-            const String.fromEnvironment('SIT_GOOGLE_WEB_READINESS_JSON'),
-        googleReadinessDigest:
-            const String.fromEnvironment('SIT_GOOGLE_WEB_READINESS_SHA256'),
-        googleDecisionJson:
-            const String.fromEnvironment('SIT_GOOGLE_WEB_DECISION_JSON'),
-        googleDecisionDigest:
-            const String.fromEnvironment('SIT_GOOGLE_WEB_DECISION_SHA256'),
-        googleEvidenceDigest:
-            const String.fromEnvironment('SIT_GOOGLE_WEB_EVIDENCE_SHA256'),
-        googleSourceCommit: const String.fromEnvironment('SIT_APP_COMMIT'),
-        facebookReadinessJson:
-            const String.fromEnvironment('SIT_FACEBOOK_WEB_READINESS_JSON'),
-        facebookReadinessDigest:
-            const String.fromEnvironment('SIT_FACEBOOK_WEB_READINESS_SHA256'),
-        appleConfig: webAppleDirectConfig,
-        appleEnabled: const bool.fromEnvironment('SIT_SOCIAL_APPLE_ENABLED'),
-        appleReadinessJson:
-            const String.fromEnvironment('SIT_APPLE_WEB_READINESS_JSON'),
-        appleReadinessDigest:
-            const String.fromEnvironment('SIT_APPLE_WEB_READINESS_SHA256'),
-        now: DateTime.now().toUtc(),
-      );
+    googleConfig: webGoogleConfig,
+    facebookConfig: webFacebookConfig,
+    googleEnabled: const bool.fromEnvironment('SIT_SOCIAL_GOOGLE_ENABLED'),
+    facebookEnabled: const bool.fromEnvironment('SIT_SOCIAL_FACEBOOK_ENABLED'),
+    activationValidated: const bool.fromEnvironment(
+      'SIT_SOCIAL_PROVIDER_ACTIVATION_VALIDATED',
+    ),
+    backendEnabled: BackendConfig.enabled,
+    apiBaseUrl: BackendConfig.apiBaseUrl,
+    origin: Uri.base.origin,
+    googleReadinessJson: const String.fromEnvironment(
+      'SIT_GOOGLE_WEB_READINESS_JSON',
+    ),
+    googleReadinessDigest: const String.fromEnvironment(
+      'SIT_GOOGLE_WEB_READINESS_SHA256',
+    ),
+    googleDecisionJson: const String.fromEnvironment(
+      'SIT_GOOGLE_WEB_DECISION_JSON',
+    ),
+    googleDecisionDigest: const String.fromEnvironment(
+      'SIT_GOOGLE_WEB_DECISION_SHA256',
+    ),
+    googleEvidenceDigest: const String.fromEnvironment(
+      'SIT_GOOGLE_WEB_EVIDENCE_SHA256',
+    ),
+    googleSourceCommit: const String.fromEnvironment('SIT_APP_COMMIT'),
+    googleBuildVersion: const String.fromEnvironment('SIT_CLIENT_BUILD'),
+    facebookReadinessJson: const String.fromEnvironment(
+      'SIT_FACEBOOK_WEB_READINESS_JSON',
+    ),
+    facebookReadinessDigest: const String.fromEnvironment(
+      'SIT_FACEBOOK_WEB_READINESS_SHA256',
+    ),
+    appleConfig: webAppleDirectConfig,
+    appleEnabled: const bool.fromEnvironment('SIT_SOCIAL_APPLE_ENABLED'),
+    appleReadinessJson: const String.fromEnvironment(
+      'SIT_APPLE_WEB_READINESS_JSON',
+    ),
+    appleReadinessDigest: const String.fromEnvironment(
+      'SIT_APPLE_WEB_READINESS_SHA256',
+    ),
+    now: DateTime.now().toUtc(),
+  );
   static const webGoogleConfig = WebGooglePublicConfig(
     projectId: projectId,
     messagingSenderId: messagingSenderId,
     appId: String.fromEnvironment('SIT_FIREBASE_WEB_APP_ID'),
     apiKey: String.fromEnvironment('SIT_FIREBASE_WEB_API_KEY'),
     authDomain: String.fromEnvironment('SIT_FIREBASE_WEB_AUTH_DOMAIN'),
-    backendProjectId:
-        String.fromEnvironment('SIT_FIREBASE_WEB_BACKEND_PROJECT_ID'),
-    authorizedOrigin:
-        String.fromEnvironment('SIT_FIREBASE_WEB_AUTHORIZED_ORIGIN'),
+    backendProjectId: String.fromEnvironment(
+      'SIT_FIREBASE_WEB_BACKEND_PROJECT_ID',
+    ),
+    authorizedOrigin: String.fromEnvironment(
+      'SIT_FIREBASE_WEB_AUTHORIZED_ORIGIN',
+    ),
     approvedDigest: String.fromEnvironment('SIT_FIREBASE_WEB_CONFIG_SHA256'),
   );
   static const String projectId = String.fromEnvironment(
@@ -332,9 +343,7 @@ ForegroundPushMessage? parseForegroundPushMessage({
 }
 
 @visibleForTesting
-Set<String> sharedPersistenceKeysForForegroundPush(
-  Map<String, dynamic> data,
-) {
+Set<String> sharedPersistenceKeysForForegroundPush(Map<String, dynamic> data) {
   if (pushActionUriForData(data) != null) {
     return {
       SharedPersistenceSync.rentalRequestsKey,
@@ -490,11 +499,13 @@ class FirebaseRuntime {
     await Firebase.initializeApp(options: options);
   }
 
-  static Future<bool> _initialize(
-      {Future<void> Function()? prepareWebAuth}) async {
+  static Future<bool> _initialize({
+    Future<void> Function()? prepareWebAuth,
+  }) async {
     if (kIsWeb) {
       _webAuthInitialized = false;
-      _webAuthInitialized = prepareWebAuth != null &&
+      _webAuthInitialized =
+          prepareWebAuth != null &&
           await prepareWebFirebaseAuth(
             selection: FirebaseRuntimeConfig.webAuthSelection,
             initializeBoundApp: _ensureBoundFirebaseApp,
@@ -520,7 +531,8 @@ class FirebaseRuntime {
         await _retryPendingCrashCleanup();
       }
       _pushEnabled = preferences.pushEnabled;
-      _crashDiagnosticsEnabled = preferences.crashDiagnosticsEnabled &&
+      _crashDiagnosticsEnabled =
+          preferences.crashDiagnosticsEnabled &&
           crashDiagnosticsCollectionAllowed(
             releaseMode: kReleaseMode,
             userEnabled: true,
@@ -528,8 +540,9 @@ class FirebaseRuntime {
       if (preferences.crashDiagnosticsEnabled && !_crashDiagnosticsEnabled) {
         await FirebaseServicePreferencesStore.setCrashDiagnosticsEnabled(false);
       }
-      await FirebaseMessaging.instance
-          .setDeliveryMetricsExportToBigQuery(false);
+      await FirebaseMessaging.instance.setDeliveryMetricsExportToBigQuery(
+        false,
+      );
       await FirebaseMessaging.instance.setAutoInitEnabled(_pushEnabled);
       await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(
         crashDiagnosticsCollectionAllowed(
@@ -537,19 +550,18 @@ class FirebaseRuntime {
           userEnabled: _crashDiagnosticsEnabled,
         ),
       );
-      FirebaseMessaging.onBackgroundMessage(
-        firebaseMessagingBackgroundHandler,
-      );
+      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
       await FirebaseMessaging.instance
           .setForegroundNotificationPresentationOptions(
-        alert: true,
-        badge: true,
-        sound: true,
+            alert: true,
+            badge: true,
+            sound: true,
+          );
+      _openedMessageSubscription ??= FirebaseMessaging.onMessageOpenedApp
+          .listen(_captureActionLink);
+      _foregroundMessageSubscription ??= FirebaseMessaging.onMessage.listen(
+        _captureForegroundMessage,
       );
-      _openedMessageSubscription ??=
-          FirebaseMessaging.onMessageOpenedApp.listen(_captureActionLink);
-      _foregroundMessageSubscription ??=
-          FirebaseMessaging.onMessage.listen(_captureForegroundMessage);
       _captureActionLink(await FirebaseMessaging.instance.getInitialMessage());
       _initialized = true;
       return true;
@@ -579,9 +591,7 @@ class FirebaseRuntime {
       );
       return;
     }
-    unawaited(
-      FirebaseCrashlytics.instance.recordFlutterFatalError(details),
-    );
+    unawaited(FirebaseCrashlytics.instance.recordFlutterFatalError(details));
   }
 
   static void recordUnhandledError(Object error, StackTrace stack) {
@@ -607,7 +617,8 @@ class FirebaseRuntime {
   static Future<bool> recordControlledStagingCrashDiagnostic(
     String requestedRunId,
   ) async {
-    final allowed = _initialized &&
+    final allowed =
+        _initialized &&
         _crashDiagnosticsEnabled &&
         controlledCrashDiagnosticAllowed(
           releaseMode: kReleaseMode,
@@ -692,10 +703,7 @@ class FirebaseRuntime {
   static Future<bool> syncPushRegistration({int? expectedSessionEpoch}) {
     final requestedEpoch =
         expectedSessionEpoch ?? BackendRepository.authSessionEpoch;
-    return _pushOperationQueue.run(
-      requestedEpoch,
-      _syncPushRegistrationOnce,
-    );
+    return _pushOperationQueue.run(requestedEpoch, _syncPushRegistrationOnce);
   }
 
   static Future<bool> _syncPushRegistrationOnce(
@@ -741,25 +749,25 @@ class FirebaseRuntime {
         }
       }
       await _tokenRefreshSubscription?.cancel();
-      _tokenRefreshSubscription =
-          FirebaseMessaging.instance.onTokenRefresh.listen(
-        (refreshedToken) {
-          unawaited(
-            _pushOperationQueue.run(
-              expectedSessionEpoch,
-              (_) => _registerRefreshedToken(
-                refreshedToken,
-                platform,
-                expectedSessionEpoch: expectedSessionEpoch,
-                operationGeneration: operationGeneration,
-              ),
-            ),
+      _tokenRefreshSubscription = FirebaseMessaging.instance.onTokenRefresh
+          .listen(
+            (refreshedToken) {
+              unawaited(
+                _pushOperationQueue.run(
+                  expectedSessionEpoch,
+                  (_) => _registerRefreshedToken(
+                    refreshedToken,
+                    platform,
+                    expectedSessionEpoch: expectedSessionEpoch,
+                    operationGeneration: operationGeneration,
+                  ),
+                ),
+              );
+            },
+            onError: (Object error, StackTrace stack) {
+              debugPrint('[FirebaseRuntime] token refresh unavailable: $error');
+            },
           );
-        },
-        onError: (Object error, StackTrace stack) {
-          debugPrint('[FirebaseRuntime] token refresh unavailable: $error');
-        },
-      );
       final token = await FirebaseMessaging.instance.getToken();
       if (token == null || token.trim().isEmpty) return false;
       final registered = await _registerToken(
@@ -813,8 +821,8 @@ class FirebaseRuntime {
       return FirebaseServiceToggleResult(
         state: !persisted
             ? (success
-                ? FirebaseServiceToggleState.disabled
-                : FirebaseServiceToggleState.disabledCleanupPending)
+                  ? FirebaseServiceToggleState.disabled
+                  : FirebaseServiceToggleState.disabledCleanupPending)
             : FirebaseServiceToggleState.unavailable,
         persistedEnabled: persisted,
       );
@@ -839,8 +847,9 @@ class FirebaseRuntime {
   ) async {
     if (requestedEpoch != BackendRepository.authSessionEpoch) return false;
     if (!enabled) {
-      final cleanupOwnerToken =
-          await _captureCurrentPushCleanupOwnerToken(requestedEpoch);
+      final cleanupOwnerToken = await _captureCurrentPushCleanupOwnerToken(
+        requestedEpoch,
+      );
       closeAuthenticatedPushSessionForLogout();
       await FirebaseServicePreferencesStore.setPushEnabled(false);
       if (cleanupOwnerToken != null) {
@@ -855,8 +864,9 @@ class FirebaseRuntime {
       _tokenRefreshSubscription = null;
       if (requestedEpoch != BackendRepository.authSessionEpoch) return false;
       final localClean = await _retryPendingPushLocalCleanup();
-      final backendClean =
-          await _retryPendingPushBackendCleanup(requestedEpoch);
+      final backendClean = await _retryPendingPushBackendCleanup(
+        requestedEpoch,
+      );
       return localClean && backendClean;
     }
 
@@ -958,15 +968,16 @@ class FirebaseRuntime {
       return FirebaseServiceToggleResult(
         state: persisted == enabled
             ? (enabled
-                ? FirebaseServiceToggleState.active
-                : FirebaseServiceToggleState.disabled)
+                  ? FirebaseServiceToggleState.active
+                  : FirebaseServiceToggleState.disabled)
             : FirebaseServiceToggleState.unavailable,
         persistedEnabled: persisted,
       );
     } catch (error) {
       _crashDiagnosticsEnabled = existing.crashDiagnosticsEnabled;
       debugPrint(
-          '[FirebaseRuntime] crash diagnostics update unavailable: $error');
+        '[FirebaseRuntime] crash diagnostics update unavailable: $error',
+      );
       return FirebaseServiceToggleResult(
         state: FirebaseServiceToggleState.unavailable,
         persistedEnabled: existing.crashDiagnosticsEnabled,
@@ -981,8 +992,9 @@ class FirebaseRuntime {
 
   static Future<void> deleteInstallationForAccountDeletion() async {
     final expectedEpoch = BackendRepository.authSessionEpoch;
-    final deletedOwnerToken =
-        await _captureCurrentPushCleanupOwnerToken(expectedEpoch);
+    final deletedOwnerToken = await _captureCurrentPushCleanupOwnerToken(
+      expectedEpoch,
+    );
     closeAuthenticatedPushSessionForLogout();
     _pushEnabled = false;
     _crashDiagnosticsEnabled = false;
@@ -1012,7 +1024,8 @@ class FirebaseRuntime {
       await FirebaseInstallations.instance.delete();
       await FirebaseServicePreferencesStore.setPushLocalCleanupPending(false);
       await FirebaseServicePreferencesStore.setInstallationCleanupPending(
-          false);
+        false,
+      );
       await FirebaseServicePreferencesStore.setCrashDiagnosticsCleanupPending(
         false,
       );
@@ -1083,11 +1096,13 @@ class FirebaseRuntime {
     }
     final preferences = await FirebaseServicePreferencesStore.read();
     if (!preferences.pushBackendCleanupPending) return true;
-    final currentOwnerToken =
-        await _captureCurrentPushCleanupOwnerToken(expectedSessionEpoch);
+    final currentOwnerToken = await _captureCurrentPushCleanupOwnerToken(
+      expectedSessionEpoch,
+    );
     if (currentOwnerToken == null) return false;
-    if (!preferences.pushBackendCleanupOwnerTokens
-        .contains(currentOwnerToken)) {
+    if (!preferences.pushBackendCleanupOwnerTokens.contains(
+      currentOwnerToken,
+    )) {
       // A pending cleanup from A must never target the current session B.
       // Keep the opaque marker so it can be retried if A's exact session
       // becomes current again, but do not block B's own registration.

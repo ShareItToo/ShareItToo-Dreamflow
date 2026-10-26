@@ -9,8 +9,11 @@ import { TARGET, bindGoogleWebConfig, inventory, readGoogleWebConfig, profile,
   sealArtifact, sha256, validateArtifact, stagingBootstrapFor } from '../../tool/staging_web_contract.mjs';
 import { GOOGLE_WEB_PROFILE_V2, bindGoogleWebReadiness,
   readGoogleWebReadiness } from '../../tool/staging_google_web_readiness.mjs';
+import { GOOGLE_WEB_PROFILE_V3, bindGoogleWebCurrentReadback,
+  readGoogleWebCurrentReadback } from '../../tool/staging_google_web_current_readback.mjs';
 import { syntheticGoogleBinding, syntheticGoogleConfig,
   syntheticGoogleEvidence } from './staging_google_web_readiness_fixture.mjs';
+import { syntheticGoogleCurrentEvidence } from './staging_google_web_current_readback_fixture.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const source = 'a'.repeat(40);
@@ -26,13 +29,13 @@ function temp(t) {
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   return root;
 }
-function makeArtifact(t, googleWeb = bound()) {
+function makeArtifact(t, googleWeb = bound(), artifactVersion = version) {
   const directory = temp(t); fs.mkdirSync(path.join(directory, 'web'));
   for (const [file, bytes] of Object.entries({ 'index.html': '<script src="flutter_bootstrap.js" async></script>',
     'main.dart.js': 'synthetic compiled output', 'manifest.json': '{}', 'flutter_bootstrap.js': 'bootstrap();' })) {
     fs.writeFileSync(path.join(directory, 'web', file), bytes);
   }
-  const hash = sealArtifact({ directory, source, version, builderDigest: 'b'.repeat(64), flutterVersion: { frameworkVersion: 'synthetic' }, googleWeb });
+  const hash = sealArtifact({ directory, source, version: artifactVersion, builderDigest: 'b'.repeat(64), flutterVersion: { frameworkVersion: 'synthetic' }, googleWeb });
   return { directory, hash, googleWeb };
 }
 function rewriteManifest(directory, mutate) {
@@ -104,6 +107,88 @@ test('Google successor binds the same canonical digest and compile-time fields a
   assert.deepEqual(keyOrder, Object.keys(googleWeb.config));
   const runtime = fs.readFileSync(path.join(repo, 'lib/services/firebase_runtime.dart'), 'utf8');
   for (const key of Object.keys(p).filter((key) => key.startsWith('SIT_FIREBASE_'))) assert.ok(runtime.includes(`'${key}'`), key);
+});
+
+function currentBinding(evidence, now = evidence.now, expectedSource = source, expectedVersion = version) {
+  return bindGoogleWebCurrentReadback(evidence.envelope, evidence.digest,
+    { now, expectedSource, expectedVersion });
+}
+function rehashCurrent(evidence) {
+  const hash = value => sha256(JSON.stringify(value));
+  evidence.envelope.serviceAccountReadbackSha256 = hash(evidence.envelope.serviceAccountReadback);
+  evidence.envelope.cloudConsoleReadbackSha256 = hash(evidence.envelope.cloudConsoleReadback);
+  evidence.envelope.decision.serviceAccountReadbackSha256 = evidence.envelope.serviceAccountReadbackSha256;
+  evidence.envelope.decision.cloudConsoleReadbackSha256 = evidence.envelope.cloudConsoleReadbackSha256;
+  evidence.envelope.decisionSha256 = hash(evidence.envelope.decision);
+  evidence.envelope.configurationSha256 = hash(evidence.envelope.configuration);
+  evidence.envelope.decision.configurationSha256 = evidence.envelope.configurationSha256;
+  evidence.bytes = Buffer.from(JSON.stringify(evidence.envelope)); evidence.digest = sha256(evidence.bytes);
+}
+test('current-readback v3 binds source/version, live runtime, direct provider+console evidence, exact APIs/origins and Sol decision', (t) => {
+  const evidence = syntheticGoogleCurrentEvidence(source, version);
+  const googleWeb = currentBinding(evidence);
+  assert.equal(googleWeb.profileContractVersion, GOOGLE_WEB_PROFILE_V3);
+  assert.notEqual(evidence.service.runtime.commit, source, 'live API runtime may predate this Web source');
+  const p = profile(source, version, googleWeb);
+  assert.equal(p.SIT_SOCIAL_GOOGLE_ENABLED, 'true');
+  assert.equal(p.SIT_SOCIAL_PROVIDER_ACTIVATION_VALIDATED, 'true');
+  assert.equal(p.SIT_SOCIAL_APPLE_ENABLED, 'false'); assert.equal(p.SIT_SOCIAL_FACEBOOK_ENABLED, 'false');
+  assert.equal(p.SIT_GOOGLE_WEB_READINESS_JSON, JSON.stringify(evidence.envelope));
+  assert.equal(p.SIT_GOOGLE_WEB_EVIDENCE_SHA256, evidence.digest);
+  const f = makeArtifact(t, googleWeb, version);
+  const manifest = validateArtifact(f.directory, f.hash, source);
+  assert.equal(manifest.schemaVersion, 9);
+  assert.equal(manifest.profileContractVersion, GOOGLE_WEB_PROFILE_V3);
+  assert.equal(manifest.googleWebServiceAccountReadbackSha256, evidence.envelope.serviceAccountReadbackSha256);
+  assert.equal(manifest.googleWebCloudConsoleReadbackSha256, evidence.envelope.cloudConsoleReadbackSha256);
+  assert.equal(manifest.profile.SIT_SOCIAL_APPLE_ENABLED, 'false');
+  assert.equal(manifest.profile.SIT_SOCIAL_FACEBOOK_ENABLED, 'false');
+});
+
+test('current-readback v3 rejects stale, wrong-build or drifted provider/runtime/console/decision evidence', () => {
+  const initial = syntheticGoogleCurrentEvidence(source, version);
+  assert.throws(() => currentBinding(initial, initial.now, 'b'.repeat(40)), /google_web_current_/u);
+  assert.throws(() => currentBinding(initial, initial.now, source, '1.2.3+other'), /google_web_current_/u);
+  assert.throws(() => currentBinding(initial, new Date(initial.now.getTime() + 2 * 60 * 60_000)), /google_web_current_expired/u);
+  for (const mutate of [
+    e => { e.serviceAccountReadback.projectState = 'DISABLED'; },
+    e => { e.serviceAccountReadback.webAppPresent = false; },
+    e => { e.serviceAccountReadback.authorizedDomains = ['other.example']; },
+    e => { e.serviceAccountReadback.googleProviderEnabled = false; },
+    e => { e.serviceAccountReadback.appleProviderEnabled = true; },
+    e => { e.serviceAccountReadback.facebookProviderEnabled = true; },
+    e => { e.serviceAccountReadback.firebaseAuthEnabled = false; },
+    e => { e.serviceAccountReadback.firebaseEmulatorEnabled = true; },
+    e => { e.serviceAccountReadback.runtime.image = 'mutable:tag'; },
+    e => { e.cloudConsoleReadback.operatorAccountEmailSha256 = '0'.repeat(64); },
+    e => { e.cloudConsoleReadback.apiKeyResourceId = 'projects/999999999999/locations/global/keys/not-bound'; },
+    e => { e.cloudConsoleReadback.apiKeySha256 = '0'.repeat(64); },
+    e => { e.cloudConsoleReadback.apiRestrictions.pop(); },
+    e => { e.cloudConsoleReadback.websiteRestrictions.pop(); },
+    e => { e.serviceAccountReadback.keyInventorySha256 = '0'.repeat(64); },
+  ]) {
+    const evidence = syntheticGoogleCurrentEvidence(source, version);
+    mutate(evidence.envelope); rehashCurrent(evidence);
+    assert.throws(() => currentBinding(evidence), /google_web_current_/u);
+  }
+  const wronglyCombined = currentBinding(initial);
+  assert.throws(() => profile(source, version, wronglyCombined, { synthetic: true }), /google_web_current_provider_mask/u);
+});
+
+test('current-readback v3 file reader enforces the existing owner-protected input contract', (t) => {
+  const root = temp(t); const file = path.join(root, 'current-readback.json');
+  const evidence = syntheticGoogleCurrentEvidence(source, version);
+  fs.writeFileSync(file, evidence.bytes, { mode: 0o600 });
+  assert.equal(readGoogleWebCurrentReadback(file, evidence.digest,
+    { now: evidence.now, expectedSource: source, expectedVersion: version }).profileContractVersion,
+  GOOGLE_WEB_PROFILE_V3);
+  fs.chmodSync(file, 0o644);
+  assert.throws(() => readGoogleWebCurrentReadback(file, evidence.digest,
+    { now: evidence.now, expectedSource: source, expectedVersion: version }), /google_web_readiness_file/u);
+  fs.chmodSync(file, 0o600);
+  const alias = path.join(root, 'alias'); fs.symlinkSync(file, alias);
+  assert.throws(() => readGoogleWebCurrentReadback(alias, evidence.digest,
+    { now: evidence.now, expectedSource: source, expectedVersion: version }));
 });
 
 for (const field of Object.keys(config())) {
@@ -232,6 +317,24 @@ for(const [file,text] of Object.entries({'index.html':'<script src="flutter_boot
   assert.equal(fs.existsSync(fs.readFileSync(definitionsLog, 'utf8')), false);
   assert.ok(!`${result.stdout}${result.stderr}`.includes(config().apiKey));
   assert.ok(!`${result.stdout}${result.stderr}`.includes(config().projectId));
+  const currentEvidence = syntheticGoogleCurrentEvidence(exactSource, version);
+  const currentFile = path.join(root, 'google-current-readback.json');
+  fs.writeFileSync(currentFile, currentEvidence.bytes, { mode: 0o600 });
+  const currentOutput = path.join(root, 'artifact-current');
+  const currentArgs = [path.join(repo, 'tool/build_staging_web.mjs'), checkout, exactSource, currentOutput,
+    '--google-web-current-readback', currentFile, currentEvidence.digest];
+  const currentResult = spawnSync(process.execPath, currentArgs, { encoding: 'utf8',
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, SIT_SYNTHETIC_DEFINES_LOG: definitionsLog } });
+  assert.equal(currentResult.status, 0, currentResult.stderr);
+  const currentSummary = JSON.parse(currentResult.stdout.trim());
+  const currentManifest = validateArtifact(currentOutput, currentSummary.manifestHash, exactSource);
+  const expectedCurrent = bindGoogleWebCurrentReadback(currentEvidence.envelope, currentEvidence.digest,
+    { now: currentEvidence.now, expectedSource: exactSource, expectedVersion: version });
+  assert.equal(currentManifest.schemaVersion, 9);
+  assert.deepEqual(currentManifest.profile, profile(exactSource, version, expectedCurrent));
+  const conflictArgs = [...currentArgs, '--google-web-readiness', file, evidence.evidenceDigest];
+  const conflict = spawnSync(process.execPath, conflictArgs, { encoding: 'utf8' });
+  assert.equal(conflict.status, 1); assert.match(conflict.stderr, /google_web_input_conflict/);
   const badArgs = [...args]; badArgs[3] = path.join(root, 'rejected'); badArgs[6] = 'b'.repeat(64);
   const bad = spawnSync(process.execPath, badArgs, { encoding: 'utf8' });
   assert.equal(bad.status, 1); assert.match(bad.stderr, /google_web_evidence_digest_mismatch/);

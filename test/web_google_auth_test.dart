@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lendify/services/remote_auth_attempt_transaction.dart';
 import 'package:lendify/services/web_google_auth.dart';
@@ -12,6 +13,7 @@ class SyntheticProviderError implements Exception {
 
 final googleFixtureNow = DateTime.utc(2026, 10, 4, 12);
 const googleFixtureSource = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const googleFixtureVersion = '1.2.3+20261026';
 
 String googleFixtureDigest(String value) =>
     sha256.convert(utf8.encode(value)).toString();
@@ -36,8 +38,10 @@ class GoogleEvidenceFixture {
   });
 }
 
-WebGooglePublicConfig config(
-    {Map<String, String> changes = const {}, bool approve = true}) {
+WebGooglePublicConfig config({
+  Map<String, String> changes = const {},
+  bool approve = true,
+}) {
   final values = <String, String>{
     'project': 'synthetic-project',
     'sender': '123456789012',
@@ -157,6 +161,156 @@ GoogleEvidenceFixture googleEvidence(
   );
 }
 
+GoogleEvidenceFixture googleCurrentReadbackEvidence(
+  WebGooglePublicConfig candidate, {
+  DateTime? at,
+  String sourceCommit = googleFixtureSource,
+  bool wrongOperator = false,
+  bool wrongApiRestriction = false,
+}) {
+  final now = (at ?? googleFixtureNow).toUtc();
+  final configMap = <String, String>{
+    'projectId': candidate.projectId,
+    'messagingSenderId': candidate.messagingSenderId,
+    'appId': candidate.appId,
+    'apiKey': candidate.apiKey,
+    'authDomain': candidate.authDomain,
+    'backendProjectId': candidate.backendProjectId,
+    'authorizedOrigin': candidate.authorizedOrigin,
+  };
+  final apis = <String>[
+    'Cloud Datastore API',
+    'Cloud Firestore API',
+    'Cloud Logging API',
+    'Cloud SQL Admin API',
+    'Cloud Storage for Firebase API',
+    'FCM Registration API',
+    'Firebase AI Logic API',
+    'Firebase App Check API',
+    'Firebase App Distribution API',
+    'Firebase App Hosting API',
+    'Firebase App Testers API',
+    'Firebase Hosting API',
+    'Firebase In-App Messaging API',
+    'Firebase Installations API',
+    'Firebase Management API',
+    'Firebase ML API',
+    'Firebase Phone Number Verification API',
+    'Firebase Realtime Database Management API',
+    'Firebase Remote Config API',
+    'Firebase Remote Config Realtime API',
+    'Firebase Rules API',
+    'Firebase SQL Connect API',
+    'Identity Toolkit API',
+    'ML Kit API',
+    'Token Service API',
+  ]..sort();
+  final origins = <String>[
+    'https://shareittoo-staging.firebaseapp.com/*',
+    'https://shareittoo-staging.web.app/*',
+    'https://staging.shareittoo.com/*',
+  ];
+  final service = <String, Object?>{
+    'schemaVersion': 1,
+    'kind': 'sit-google-web-service-account-readback',
+    'evidenceClass':
+        'direct-firebase-management-identity-toolkit-and-runtime-readback',
+    'syntheticFixture': false,
+    'readAtUtc': now.subtract(const Duration(minutes: 1)).toIso8601String(),
+    'validUntilUtc': now.add(const Duration(hours: 1)).toIso8601String(),
+    'projectId': candidate.projectId,
+    'projectState': 'ACTIVE',
+    'webAppId': candidate.appId,
+    'webAppPresent': true,
+    'publicWebConfig': configMap,
+    'authorizedDomains': <String>[
+      'staging.shareittoo.com',
+      '${candidate.projectId}.firebaseapp.com',
+    ],
+    'googleProviderEnabled': true,
+    'appleProviderEnabled': false,
+    'facebookProviderEnabled': false,
+    'firebaseAuthEnabled': true,
+    'firebaseEmulatorEnabled': false,
+    'runtime': <String, Object?>{
+      'service': 'shareittoo-staging-api',
+      'identity': 'staging-api-container-123',
+      'environment': 'staging',
+      'projectId': candidate.projectId,
+      'green': true,
+      'running': true,
+      'commit': 'c904aed9f58691176a30aadb222f0cb3635f167e',
+      'image':
+          'ghcr.io/shareittoo/shareittoo-api:staging@sha256:${List.filled(64, 'b').join()}',
+    },
+  };
+  final serviceDigest = googleFixtureDigest(jsonEncode(service));
+  final console = <String, Object?>{
+    'schemaVersion': 1,
+    'kind': 'sit-google-web-cloud-console-api-key-readback',
+    'evidenceClass': 'direct-google-cloud-console-readback',
+    'syntheticFixture': false,
+    'readAtUtc': now.subtract(const Duration(seconds: 30)).toIso8601String(),
+    'validUntilUtc': now.add(const Duration(hours: 1)).toIso8601String(),
+    'projectId': candidate.projectId,
+    'operatorAccountEmailSha256': wrongOperator
+        ? List.filled(64, '0').join()
+        : 'ab40c92847d70810d0da6d819491307bbaf5989e3d835ee0eb1b3d4443bad776',
+    'apiKeyResourceId':
+        'projects/123456789012/locations/global/keys/64e7f44b-32c2-4188-92b4-7983349ceeb6',
+    'apiKeySha256': googleFixtureDigest(candidate.apiKey),
+    'apiRestrictions': wrongApiRestriction ? apis.take(24).toList() : apis,
+    'websiteRestrictions': origins,
+  };
+  final consoleDigest = googleFixtureDigest(jsonEncode(console));
+  final decision = <String, Object?>{
+    'schemaVersion': 1,
+    'kind': 'sit-google-web-sol-release-decision',
+    'evidenceClass': 'independent-sol-release-review',
+    'syntheticFixture': false,
+    'decision': 'approved',
+    'sourceCommit': sourceCommit,
+    'buildVersion': googleFixtureVersion,
+    'serviceAccountReadbackSha256': serviceDigest,
+    'cloudConsoleReadbackSha256': consoleDigest,
+    'configurationSha256': candidate.publicConfigDigest,
+    'projectId': candidate.projectId,
+    'webAppId': candidate.appId,
+    'apiKeyResourceId': console['apiKeyResourceId'],
+    'decidedAtUtc': now.toIso8601String(),
+    'validUntilUtc': now.add(const Duration(minutes: 30)).toIso8601String(),
+  };
+  final decisionJson = jsonEncode(decision);
+  final decisionDigest = googleFixtureDigest(decisionJson);
+  final envelope = <String, Object?>{
+    'schemaVersion': 1,
+    'kind': 'sit-google-web-current-readback',
+    'evidenceClass':
+        'direct-authoritative-provider-runtime-and-console-readback',
+    'syntheticFixture': false,
+    'sourceCommit': sourceCommit,
+    'buildVersion': googleFixtureVersion,
+    'configuration': configMap,
+    'configurationSha256': candidate.publicConfigDigest,
+    'serviceAccountReadback': service,
+    'serviceAccountReadbackSha256': serviceDigest,
+    'cloudConsoleReadback': console,
+    'cloudConsoleReadbackSha256': consoleDigest,
+    'decision': decision,
+    'decisionSha256': decisionDigest,
+  };
+  final readinessJson = jsonEncode(envelope);
+  return GoogleEvidenceFixture(
+    readinessJson: readinessJson,
+    readinessDigest: googleFixtureDigest(readinessJson),
+    decisionJson: decisionJson,
+    decisionDigest: decisionDigest,
+    evidenceDigest: googleFixtureDigest(readinessJson),
+    sourceCommit: sourceCommit,
+    now: now,
+  );
+}
+
 verifiedOptions(
   WebGooglePublicConfig candidate, {
   bool googleEnabled = true,
@@ -186,15 +340,72 @@ verifiedOptions(
 }
 
 void main() {
-  test('verified public options bind Web app, sender, project and staging only',
-      () {
-    final candidate = config();
-    expect(candidate.isBound, isTrue);
-    final options = verifiedOptions(candidate);
-    expect(options?.appId, candidate.appId);
-    expect(options?.authDomain, candidate.authDomain);
-    expect(options?.projectId, candidate.backendProjectId);
-  });
+  test(
+    'current-readback profile binds build identity, exact runtime, operator, console restrictions and decision',
+    () {
+      final candidate = config();
+      final evidence = googleCurrentReadbackEvidence(candidate);
+      FirebaseOptions? optionsFor(
+        GoogleEvidenceFixture proof, {
+        String expectedSourceCommit = googleFixtureSource,
+        DateTime? runtimeNow,
+      }) =>
+          candidate.optionsFor(
+            googleEnabled: true,
+            activationValidated: true,
+            backendEnabled: true,
+            apiBaseUrl: '${WebGooglePublicConfig.stagingOrigin}/api/v1',
+            origin: WebGooglePublicConfig.stagingOrigin,
+            readinessJson: proof.readinessJson,
+            approvedReadinessDigest: proof.readinessDigest,
+            decisionJson: proof.decisionJson,
+            approvedDecisionDigest: proof.decisionDigest,
+            approvedEvidenceDigest: proof.evidenceDigest,
+            expectedSourceCommit: expectedSourceCommit,
+            expectedBuildVersion: googleFixtureVersion,
+            now: runtimeNow ?? proof.now,
+          );
+      expect(optionsFor(evidence)?.projectId, candidate.projectId);
+      expect(
+        optionsFor(
+          googleCurrentReadbackEvidence(candidate, wrongOperator: true),
+        ),
+        isNull,
+      );
+      expect(
+        optionsFor(
+          googleCurrentReadbackEvidence(candidate, wrongApiRestriction: true),
+        ),
+        isNull,
+      );
+      expect(
+        optionsFor(
+          googleCurrentReadbackEvidence(candidate, sourceCommit: 'b' * 40),
+          expectedSourceCommit: googleFixtureSource,
+        ),
+        isNull,
+      );
+      expect(
+        optionsFor(
+          googleCurrentReadbackEvidence(candidate),
+          runtimeNow: googleFixtureNow.add(const Duration(hours: 3)),
+        ),
+        isNull,
+      );
+    },
+  );
+
+  test(
+    'verified public options bind Web app, sender, project and staging only',
+    () {
+      final candidate = config();
+      expect(candidate.isBound, isTrue);
+      final options = verifiedOptions(candidate);
+      expect(options?.appId, candidate.appId);
+      expect(options?.authDomain, candidate.authDomain);
+      expect(options?.projectId, candidate.backendProjectId);
+    },
+  );
   test('accepted Google options survive the deployment freshness window', () {
     final candidate = config();
     final evidence = googleEvidence(candidate);
@@ -204,8 +415,11 @@ void main() {
       const Duration(hours: 2),
       const Duration(days: 30),
     ]) {
-      final options = verifiedOptions(candidate,
-          evidence: evidence, runtimeNow: evidence.now.add(elapsed));
+      final options = verifiedOptions(
+        candidate,
+        evidence: evidence,
+        runtimeNow: evidence.now.add(elapsed),
+      );
       expect(options?.appId, candidate.appId);
       expect(options?.projectId, candidate.backendProjectId);
     }
@@ -222,19 +436,22 @@ void main() {
       {'authorizedDomain': 'shareittoo.com'},
       {
         'validUntilUtc': googleFixtureNow.toIso8601String(),
-        'collectedAtUtc': googleFixtureNow.toIso8601String()
+        'collectedAtUtc': googleFixtureNow.toIso8601String(),
       },
       {
         'validUntilUtc':
-            googleFixtureNow.add(const Duration(hours: 3)).toIso8601String()
+            googleFixtureNow.add(const Duration(hours: 3)).toIso8601String(),
       },
     ]) {
       expect(
-          verifiedOptions(candidate,
-              evidence: googleEvidence(candidate, readinessChanges: changes),
-              runtimeNow: later),
-          isNull,
-          reason: changes.toString());
+        verifiedOptions(
+          candidate,
+          evidence: googleEvidence(candidate, readinessChanges: changes),
+          runtimeNow: later,
+        ),
+        isNull,
+        reason: changes.toString(),
+      );
     }
     for (final changes in <Map<String, Object?>>[
       {'decision': 'revoked'},
@@ -244,41 +461,62 @@ void main() {
       {'validUntilUtc': googleFixtureNow.toIso8601String()},
       {
         'validUntilUtc':
-            googleFixtureNow.add(const Duration(hours: 3)).toIso8601String()
+            googleFixtureNow.add(const Duration(hours: 3)).toIso8601String(),
       },
     ]) {
       expect(
-          verifiedOptions(candidate,
-              evidence: googleEvidence(candidate, decisionChanges: changes),
-              runtimeNow: later),
-          isNull,
-          reason: changes.toString());
+        verifiedOptions(
+          candidate,
+          evidence: googleEvidence(candidate, decisionChanges: changes),
+          runtimeNow: later,
+        ),
+        isNull,
+        reason: changes.toString(),
+      );
     }
     final evidence = googleEvidence(candidate);
     expect(
-        verifiedOptions(candidate,
-            evidence: evidence,
-            runtimeNow: googleFixtureNow.subtract(const Duration(minutes: 2))),
-        isNull);
+      verifiedOptions(
+        candidate,
+        evidence: evidence,
+        runtimeNow: googleFixtureNow.subtract(const Duration(minutes: 2)),
+      ),
+      isNull,
+    );
     expect(
-        verifiedOptions(candidate,
-            evidence: evidence,
-            runtimeNow: googleFixtureNow.subtract(const Duration(seconds: 1))),
-        isNull);
+      verifiedOptions(
+        candidate,
+        evidence: evidence,
+        runtimeNow: googleFixtureNow.subtract(const Duration(seconds: 1)),
+      ),
+      isNull,
+    );
     expect(
-        verifiedOptions(candidate,
-            evidence: evidence,
-            expectedSourceCommit: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-            runtimeNow: later),
-        isNull);
+      verifiedOptions(
+        candidate,
+        evidence: evidence,
+        expectedSourceCommit: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        runtimeNow: later,
+      ),
+      isNull,
+    );
     expect(
-        verifiedOptions(candidate,
-            evidence: evidence, activationValidated: false, runtimeNow: later),
-        isNull);
+      verifiedOptions(
+        candidate,
+        evidence: evidence,
+        activationValidated: false,
+        runtimeNow: later,
+      ),
+      isNull,
+    );
     expect(
-        verifiedOptions(config(changes: {'app': '${candidate.appId}a'}),
-            evidence: evidence, runtimeNow: later),
-        isNull);
+      verifiedOptions(
+        config(changes: {'app': '${candidate.appId}a'}),
+        evidence: evidence,
+        runtimeNow: later,
+      ),
+      isNull,
+    );
   });
   for (final mutation in <Map<String, String>>[
     {'project': ''},
@@ -297,65 +535,77 @@ void main() {
     {'sender': '.*'},
     {'origin': 'https://shareittoo.com'},
   ]) {
-    test('even rehashed invalid public options are rejected: ${mutation.keys}',
-        () {
-      expect(config(changes: mutation).isBound, isFalse);
-    });
+    test(
+      'even rehashed invalid public options are rejected: ${mutation.keys}',
+      () {
+        expect(config(changes: mutation).isBound, isFalse);
+      },
+    );
   }
   test('missing or stale approval digest cannot enable Web auth', () {
     expect(config(approve: false).isBound, isFalse);
     final old = config();
     final drift = WebGooglePublicConfig(
-        projectId: old.projectId,
-        messagingSenderId: old.messagingSenderId,
-        appId: '${old.appId}a',
-        apiKey: old.apiKey,
-        authDomain: old.authDomain,
-        backendProjectId: old.backendProjectId,
-        authorizedOrigin: old.authorizedOrigin,
-        approvedDigest: old.publicConfigDigest);
+      projectId: old.projectId,
+      messagingSenderId: old.messagingSenderId,
+      appId: '${old.appId}a',
+      apiKey: old.apiKey,
+      authDomain: old.authDomain,
+      backendProjectId: old.backendProjectId,
+      authorizedOrigin: old.authorizedOrigin,
+      approvedDigest: old.publicConfigDigest,
+    );
     expect(drift.isBound, isFalse);
   });
   test(
-      'flags, backend binding, exact origin and initialization all fail closed',
-      () {
-    final candidate = config();
-    for (final origin in [
-      'https://shareittoo.com',
-      'http://staging.shareittoo.com',
-      'https://staging.shareittoo.com.evil.invalid',
-      'http://localhost:1234'
-    ]) {
-      expect(verifiedOptions(candidate, origin: origin), isNull);
-    }
-    for (final flags in [(false, true), (true, false)]) {
+    'flags, backend binding, exact origin and initialization all fail closed',
+    () {
+      final candidate = config();
+      for (final origin in [
+        'https://shareittoo.com',
+        'http://staging.shareittoo.com',
+        'https://staging.shareittoo.com.evil.invalid',
+        'http://localhost:1234',
+      ]) {
+        expect(verifiedOptions(candidate, origin: origin), isNull);
+      }
+      for (final flags in [(false, true), (true, false)]) {
+        expect(
+          verifiedOptions(
+            candidate,
+            googleEnabled: flags.$1,
+            backendEnabled: flags.$2,
+          ),
+          isNull,
+        );
+      }
       expect(
-          verifiedOptions(candidate,
-              googleEnabled: flags.$1, backendEnabled: flags.$2),
-          isNull);
-    }
-    expect(
         verifiedOptions(candidate, apiBaseUrl: 'https://shareittoo.com/api/v1'),
-        isNull);
-    for (final enabled in [false, true]) {
-      for (final bound in [false, true]) {
-        for (final ready in [false, true]) {
-          expect(
+        isNull,
+      );
+      for (final enabled in [false, true]) {
+        for (final bound in [false, true]) {
+          for (final ready in [false, true]) {
+            expect(
               webGoogleControlAvailable(
-                  googleEnabled: enabled,
-                  optionsBound: bound,
-                  initialized: ready),
-              enabled && bound && ready);
+                googleEnabled: enabled,
+                optionsBound: bound,
+                initialized: ready,
+              ),
+              enabled && bound && ready,
+            );
+          }
         }
       }
-    }
-  });
-  test('activation and exact current readiness/decision evidence fail closed',
-      () {
-    final candidate = config();
-    expect(verifiedOptions(candidate, activationValidated: false), isNull);
-    final valid = googleEvidence(candidate);
-    expect(
+    },
+  );
+  test(
+    'activation and exact current readiness/decision evidence fail closed',
+    () {
+      final candidate = config();
+      expect(verifiedOptions(candidate, activationValidated: false), isNull);
+      final valid = googleEvidence(candidate);
+      expect(
         candidate.optionsFor(
           googleEnabled: true,
           activationValidated: true,
@@ -370,70 +620,92 @@ void main() {
           expectedSourceCommit: valid.sourceCommit,
           now: valid.now,
         ),
-        isNull);
-    expect(
-        verifiedOptions(candidate,
-            evidence: googleEvidence(candidate,
-                readinessChanges: const {'firebaseProviderEnabled': false})),
-        isNull);
-    expect(
-        verifiedOptions(candidate,
-            evidence: googleEvidence(candidate,
-                decisionChanges: const {'decision': 'rejected'})),
-        isNull);
-    final foreignEvidence = googleEvidence(candidate,
-        sourceCommit: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb');
-    expect(
-        verifiedOptions(candidate,
-            evidence: foreignEvidence,
-            expectedSourceCommit: googleFixtureSource),
-        isNull);
-  });
+        isNull,
+      );
+      expect(
+        verifiedOptions(
+          candidate,
+          evidence: googleEvidence(
+            candidate,
+            readinessChanges: const {'firebaseProviderEnabled': false},
+          ),
+        ),
+        isNull,
+      );
+      expect(
+        verifiedOptions(
+          candidate,
+          evidence: googleEvidence(
+            candidate,
+            decisionChanges: const {'decision': 'rejected'},
+          ),
+        ),
+        isNull,
+      );
+      final foreignEvidence = googleEvidence(
+        candidate,
+        sourceCommit: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      );
+      expect(
+        verifiedOptions(
+          candidate,
+          evidence: foreignEvidence,
+          expectedSourceCommit: googleFixtureSource,
+        ),
+        isNull,
+      );
+    },
+  );
   for (final failure in [
     'none',
     'missing-options',
     'initialize',
-    'persistence'
+    'persistence',
   ]) {
-    test('auth-only preparation $failure never reports premature readiness',
-        () async {
-      final calls = <String>[];
-      final options = verifiedOptions(config());
-      final ready = await prepareWebGoogleAuth(
-        options: failure == 'missing-options' ? null : options,
-        initializeBoundApp: () async {
-          calls.add('app');
-          if (failure == 'initialize') throw StateError('fixture');
-        },
-        useMemoryPersistence: () async {
-          calls.add('memory');
-          if (failure == 'persistence') throw StateError('fixture');
-        },
-      );
-      expect(ready, failure == 'none');
-      expect(
+    test(
+      'auth-only preparation $failure never reports premature readiness',
+      () async {
+        final calls = <String>[];
+        final options = verifiedOptions(config());
+        final ready = await prepareWebGoogleAuth(
+          options: failure == 'missing-options' ? null : options,
+          initializeBoundApp: () async {
+            calls.add('app');
+            if (failure == 'initialize') throw StateError('fixture');
+          },
+          useMemoryPersistence: () async {
+            calls.add('memory');
+            if (failure == 'persistence') throw StateError('fixture');
+          },
+        );
+        expect(ready, failure == 'none');
+        expect(
           calls,
           failure == 'missing-options'
               ? []
               : failure == 'initialize'
                   ? ['app']
-                  : ['app', 'memory']);
-    });
+                  : ['app', 'memory'],
+        );
+      },
+    );
   }
 
-  Future<String> token(
-          {bool available = true,
-          void Function()? current,
-          Future<WebGoogleIdentity> Function()? popup,
-          String? Function()? currentUid,
-          void Function(String)? acquired}) =>
+  Future<String> token({
+    bool available = true,
+    void Function()? current,
+    Future<WebGoogleIdentity> Function()? popup,
+    String? Function()? currentUid,
+    void Function(String)? acquired,
+  }) =>
       acquireWebGoogleToken(
         available: available,
         requireCurrent: current ?? () {},
         popup: popup ??
             () async => WebGoogleIdentity(
-                uid: 'synthetic-a',
-                readFreshIdToken: () async => 'synthetic-firebase-token'),
+                  uid: 'synthetic-a',
+                  readFreshIdToken: () async => 'synthetic-firebase-token',
+                ),
         currentFirebaseUid: currentUid ?? () => 'synthetic-a',
         acquired: acquired ?? (_) {},
         providerErrorCode: (error) =>
@@ -443,24 +715,30 @@ void main() {
   test('disabled Google never invokes popup', () async {
     var called = false;
     await expectLater(
-        token(
-            available: false,
-            popup: () async {
-              called = true;
-              throw StateError('unexpected');
-            }),
-        throwsA(isA<WebGoogleAuthFailure>()));
+      token(
+        available: false,
+        popup: () async {
+          called = true;
+          throw StateError('unexpected');
+        },
+      ),
+      throwsA(isA<WebGoogleAuthFailure>()),
+    );
     expect(called, isFalse);
   });
-  test('untyped provider-looking error cannot forge popup cancellation',
-      () async {
-    await expectLater(
-      token(popup: () async => throw StateError('popup-closed-by-user')),
-      throwsA(isA<WebGoogleAuthFailure>()
-          .having((error) => error.cancelled, 'cancelled', isFalse)
-          .having((error) => error.code, 'code', 'popup_unavailable')),
-    );
-  });
+  test(
+    'untyped provider-looking error cannot forge popup cancellation',
+    () async {
+      await expectLater(
+        token(popup: () async => throw StateError('popup-closed-by-user')),
+        throwsA(
+          isA<WebGoogleAuthFailure>()
+              .having((error) => error.cancelled, 'cancelled', isFalse)
+              .having((error) => error.code, 'code', 'popup_unavailable'),
+        ),
+      );
+    },
+  );
   for (final code in [
     'popup-closed-by-user',
     'cancelled-popup-request',
@@ -469,13 +747,13 @@ void main() {
     'popup-blocked',
     'unauthorized-domain',
     'network-request-failed',
-    'operation-not-allowed'
+    'operation-not-allowed',
   ]) {
     test(
-        'popup $code has a sanitized cancellation/error outcome and no backend call',
-        () async {
-      var remoteCalled = false;
-      await expectLater(
+      'popup $code has a sanitized cancellation/error outcome and no backend call',
+      () async {
+        var remoteCalled = false;
+        await expectLater(
           const RemoteAuthAttemptTransaction<String, String, String>().run(
             preflightCurrent: () => true,
             actionCurrent: () => true,
@@ -490,77 +768,87 @@ void main() {
             persistedCurrent: (_) async => true,
             discardPersisted: (_) async {},
           ),
-          throwsA(isA<WebGoogleAuthFailure>()
-              .having(
+          throwsA(
+            isA<WebGoogleAuthFailure>()
+                .having(
                   (error) => error.cancelled,
                   'cancelled',
                   const {
                     'popup-closed-by-user',
                     'cancelled-popup-request',
                     'web-context-cancelled',
-                    'canceled'
-                  }.contains(code))
-              .having(
-                  (error) => error.code,
-                  'sanitized code',
-                  switch (code) {
-                    'popup-blocked' => 'popup_blocked',
-                    'network-request-failed' => 'network_request_failed',
-                    'popup-closed-by-user' ||
-                    'cancelled-popup-request' ||
-                    'web-context-cancelled' ||
-                    'canceled' =>
-                      'popup_cancelled',
-                    _ => 'popup_unavailable',
-                  })));
-      expect(remoteCalled, isFalse);
-    });
+                    'canceled',
+                  }.contains(code),
+                )
+                .having(
+                    (error) => error.code,
+                    'sanitized code',
+                    switch (code) {
+                      'popup-blocked' => 'popup_blocked',
+                      'network-request-failed' => 'network_request_failed',
+                      'popup-closed-by-user' ||
+                      'cancelled-popup-request' ||
+                      'web-context-cancelled' ||
+                      'canceled' =>
+                        'popup_cancelled',
+                      _ => 'popup_unavailable',
+                    }),
+          ),
+        );
+        expect(remoteCalled, isFalse);
+      },
+    );
   }
   test(
-      'only the backend response becomes a session, never the Firebase credential',
-      () async {
-    final events = <String>[];
-    final result =
-        await const RemoteAuthAttemptTransaction<String, String, String>().run(
-      preflightCurrent: () => true,
-      actionCurrent: () => true,
-      acquire: () => token(acquired: (_) => events.add('owned')),
-      invokeRemote: (idToken) async {
-        expect(idToken, 'synthetic-firebase-token');
-        events.add('exchange');
-        return 'backend-owned-session';
-      },
-      persist: (value) async {
-        events.add('persist');
-        return value;
-      },
-      discardRemote: (_) async {},
-      persistedCurrent: (_) async => true,
-      discardPersisted: (_) async {},
-    );
-    expect(result, 'backend-owned-session');
-    expect(events, ['owned', 'exchange', 'persist']);
-  });
+    'only the backend response becomes a session, never the Firebase credential',
+    () async {
+      final events = <String>[];
+      final result =
+          await const RemoteAuthAttemptTransaction<String, String, String>()
+              .run(
+        preflightCurrent: () => true,
+        actionCurrent: () => true,
+        acquire: () => token(acquired: (_) => events.add('owned')),
+        invokeRemote: (idToken) async {
+          expect(idToken, 'synthetic-firebase-token');
+          events.add('exchange');
+          return 'backend-owned-session';
+        },
+        persist: (value) async {
+          events.add('persist');
+          return value;
+        },
+        discardRemote: (_) async {},
+        persistedCurrent: (_) async => true,
+        discardPersisted: (_) async {},
+      );
+      expect(result, 'backend-owned-session');
+      expect(events, ['owned', 'exchange', 'persist']);
+    },
+  );
   test(
-      'UI loss after popup still records cleanup ownership but never exchanges',
-      () async {
-    var current = true;
-    String? cleanupUid;
-    var remoteCalled = false;
-    await expectLater(
+    'UI loss after popup still records cleanup ownership but never exchanges',
+    () async {
+      var current = true;
+      String? cleanupUid;
+      var remoteCalled = false;
+      await expectLater(
         const RemoteAuthAttemptTransaction<String, String, String>().run(
           preflightCurrent: () => current,
           actionCurrent: () => current,
           acquire: () => token(
-              current: () {
-                if (!current) throw const RemoteAuthAttemptSuperseded();
-              },
-              popup: () async {
-                current = false;
-                return WebGoogleIdentity(
-                    uid: 'synthetic-a', readFreshIdToken: () async => 'unused');
-              },
-              acquired: (uid) => cleanupUid = uid),
+            current: () {
+              if (!current) throw const RemoteAuthAttemptSuperseded();
+            },
+            popup: () async {
+              current = false;
+              return WebGoogleIdentity(
+                uid: 'synthetic-a',
+                readFreshIdToken: () async => 'unused',
+              );
+            },
+            acquired: (uid) => cleanupUid = uid,
+          ),
           invokeRemote: (_) async {
             remoteCalled = true;
             return 'unused';
@@ -570,28 +858,38 @@ void main() {
           persistedCurrent: (_) async => true,
           discardPersisted: (_) async {},
         ),
-        throwsA(isA<RemoteAuthAttemptSuperseded>()));
-    expect(cleanupUid, 'synthetic-a');
-    expect(remoteCalled, isFalse);
-  });
+        throwsA(isA<RemoteAuthAttemptSuperseded>()),
+      );
+      expect(cleanupUid, 'synthetic-a');
+      expect(remoteCalled, isFalse);
+    },
+  );
   test(
-      'principal change during token acquisition and empty token both fail closed',
-      () async {
-    var uid = 'synthetic-a';
-    await expectLater(
+    'principal change during token acquisition and empty token both fail closed',
+    () async {
+      var uid = 'synthetic-a';
+      await expectLater(
         token(
-            currentUid: () => uid,
-            popup: () async => WebGoogleIdentity(
-                uid: uid,
-                readFreshIdToken: () async {
-                  uid = 'synthetic-b';
-                  return 'stale';
-                })),
-        throwsA(isA<RemoteAuthAttemptSuperseded>()));
-    await expectLater(
+          currentUid: () => uid,
+          popup: () async => WebGoogleIdentity(
+            uid: uid,
+            readFreshIdToken: () async {
+              uid = 'synthetic-b';
+              return 'stale';
+            },
+          ),
+        ),
+        throwsA(isA<RemoteAuthAttemptSuperseded>()),
+      );
+      await expectLater(
         token(
-            popup: () async => WebGoogleIdentity(
-                uid: 'synthetic-a', readFreshIdToken: () async => null)),
-        throwsA(isA<WebGoogleAuthFailure>()));
-  });
+          popup: () async => WebGoogleIdentity(
+            uid: 'synthetic-a',
+            readFreshIdToken: () async => null,
+          ),
+        ),
+        throwsA(isA<WebGoogleAuthFailure>()),
+      );
+    },
+  );
 }

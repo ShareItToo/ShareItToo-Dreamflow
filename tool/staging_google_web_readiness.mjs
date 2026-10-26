@@ -98,7 +98,7 @@ function assertDirectories(directories) {
     'google_web_readiness_changed');
   }
 }
-function readProtected(file) {
+export function readGoogleWebProtectedBytes(file) {
   check(typeof file === 'string' && path.isAbsolute(file)
     && path.normalize(file) === file, 'google_web_readiness_path');
   const descriptors = [];
@@ -290,7 +290,7 @@ export function validateGoogleWebBinding(binding,
 
 export function readGoogleWebReadiness(file, evidenceDigest,
   { now = new Date(), expectedSource = null } = {}) {
-  const bytes = readProtected(file);
+  const bytes = readGoogleWebProtectedBytes(file);
   try {
     check(hashPattern.test(evidenceDigest ?? '') && sha256(bytes) === evidenceDigest,
       'google_web_evidence_digest_mismatch');
