@@ -132,7 +132,7 @@
     },
     {
       "path": "backend/src/server.js",
-      "sha256": "ce3414718038d312ccb6f6f8e0b7cb8dd324606e914091e91c7948ce93df08ff"
+      "sha256": "a4985458badf86cd6a62997930ebe19bf19371382b9577e71f9bacbbbb597f47"
     },
     {
       "path": "backend/src/credential_cleanup.js",
