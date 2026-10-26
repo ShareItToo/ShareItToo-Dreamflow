@@ -316,7 +316,7 @@
     },
     {
       "path": "backend/src/listing_catalog.js",
-      "sha256": "96643aa7926e2a5c053aa03a237011b5a6b0015b490703f9384c9e11edee97c7"
+      "sha256": "3cbf3a38e5e841651c30481b8315e0023e07cd0e88672b303296f090d19a8013"
     },
     {
       "path": "backend/src/listing_supply_enrichment.js",

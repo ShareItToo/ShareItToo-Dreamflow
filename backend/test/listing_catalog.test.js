@@ -130,6 +130,7 @@ test('incomplete private-pilot drafts can persist without invented place metadat
     city: '',
     lat: 0,
     lng: 0,
+    approximateLocation: true,
     photos: [],
     privateStatusConfirmed: false,
     photoTruthPolicyVersion: undefined,
@@ -146,13 +147,14 @@ test('incomplete private-pilot drafts can persist without invented place metadat
   assert.equal(draft.city, '');
   assert.equal(draft.lat, 0);
   assert.equal(draft.lng, 0);
+  assert.equal(draft.approximateLocation, true);
   assert.equal(draft.pilotRegionCode, '');
 
   assert.throws(
     () => normalizeListingPayload({
       ...validListing,
       status: 'active',
-      locationText: '',
+      locationText: 'Musterstraße 1, Berlin',
       city: 'Berlin',
       lat: 0,
       lng: 0,
@@ -164,7 +166,21 @@ test('incomplete private-pilot drafts can persist without invented place metadat
       privatePilotAllowedRegions: ['berlin'],
     }),
     (error) => error instanceof ListingValidationError
-      && error.code === 'listing_location_required',
+      && error.code === 'invalid_listing_coordinates',
+  );
+  assert.throws(
+    () => normalizeListingPayload({
+      ...validListing,
+      approximateLocation: true,
+      privateStatusConfirmed: true,
+    }, {
+      id: 'listing-approximate-active',
+      ownerId: 'owner',
+      privatePilot: true,
+      privatePilotAllowedRegions: ['berlin'],
+    }),
+    (error) => error instanceof ListingValidationError
+      && error.code === 'invalid_listing_coordinates',
   );
 });
 

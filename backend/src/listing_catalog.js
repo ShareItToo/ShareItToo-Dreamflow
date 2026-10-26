@@ -152,6 +152,10 @@ export function normalizeListingPayload(raw, {
         || longitude === null || longitude < -180 || longitude > 180) {
       throw new ListingValidationError('invalid_listing_coordinates');
     }
+    if ((latitude === 0 && longitude === 0)
+        || (privatePilot && raw.approximateLocation === true)) {
+      throw new ListingValidationError('invalid_listing_coordinates');
+    }
   } else if (
     (latitude !== null && (latitude < -90 || latitude > 90))
       || (longitude !== null && (longitude < -180 || longitude > 180))
