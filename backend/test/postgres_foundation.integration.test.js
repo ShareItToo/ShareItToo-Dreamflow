@@ -102,6 +102,7 @@ if (!databaseUrl) {
     process.env.DEPLOYMENT_ENVIRONMENT = 'test';
     process.env.JWT_SECRET ??= crypto.randomBytes(48).toString('base64url');
     process.env.MAIL_TRANSPORT = 'memory';
+    process.env.PUSH_TRANSPORT = 'memory';
     process.env.PAYMENT_TRANSPORT = 'memory';
     process.env.FIREBASE_PHONE_VERIFICATION_ENABLED = 'true';
     process.env.SUPPORT_LEGACY_MIGRATION_ENABLED = 'true';
@@ -7603,10 +7604,88 @@ if (!databaseUrl) {
       // production upload/message/confirmation/challenge routes before checkout.
       const b8ThreadResponse = await fetch(
         `${baseUrl}/v1/message-threads/booking/b8-payment-flow`,
-        { method: 'POST', headers: ownerHeaders },
+        { method: 'POST', headers: renterAHeaders },
       );
       assert.equal(b8ThreadResponse.status, 201);
       const b8ThreadId = (await b8ThreadResponse.json()).thread.id;
+      const b8ThreadList = await fetch(`${baseUrl}/v1/message-threads`, {
+        headers: { Authorization: ownerHeaders.Authorization },
+      });
+      assert.equal(b8ThreadList.status, 200);
+      assert.ok((await b8ThreadList.json()).threads.some((thread) => thread.id === b8ThreadId));
+      const b8OutsiderCreateThread = await fetch(
+        `${baseUrl}/v1/message-threads/booking/b8-payment-flow`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${tokenFor('outsider')}` },
+        },
+      );
+      assert.equal(b8OutsiderCreateThread.status, 403);
+      const b8OutsiderMessages = await fetch(
+        `${baseUrl}/v1/message-threads/${b8ThreadId}/messages`,
+        { headers: { Authorization: `Bearer ${tokenFor('outsider')}` } },
+      );
+      assert.equal(b8OutsiderMessages.status, 403);
+
+      const b8SendRenterMessage = () => fetch(
+        `${baseUrl}/v1/message-threads/${b8ThreadId}/messages`,
+        {
+          method: 'POST',
+          headers: { ...renterAHeaders, 'Idempotency-Key': 'b8-renter-text-message-001' },
+          body: JSON.stringify({ text: 'Synthetic renter message before handover.' }),
+        },
+      );
+      const b8RenterMessageResponse = await b8SendRenterMessage();
+      assert.equal(b8RenterMessageResponse.status, 201);
+      const b8RenterMessage = (await b8RenterMessageResponse.json()).message;
+      assert.equal((await b8SendRenterMessage()).status, 200);
+      const unreadBeforeOwnerRead = (await setupPool.query(
+        `SELECT message.is_read,
+                (SELECT count(*)::int FROM message_reads
+                  WHERE message_id = message.id AND user_id = 'owner') AS owner_read_receipts
+           FROM messages AS message WHERE message.id = $1`,
+        [b8RenterMessage.id],
+      )).rows[0];
+      assert.deepEqual(unreadBeforeOwnerRead, { is_read: false, owner_read_receipts: 0 });
+      const b8SendOwnerMessage = await fetch(
+        `${baseUrl}/v1/message-threads/${b8ThreadId}/messages`,
+        {
+          method: 'POST',
+          headers: { ...ownerHeaders, 'Idempotency-Key': 'b8-owner-text-message-001' },
+          body: JSON.stringify({ text: 'Synthetic owner reply before handover.' }),
+        },
+      );
+      assert.equal(b8SendOwnerMessage.status, 201);
+      const b8OwnerMessage = (await b8SendOwnerMessage.json()).message;
+      const b8RenterMessageReadback = await fetch(
+        `${baseUrl}/v1/message-threads/${b8ThreadId}/messages`,
+        { headers: renterAHeaders },
+      );
+      assert.equal(b8RenterMessageReadback.status, 200);
+      const b8OrderedMessages = (await b8RenterMessageReadback.json()).messages;
+      assert.deepEqual(b8OrderedMessages.map((message) => message.id).slice(-2), [
+        b8RenterMessage.id,
+        b8OwnerMessage.id,
+      ]);
+      const b8OwnerRead = await fetch(`${baseUrl}/v1/message-threads/${b8ThreadId}/read`, {
+        method: 'POST', headers: ownerHeaders,
+      });
+      assert.equal(b8OwnerRead.status, 200);
+      assert.equal((await b8OwnerRead.json()).readCount, 1);
+      const b8RenterRead = await fetch(`${baseUrl}/v1/message-threads/${b8ThreadId}/read`, {
+        method: 'POST', headers: renterAHeaders,
+      });
+      assert.equal(b8RenterRead.status, 200);
+      assert.equal((await b8RenterRead.json()).readCount, 1);
+      assert.deepEqual((await setupPool.query(
+        `SELECT user_id, count(*)::int AS count FROM message_reads
+          WHERE thread_id = $1 AND user_id IN ('owner', 'renter-a')
+          GROUP BY user_id ORDER BY user_id`,
+        [b8ThreadId],
+      )).rows.map((row) => [row.user_id, row.count]), [
+        ['owner', 1],
+        ['renter-a', 1],
+      ]);
       const b8PresenterSlots = ['overview', 'detail', 'accessories', 'critical'];
       for (const slot of b8PresenterSlots) {
         const image = await sharp({
@@ -8114,6 +8193,77 @@ if (!databaseUrl) {
       });
       assert.equal(b8Complete.status, 200);
       await b8AssertParticipantState('completed');
+      const { config: b8TestConfig } = await import('../src/config.js');
+      assert.equal(b8TestConfig.mail.transport, 'memory');
+      assert.equal(b8TestConfig.push.transport, 'memory');
+      for (let drain = 0; drain < 20; drain += 1) {
+        if (await drainNotificationOutbox({ limit: 100 }) === 0) break;
+      }
+      const b8ExpectedBookingNotifications = [
+        ['owner', 'booking_requested', 1],
+        ['renter-a', 'booking_accepted', 2],
+        ['owner', 'booking_confirmed', 1],
+        ['renter-a', 'booking_confirmed', 1],
+        ['owner', 'booking_active', 1],
+        ['renter-a', 'booking_active', 1],
+        ['owner', 'booking_completed', 1],
+        ['renter-a', 'booking_completed', 1],
+      ];
+      for (const [userId, kind, expectedCount] of b8ExpectedBookingNotifications) {
+        assert.equal((await setupPool.query(
+          `SELECT count(*)::int AS count FROM notification_outbox
+            WHERE booking_id = 'b8-payment-flow'
+              AND user_id = $1 AND kind = $2 AND channel = 'in_app'
+              AND status IN ('sent', 'suppressed')`,
+          [userId, kind],
+        )).rows[0].count, expectedCount, `${userId} has unexpected ${kind} in-app outbox deliveries`);
+      }
+      for (const [headers, expectedKinds] of [
+        [ownerHeaders, ['booking_requested', 'booking_confirmed', 'booking_active', 'booking_completed']],
+        [renterAHeaders, ['booking_accepted', 'booking_confirmed', 'booking_active', 'booking_completed']],
+      ]) {
+        const notificationResponse = await fetch(`${baseUrl}/v1/notifications?limit=100`, { headers });
+        assert.equal(notificationResponse.status, 200);
+        const bookingKinds = (await notificationResponse.json()).notifications
+          .filter((notification) => notification.bookingId === 'b8-payment-flow')
+          .map((notification) => notification.kind);
+        for (const kind of expectedKinds) assert.ok(bookingKinds.includes(kind));
+      }
+      const b8MessageNotifications = await setupPool.query(
+        `SELECT event_key, user_id, channel, status, attempt_count
+           FROM notification_outbox
+          WHERE thread_id = $1 AND kind = 'message_received'
+          ORDER BY event_key, channel`,
+        [b8ThreadId],
+      );
+      assert.ok(b8MessageNotifications.rows.some((row) =>
+        row.event_key === `message:${b8RenterMessage.id}` && row.user_id === 'owner'
+          && row.channel === 'in_app'));
+      assert.ok(b8MessageNotifications.rows.some((row) =>
+        row.event_key === `message:${b8OwnerMessage.id}` && row.user_id === 'renter-a'
+          && row.channel === 'in_app'));
+      assert.ok(b8MessageNotifications.rows.every((row) =>
+        ['sent', 'suppressed'].includes(row.status) && row.attempt_count === 1));
+      for (const [headers, participantId] of [
+        [ownerHeaders, 'owner'],
+        [renterAHeaders, 'renter-a'],
+      ]) {
+        const notificationResponse = await fetch(`${baseUrl}/v1/notifications?limit=100`, { headers });
+        assert.equal(notificationResponse.status, 200);
+        const ownMessageNotifications = (await notificationResponse.json()).notifications
+          .filter((notification) => notification.kind === 'message_received'
+            && notification.threadId === b8ThreadId);
+        assert.ok(ownMessageNotifications.length >= 1, `${participantId} has no chat notification`);
+      }
+      const b8ProviderAttempts = await setupPool.query(
+        `SELECT DISTINCT attempt.channel, attempt.provider
+           FROM notification_delivery_attempts AS attempt
+           JOIN notification_outbox AS outbox ON outbox.id = attempt.outbox_id
+          WHERE outbox.booking_id = 'b8-payment-flow'`,
+      );
+      assert.ok(b8ProviderAttempts.rowCount > 0);
+      assert.ok(b8ProviderAttempts.rows.every((row) =>
+        row.provider === 'postgres' || row.provider === 'memory'));
       // This existing payment-reconciliation scenario runs after the lifecycle
       // assertions below. Advance only its synthetic database clock so the
       // confirmed return's 48-hour report window has elapsed without sleeping.
