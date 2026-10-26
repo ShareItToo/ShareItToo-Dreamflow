@@ -244,10 +244,26 @@ test('the owner request overview refreshes exactly at the next server deadline',
   );
   assert.match(
     ownerRequests,
-    /bool _ownerAcceptanceDeadlineValid\(_OwnerEntry entry\)[\s\S]*?deadline != null && deadline\.isAfter\(DateTime\.now\(\)\)/u,
+    /bool _ownerAcceptanceDeadlineValid\([\s\S]*?OwnerAcceptanceDeadlinePolicy\.isValid\([\s\S]*?BackendConfig\.enabled && !QaRuntimeService\.isEnabled/u,
   );
   assert.match(ownerRequests, /Annahmefrist abgelaufen/u);
   assert.match(ownerRequests, /Annahme gesperrt/u);
+
+  const inlineActions = readFileSync(
+    new URL('../../lib/widgets/owner_request_inline_actions.dart', import.meta.url),
+    'utf8',
+  );
+  assert.match(
+    ownerRequests,
+    /final now = DateTime\.now\(\);[\s\S]*?_buildStatusChipForCard\([\s\S]*?now: now[\s\S]*?_buildInlineAction\(effective, e, now: now\)/u,
+  );
+  assert.match(
+    ownerRequests,
+    /Future<void> _acceptRequest\(_OwnerEntry entry\) async \{[\s\S]*?if \(!_ownerAcceptanceDeadlineValid\(entry, now: DateTime\.now\(\)\)\)/u,
+  );
+  assert.match(inlineActions, /onPressed: deadlineValid \? onAccept : null/u);
+  assert.match(inlineActions, /onPressed: onDecline/u);
+  assert.match(inlineActions, /if \(blockedMessage != null\)/u);
 });
 
 test('the open owner detail disables acceptance exactly at the server deadline', () => {

@@ -8,11 +8,13 @@ import 'package:lendify/models/user.dart' as model;
 import 'package:lendify/services/backend_config.dart';
 import 'package:lendify/services/data_service.dart';
 import 'package:lendify/services/local_principal_scope.dart';
+import 'package:lendify/services/owner_acceptance_deadline_policy.dart';
 import 'package:lendify/services/rental_request_decision_service.dart';
 import 'package:lendify/services/shared_persistence_sync.dart';
 import 'package:lendify/widgets/app_image.dart';
 import 'package:lendify/widgets/app_popup.dart';
 import 'package:lendify/widgets/private_pilot_owner_acceptance_dialog.dart';
+import 'package:lendify/widgets/owner_request_inline_actions.dart';
 import 'package:lendify/widgets/rental_request_decision_interaction.dart';
 import 'package:lendify/screens/ongoing_owner_detail_screen.dart';
 import 'package:lendify/widgets/box_chat_icon.dart';
@@ -325,8 +327,8 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen>
             ? await DataService.getHandoverReturnState(entry.r.id)
             : const <String, dynamic>{};
         final reviewed = SyntheticCloneConfig.reviewActionsEnabled &&
-            status == 'completed' &&
-            !entry.r.needsReview
+                status == 'completed' &&
+                !entry.r.needsReview
             ? await DataService.hasSubmittedReview(
                 requestId: entry.r.id,
                 reviewerId: owner.id,
@@ -803,6 +805,7 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen>
       );
     }
     final bool isRequestsTab = target == 'requests';
+    final now = DateTime.now();
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: maps.length,
@@ -813,9 +816,14 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen>
             (_parseDateTime(e.r.start), _parseDateTime(e.r.end));
         final effective = _effectiveCategory(e);
         final titleForCategory = _titleForCategory(effective);
-        final chip = _buildStatusChipForCard(effective, start, end, e);
-        final inlineAction =
-            isRequestsTab ? null : _buildInlineAction(effective, e);
+        final chip = _buildStatusChipForCard(
+          effective,
+          start,
+          end,
+          e,
+          now: now,
+        );
+        final inlineAction = _buildInlineAction(effective, e, now: now);
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
           elevation: 2,
@@ -1035,7 +1043,12 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen>
   }
 
   Widget _buildStatusChipForCard(
-      String category, DateTime start, DateTime end, _OwnerEntry e) {
+    String category,
+    DateTime start,
+    DateTime end,
+    _OwnerEntry e, {
+    required DateTime now,
+  }) {
     String label;
     Color color;
     if (e.r.simulationOnly) {
@@ -1054,7 +1067,7 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen>
         color = const Color(0xFFFB923C);
         break;
       case 'requests':
-        if (!_ownerAcceptanceDeadlineValid(e)) {
+        if (!_ownerAcceptanceDeadlineValid(e, now: now)) {
           label = e.r.bindingExpiresAt == null
               ? 'Annahme gesperrt'
               : 'Annahmefrist abgelaufen';
@@ -1104,14 +1117,24 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen>
     );
   }
 
-  bool _ownerAcceptanceDeadlineValid(_OwnerEntry entry) {
-    if (entry.r.simulationOnly) return true;
-    if (!BackendConfig.enabled || QaRuntimeService.isEnabled) return true;
-    final deadline = entry.r.bindingExpiresAt;
-    return deadline != null && deadline.isAfter(DateTime.now());
+  bool _ownerAcceptanceDeadlineValid(
+    _OwnerEntry entry, {
+    required DateTime now,
+  }) {
+    return OwnerAcceptanceDeadlinePolicy.isValid(
+      simulationOnly: entry.r.simulationOnly,
+      requiresRemoteDeadline:
+          BackendConfig.enabled && !QaRuntimeService.isEnabled,
+      deadline: entry.r.bindingExpiresAt,
+      now: now,
+    );
   }
 
   Future<void> _acceptRequest(_OwnerEntry entry) async {
+    if (!_ownerAcceptanceDeadlineValid(entry, now: DateTime.now())) {
+      if (mounted) setState(() {});
+      return;
+    }
     final owner = _decisionActions.capture();
     if (owner == null) return;
     try {
@@ -1316,25 +1339,21 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen>
     );
   }
 
-  Widget? _buildInlineAction(String category, _OwnerEntry e) {
+  Widget? _buildInlineAction(
+    String category,
+    _OwnerEntry e, {
+    required DateTime now,
+  }) {
     switch (category) {
       case 'requests':
-        return Row(mainAxisSize: MainAxisSize.min, children: [
-          // Swap order: Akzeptieren first. Same design as Ablehnen, only text in green.
-          _TinyTextButton(
-            icon: Icons.check_circle_outline,
-            label: 'Akzeptieren',
-            color: const Color(0xFF22C55E),
-            onPressed: () => _acceptRequest(e),
-          ),
-          const SizedBox(width: 6),
-          _TinyTextButton(
-            icon: Icons.cancel_outlined,
-            label: 'Ablehnen',
-            color: Theme.of(context).colorScheme.error,
-            onPressed: () => _declineRequest(e),
-          ),
-        ]);
+        return OwnerRequestInlineActions(
+          request: e.r,
+          requiresRemoteDeadline:
+              BackendConfig.enabled && !QaRuntimeService.isEnabled,
+          now: now,
+          onAccept: () => _acceptRequest(e),
+          onDecline: () => _declineRequest(e),
+        );
       case 'completed':
         // Show a small inline "Bewerten" action for completed rentals (not for cancelled/declined)
         if (SyntheticCloneConfig.reviewActionsEnabled &&
@@ -1420,15 +1439,13 @@ class _TinyTextButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onPressed;
-  final Color? color;
   const _TinyTextButton(
       {required this.icon,
       required this.label,
-      required this.onPressed,
-      this.color});
+      required this.onPressed});
   @override
   Widget build(BuildContext context) {
-    final fg = color ?? Theme.of(context).colorScheme.primary;
+    final fg = Theme.of(context).colorScheme.primary;
     return TextButton(
       onPressed: onPressed,
       style: TextButton.styleFrom(
