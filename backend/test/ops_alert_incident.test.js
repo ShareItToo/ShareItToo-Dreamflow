@@ -81,7 +81,7 @@ print(json.dumps({'_SYSTEMD_UNIT':'shareittoo-health.service',
   };
 }
 
-test('incident opens once, stays silent indefinitely, recovers once, then opens immediately', async (t) => {
+test('incident opens once, stays silent indefinitely, debounces recovery, then opens immediately', async (t) => {
   const f = await fixture(t);
   assert.equal((await f.call('recovery')).code, 0);
   assert.equal((await f.messages()).length, 0);
@@ -93,7 +93,10 @@ test('incident opens once, stays silent indefinitely, recovers once, then opens 
   await f.call('failure', service, { FAKE_NOW: '2031536000', FAKE_INVOCATION_ID: 'b'.repeat(32) });
   assert.equal((await f.messages()).length, 1);
   await f.call('recovery', service, { FAKE_NOW: '2000086401' });
+  assert.equal((await f.read()).recovery_streak, 1);
   await f.call('recovery', service, { FAKE_NOW: '2000086402' });
+  assert.equal((await f.read()).recovery_streak, 2);
+  await f.call('recovery', service, { FAKE_NOW: '2000086403' });
   assert.equal((await f.messages()).length, 2);
   assert.equal((await f.read()).phase, 'closed');
   await f.call('failure', service, { FAKE_NOW: '2000086403' });
@@ -139,6 +142,8 @@ for index in range(100):
   assert.equal((await f.messages()).length, 1);
   assert.equal((await f.read()).phase, 'open');
   await f.call('recovery', service, { FAKE_NOW: '2000000100' });
+  await f.call('recovery', service, { FAKE_NOW: '2000000101' });
+  await f.call('recovery', service, { FAKE_NOW: '2000000102' });
   await f.call('failure', service, { FAKE_NOW: '2000000101', FAKE_FAILURE_TAGS: 'api' });
   assert.equal((await f.messages()).length, 3);
 });
@@ -165,18 +170,67 @@ test('stale, unrecognized and non-failed invocation identity cannot suppress or 
   assert.equal((await f.messages()).length, 1);
 });
 
-test('valid v1 state stays readable and closed historical recovery never generates another mail', async (t) => {
+test('valid v1 state migrates without losing closed truth or generating another mail', async (t) => {
   const f = await fixture(t);
   const historical = { version: 1, service, phase: 'closed', kind: 'recovery',
     last_attempt: 1900000000, delivery: 'delivered' };
-  const bytes = `${JSON.stringify(historical, null, 2)}\n`;
-  await fs.writeFile(path.join(f.state, stateName()), bytes, { mode: 0o600 });
+  await fs.writeFile(path.join(f.state, stateName()), `${JSON.stringify(historical, null, 2)}\n`, { mode: 0o600 });
   assert.equal((await f.call('recovery')).code, 0);
   assert.equal((await f.messages()).length, 0);
-  assert.equal(await fs.readFile(path.join(f.state, stateName()), 'utf8'), bytes);
+  assert.deepEqual(await f.read(), {
+    version: 3, service, phase: 'closed', kind: 'recovery',
+    last_attempt: historical.last_attempt, delivery: 'delivered',
+    failure_fingerprint: createHash('sha256').update(`legacy\n${service}`).digest('hex'),
+    recovery_streak: 0,
+  });
   await f.call();
   assert.equal((await f.messages()).length, 1);
-  assert.equal((await f.read()).version, 2);
+  assert.equal((await f.read()).version, 3);
+});
+
+test('v1 and v2 open incidents migrate with incident truth and reset streak on failure', async (t) => {
+  for (const version of [1, 2]) {
+    await t.test(`v${version}`, async (t) => {
+      const f = await fixture(t);
+      const old = { version, service, phase: 'open', kind: 'failure',
+        last_attempt: 1900000000, delivery: 'delivered' };
+      if (version === 2) old.failure_fingerprint = 'a'.repeat(64);
+      await fs.writeFile(path.join(f.state, stateName()), `${JSON.stringify(old)}\n`, { mode: 0o600 });
+      await f.call('failure');
+      assert.equal((await f.messages()).length, 0, 'existing open incident stays suppressed');
+      assert.equal((await f.read()).phase, 'open');
+      assert.equal((await f.read()).recovery_streak, 0);
+      await f.call('recovery');
+      assert.equal((await f.read()).recovery_streak, 1);
+      await f.call('failure');
+      assert.equal((await f.read()).recovery_streak, 0);
+      assert.equal((await f.read()).phase, 'open');
+      assert.equal((await f.messages()).length, 0, 'failure remains suppressed for the open incident');
+    });
+  }
+});
+
+test('recovery requires three consecutive successes; any failure resets the streak', async (t) => {
+  const f = await fixture(t);
+  await f.call('failure');
+  await f.call('recovery');
+  assert.equal((await f.read()).recovery_streak, 1);
+  await f.call('failure', service, { FAKE_INVOCATION_ID: 'b'.repeat(32) });
+  assert.equal((await f.read()).recovery_streak, 0);
+  assert.equal((await f.read()).phase, 'open');
+  assert.equal((await f.messages()).length, 1);
+  await f.call('recovery');
+  await f.call('recovery');
+  assert.equal((await f.read()).phase, 'open');
+  assert.equal((await f.messages()).length, 1);
+  await f.call('failure', service, { FAKE_INVOCATION_ID: 'c'.repeat(32) });
+  assert.equal((await f.read()).recovery_streak, 0);
+  await f.call('recovery');
+  await f.call('recovery');
+  await f.call('recovery');
+  assert.equal((await f.read()).phase, 'closed');
+  assert.equal((await f.read()).recovery_streak, 3);
+  assert.equal((await f.messages()).length, 2);
 });
 
 test('state or held lock replacement during classification fails explicitly before suppression', async (t) => {
@@ -269,7 +323,9 @@ test('failed or timed-out transport is unknown and bounded, including recovery',
       assert.equal((await f.messages()).length, 1);
       await f.call('failure', service, { FAKE_NOW: '2000086400' });
       assert.equal((await f.messages()).length, 1);
-      await f.call('recovery', service, { FAKE_CURL_CODE: code, FAKE_NOW: '2000086401' });
+      await f.call('recovery', service, { FAKE_NOW: '2000086401' });
+      await f.call('recovery', service, { FAKE_NOW: '2000086402' });
+      await f.call('recovery', service, { FAKE_CURL_CODE: code, FAKE_NOW: '2000086403' });
       assert.equal((await f.read()).phase, 'closed');
       assert.equal((await f.read()).delivery, 'unknown');
       await f.call('recovery');
@@ -290,13 +346,15 @@ test('post-send persistence failure is explicit and never claims confirmed deliv
   assert.equal((await fs.readdir(f.state)).some((name) => name.endsWith('.tmp')), false);
 });
 
-test('legacy open marker suppresses repeats, recovers once, then permits a new incident', async (t) => {
+test('legacy open marker migrates, recovers after debounce, then permits a new incident', async (t) => {
   const f = await fixture(t);
   const legacy = path.join(f.state, `${service}.last`);
   await fs.writeFile(legacy, '2000000000\n', { mode: 0o600 });
   await f.call();
   assert.equal((await f.messages()).length, 0);
-  assert.equal((await f.read()).version, 1);
+  assert.equal((await f.read()).version, 3);
+  await f.call('recovery');
+  await f.call('recovery');
   await f.call('recovery');
   assert.equal((await f.messages()).length, 1);
   assert.equal(await fs.readFile(legacy, 'utf8'), '2000000000\n');
@@ -453,11 +511,12 @@ test('known unsent configuration failure retries promptly after repair, then sup
   await f.call('failure', service, { FAKE_NOW: '2000000002' });
   assert.equal((await f.messages()).length, 1);
   await fs.writeFile(f.envFile, 'MAIL_TRANSPORT=memory\n');
+  assert.equal((await f.call('recovery')).code, 0);
+  assert.equal((await f.call('recovery')).code, 0);
   assert.notEqual((await f.call('recovery')).code, 0);
   assert.equal((await f.read()).phase, 'closed');
   assert.equal((await f.read()).delivery, 'not_sent');
   await fs.writeFile(f.envFile, configured);
-  await f.call('recovery');
   await f.call('recovery');
   assert.equal((await f.messages()).length, 2);
 });

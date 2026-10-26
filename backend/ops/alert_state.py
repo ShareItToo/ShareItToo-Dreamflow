@@ -3,8 +3,9 @@
 
 SMTP cannot guarantee exactly-once recipient delivery. A durable pending attempt
 is therefore treated as unknown after interruption, never as permission to retry.
-Recovery gets one attempt; an open service incident never sends another failure
-notification, even when its observed failure classification changes.
+Recovery requires three consecutive successful invocations; an open service
+incident never sends another failure notification, even when its observed
+failure classification changes.
 """
 import email.utils
 import fcntl
@@ -83,17 +84,20 @@ def load_state(directory, name, service):
             return None
         if not re.fullmatch(rb'[0-9]{1,16}\n', legacy):
             raise AlertError('state unavailable')
-        value = dict(version=1, service=service, phase='open', kind='failure',
-                     last_attempt=int(legacy), delivery='unknown')
+        value = dict(version=3, service=service, phase='open', kind='failure',
+                     last_attempt=int(legacy), delivery='unknown',
+                     failure_fingerprint=hashlib.sha256(('legacy\n' + service).encode()).hexdigest(),
+                     recovery_streak=0)
         replace_state(directory, name, value)
         return value
     try:
         value = json.loads(data)
         base_keys = {'version', 'service', 'phase', 'kind', 'last_attempt', 'delivery'}
         if (not isinstance(value, dict)
-                or type(value.get('version')) is not int or value['version'] not in (1, 2)
+                or type(value.get('version')) is not int or value['version'] not in (1, 2, 3)
                 or set(value) != (base_keys if value['version'] == 1
-                                  else base_keys | {'failure_fingerprint'})
+                                  else base_keys | {'failure_fingerprint'} if value['version'] == 2
+                                  else base_keys | {'failure_fingerprint', 'recovery_streak'})
                 or value['service'] != service or value['phase'] not in ('open', 'closed')
                 or value['kind'] not in ('failure', 'reminder', 'recovery')
                 or (value['phase'] == 'closed') != (value['kind'] == 'recovery')
@@ -106,8 +110,23 @@ def load_state(directory, name, service):
                 isinstance(value['failure_fingerprint'], str)
                 and re.fullmatch(r'[a-f0-9]{64}', value['failure_fingerprint'])):
             raise ValueError()
+        if value['version'] == 3 and not (
+                value['kind'] in ('failure', 'recovery')
+                and isinstance(value['failure_fingerprint'], str)
+                and re.fullmatch(r'[a-f0-9]{64}', value['failure_fingerprint'])
+                and type(value['recovery_streak']) is int
+                and 0 <= value['recovery_streak'] <= 3):
+            raise ValueError()
     except (ValueError, TypeError, UnicodeError):
         raise AlertError('state unavailable') from None
+    if value['version'] < 3:
+        fingerprint = value.get('failure_fingerprint')
+        if fingerprint is None:
+            fingerprint = hashlib.sha256(('legacy\n' + service).encode()).hexdigest()
+        value = dict(version=3, service=service, phase=value['phase'], kind=value['kind'],
+                     last_attempt=value['last_attempt'], delivery=value['delivery'],
+                     failure_fingerprint=fingerprint, recovery_streak=0)
+        replace_state(directory, name, value)
     if value['delivery'] == 'pending':
         value['delivery'] = 'unknown'
         replace_state(directory, name, value)
@@ -285,10 +304,6 @@ def incident(directory, service, mode):
             raise AlertError('state unavailable: changed while locked')
         fingerprint = failure_fingerprint(service) if mode == 'failure' else (
             previous.get('failure_fingerprint') if previous else None)
-        # V1 did not record a failure class; preserve its reader contract, then
-        # bind one fresh classified event instead of claiming the class matched.
-        if mode == 'recovery' and previous and fingerprint is None:
-            fingerprint = hashlib.sha256(('legacy\n' + service).encode()).hexdigest()
         linked_lock = os.stat(key + '.lock', dir_fd=directory, follow_symlinks=False)
         held_lock = os.fstat(held.fileno())
         if ((linked_lock.st_dev, linked_lock.st_ino) != (held_lock.st_dev, held_lock.st_ino)
@@ -299,14 +314,28 @@ def incident(directory, service, mode):
             raise AlertError('state unavailable')
         opened = previous is not None and previous['phase'] == 'open'
         unsent = previous is not None and previous['delivery'] == 'not_sent'
-        if mode == 'recovery' and not opened and not unsent:
-            return 0
-        if mode == 'failure' and opened and not unsent:
-            print('ShareItToo alert suppressed open incident for ' + service)
-            return 0
+        if mode == 'recovery':
+            if opened:
+                recovery_streak = previous['recovery_streak'] + 1
+                if recovery_streak < 3:
+                    previous['recovery_streak'] = recovery_streak
+                    replace_state(directory, name, previous)
+                    print('ShareItToo alert recovery confirmation %d/3 for %s' % (
+                        recovery_streak, service))
+                    return 0
+            elif not unsent:
+                return 0
+        if mode == 'failure' and opened:
+            if previous['recovery_streak']:
+                previous['recovery_streak'] = 0
+                replace_state(directory, name, previous)
+            if not unsent:
+                print('ShareItToo alert suppressed open incident for ' + service)
+                return 0
         kind = 'recovery' if mode == 'recovery' else 'failure'
-        state = dict(version=2, service=service, phase='closed' if mode == 'recovery' else 'open',
-                     kind=kind, last_attempt=now, delivery='pending', failure_fingerprint=fingerprint)
+        state = dict(version=3, service=service, phase='closed' if mode == 'recovery' else 'open',
+                     kind=kind, last_attempt=now, delivery='pending',
+                     failure_fingerprint=fingerprint, recovery_streak=3 if mode == 'recovery' else 0)
         # Reserve durably before any transport. A crash cannot grant rapid retry.
         replace_state(directory, name, state)
         try:
