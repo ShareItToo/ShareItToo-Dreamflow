@@ -99,9 +99,13 @@ export function integrationTestPlan({
   focusedMissionQuorumProjection = false,
   focusedPrivateShelf = false,
   focusedAppleOwnership = false,
+  focusedListingAi = false,
   focusedBookingPayment = false,
 } = {}) {
   if (focusedAppleOwnership) return [integrationTestGroups.appleOwnership];
+  if (focusedListingAi) {
+    return [integrationTestGroups.foundation, integrationTestGroups.listingAi];
+  }
   if (focusedBookingPayment) {
     return [Object.freeze([
       'backend/test/postgres_foundation.integration.test.js',
@@ -364,6 +368,7 @@ export async function runLocalPostgresIntegration({
   const focusedNotifications = environment.SIT_POSTGRES_FOCUSED_NOTIFICATIONS === '1';
   const focusedMissionAdmission = environment.SIT_POSTGRES_FOCUSED_MISSION_ADMISSION === '1';
   const focusedAppleOwnership = environment.SIT_POSTGRES_FOCUSED_APPLE_OWNERSHIP === '1';
+  const focusedListingAi = environment.SIT_POSTGRES_FOCUSED_LISTING_AI === '1';
   const focusedBookingPayment = environment.SIT_POSTGRES_FOCUSED_BOOKING_PAYMENT === '1';
   const integrationGroups = integrationTestPlan({
     focusedMissionAdmission,
@@ -383,6 +388,7 @@ export async function runLocalPostgresIntegration({
     focusedMissionQuorumProjection,
     focusedPrivateShelf,
     focusedAppleOwnership,
+    focusedListingAi,
     focusedBookingPayment,
   });
 

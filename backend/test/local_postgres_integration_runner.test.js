@@ -18,6 +18,7 @@ import {
   parsePostgresMajor,
   requiredPostgresMajor,
   runLocalPostgresIntegration,
+  integrationTestGroups,
   integrationTestPlan,
 } from '../../tool/run_local_postgres_integration.mjs';
 
@@ -94,6 +95,20 @@ test('Apple ownership is included in standard PG execution and has a focused rou
   const target = 'backend/test/apple_ownership_postgres.integration.test.js';
   assert.deepEqual(integrationTestPlan({ focusedAppleOwnership: true }), [[target]]);
   assert.equal(integrationTestPlan().flat().filter((entry) => entry === target).length, 1);
+});
+
+test('Listing-AI ledger migrations and attempt reservations have a focused PG route', () => {
+  const listingAiTargets = [
+    'backend/test/listing_ai_lifetime_budget_migration.integration.test.js',
+    'backend/test/listing_ai_attempt_postgres.integration.test.js',
+  ];
+  assert.deepEqual(integrationTestPlan({ focusedListingAi: true }), [
+    integrationTestGroups.foundation,
+    listingAiTargets,
+  ]);
+  for (const target of listingAiTargets) {
+    assert.equal(integrationTestPlan().flat().filter((entry) => entry === target).length, 1);
+  }
 });
 
 test('private-pilot listing activation suite is available through its focused route', () => {

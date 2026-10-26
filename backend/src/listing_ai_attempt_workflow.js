@@ -166,7 +166,7 @@ export async function claimListingAiAttempt(client, {
        status, reserved_cost_cents, reserved_call_count, lease_expires_at, result
      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
                'reserved', $9, $10, now() + ($11 * interval '1 millisecond'),
-               jsonb_build_object('__sitStagingSmokeActivationId', $12))
+               jsonb_build_object('__sitStagingSmokeActivationId', $12::text))
      ON CONFLICT (draft_id, generation_key) DO NOTHING
      RETURNING ${attemptSelect}`,
     [draftId, ownerId, generationKey, hashes.requestSha256, hashes.payloadSha256,
@@ -277,7 +277,7 @@ export async function claimListingAiAttempt(client, {
       `UPDATE listing_ai_analysis_attempts
           SET status = 'reserved', provider_call_count = 0,
               estimated_cost_cents = NULL, billed_cost_cents = NULL,
-              result = jsonb_build_object('__sitStagingSmokeActivationId', $4),
+              result = jsonb_build_object('__sitStagingSmokeActivationId', $4::text),
               lease_expires_at = now() + ($3 * interval '1 millisecond'),
               updated_at = now()
         WHERE id = $1 AND owner_id = $2 AND status = 'failed'
