@@ -136,14 +136,19 @@ test('Web gallery picker starts in the tap gesture before dismissing the sheet',
   const syncOwnerCheck = pickerRoutine.indexOf(
     'if (!_profileActions.isSynchronouslyCurrent(owner)) { return; }',
   );
-  const pickerCall = pickerRoutine.indexOf(
-    'final XFile? shot = await picker.pickImage(',
+  const pickerDispatch = pickerRoutine.indexOf(
+    'final XFile? shot = widget.imagePicker != null ? await widget.imagePicker!(source) : await ImagePicker().pickImage(',
   );
-  assert.ok(syncOwnerCheck >= 0 && pickerCall > syncOwnerCheck);
+  assert.ok(syncOwnerCheck >= 0 && pickerDispatch > syncOwnerCheck);
   assert.doesNotMatch(
-    pickerRoutine.slice(syncOwnerCheck, pickerCall),
-    /await _profileActions\.isCurrent/u,
-    'no async session check may precede the browser file-input click',
+    pickerRoutine.slice(syncOwnerCheck, pickerDispatch),
+    /await (?:_profileActions\.isCurrent|_isPickerOwnerCurrent)/u,
+    'no async owner check may precede the browser file-input click',
+  );
+  assert.match(
+    pickerRoutine,
+    /if \(!_profileActions\.isSynchronouslyCurrent\(owner\)\) \{ return; \} final XFile\? shot = widget\.imagePicker != null \? await widget\.imagePicker!\(source\) : await ImagePicker\(\)\.pickImage\(source: source, imageQuality: 85\); if \(shot == null \|\| !await _isPickerOwnerCurrent\(owner\)\) \{ return; \} final bytes = await shot\.readAsBytes\(\); if \(!await _isPickerOwnerCurrent\(owner\)\) \{ return; \}/u,
+    'picker activation is synchronous, then its result and bytes each require a current session check',
   );
 });
 

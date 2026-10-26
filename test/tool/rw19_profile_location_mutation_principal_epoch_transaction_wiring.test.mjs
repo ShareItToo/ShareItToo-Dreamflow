@@ -126,16 +126,47 @@ test('route cleanup is bound to exact identities and never pops the successor ro
   assert.doesNotMatch(interaction, /Navigator\.of\([^)]*\)\.maybePop/u);
 });
 
-test('location permission and media awaits revalidate the captured profile owner', () => {
+test('location awaits revalidate the captured action owner and media awaits revalidate its session principal', () => {
   const explore = read('lib/screens/explore_screen.dart');
   assert.match(
     explore,
     /Geolocator\.checkPermission\(\)[\s\S]*?_profileActions\.isCurrent[\s\S]*?Geolocator\.requestPermission\(\)[\s\S]*?_profileActions\.isCurrent[\s\S]*?Geolocator\.getCurrentPosition\([\s\S]*?_profileActions\.isCurrent/u,
   );
   const profileInfo = read('lib/screens/profile_info_screen.dart');
-  assert.match(
+  const pickPhoto = method(
     profileInfo,
-    /picker\.pickImage[\s\S]*?_profileActions\.isCurrent[\s\S]*?shot\.readAsBytes\(\)[\s\S]*?_profileActions\.isCurrent/u,
+    'Future<void> _pickPhoto(',
+    'Future<bool> _isPickerOwnerCurrent(',
+  ).replace(/\s+/gu, ' ');
+  assert.match(
+    pickPhoto,
+    /final XFile\? shot = widget\.imagePicker != null[\s\S]*?if \(shot == null \|\| !await _isPickerOwnerCurrent\(owner\)\) \{ return; \} final bytes = await shot\.readAsBytes\(\); if \(!await _isPickerOwnerCurrent\(owner\)\) \{ return; \}/u,
+    'the selected image and bytes are each discarded when the captured session is no longer current',
+  );
+  const pickerOwnerCheck = method(
+    profileInfo,
+    'Future<bool> _isPickerOwnerCurrent(',
+    'Future<Set<String>?> _showMultiSelect(',
+  );
+  assert.match(
+    pickerOwnerCheck,
+    /if \(!mounted\) return false;[\s\S]*?\.isContextCurrent\(owner\.context\)[\s\S]*?\.timeout\(const Duration\(seconds: 3\), onTimeout: \(\) => false\)/u,
+    'picker revalidation uses the captured auth context and fails closed on timeout',
+  );
+  assert.doesNotMatch(
+    pickerOwnerCheck,
+    /_profileActions\.(?:isCurrent|isSynchronouslyCurrent)|actionEpoch/u,
+    'same-principal UI epoch refreshes do not invalidate an in-flight file selection',
+  );
+  const isContextCurrent = method(
+    coordinator,
+    'Future<bool> isContextCurrent(ProfileMutationContext context) async {',
+    'static ProfileMutationFailureKind classifyBackendFailure(',
+  );
+  assert.match(
+    isContextCurrent,
+    /isOwnerCurrent\(context\.owner\)[\s\S]*?cachedCurrentUserForOwner\(context\.owner\)[\s\S]*?current\.id\.trim\(\) == context\.user\.id\.trim\(\)[\s\S]*?current\.email\.trim\(\)\.toLowerCase\(\) ==[\s\S]*?context\.user\.email\.trim\(\)\.toLowerCase\(\)[\s\S]*?isOwnerCurrent\(context\.owner\)/u,
+    'session ownership and principal identity are checked before and after the user read',
   );
 });
 
