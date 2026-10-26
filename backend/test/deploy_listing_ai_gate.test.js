@@ -155,12 +155,13 @@ test('Staging listing-AI rejects a smoke budget below one image reservation befo
   assert.equal(calls.includes(' compose '), false);
 });
 
-test('deployment source keeps listing-AI opt-in, bounded and sanitized', async () => {
-  const [deploy, overlay, app, receiptWriter] = await Promise.all([
+test('deployment and CI compose contracts keep listing-AI opt-in, bounded and sanitized', async () => {
+  const [deploy, overlay, app, receiptWriter, workflow] = await Promise.all([
     readFile(deployScript, 'utf8'),
     readFile(join(backendRoot, 'compose.staging.listing-ai.yml'), 'utf8'),
     readFile(join(backendRoot, 'src', 'app.js'), 'utf8'),
     readFile(join(backendRoot, 'ops', 'write_staging_listing_ai_activation_receipt.mjs'), 'utf8'),
+    readFile(resolve(backendRoot, '..', '.github', 'workflows', 'regression.yml'), 'utf8'),
   ]);
   assert.match(deploy, /ENABLE_STAGING_LISTING_AI:-0/u);
   assert.match(deploy, /CONFIRM_STAGING_LISTING_AI/u);
@@ -203,6 +204,11 @@ test('deployment source keeps listing-AI opt-in, bounded and sanitized', async (
   assert.match(receiptWriter, /staging_listing_ai_activation_receipt_invalid/u);
   assert.doesNotMatch(receiptWriter, /OPENAI_API_KEY=/u);
   assert.doesNotMatch(overlay, /sk-(?:proj-)?[A-Za-z0-9_-]{16}/u);
+  assert.match(workflow, /SIT_LISTING_AI_BUDGET_CENTS: "10000"/u);
+  assert.match(workflow, /SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: "500"/u);
+  assert.match(workflow, /SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: 11111111-1111-4111-8111-111111111111/u);
+  assert.match(workflow, /SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: "1"/u);
+  assert.match(workflow, /-f compose\.staging\.yml \\\n\s+-f compose\.staging\.pilot\.yml \\\n\s+-f compose\.staging\.listing-ai\.yml \\\n\s+config --quiet/u);
   assert.match(app, /const listingAiHealth = Object\.freeze\(\{/u);
   assert.match(app, /status: config\.listingAi\.enabled \? 'enabled' : 'disabled'/u);
   assert.match(app, /provider: config\.listingAi\.provider/u);
