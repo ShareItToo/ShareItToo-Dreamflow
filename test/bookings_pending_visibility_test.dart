@@ -26,6 +26,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
   }
 
+  Finder visibleText(String text) => find.text(text).hitTestable();
+
   testWidgets(
     'new pending renter request appears in Ausstehend, not Kommend',
     (tester) async {
@@ -79,22 +81,25 @@ void main() {
       );
       await pumpUntilVisible(
         tester,
-        find.text('Synthetischer Pending-Projektor'),
+        visibleText('Synthetischer Pending-Projektor'),
       );
 
       expect(find.text('Meine Buchungen'), findsOneWidget);
-      expect(find.text('Synthetischer Pending-Projektor'), findsOneWidget);
-      expect(find.text('Wartet auf Bestätigung'), findsOneWidget);
-      expect(find.text('Du hast keine ausstehenden Buchungen'), findsNothing);
+      expect(visibleText('Synthetischer Pending-Projektor'), findsOneWidget);
+      expect(visibleText('Wartet auf Bestätigung'), findsOneWidget);
+      expect(
+        visibleText('Du hast keine ausstehenden Buchungen'),
+        findsNothing,
+      );
 
-      await tester.tap(find.text('Kommend'));
+      await tester.tap(visibleText('Kommend'));
       await pumpTabTransition(tester);
-      expect(find.text('Du hast keine kommenden Buchungen'), findsOneWidget);
-      expect(find.text('Synthetischer Pending-Projektor'), findsNothing);
+      expect(visibleText('Du hast keine kommenden Buchungen'), findsOneWidget);
+      expect(visibleText('Synthetischer Pending-Projektor'), findsNothing);
 
-      await tester.tap(find.text('Ausstehend'));
+      await tester.tap(visibleText('Ausstehend'));
       await pumpTabTransition(tester);
-      expect(find.text('Synthetischer Pending-Projektor'), findsOneWidget);
+      expect(visibleText('Synthetischer Pending-Projektor'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox.shrink());
     },
