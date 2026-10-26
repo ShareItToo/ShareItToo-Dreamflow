@@ -231,6 +231,21 @@ class ProfileMutationService {
     required ProfileMutationContext context,
     required Map<CurrentUserProfileField, Object?> updates,
   }) async {
+    final photoUrl = updates[CurrentUserProfileField.photoURL];
+    final remoteMutationEnabled =
+        BackendConfig.enabled || _remoteProfileImageUploadEnabled == true;
+    if (remoteMutationEnabled &&
+        !QaRuntimeService.isEnabled &&
+        photoUrl is String &&
+        photoUrl.trim().toLowerCase().startsWith('data:')) {
+      // Remote profiles may only persist a server-managed upload URL. This
+      // guards the save path if a picker result was retained as a local data
+      // URI or image upload was skipped; the server must never truncate it
+      // into an apparently successful profile value.
+      throw const ProfileMutationFailure.rejected(
+        'profile_photo_upload_required',
+      );
+    }
     if (!await isContextCurrent(context)) {
       throw const ProfileMutationFailure.principalChanged();
     }

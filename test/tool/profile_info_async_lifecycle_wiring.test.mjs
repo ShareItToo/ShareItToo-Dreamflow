@@ -116,6 +116,29 @@ test('profile save reads the authenticated projection back before reporting succ
   );
 });
 
+test('remote profile save cannot report success while a data URI remains unuploaded', () => {
+  const updateProfile = mutationService.slice(
+    mutationService.indexOf('Future<AccountProfileMutationResult> updateProfile('),
+  );
+  const remotePhotoGuard = updateProfile.indexOf(
+    "photoUrl.trim().toLowerCase().startsWith('data:')",
+  );
+  const profileMutation = updateProfile.indexOf('performProfileMutation(');
+  assert.ok(remotePhotoGuard >= 0 && remotePhotoGuard < profileMutation);
+  assert.match(mutationService, /profile_photo_upload_required/u);
+
+  const remoteSave = source.indexOf(
+    'await _profileMutationService.updateProfile(',
+  );
+  const successDialog = source.indexOf("title: l10n.t('Gespeichert')");
+  const failureHandler = source.indexOf(
+    'on ProfileMutationFailure catch (failure)',
+  );
+  assert.ok(remoteSave >= 0 && remoteSave < successDialog);
+  assert.ok(successDialog < failureHandler);
+  assert.match(source.slice(failureHandler), /'Speichern fehlgeschlagen'/u);
+});
+
 test('open identity surfaces refresh the authoritative avatar after profile changes', () => {
   assert.match(
     thread,

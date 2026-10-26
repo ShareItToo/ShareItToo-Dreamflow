@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lendify/services/auth_service.dart';
 import 'package:lendify/services/backend_http.dart';
+import 'package:lendify/services/data_service.dart';
 import 'package:lendify/services/profile_mutation_service.dart';
 import 'package:lendify/services/session_transition_service.dart';
 
@@ -138,11 +139,59 @@ void main() {
     );
     expect(uploadCalls, 0);
   });
+
+  test('remote save rejects a data URI if upload did not produce a managed URL',
+      () async {
+    final service = _TestProfileMutationService(
+      remoteUploadEnabled: true,
+      uploader: ({
+        required AuthSessionOwner owner,
+        required bytes,
+        required String filename,
+        required String purpose,
+      }) async => managedUrl,
+    );
+
+    await expectLater(
+      service.updateProfile(
+        context: context,
+        updates: {CurrentUserProfileField.photoURL: draft},
+      ),
+      throwsA(isA<ProfileMutationFailure>().having(
+        (failure) => failure.code,
+        'code',
+        'profile_photo_upload_required',
+      )),
+    );
+    expect(service.mutationCalls, 0,
+        reason: 'do not send an unuploaded data URI to profile persistence');
+  });
+
+  test('remote profile save accepts the managed URL returned by upload',
+      () async {
+    final service = _TestProfileMutationService(
+      remoteUploadEnabled: true,
+      uploader: ({
+        required AuthSessionOwner owner,
+        required bytes,
+        required String filename,
+        required String purpose,
+      }) async => managedUrl,
+    );
+
+    final result = await service.updateProfile(
+      context: context,
+      updates: {CurrentUserProfileField.photoURL: managedUrl},
+    );
+    expect(result.user, context.user);
+    expect(service.mutationCalls, 1);
+  });
 }
 
 class _TestProfileMutationService extends ProfileMutationService {
   final bool flipAfterUpload;
   int _contextChecks = 0;
+  int mutationCalls = 0;
 
   _TestProfileMutationService({
     required ProfileImageUploader uploader,
@@ -157,5 +206,14 @@ class _TestProfileMutationService extends ProfileMutationService {
   Future<bool> isContextCurrent(ProfileMutationContext context) async {
     _contextChecks += 1;
     return !flipAfterUpload || _contextChecks < 2;
+  }
+
+  @override
+  Future<AccountProfileMutationResult> performProfileMutation({
+    required ProfileMutationContext context,
+    required Map<CurrentUserProfileField, Object?> updates,
+  }) async {
+    mutationCalls += 1;
+    return AccountProfileMutationResult(user: context.user, remoteAccepted: true);
   }
 }
