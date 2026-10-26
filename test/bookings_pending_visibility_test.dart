@@ -28,6 +28,15 @@ void main() {
 
   Finder visibleText(String text) => find.text(text).hitTestable();
 
+  Set<Element> visibleCardsForTitle(WidgetTester tester, String title) => find
+      .ancestor(
+        of: find.text(title),
+        matching: find.byType(Card),
+      )
+      .hitTestable()
+      .evaluate()
+      .toSet();
+
   testWidgets(
     'new pending renter request appears in Ausstehend, not Kommend',
     (tester) async {
@@ -60,6 +69,7 @@ void main() {
           'email': renter.email,
           'createdAt': '2026-10-26T09:00:00.000Z',
         }),
+        'qa_messages_notifs_seeded_v3_for_${renter.id}': true,
       });
 
       final created = await DataService.addRentalRequest(
@@ -75,6 +85,9 @@ void main() {
         ),
       );
       expect(created.status, 'pending');
+      final savedRequests =
+          await DataService.getRentalRequestsForRenter(renter.id);
+      expect(savedRequests.map((request) => request.id), [created.id]);
 
       await tester.pumpWidget(
         const MaterialApp(home: BookingsScreen(initialTabIndex: 2)),
@@ -85,7 +98,10 @@ void main() {
       );
 
       expect(find.text('Meine Buchungen'), findsOneWidget);
-      expect(visibleText('Synthetischer Pending-Projektor'), findsOneWidget);
+      expect(
+        visibleCardsForTitle(tester, 'Synthetischer Pending-Projektor'),
+        hasLength(1),
+      );
       expect(visibleText('Wartet auf Bestätigung'), findsOneWidget);
       expect(
         visibleText('Du hast keine ausstehenden Buchungen'),
@@ -95,11 +111,17 @@ void main() {
       await tester.tap(visibleText('Kommend'));
       await pumpTabTransition(tester);
       expect(visibleText('Du hast keine kommenden Buchungen'), findsOneWidget);
-      expect(visibleText('Synthetischer Pending-Projektor'), findsNothing);
+      expect(
+        visibleCardsForTitle(tester, 'Synthetischer Pending-Projektor'),
+        isEmpty,
+      );
 
       await tester.tap(visibleText('Ausstehend'));
       await pumpTabTransition(tester);
-      expect(visibleText('Synthetischer Pending-Projektor'), findsOneWidget);
+      expect(
+        visibleCardsForTitle(tester, 'Synthetischer Pending-Projektor'),
+        hasLength(1),
+      );
 
       await tester.pumpWidget(const SizedBox.shrink());
     },
