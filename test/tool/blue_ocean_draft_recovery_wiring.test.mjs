@@ -89,7 +89,11 @@ test('double taps and interrupted publication retries cannot duplicate a listing
   );
   assert.match(
     screen,
-    /onPressed:\s+_submitBusy \|\| _blueOceanBusy \? null : _submit/u,
+    /onPressed:\s+_submitBusy\s*\|\|\s*_blueOceanBusy\s*\|\|\s*!_hasPublishableSelectedPlace\s*\?\s*null\s*:\s*_submit/u,
+  );
+  assert.match(
+    screen,
+    /onPressed:\s*_submitBusy\s*\|\|\s*_blueOceanBusy\s*\?\s*null\s*:\s*\(\)\s*=>\s*_submit\(forceInactive:\s*true\)/u,
   );
   assert.match(
     backend,

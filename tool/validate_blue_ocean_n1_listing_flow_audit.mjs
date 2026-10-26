@@ -91,7 +91,9 @@ export function validateBlueOceanN1ListingFlowAudit({
   requireMarkers(repositoryRoot, 'lib/screens/create_listing_screen.dart', [
     'Future<void> _submit({bool forceInactive = false})',
     'if (_submitBusy) return;',
-    '_submitBusy || _blueOceanBusy ? null : _submit,',
+    '!_hasPublishableSelectedPlace',
+    '_submitBusy ||\n                                _blueOceanBusy ||\n                                !_hasPublishableSelectedPlace\n                            ? null\n                            : _submit,',
+    '_submitBusy || _blueOceanBusy\n                            ? null\n                            : () => _submit(forceInactive: true),',
     ': () => _submit(forceInactive: true),',
     'await _listingMutationService.execute(',
     'final owner = _listingActions.capture();',

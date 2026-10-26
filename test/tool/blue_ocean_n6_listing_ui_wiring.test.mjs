@@ -151,7 +151,10 @@ test('one-image timeout fails closed into a manual fallback without losing input
   assert.match(assistantStart, /finally \{[\s\S]*_blueOceanBusy = false\);/u);
   assert.doesNotMatch(assistantStart, /_submit\s*\(/u);
   assert.doesNotMatch(assistantStart, /OpenAI/u);
-  assert.match(screen, /_submitBusy \|\| _blueOceanBusy \? null : _submit/u);
+  assert.match(
+    screen,
+    /_submitBusy\s*\|\|\s*_blueOceanBusy\s*\|\|\s*!_hasPublishableSelectedPlace\s*\?\s*null\s*:\s*_submit/u,
+  );
 });
 
 test('one visible owner confirmation maps to the ten factual IDs while final publication stays internal', () => {
