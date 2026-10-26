@@ -223,6 +223,8 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
   bool _savingEvidence = false;
   bool _evidencePersisted = false;
   String _lastPhotoSource = 'browser_picker';
+  LocalPrincipalActionOwner? _photoOwner;
+  bool _pickingPhotos = false;
 
   // Step: damage report (return flow only)
   bool _hasDamage = false;
@@ -623,7 +625,9 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
 
   Future<LocalPrincipalActionOwner?> _captureChallengeOwner() async {
     try {
-      return await LocalPrincipalActionOwner.capture();
+      final owner = await LocalPrincipalActionOwner.capture();
+      if (mounted) setState(() => _photoOwner = owner);
+      return owner;
     } catch (_) {
       return null;
     }
@@ -1029,7 +1033,7 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
           ),
         if (allowAdd)
           InkWell(
-            onTap: onPick,
+            onTap: _pickingPhotos ? null : onPick,
             borderRadius: BorderRadius.circular(12),
             child: Container(
               width: 92,
@@ -1127,28 +1131,77 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
 
   Future<void> _pickPhotosGallery(Function(List<PlatformFile>) addToList,
       {bool allowMultiple = true}) async {
-    final res = await FilePicker.pickFiles(
-      type: FileType.image,
-      allowMultiple: allowMultiple,
-      withData: true,
-    );
-    if (res != null) {
+    final owner = _beginPhotoSelection();
+    if (owner == null) return;
+    final attempt = _stepAttempt;
+    final step = _step;
+    try {
+      final res = await FilePicker.pickFiles(
+        type: FileType.image,
+        allowMultiple: allowMultiple,
+        withData: true,
+      );
+      if (res == null ||
+          !await _isPhotoSelectionCurrent(owner, attempt, step)) {
+        return;
+      }
       setState(() {
         _lastPhotoSource = kIsWeb ? 'browser_picker' : 'gallery';
         _galleryUsedInCheckoutPhotos =
             _galleryUsedInCheckoutPhotos || res.files.isNotEmpty;
         addToList(res.files);
       });
+    } catch (_) {
+      if (!await _isPhotoSelectionCurrent(owner, attempt, step)) return;
+      if (!mounted) return;
+      await AppPopup.toast(context,
+          icon: Icons.error_outline,
+          title: 'Fotos konnten nicht geladen werden');
+    } finally {
+      if (mounted) setState(() => _pickingPhotos = false);
+    }
+  }
+
+  LocalPrincipalActionOwner? _beginPhotoSelection() {
+    final owner = _photoOwner;
+    if (!mounted || _pickingPhotos || owner == null || !owner.isCurrentEpoch) {
+      return null;
+    }
+    // Keep the browser picker in the originating user gesture. The full
+    // stored-session check happens after selection, before consuming media.
+    setState(() => _pickingPhotos = true);
+    return owner;
+  }
+
+  Future<bool> _isPhotoSelectionCurrent(
+      LocalPrincipalActionOwner owner, int attempt, int step) async {
+    bool current() =>
+        mounted &&
+        step == _step &&
+        attempt == _stepAttempt &&
+        owner.isCurrentEpoch;
+    if (!current()) return false;
+    try {
+      final ownsSession = await owner.isCurrent();
+      return current() && ownsSession;
+    } catch (_) {
+      return false;
     }
   }
 
   Future<void> _pickPhotoCamera(Function(List<PlatformFile>) addToList) async {
+    final owner = _beginPhotoSelection();
+    if (owner == null) return;
+    final attempt = _stepAttempt;
+    final step = _step;
     try {
       final ImagePicker picker = ImagePicker();
       final XFile? shot =
           await picker.pickImage(source: ImageSource.camera, imageQuality: 85);
       if (shot != null) {
+        if (!await _isPhotoSelectionCurrent(owner, attempt, step)) return;
         final bytes = await shot.readAsBytes();
+        if (!await _isPhotoSelectionCurrent(owner, attempt, step)) return;
         final pf = PlatformFile(
             name: shot.name, size: bytes.length, path: shot.path, bytes: bytes);
         setState(() {
@@ -1163,7 +1216,11 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
           fromCamera: true,
           webBytes: bytes,
         );
-        if (!mounted || !result.shouldNotify) return;
+        if (!result.shouldNotify ||
+            !await _isPhotoSelectionCurrent(owner, attempt, step)) {
+          return;
+        }
+        if (!mounted) return;
         await AppPopup.toast(
           context,
           icon:
@@ -1171,16 +1228,19 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
           title: result.message!,
         );
       }
-    } catch (e) {
-      debugPrint('[handover] camera pick failed: $e');
+    } catch (_) {
+      if (!await _isPhotoSelectionCurrent(owner, attempt, step)) return;
       if (!mounted) return;
       await AppPopup.toast(context,
           icon: Icons.error_outline, title: 'Kamera nicht verfügbar');
+    } finally {
+      if (mounted) setState(() => _pickingPhotos = false);
     }
   }
 
   Future<void> _pickPhotosMenu(Function(List<PlatformFile>) addToList,
       {bool multiple = true}) async {
+    if (_pickingPhotos) return;
     await AppPopup.show(
       context,
       icon: Icons.add_a_photo,
