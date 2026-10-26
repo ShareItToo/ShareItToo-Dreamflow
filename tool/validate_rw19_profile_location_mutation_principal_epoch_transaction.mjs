@@ -161,7 +161,7 @@ export function validateRw19ProfileLocationMutationPrincipalEpochTransaction({
     expectedActions.map(([id, file]) => [id, file, 'guarded-rw19']),
   )) fail('RW19 profile-action inventory is invalid.');
 
-  const expectedCallSites = [
+  const historicalCallSites = [
     ['DataService.updateCurrentUserProfile', {}],
     ['DataService.updateCurrentUserProfileForOwner', {
       'lib/services/profile_mutation_service.dart': 1,
@@ -177,7 +177,7 @@ export function validateRw19ProfileLocationMutationPrincipalEpochTransaction({
     }],
     ['.updateProfile', {
       'lib/screens/change_address_screen.dart': 1,
-      'lib/screens/contact_data_screen.dart': 1,
+      'lib/screens/contact_data_screen.dart': 2,
       'lib/screens/edit_profile_screen.dart': 1,
       'lib/screens/edit_social_media_screen.dart': 1,
       'lib/screens/explore_screen.dart': 1,
@@ -203,11 +203,32 @@ export function validateRw19ProfileLocationMutationPrincipalEpochTransaction({
   ];
   if (!exact(
     value.callSiteInventory?.map(({ symbol, paths }) => [symbol, paths]),
-    expectedCallSites,
-  )) fail('RW19 call-site inventory declaration is invalid.');
-  for (const [symbol, paths] of expectedCallSites) {
+    historicalCallSites,
+  )) fail('RW19 historical call-site inventory declaration is invalid.');
+
+  // This historical evidence remains bound to its original source snapshot.
+  // The current ContactDataScreen successor intentionally removes the
+  // pseudo-geocoded profile mutation, so validate its present call-site count
+  // against this separate current contract below.
+  const historicalContactScreen = sourceAtImplementationHead(
+    repositoryRoot,
+    value,
+    'lib/screens/contact_data_screen.dart',
+    {},
+  );
+  if ([...historicalContactScreen.matchAll(/\.updateProfile\s*\(/gu)].length !== 2) {
+    fail('RW19 historical ContactDataScreen call-site binding drifted.');
+  }
+
+  const currentCallSites = historicalCallSites.map(([symbol, paths]) => [
+    symbol,
+    symbol === '.updateProfile'
+      ? { ...paths, 'lib/screens/contact_data_screen.dart': 1 }
+      : paths,
+  ]);
+  for (const [symbol, paths] of currentCallSites) {
     if (!exact(countCallSites({ repositoryRoot, sourceTexts, symbol }), paths)) {
-      fail(`RW19 call-site inventory drifted for ${symbol}.`);
+      fail(`RW19 current call-site contract drifted for ${symbol}.`);
     }
   }
 

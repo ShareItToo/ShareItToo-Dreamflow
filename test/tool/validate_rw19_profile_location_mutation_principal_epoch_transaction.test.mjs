@@ -26,6 +26,25 @@ test('accepts the bounded RW19 profile and location closure', () => {
   assert.equal(result.focusedRw19Flutter, 'passed-9');
 });
 
+test('keeps historical RW19 evidence immutable while checking the current successor', () => {
+  const historical = evidence();
+  const historicalProfileCalls = historical.callSiteInventory
+    .find(({ symbol }) => symbol === '.updateProfile')
+    .paths['lib/screens/contact_data_screen.dart'];
+  const currentScreen = readFileSync(
+    new URL('lib/screens/contact_data_screen.dart', root),
+    'utf8',
+  );
+
+  assert.equal(historicalProfileCalls, 2);
+  assert.equal([...currentScreen.matchAll(/\.updateProfile\s*\(/gu)].length, 1);
+  assert.doesNotMatch(currentScreen, /_pseudoGeocode|_confirmLocationOnMap|homeLat|homeLng/u);
+  assert.doesNotThrow(() => validateRw19ProfileLocationMutationPrincipalEpochTransaction({
+    repositoryRoot,
+    evidence: historical,
+  }));
+});
+
 test('rejects 408 as a rejection or a granted external gate', () => {
   const broadened = evidence();
   broadened.definiteRejectionContracts.profileMutation.push({
@@ -62,7 +81,7 @@ test('rejects a direct screen mutation call site or stale protected source', () 
         [screenPath]: `${screen}\nvoid rw19Drift() { DataService.updateCurrentUserProfile(); }\n`,
       },
     }),
-    /call-site inventory drifted/u,
+    /current call-site contract drifted/u,
   );
 
   const stale = evidence();
