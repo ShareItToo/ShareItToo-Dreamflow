@@ -55,6 +55,15 @@ async function main() {
     enabled: syntheticCloneEnabled,
     bindHost: config.bindHost,
   });
+  if (syntheticCloneEnabled && (
+    config.deploymentEnvironment !== 'test'
+    || config.nonBindingSimulationEnabled !== true
+    || config.payments.transport !== 'memory'
+    || config.payments.livemode !== false
+    || config.listingAi.externalProviderExecutionAllowed !== false
+  )) {
+    throw new Error('synthetic clone lifecycle requires Stage-A test, memory-only, external-AI-off configuration');
+  }
   const paymentTestEnvelope = {
     requested: process.env.SIT_LOCAL_QA_SYNTHETIC_PAYMENT_LANE ?? '0',
     cloneEnabled: syntheticCloneEnabled,
@@ -81,6 +90,7 @@ async function main() {
       renterId: process.env.SIT_SYNTHETIC_CLONE_RENTER_ID?.trim(),
       listingId: SYNTHETIC_CLONE_PRINCIPALS.listingId,
       secret: process.env.SIT_SYNTHETIC_CLONE_CONFIRMATION_SECRET?.trim(),
+      stageANonBindingPilot: config.nonBindingSimulationEnabled,
     })
     : null;
 

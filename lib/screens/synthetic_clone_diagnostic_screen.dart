@@ -13,6 +13,7 @@ import 'synthetic_payment_test_screen.dart';
 import '../services/auth_service.dart';
 import '../services/backend_http.dart';
 import '../services/synthetic_clone_booking_service.dart';
+import '../widgets/synthetic_clone_lifecycle_panels.dart';
 import '../widgets/synthetic_clone_non_binding_banner.dart';
 
 class SyntheticCloneDiagnosticScreen extends StatefulWidget {
@@ -31,6 +32,7 @@ class _SyntheticCloneDiagnosticScreenState
   final _challengeIdController = TextEditingController();
   final _fallbackCodeController = TextEditingController();
   final _qrPayloadController = TextEditingController();
+  int _reviewDraftRating = 5;
   SyntheticCloneStatus? _status;
   SyntheticCloneBooking? _booking;
   SyntheticCloneChallenge? _challenge;
@@ -238,6 +240,24 @@ class _SyntheticCloneDiagnosticScreenState
         setState(() => _audit = audit);
       });
 
+  Future<void> _sendChatTemplate(String template) => _run(() async {
+        final booking = await SyntheticCloneBookingService.sendChatTemplate(
+          bookingId: _booking!.id,
+          template: template,
+        );
+        if (!mounted) return;
+        setState(() => _booking = booking);
+      });
+
+  Future<void> _saveReviewDraft() => _run(() async {
+        final booking = await SyntheticCloneBookingService.saveReviewDraft(
+          bookingId: _booking!.id,
+          rating: _reviewDraftRating,
+        );
+        if (!mounted) return;
+        setState(() => _booking = booking);
+      });
+
   Future<void> _cleanup() => _run(() async {
         final result = await SyntheticCloneBookingService.cleanup();
         if (result['cleanupVerified'] != true) {
@@ -245,7 +265,8 @@ class _SyntheticCloneDiagnosticScreenState
         }
         final status = await SyntheticCloneBookingService.status();
         if (!status.cleaned || status.bookings != 0) {
-          throw const FormatException('synthetic_clone_cleanup_readback_invalid');
+          throw const FormatException(
+              'synthetic_clone_cleanup_readback_invalid');
         }
         final prefs = await SharedPreferences.getInstance();
         await prefs.remove(_bookingKey);
@@ -306,6 +327,15 @@ class _SyntheticCloneDiagnosticScreenState
               const SizedBox(height: 12),
               _buildWorkflowCard(),
               const SizedBox(height: 12),
+              if (const {'accepted', 'active', 'returned'}
+                  .contains(_booking!.status)) ...[
+                _buildChatCard(),
+                const SizedBox(height: 12),
+              ],
+              if (_booking!.status == 'returned') ...[
+                _buildReviewDraftCard(),
+                const SizedBox(height: 12),
+              ],
               _buildChallengeCard(),
               const SizedBox(height: 12),
               _buildAuditCard(),
@@ -408,13 +438,20 @@ class _SyntheticCloneDiagnosticScreenState
                 style: const TextStyle(fontWeight: FontWeight.w800)),
             Text('Owner: ${booking.ownerId}'),
             Text('Renter: ${booking.renterId}'),
-            if (SyntheticPaymentConfig.enabled && _status != null && !_status!.cleaned)
+            if (SyntheticPaymentConfig.enabled &&
+                _status != null &&
+                !_status!.cleaned)
               OutlinedButton(
-                onPressed: _busy ? null : () async {
-                  final runId = _status!.runId;
-                  await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SyntheticPaymentTestScreen(runId: runId, bookingId: booking.id)));
-                  if (mounted) await _load();
-                },
+                onPressed: _busy
+                    ? null
+                    : () async {
+                        final runId = _status!.runId;
+                        await Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                                builder: (_) => SyntheticPaymentTestScreen(
+                                    runId: runId, bookingId: booking.id)));
+                        if (mounted) await _load();
+                      },
                 child: const Text('Lokalen Zahlungstest öffnen'),
               ),
             const SizedBox(height: 8),
@@ -440,8 +477,13 @@ class _SyntheticCloneDiagnosticScreenState
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          segment == 'pickup' ? '4 Pickup-Fotos (Owner)' : '4 Return-Fotos (Renter)',
+          segment == 'pickup'
+              ? '4 Pickup-Fotos (Owner)'
+              : '4 Return-Fotos (Renter)',
           style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+        const Text(
+          'Synthetische Testslots: kein Foto wird als echter Zustandsnachweis gespeichert.',
         ),
         const SizedBox(height: 8),
         SyntheticClonePhotoSlotActions(
@@ -455,7 +497,8 @@ class _SyntheticCloneDiagnosticScreenState
             key: ValueKey('synthetic-clone-challenge-$segment'),
             onPressed: _busy ? null : _issueChallenge,
             icon: const Icon(Icons.qr_code_2),
-            label: Text('${segment == 'pickup' ? 'Pickup' : 'Return'}-QR-v3 ausstellen'),
+            label: Text(
+                '${segment == 'pickup' ? 'Pickup' : 'Return'}-QR-v3 ausstellen'),
           ),
       ],
     );
@@ -478,7 +521,8 @@ class _SyntheticCloneDiagnosticScreenState
             ),
             if (_isPresenter && _challenge != null) ...[
               const SizedBox(height: 12),
-              Center(child: QrImageView(data: _challenge!.qrPayload, size: 180)),
+              Center(
+                  child: QrImageView(data: _challenge!.qrPayload, size: 180)),
               SelectableText('Fallback-Code: ${_challenge!.fallbackCode}'),
               SelectableText('Challenge-ID: ${_challenge!.id}'),
             ],
@@ -496,6 +540,29 @@ class _SyntheticCloneDiagnosticScreenState
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildChatCard() {
+    final booking = _booking!;
+    return SyntheticCloneChatPanel(
+      messages: booking.chatMessages,
+      busy: _busy,
+      onSendTemplate: _sendChatTemplate,
+    );
+  }
+
+  Widget _buildReviewDraftCard() {
+    final booking = _booking!;
+    final ownDraft =
+        booking.reviewDrafts.any((draft) => draft['reviewerRole'] == _role);
+    return SyntheticCloneReviewDraftPanel(
+      reviewDrafts: booking.reviewDrafts,
+      ownDraftExists: ownDraft,
+      busy: _busy,
+      rating: _reviewDraftRating,
+      onRatingChanged: (value) => setState(() => _reviewDraftRating = value),
+      onSave: _saveReviewDraft,
     );
   }
 
@@ -533,7 +600,6 @@ class _SyntheticCloneDiagnosticScreenState
           ),
         ),
       );
-
 }
 
 class SyntheticCloneVerifierEntry extends StatelessWidget {
@@ -694,5 +760,4 @@ class SyntheticClonePhotoSlotActions extends StatelessWidget {
         'critical' => 'Kritischer Bereich',
         _ => slot,
       };
-
 }

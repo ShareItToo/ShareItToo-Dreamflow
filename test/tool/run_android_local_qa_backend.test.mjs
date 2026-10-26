@@ -19,6 +19,7 @@ test('local Android QA harness remains loopback-only, synthetic and cleanup-safe
     "payment: 'memory-no-real-money'",
     'store: false',
     "SIT_SYNTHETIC_CLONE_BOOKING_LANE: '1'",
+    "PRIVATE_PILOT_V4_ENABLED: 'true'",
     'SIT_SYNTHETIC_CLONE_OWNER_ID',
     'SIT_SYNTHETIC_CLONE_RENTER_ID',
     'SIT_SYNTHETIC_CLONE_CONFIRMATION_SECRET',

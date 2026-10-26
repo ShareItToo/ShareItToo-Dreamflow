@@ -80,6 +80,16 @@ void main() {
           releaseChannel: 'internal',
           apiBaseUrl: SyntheticCloneConfig.isolatedLocalQaEndpoint,
         ),
+        isFalse,
+      );
+      expect(
+        SyntheticCloneConfig.configurationAllowed(
+          requested: true,
+          backendEnabled: true,
+          releaseChannel: 'internal',
+          apiBaseUrl: SyntheticCloneConfig.isolatedLocalQaEndpoint,
+          stageANonBindingPilot: true,
+        ),
         isTrue,
       );
       expect(

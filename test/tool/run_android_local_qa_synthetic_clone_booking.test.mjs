@@ -27,6 +27,14 @@ const diagnosticScreenSource = readFileSync(
   new URL('../../lib/screens/synthetic_clone_diagnostic_screen.dart', import.meta.url),
   'utf8',
 );
+const cloneServiceSource = readFileSync(
+  new URL('../../lib/services/synthetic_clone_booking_service.dart', import.meta.url),
+  'utf8',
+);
+const lifecyclePanelsSource = readFileSync(
+  new URL('../../lib/widgets/synthetic_clone_lifecycle_panels.dart', import.meta.url),
+  'utf8',
+);
 
 const ownerId = '11111111-1111-4111-8111-111111111111';
 const renterId = '22222222-2222-4222-8222-222222222222';
@@ -91,6 +99,20 @@ test('runner QR input contract matches the rendered diagnostic field', () => {
     diagnosticScreenSource,
     /labelText: 'QR-v3-Payload eingeben \(kein Kamera-Scan\)'/u,
   );
+});
+
+test('Stage-A clone UI chat and review actions remain synthetic and non-publishing', () => {
+  assert.match(lifecyclePanelsSource, /Synthetischer Chat · keine externe Nachricht/u);
+  assert.match(lifecyclePanelsSource, /Private synthetische Bewertungsentwürfe/u);
+  assert.match(lifecyclePanelsSource, /Keine Veröffentlichung, kein Profilwert und kein Ranking/u);
+  assert.match(diagnosticScreenSource, /Synthetische Testslots: kein Foto wird als echter Zustandsnachweis gespeichert/u);
+  assert.match(diagnosticScreenSource, /SyntheticCloneBookingService\.sendChatTemplate/u);
+  assert.match(diagnosticScreenSource, /SyntheticCloneBookingService\.saveReviewDraft/u);
+  assert.match(cloneServiceSource, /'\/synthetic-clone\/bookings\/\$\{Uri\.encodeComponent\(bookingId\)\}\/chat-templates'/u);
+  assert.match(cloneServiceSource, /'\/synthetic-clone\/bookings\/\$\{Uri\.encodeComponent\(bookingId\)\}\/review-drafts'/u);
+  assert.match(cloneServiceSource, /message\['externalDelivery'\] != false/u);
+  assert.match(cloneServiceSource, /draft\['publishable'\] != false/u);
+  assert.match(cloneServiceSource, /draft\['profileEffect'\] != false/u);
 });
 
 test('return fallback carries both the visible challenge id and exact six-digit code', () => {

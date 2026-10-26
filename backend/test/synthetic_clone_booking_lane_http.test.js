@@ -17,6 +17,7 @@ const listingId = 'synthetic_clone_listing_wp255';
 function createLane() {
   return createSyntheticCloneBookingLane({
     enabled: true,
+    stageANonBindingPilot: true,
     deploymentEnvironment: 'test',
     targetKind: 'clone',
     datasetId: 'wp255-green-clone-http',
@@ -103,5 +104,75 @@ test('actual Express clone routes reject missing and non-allowlisted principals'
     const outsider = await fetch(`${baseUrl}/v1/synthetic-clone/status`, { headers: headers('outsider-token') });
     assert.equal(outsider.status, 403);
     assert.equal((await outsider.json()).error, 'synthetic_clone_principal_not_allowlisted');
+  });
+});
+
+test('chat templates and review drafts stay inside the synthetic lane', async () => {
+  await withServer(async (baseUrl, lane) => {
+    const create = await fetch(`${baseUrl}/v1/synthetic-clone/bookings`, {
+      method: 'POST', headers: headers('renter-token'), body: JSON.stringify({ listingId }),
+    });
+    const booking = await create.json();
+    const prematureChat = await fetch(`${baseUrl}/v1/synthetic-clone/bookings/${booking.id}/chat-templates`, {
+      method: 'POST', headers: headers('renter-token'), body: JSON.stringify({ template: 'handover_arranged' }),
+    });
+    assert.equal(prematureChat.status, 409);
+    assert.equal((await prematureChat.json()).error, 'synthetic_clone_chat_wrong_booking_state');
+    const chatWithExtraData = await fetch(`${baseUrl}/v1/synthetic-clone/bookings/${booking.id}/chat-templates`, {
+      method: 'POST', headers: headers('renter-token'),
+      body: JSON.stringify({ template: 'handover_arranged', email: 'person@example.invalid' }),
+    });
+    assert.equal(chatWithExtraData.status, 400);
+    assert.equal((await chatWithExtraData.json()).error, 'synthetic_clone_chat_payload_invalid');
+
+    const accepted = await fetch(`${baseUrl}/v1/synthetic-clone/bookings/${booking.id}/accept`, {
+      method: 'POST', headers: headers('owner-token'), body: '{}',
+    });
+    assert.equal(accepted.status, 200);
+    const chat = await fetch(`${baseUrl}/v1/synthetic-clone/bookings/${booking.id}/chat-templates`, {
+      method: 'POST', headers: headers('renter-token'), body: JSON.stringify({ template: 'handover_arranged' }),
+    });
+    assert.equal(chat.status, 201);
+    const afterChat = await chat.json();
+    assert.equal(afterChat.chatMessages[0].syntheticTestOnly, true);
+    assert.equal(afterChat.chatMessages[0].externalDelivery, false);
+    assert.equal(afterChat.chatMessages[0].text, 'Synthetischer Test: Übergabe abgestimmt.');
+
+    const prematureDraft = await fetch(`${baseUrl}/v1/synthetic-clone/bookings/${booking.id}/review-drafts`, {
+      method: 'POST', headers: headers('renter-token'), body: JSON.stringify({ rating: 5 }),
+    });
+    assert.equal(prematureDraft.status, 409);
+    assert.equal((await prematureDraft.json()).error, 'synthetic_clone_review_wrong_booking_state');
+    const draftWithText = await fetch(`${baseUrl}/v1/synthetic-clone/bookings/${booking.id}/review-drafts`, {
+      method: 'POST', headers: headers('renter-token'),
+      body: JSON.stringify({ rating: 5, text: 'not stored' }),
+    });
+    assert.equal(draftWithText.status, 400);
+    assert.equal((await draftWithText.json()).error, 'synthetic_clone_review_payload_invalid');
+
+    for (const slot of ['overview', 'detail', 'accessories', 'critical']) {
+      lane.addPhoto({ actorId: ownerId, bookingId: booking.id, segment: 'pickup', slot });
+    }
+    const pickup = lane.issueChallenge({ actorId: ownerId, bookingId: booking.id, segment: 'pickup' });
+    lane.verifyChallenge({ actorId: renterId, bookingId: booking.id, raw: { qrPayload: pickup.qrPayload } });
+    for (const slot of ['overview', 'detail', 'accessories', 'critical']) {
+      lane.addPhoto({ actorId: renterId, bookingId: booking.id, segment: 'return', slot });
+    }
+    const returned = lane.issueChallenge({ actorId: renterId, bookingId: booking.id, segment: 'return' });
+    lane.verifyChallenge({ actorId: ownerId, bookingId: booking.id, raw: { qrPayload: returned.qrPayload } });
+    for (const [roleToken, rating, direction] of [
+      ['owner-token', 5, 'owner_to_renter'],
+      ['renter-token', 4, 'renter_to_owner'],
+    ]) {
+      const draftResponse = await fetch(`${baseUrl}/v1/synthetic-clone/bookings/${booking.id}/review-drafts`, {
+        method: 'POST', headers: headers(roleToken), body: JSON.stringify({ rating }),
+      });
+      assert.equal(draftResponse.status, 201);
+      const draftResult = await draftResponse.json();
+      assert.ok(draftResult.reviewDrafts.some((draft) => draft.direction === direction));
+      assert.ok(draftResult.reviewDrafts.every((draft) => draft.publishable === false && draft.profileEffect === false));
+    }
+    assert.equal(lane.status().sideEffects.review, false);
+    assert.equal(lane.status().sideEffects.ranking, false);
   });
 });

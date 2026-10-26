@@ -11,7 +11,7 @@ const renterId = '00000000-0000-4000-8000-000000000012';
 const runId = 'wp255-20260929120000-aabbccdd';
 const envelope = { requested: '1', cloneEnabled: true, localQa: true, deploymentEnvironment: 'test', bindHost: '127.0.0.1', transport: 'memory', livemode: false };
 function fixture(enabled = true) {
-  const lane = createSyntheticCloneBookingLane({ enabled: true, deploymentEnvironment: 'test', targetKind: 'clone', datasetId: 'wp255-green-clone-payment-test', runId, ownerId, renterId, secret: 'synthetic-local-only-secret-long-enough', ...(enabled ? { paymentTestEnvelope: envelope } : {}) });
+  const lane = createSyntheticCloneBookingLane({ enabled: true, stageANonBindingPilot: true, deploymentEnvironment: 'test', targetKind: 'clone', datasetId: 'wp255-green-clone-payment-test', runId, ownerId, renterId, secret: 'synthetic-local-only-secret-long-enough', ...(enabled ? { paymentTestEnvelope: envelope } : {}) });
   const booking = lane.createBooking({ actorId: renterId, listingId: 'synthetic_clone_listing_wp255' });
   const command = (action, extra = {}, key = `synthetic-key-${action}`) => lane.paymentTest.execute({ actorId: renterId, bookingId: booking.id, body: { runId, key, action, ...extra } });
   return { lane, booking, command };
@@ -25,7 +25,7 @@ test('payment gate defaults off and rejects every unsafe envelope axis', () => {
   for (const patch of [{ requested: 'true' }, { requested: '' }, { cloneEnabled: false }, { localQa: false }, { deploymentEnvironment: 'staging' }, { deploymentEnvironment: 'production' }, { bindHost: '0.0.0.0' }, { bindHost: '::1' }, { transport: 'stripe' }, { livemode: true }]) {
     assert.throws(() => assertSyntheticPaymentTestEnvelope({ ...envelope, ...patch }));
   }
-  assert.throws(() => createSyntheticCloneBookingLane({ enabled: true, deploymentEnvironment: 'clone', targetKind: 'clone', datasetId: 'wp255-green-clone-payment-test', runId, ownerId, renterId, secret: 'synthetic-local-only-secret-long-enough', paymentTestEnvelope: envelope }), /clone_environment_mismatch/u);
+  assert.throws(() => createSyntheticCloneBookingLane({ enabled: true, stageANonBindingPilot: true, deploymentEnvironment: 'clone', targetKind: 'clone', datasetId: 'wp255-green-clone-payment-test', runId, ownerId, renterId, secret: 'synthetic-local-only-secret-long-enough', paymentTestEnvelope: envelope }), /clone_environment_mismatch/u);
 });
 
 test('server owns challenge, capture, refund and replay without changing clone booking', () => {

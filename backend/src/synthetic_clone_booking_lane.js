@@ -29,6 +29,11 @@ export const SYNTHETIC_CLONE_NON_BINDING_MARKER = Object.freeze({
 const PHOTO_SLOTS = Object.freeze(['overview', 'detail', 'accessories', 'critical']);
 const PHOTO_SEGMENTS = Object.freeze(['pickup', 'return']);
 const STATUSES = Object.freeze(['requested', 'accepted', 'active', 'returned']);
+const CHAT_TEMPLATES = Object.freeze({
+  handover_arranged: 'Synthetischer Test: Übergabe abgestimmt.',
+  return_arranged: 'Synthetischer Test: Rückgabe abgestimmt.',
+});
+const REVIEW_DIRECTIONS = Object.freeze({ owner: 'owner_to_renter', renter: 'renter_to_owner' });
 const DEFAULT_FALLBACK_CODE = '246810';
 
 export class SyntheticCloneBookingLaneError extends Error {
@@ -58,6 +63,14 @@ function text(value, max = 200) {
 function assertObject(value, code = 'invalid_synthetic_clone_payload') {
   if (!value || typeof value !== 'object' || Array.isArray(value)) fail(400, code);
   return value;
+}
+
+function assertExactPayloadKeys(value, key, code) {
+  const payload = assertObject(value, code);
+  if (Object.keys(payload).length !== 1 || !Object.hasOwn(payload, key)) {
+    fail(400, code);
+  }
+  return payload;
 }
 
 function assertUuid(value, code = 'synthetic_clone_booking_invalid') {
@@ -156,6 +169,8 @@ function publicBooking(booking, { includeAudit = false } = {}) {
       return: booking.photos.return.map(publicPhoto),
     },
     confirmations: clone(booking.confirmations),
+    chatMessages: clone(booking.chatMessages),
+    reviewDrafts: clone(booking.reviewDrafts),
     returnCompletedAt: booking.returnCompletedAt,
     ...(includeAudit ? { audit: clone(booking.audit) } : {}),
   };
@@ -170,8 +185,10 @@ function validateCloneIdentity({
   ownerId,
   renterId,
   listingId,
+  stageANonBindingPilot,
 } = {}) {
   if (enabled !== true) fail(503, 'synthetic_clone_lane_disabled');
+  if (stageANonBindingPilot !== true) fail(503, 'synthetic_clone_stage_a_required');
   if (!['test', 'clone'].includes(String(deploymentEnvironment ?? '').toLowerCase())) {
     fail(503, 'synthetic_clone_test_environment_required');
   }
@@ -241,6 +258,7 @@ export function createSyntheticCloneBookingLane({
   clock = () => new Date(),
   fallbackCode = DEFAULT_FALLBACK_CODE,
   paymentTestEnvelope = undefined,
+  stageANonBindingPilot = false,
 } = {}) {
   validateCloneIdentity({
     enabled,
@@ -251,6 +269,7 @@ export function createSyntheticCloneBookingLane({
     ownerId,
     renterId,
     listingId,
+    stageANonBindingPilot,
   });
   if (typeof secret !== 'string' || secret.length < 32) fail(503, 'synthetic_clone_secret_invalid');
   if (!/^\d{6}$/u.test(fallbackCode)) fail(503, 'synthetic_clone_fallback_code_invalid');
@@ -317,6 +336,8 @@ export function createSyntheticCloneBookingLane({
       photos: { pickup: [], return: [] },
       challenges: new Map(),
       confirmations: { pickup: null, return: null },
+      chatMessages: [],
+      reviewDrafts: [],
       returnCompletedAt: null,
       audit: [],
       createdAt,
@@ -475,6 +496,60 @@ export function createSyntheticCloneBookingLane({
     return publicBooking(bookingFor(actorId, bookingId), { includeAudit });
   }
 
+  function sendChatTemplate({ actorId, bookingId, template } = {}) {
+    const booking = bookingFor(actorId, bookingId);
+    if (!['accepted', 'active', 'returned'].includes(booking.status)) {
+      fail(409, 'synthetic_clone_chat_wrong_booking_state');
+    }
+    if (!Object.hasOwn(CHAT_TEMPLATES, template)) fail(400, 'synthetic_clone_chat_template_invalid');
+    if (booking.chatMessages.length >= 20) fail(409, 'synthetic_clone_chat_run_limit');
+    const message = Object.freeze({
+      id: crypto.randomUUID(),
+      template,
+      text: CHAT_TEMPLATES[template],
+      actorRole: participantRole(actorId, principals),
+      syntheticTestOnly: true,
+      externalDelivery: false,
+      createdAt: timestamp(),
+    });
+    booking.chatMessages.push(message);
+    record('synthetic_clone.chat_template_sent', {
+      actorId,
+      bookingId,
+      metadata: { template, externalDelivery: false },
+    });
+    booking.audit.push(audit[audit.length - 1]);
+    return publicBooking(booking);
+  }
+
+  function saveReviewDraft({ actorId, bookingId, rating } = {}) {
+    const booking = bookingFor(actorId, bookingId);
+    if (booking.status !== 'returned') fail(409, 'synthetic_clone_review_wrong_booking_state');
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) fail(400, 'synthetic_clone_review_rating_invalid');
+    const reviewerRole = participantRole(actorId, principals);
+    if (booking.reviewDrafts.some((draft) => draft.reviewerRole === reviewerRole)) {
+      fail(409, 'synthetic_clone_review_draft_exists');
+    }
+    const draft = Object.freeze({
+      id: crypto.randomUUID(),
+      direction: REVIEW_DIRECTIONS[reviewerRole],
+      reviewerRole,
+      rating,
+      syntheticTestOnly: true,
+      publishable: false,
+      profileEffect: false,
+      createdAt: timestamp(),
+    });
+    booking.reviewDrafts.push(draft);
+    record('synthetic_clone.review_draft_saved', {
+      actorId,
+      bookingId,
+      metadata: { direction: draft.direction, rating, publishable: false, profileEffect: false },
+    });
+    booking.audit.push(audit[audit.length - 1]);
+    return publicBooking(booking);
+  }
+
   function getListing({ actorId, requestedListingId = principals.listingId } = {}) {
     participantRole(actorId, principals);
     if (requestedListingId !== principals.listingId) fail(404, 'synthetic_clone_listing_not_found');
@@ -497,7 +572,12 @@ export function createSyntheticCloneBookingLane({
 
   function cleanup({ actorId } = {}) {
     participantRole(actorId, principals);
-    const before = { bookings: bookings.size, auditEvents: audit.length };
+    const before = {
+      bookings: bookings.size,
+      chatMessages: [...bookings.values()].reduce((count, booking) => count + booking.chatMessages.length, 0),
+      reviewDrafts: [...bookings.values()].reduce((count, booking) => count + booking.reviewDrafts.length, 0),
+      auditEvents: audit.length,
+    };
     for (const booking of bookings.values()) {
       record('synthetic_clone.booking_cleaned', {
         actorId,
@@ -509,7 +589,7 @@ export function createSyntheticCloneBookingLane({
     bookings.clear();
     const paymentCleanup = paymentTest?.cleanup();
     cleaned = true;
-    const after = { bookings: bookings.size, listings: 0, photos: 0, challenges: 0 };
+    const after = { bookings: bookings.size, listings: 0, photos: 0, challenges: 0, chatMessages: 0, reviewDrafts: 0 };
     record('synthetic_clone.cleanup_verified', { actorId, metadata: { before, after } });
     return {
       marker: SYNTHETIC_CLONE_NON_BINDING_MARKER,
@@ -528,12 +608,15 @@ export function createSyntheticCloneBookingLane({
   }
 
   function status() {
+    const bookingValues = [...bookings.values()];
     return {
       marker: SYNTHETIC_CLONE_NON_BINDING_MARKER,
       datasetId,
       runId,
       principals: clone(principals),
       bookings: bookings.size,
+      chatMessages: bookingValues.reduce((count, booking) => count + booking.chatMessages.length, 0),
+      reviewDrafts: bookingValues.reduce((count, booking) => count + booking.reviewDrafts.length, 0),
       auditEventCount: audit.length,
       cleaned,
       ...(paymentTest ? { paymentTest: paymentTest.capability() } : {}),
@@ -559,6 +642,8 @@ export function createSyntheticCloneBookingLane({
     issueChallenge,
     verifyChallenge,
     getBooking,
+    sendChatTemplate,
+    saveReviewDraft,
     getListing,
     getAudit,
     getAuditLog,
@@ -632,6 +717,14 @@ export function registerSyntheticCloneBookingLaneRoutes(app, {
   }));
   app.post(`${SYNTHETIC_CLONE_BOOKING_ROUTE_PREFIX}/:id/challenges/verify`, ...auth, route(async (req, res) => {
     res.json(lane.verifyChallenge({ actorId: actor(req), bookingId: req.params.id, raw: req.body }));
+  }));
+  app.post(`${SYNTHETIC_CLONE_BOOKING_ROUTE_PREFIX}/:id/chat-templates`, ...auth, route(async (req, res) => {
+    const payload = assertExactPayloadKeys(req.body, 'template', 'synthetic_clone_chat_payload_invalid');
+    res.status(201).json(lane.sendChatTemplate({ actorId: actor(req), bookingId: req.params.id, template: payload.template }));
+  }));
+  app.post(`${SYNTHETIC_CLONE_BOOKING_ROUTE_PREFIX}/:id/review-drafts`, ...auth, route(async (req, res) => {
+    const payload = assertExactPayloadKeys(req.body, 'rating', 'synthetic_clone_review_payload_invalid');
+    res.status(201).json(lane.saveReviewDraft({ actorId: actor(req), bookingId: req.params.id, rating: payload.rating }));
   }));
   app.delete(`${SYNTHETIC_CLONE_BOOKING_ROUTE_PREFIX}`, ...auth, route(async (req, res) => {
     res.json(lane.cleanup({ actorId: actor(req) }));

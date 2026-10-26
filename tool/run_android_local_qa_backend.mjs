@@ -425,6 +425,7 @@ async function main() {
     backendChild = undefined;
     const cloneEnvironment = {
       ...backendEnvironment,
+      PRIVATE_PILOT_V4_ENABLED: 'true',
       SIT_SYNTHETIC_CLONE_BOOKING_LANE: '1',
       SIT_LOCAL_QA_SYNTHETIC_PAYMENT_LANE: syntheticPaymentFlag,
       SIT_SYNTHETIC_CLONE_OWNER_ID: ownerAccount.userId,

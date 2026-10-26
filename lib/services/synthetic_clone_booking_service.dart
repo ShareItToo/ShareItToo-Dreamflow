@@ -18,6 +18,10 @@ const Set<String> syntheticCloneStatuses = <String>{
   'active',
   'returned',
 };
+const Set<String> syntheticCloneChatTemplates = <String>{
+  'handover_arranged',
+  'return_arranged',
+};
 
 class SyntheticCloneBooking {
   final String id;
@@ -29,6 +33,8 @@ class SyntheticCloneBooking {
   final Map<String, dynamic> confirmations;
   final Map<String, dynamic> marker;
   final Map<String, dynamic> listing;
+  final List<Map<String, dynamic>> chatMessages;
+  final List<Map<String, dynamic>> reviewDrafts;
 
   const SyntheticCloneBooking({
     required this.id,
@@ -40,6 +46,8 @@ class SyntheticCloneBooking {
     required this.confirmations,
     required this.marker,
     required this.listing,
+    required this.chatMessages,
+    required this.reviewDrafts,
   });
 
   bool hasCompletePhotos(String segment) =>
@@ -65,14 +73,30 @@ class SyntheticCloneBooking {
     final confirmations = raw['confirmations'] is Map
         ? Map<String, dynamic>.from(raw['confirmations'] as Map)
         : <String, dynamic>{};
+    final chatMessages = _strictMaps(raw['chatMessages'] ?? const <dynamic>[]);
+    final reviewDrafts = _strictMaps(raw['reviewDrafts'] ?? const <dynamic>[]);
+    if (chatMessages.any((message) =>
+            message['syntheticTestOnly'] != true ||
+            message['externalDelivery'] != false) ||
+        reviewDrafts.any((draft) =>
+            draft['syntheticTestOnly'] != true ||
+            draft['publishable'] != false ||
+            draft['profileEffect'] != false ||
+            draft['rating'] is! int ||
+            (draft['rating'] as int) < 1 ||
+            (draft['rating'] as int) > 5)) {
+      throw const FormatException('synthetic_clone_private_artifact_invalid');
+    }
     final pickupSlots = _parsePhotoSlots(photos['pickup']);
     final returnSlots = _parsePhotoSlots(photos['return']);
     if ((status == 'active' || status == 'returned') &&
         !_hasCompleteSlotSet(pickupSlots)) {
-      throw const FormatException('synthetic_clone_pickup_photo_set_incomplete');
+      throw const FormatException(
+          'synthetic_clone_pickup_photo_set_incomplete');
     }
     if (status == 'returned' && !_hasCompleteSlotSet(returnSlots)) {
-      throw const FormatException('synthetic_clone_return_photo_set_incomplete');
+      throw const FormatException(
+          'synthetic_clone_return_photo_set_incomplete');
     }
     return SyntheticCloneBooking(
       id: id,
@@ -87,6 +111,8 @@ class SyntheticCloneBooking {
       confirmations: confirmations,
       marker: marker,
       listing: listing,
+      chatMessages: chatMessages,
+      reviewDrafts: reviewDrafts,
     );
   }
 }
@@ -185,7 +211,8 @@ class SyntheticCloneStatus {
       renterId: _requiredText(principals['renterId'], 'renter_id'),
       listingId: _requiredText(principals['listingId'], 'listing_id'),
       bookings: _requiredInt(raw['bookings'], 'bookings'),
-      auditEventCount: _requiredInt(raw['auditEventCount'], 'audit_event_count'),
+      auditEventCount:
+          _requiredInt(raw['auditEventCount'], 'audit_event_count'),
       cleaned: raw['cleaned'] == true,
       sideEffects: sideEffects,
     );
@@ -236,8 +263,7 @@ class SyntheticCloneBookingService {
         path: '/synthetic-clone/status',
       ));
 
-  static Future<Map<String, dynamic>> listing() async =>
-      await _authorized(
+  static Future<Map<String, dynamic>> listing() async => await _authorized(
         method: 'GET',
         path: '/synthetic-clone/listings/synthetic_clone_listing_wp255',
       );
@@ -273,7 +299,8 @@ class SyntheticCloneBookingService {
     _assertPhotoInput(segment, slot, source);
     return SyntheticCloneBooking.fromJson(await _authorized(
       method: 'POST',
-      path: '/synthetic-clone/bookings/${Uri.encodeComponent(bookingId)}/photos',
+      path:
+          '/synthetic-clone/bookings/${Uri.encodeComponent(bookingId)}/photos',
       body: <String, dynamic>{
         'segment': segment,
         'slot': slot,
@@ -298,6 +325,36 @@ class SyntheticCloneBookingService {
       path:
           '/synthetic-clone/bookings/${Uri.encodeComponent(bookingId)}/challenges',
       body: <String, dynamic>{'segment': segment},
+    ));
+  }
+
+  static Future<SyntheticCloneBooking> sendChatTemplate({
+    required String bookingId,
+    required String template,
+  }) async {
+    if (!syntheticCloneChatTemplates.contains(template)) {
+      throw const FormatException('synthetic_clone_chat_template_invalid');
+    }
+    return SyntheticCloneBooking.fromJson(await _authorized(
+      method: 'POST',
+      path:
+          '/synthetic-clone/bookings/${Uri.encodeComponent(bookingId)}/chat-templates',
+      body: <String, dynamic>{'template': template},
+    ));
+  }
+
+  static Future<SyntheticCloneBooking> saveReviewDraft({
+    required String bookingId,
+    required int rating,
+  }) async {
+    if (rating < 1 || rating > 5) {
+      throw const FormatException('synthetic_clone_review_rating_invalid');
+    }
+    return SyntheticCloneBooking.fromJson(await _authorized(
+      method: 'POST',
+      path:
+          '/synthetic-clone/bookings/${Uri.encodeComponent(bookingId)}/review-drafts',
+      body: <String, dynamic>{'rating': rating},
     ));
   }
 

@@ -4,8 +4,7 @@
 /// must opt in explicitly and must also be backed by the isolated local QA
 /// endpoint used by the canonical local candidate.
 abstract final class SyntheticCloneConfig {
-  static const String isolatedLocalQaEndpoint =
-      'http://127.0.0.1:18080/api/v1';
+  static const String isolatedLocalQaEndpoint = 'http://127.0.0.1:18080/api/v1';
 
   static const bool requested = bool.fromEnvironment(
     'SIT_SYNTHETIC_CLONE_BOOKING_LANE',
@@ -27,17 +26,24 @@ abstract final class SyntheticCloneConfig {
     defaultValue: 'https://shareittoo.com/api/v1',
   );
 
+  static const bool stageANonBindingPilot = bool.fromEnvironment(
+    'SIT_STAGE_A_NON_BINDING_PILOT',
+    defaultValue: false,
+  );
+
   static bool configurationAllowed({
     required bool requested,
     required bool backendEnabled,
     required String releaseChannel,
     required String apiBaseUrl,
+    bool stageANonBindingPilot = false,
   }) {
     if (!requested) return true;
     if (!backendEnabled) return false;
     if (releaseChannel.trim().toLowerCase() != 'internal') {
       return false;
     }
+    if (!stageANonBindingPilot) return false;
 
     return apiBaseUrl.trim() == isolatedLocalQaEndpoint;
   }
@@ -47,12 +53,14 @@ abstract final class SyntheticCloneConfig {
     required bool backendEnabled,
     required String releaseChannel,
     required String apiBaseUrl,
+    bool stageANonBindingPilot = false,
   }) {
     if (!requested) return null;
     if (!backendEnabled) return 'backend_required';
     if (releaseChannel.trim().toLowerCase() != 'internal') {
       return 'internal_channel_required';
     }
+    if (!stageANonBindingPilot) return 'stage_a_non_binding_pilot_required';
     if (apiBaseUrl.trim() != isolatedLocalQaEndpoint) {
       return 'isolated_local_qa_endpoint_required';
     }
@@ -64,12 +72,14 @@ abstract final class SyntheticCloneConfig {
     required bool backendEnabled,
     required String releaseChannel,
     required String apiBaseUrl,
+    bool stageANonBindingPilot = false,
   }) {
     final error = configurationErrorFor(
       requested: requested,
       backendEnabled: backendEnabled,
       releaseChannel: releaseChannel,
       apiBaseUrl: apiBaseUrl,
+      stageANonBindingPilot: stageANonBindingPilot,
     );
     if (error != null) {
       throw StateError('Invalid synthetic clone build configuration: $error');
@@ -82,6 +92,7 @@ abstract final class SyntheticCloneConfig {
       backendEnabled: backendEnabled,
       releaseChannel: releaseChannel,
       apiBaseUrl: apiBaseUrl,
+      stageANonBindingPilot: stageANonBindingPilot,
     );
   }
 
@@ -92,14 +103,16 @@ abstract final class SyntheticCloneConfig {
         backendEnabled: backendEnabled,
         releaseChannel: releaseChannel,
         apiBaseUrl: apiBaseUrl,
+        stageANonBindingPilot: stageANonBindingPilot,
       );
 
   static String? get configurationError => configurationErrorFor(
-    requested: requested,
-    backendEnabled: backendEnabled,
-    releaseChannel: releaseChannel,
-    apiBaseUrl: apiBaseUrl,
-  );
+        requested: requested,
+        backendEnabled: backendEnabled,
+        releaseChannel: releaseChannel,
+        apiBaseUrl: apiBaseUrl,
+        stageANonBindingPilot: stageANonBindingPilot,
+      );
 
   static bool reviewActionsAvailableFor({required bool syntheticClone}) =>
       !syntheticClone;

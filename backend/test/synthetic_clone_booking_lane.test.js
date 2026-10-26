@@ -18,6 +18,7 @@ const listingId = SYNTHETIC_CLONE_PRINCIPALS.listingId;
 function lane(overrides = {}) {
   return createSyntheticCloneBookingLane({
     enabled: true,
+    stageANonBindingPilot: true,
     deploymentEnvironment: 'test',
     targetKind: 'clone',
     datasetId: 'wp255-green-clone-booking-lane',
@@ -57,6 +58,8 @@ test('clone startup guard runs before database, mailer, and lane activation', ()
   assert.ok(guardOffset < databaseOffset);
   assert.ok(guardOffset < mailerOffset);
   assert.ok(guardOffset < laneActivationOffset);
+  assert.match(serverSource, /config\.deploymentEnvironment !== 'test'[\s\S]*config\.nonBindingSimulationEnabled !== true[\s\S]*config\.payments\.transport !== 'memory'[\s\S]*config\.payments\.livemode !== false[\s\S]*config\.listingAi\.externalProviderExecutionAllowed !== false/u);
+  assert.match(serverSource, /stageANonBindingPilot: config\.nonBindingSimulationEnabled/u);
 });
 
 test('clone lane requires explicit test clone identity and exact distinct principals', () => {
@@ -65,6 +68,7 @@ test('clone lane requires explicit test clone identity and exact distinct princi
   assert.throws(() => lane({ deploymentEnvironment: 'staging' }), /synthetic_clone_test_environment_required/u);
   assert.throws(() => lane({ ownerId: renterId }), /synthetic_clone_principals_invalid/u);
   assert.throws(() => lane({ renterId: ownerId }), /synthetic_clone_principals_invalid/u);
+  assert.throws(() => lane({ stageANonBindingPilot: false }), /synthetic_clone_stage_a_required/u);
   assert.throws(() => lane({ secret: undefined }), /synthetic_clone_secret_invalid/u);
 });
 
@@ -117,6 +121,21 @@ test('full synthetic non-binding booking lifecycle supports QR-v3 and six-digit 
   assert.equal(afterReturn.booking.marker.binding, 'non-binding');
   assert.equal(afterReturn.booking.returnCompletedAt != null, true);
 
+  const ownerMessage = service.sendChatTemplate({ actorId: ownerId, bookingId: created.id, template: 'return_arranged' });
+  assert.equal(ownerMessage.chatMessages[0].externalDelivery, false);
+  assert.equal(ownerMessage.chatMessages[0].syntheticTestOnly, true);
+  const ownerDraft = service.saveReviewDraft({ actorId: ownerId, bookingId: created.id, rating: 5 });
+  const renterDraft = service.saveReviewDraft({ actorId: renterId, bookingId: created.id, rating: 4 });
+  assert.deepEqual(ownerDraft.reviewDrafts.map((draft) => draft.direction), ['owner_to_renter']);
+  assert.deepEqual(renterDraft.reviewDrafts.map((draft) => draft.direction), ['owner_to_renter', 'renter_to_owner']);
+  assert.ok(renterDraft.reviewDrafts.every((draft) => draft.publishable === false && draft.profileEffect === false));
+  assert.equal(service.status().sideEffects.review, false);
+  assert.equal(service.status().sideEffects.ranking, false);
+  assert.equal(service.status().reviewDrafts, 2);
+  assert.equal(errorCode(() => service.saveReviewDraft({ actorId: renterId, bookingId: created.id, rating: 4 })), 'synthetic_clone_review_draft_exists');
+  assert.equal(errorCode(() => service.saveReviewDraft({ actorId: renterId, bookingId: created.id, rating: 6 })), 'synthetic_clone_review_rating_invalid');
+  assert.equal(errorCode(() => service.sendChatTemplate({ actorId: renterId, bookingId: created.id, template: 'freeform' })), 'synthetic_clone_chat_template_invalid');
+
   const status = service.status();
   assert.deepEqual(status.sideEffects, {
     platformContract: false,
@@ -162,13 +181,35 @@ test('QR and fallback verification fail closed on tamper, crossover and replay',
 test('cleanup removes all lane resources while retaining an auditable cleanup proof', () => {
   const service = lane();
   const created = service.createBooking({ actorId: renterId, listingId });
+  service.acceptBooking({ actorId: ownerId, bookingId: created.id });
+  service.sendChatTemplate({ actorId: ownerId, bookingId: created.id, template: 'handover_arranged' });
+  for (const slot of ['overview', 'detail', 'accessories', 'critical']) {
+    service.addPhoto({ actorId: ownerId, bookingId: created.id, segment: 'pickup', slot });
+  }
+  const pickup = service.issueChallenge({ actorId: ownerId, bookingId: created.id, segment: 'pickup' });
+  service.verifyChallenge({ actorId: renterId, bookingId: created.id, raw: { qrPayload: pickup.qrPayload } });
+  for (const slot of ['overview', 'detail', 'accessories', 'critical']) {
+    service.addPhoto({ actorId: renterId, bookingId: created.id, segment: 'return', slot });
+  }
+  const returned = service.issueChallenge({ actorId: renterId, bookingId: created.id, segment: 'return' });
+  service.verifyChallenge({ actorId: ownerId, bookingId: created.id, raw: { qrPayload: returned.qrPayload } });
+  service.saveReviewDraft({ actorId: ownerId, bookingId: created.id, rating: 5 });
+  service.saveReviewDraft({ actorId: renterId, bookingId: created.id, rating: 4 });
+  assert.equal(service.status().chatMessages, 1);
+  assert.equal(service.status().reviewDrafts, 2);
   const result = service.cleanup({ actorId: ownerId });
   assert.equal(result.cleanupVerified, true);
   assert.equal(result.remainingResources.bookings, 0);
   assert.equal(result.remainingResources.listings, 0);
   assert.equal(result.remainingResources.photos, 0);
   assert.equal(result.remainingResources.challenges, 0);
+  assert.equal(result.remainingResources.chatMessages, 0);
+  assert.equal(result.remainingResources.reviewDrafts, 0);
   assert.equal(result.auditRetained, true);
+  const audit = service.getAuditLog({ actorId: ownerId });
+  assert.ok(audit.some((entry) => entry.action === 'synthetic_clone.chat_template_sent'));
+  assert.ok(audit.some((entry) => entry.action === 'synthetic_clone.review_draft_saved'));
+  assert.ok(audit.some((entry) => entry.action === 'synthetic_clone.cleanup_verified'));
   assert.equal(service.status().bookings, 0);
   assert.throws(() => service.getBooking({ actorId: ownerId, bookingId: created.id }), (error) => error.code === 'synthetic_clone_booking_not_found');
   assert.throws(() => service.createBooking({ actorId: renterId, listingId }), (error) => error.code === 'synthetic_clone_lane_cleaned');
