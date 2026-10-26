@@ -232,7 +232,10 @@ class _UploadProbe {
 }
 
 class _MemoryXFile extends XFile {
-  _MemoryXFile() : super.fromData(_png, name: 'synthetic.png');
+  _MemoryXFile() : super.fromData(_png);
+
+  @override
+  String get name => 'synthetic.png';
 
   @override
   Future<Uint8List> readAsBytes() async => Uint8List.fromList(_png);
