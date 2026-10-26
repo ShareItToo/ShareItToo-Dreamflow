@@ -116,6 +116,37 @@ test('profile save reads the authenticated projection back before reporting succ
   );
 });
 
+test('Web gallery picker starts in the tap gesture before dismissing the sheet', () => {
+  const galleryAction = compactSource.indexOf("title: 'Foto aus Galerie wählen'");
+  const pickerLaunch = compactSource.indexOf(
+    'unawaited(_pickPhoto(ImageSource.gallery, owner));',
+    galleryAction,
+  );
+  const sheetDismiss = compactSource.indexOf(
+    'Navigator.of(context).pop(_ProfilePhotoChoice.gallery);',
+    galleryAction,
+  );
+  assert.ok(galleryAction >= 0 && pickerLaunch > galleryAction);
+  assert.ok(sheetDismiss > pickerLaunch,
+      'Web picker must open before the async sheet result loses browser activation');
+
+  const pickerRoutine = compactSource.slice(
+    compactSource.indexOf('Future<void> _pickPhoto('),
+  );
+  const syncOwnerCheck = pickerRoutine.indexOf(
+    'if (!_profileActions.isSynchronouslyCurrent(owner)) { return; }',
+  );
+  const pickerCall = pickerRoutine.indexOf(
+    'final XFile? shot = await picker.pickImage(',
+  );
+  assert.ok(syncOwnerCheck >= 0 && pickerCall > syncOwnerCheck);
+  assert.doesNotMatch(
+    pickerRoutine.slice(syncOwnerCheck, pickerCall),
+    /await _profileActions\.isCurrent/u,
+    'no async session check may precede the browser file-input click',
+  );
+});
+
 test('remote profile save cannot report success while a data URI remains unuploaded', () => {
   const updateProfile = mutationService.slice(
     mutationService.indexOf('Future<AccountProfileMutationResult> updateProfile('),

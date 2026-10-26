@@ -39,6 +39,11 @@ final png = base64Decode(
 final avatar =
     BackendConfig.uri('/uploads/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa-full.png')
         .toString();
+// Legacy data-URI rows were truncated to 2000 characters by an older API
+// sanitizer. This payload length is not valid base64 and must be replaceable
+// by a newly selected image without blocking the managed upload flow.
+final legacyInvalidPhotoUrl =
+    'data:image/png;base64,${List<String>.filled(1977, 'A').join()}';
 User user(String id) => User(
     id: id,
     displayName: 'Synthetic $id',
@@ -60,17 +65,6 @@ String session(User u) => jsonEncode({
       'refreshToken': 'refresh-${u.id}',
       'accessTokenExpiresAt': '2099-01-01T00:00:00Z'
     });
-
-class Picker extends ImagePickerPlatform {
-  int calls = 0;
-  @override
-  Future<XFile?> getImageFromSource(
-      {required ImageSource source,
-      ImagePickerOptions options = const ImagePickerOptions()}) async {
-    calls++;
-    return XFile.fromData(png, name: 'synthetic.png', mimeType: 'image/png');
-  }
-}
 
 void main() {
   test(
@@ -101,7 +95,15 @@ void main() {
       'web avatar upload, localStorage rehydrate, exact local logout and account isolation',
       (tester) async {
     expect(BackendConfig.enabled, true);
-    final a = user('a');
+    expect(
+      legacyInvalidPhotoUrl
+              .substring(legacyInvalidPhotoUrl.indexOf(',') + 1)
+              .length %
+          4,
+      1,
+      reason: 'reproduce malformed legacy data-URI base64 truncation',
+    );
+    final a = user('a').copyWith(photoURL: legacyInvalidPhotoUrl);
     final b = user('b');
     SharedPreferencesPlugin.registerWith(null);
     SharedPreferences.resetStatic();
@@ -137,6 +139,7 @@ void main() {
     var active = a;
     var uploads = 0;
     var patches = 0;
+    final profilePhotoRequests = <String>[];
     final navigation = GlobalKey<NavigatorState>();
     Widget root() => MultiProvider(
             providers: [
@@ -176,10 +179,15 @@ void main() {
       await tester.runAsync(
           () => Future<void>.delayed(const Duration(milliseconds: 100)));
       await settle();
-      expect(picker.calls, 1);
-      expect(avatars().any((w) => (w.url ?? '').startsWith('data:image/png')),
-          true,
-          reason: 'selected image preview');
+      expect(picker.calls, 1,
+          reason: 'the Web gallery selection reaches the image picker');
+      expect(
+        avatars().any(
+          (w) => _isFreshPngPreview(w.url),
+        ),
+        true,
+        reason: 'the controlled fresh PNG replaces the malformed legacy URI',
+      );
       // Chrome image codecs must start outside WidgetTester's fake clock.
       // Predecode only the locally intercepted synthetic owner-bound image;
       // URL propagation, rendered pixels and account isolation remain asserted.
@@ -202,11 +210,14 @@ void main() {
         }
       });
       await tester.ensureVisible(find.text('Speichern'));
+      profilePhotoRequests.clear();
       await tester.tap(find.text('Speichern'));
       await settle();
       expect(find.text('Gespeichert'), findsOneWidget);
       expect(uploads, 1);
       expect(patches, 1);
+      expect(profilePhotoRequests, ['upload', 'patch', 'auth-me']);
+      expect(remoteA['photoURL'], avatar);
       await tester.tap(find.text('OK'));
       await tester.pumpAndSettle();
       await tester.runAsync(
@@ -284,10 +295,12 @@ void main() {
                 expect(request.headers['Authorization'], 'Bearer token-a');
                 expect(latin1.decode(request.bodyBytes),
                     contains('profile_image'));
+                profilePhotoRequests.add('upload');
                 uploads++;
                 return http.Response(jsonEncode({'url': avatar}), 200);
               }
               if (request.method == 'PATCH' && path.endsWith('/profile')) {
+                profilePhotoRequests.add('patch');
                 remoteA = Map<String, dynamic>.from(
                     (jsonDecode(request.body) as Map)['profile'] as Map);
                 expect(remoteA['photoURL'], avatar);
@@ -295,6 +308,9 @@ void main() {
                 return http.Response(jsonEncode({'user': remoteA}), 200);
               }
               if (request.method == 'GET' && path.endsWith('/auth/me')) {
+                if (profilePhotoRequests.isNotEmpty) {
+                  profilePhotoRequests.add('auth-me');
+                }
                 return http.Response(
                     jsonEncode(
                         {'user': active.id == 'a' ? remoteA : b.toJson()}),
@@ -321,4 +337,35 @@ void main() {
                   'Unexpected mock route: ${request.method} $path');
             }));
   });
+}
+
+bool _isFreshPngPreview(String? url) {
+  if (url == null ||
+      url == legacyInvalidPhotoUrl ||
+      !url.startsWith('data:image/png;base64,')) {
+    return false;
+  }
+  try {
+    final bytes = base64Decode(url.substring(url.indexOf(',') + 1));
+    return bytes.length > 8 &&
+        bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4e &&
+        bytes[3] == 0x47;
+  } on FormatException {
+    return false;
+  }
+}
+
+class Picker extends ImagePickerPlatform {
+  int calls = 0;
+
+  @override
+  Future<XFile?> getImageFromSource({
+    required ImageSource source,
+    ImagePickerOptions options = const ImagePickerOptions(),
+  }) async {
+    calls++;
+    return XFile.fromData(png, name: 'synthetic.png', mimeType: 'image/png');
+  }
 }

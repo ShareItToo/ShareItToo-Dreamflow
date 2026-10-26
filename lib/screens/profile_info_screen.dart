@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lendify/models/rental_request.dart';
@@ -533,15 +534,23 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
                 _SheetAction(
                   icon: Icons.photo_camera_outlined,
                   title: 'Foto aufnehmen',
-                  onTap: () =>
-                      Navigator.of(context).pop(_ProfilePhotoChoice.camera),
+                  onTap: () {
+                    if (kIsWeb) {
+                      unawaited(_pickPhoto(ImageSource.camera, owner));
+                    }
+                    Navigator.of(context).pop(_ProfilePhotoChoice.camera);
+                  },
                 ),
                 const SizedBox(height: 10),
                 _SheetAction(
                   icon: Icons.photo_library_outlined,
                   title: 'Foto aus Galerie wählen',
-                  onTap: () =>
-                      Navigator.of(context).pop(_ProfilePhotoChoice.gallery),
+                  onTap: () {
+                    if (kIsWeb) {
+                      unawaited(_pickPhoto(ImageSource.gallery, owner));
+                    }
+                    Navigator.of(context).pop(_ProfilePhotoChoice.gallery);
+                  },
                 ),
                 const SizedBox(height: 10),
                 _SheetAction(
@@ -563,10 +572,10 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
     }
     switch (choice) {
       case _ProfilePhotoChoice.camera:
-        await _pickPhoto(ImageSource.camera, owner);
+        if (!kIsWeb) await _pickPhoto(ImageSource.camera, owner);
         break;
       case _ProfilePhotoChoice.gallery:
-        await _pickPhoto(ImageSource.gallery, owner);
+        if (!kIsWeb) await _pickPhoto(ImageSource.gallery, owner);
         break;
       case _ProfilePhotoChoice.remove:
         if (_profileActions.isSynchronouslyCurrent(owner)) {
@@ -581,7 +590,10 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
     ProfileMutationActionOwner owner,
   ) async {
     try {
-      if (!await _profileActions.isCurrent(_profileMutationService, owner)) {
+      // On Web the browser only permits a file-input click during the current
+      // user gesture. Validate the action epoch synchronously, open the picker
+      // immediately, then revalidate the full session owner after selection.
+      if (!_profileActions.isSynchronouslyCurrent(owner)) {
         return;
       }
       final picker = ImagePicker();
