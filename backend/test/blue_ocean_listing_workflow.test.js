@@ -308,7 +308,9 @@ test('workflow consumes the exact capability disclosure in every provider mode',
   const openAiConfiguration = readListingAiGatewayConfiguration({
     SIT_LISTING_AI_PROVIDER: 'openai',
     SIT_LISTING_AI_MODEL: listingAiOpenAiModel,
-    SIT_LISTING_AI_BUDGET_CENTS: '5',
+    SIT_LISTING_AI_BUDGET_CENTS: '10000',
+    SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: '500',
+    SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: '11111111-1111-4111-8111-111111111111',
     SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '1',
   }, { deploymentEnvironment: 'staging' });
   const openAiGateway = createListingAiGateway({
@@ -445,7 +447,9 @@ test('openai composition screens stripped derivatives and reports estimated not 
   const configuration = readListingAiGatewayConfiguration({
     SIT_LISTING_AI_PROVIDER: 'openai',
     SIT_LISTING_AI_MODEL: listingAiOpenAiModel,
-    SIT_LISTING_AI_BUDGET_CENTS: '5',
+    SIT_LISTING_AI_BUDGET_CENTS: '10000',
+    SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: '500',
+    SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: '11111111-1111-4111-8111-111111111111',
     SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '1',
   }, { deploymentEnvironment: 'staging' });
   let generatedBytes = null;
@@ -516,7 +520,9 @@ test('actual adapter rejects non-completed screening and generation without crea
       const configuration = readListingAiGatewayConfiguration({
         SIT_LISTING_AI_PROVIDER: 'openai',
         SIT_LISTING_AI_MODEL: listingAiOpenAiModel,
-        SIT_LISTING_AI_BUDGET_CENTS: '5',
+        SIT_LISTING_AI_BUDGET_CENTS: '10000',
+        SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: '500',
+        SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: '11111111-1111-4111-8111-111111111111',
         SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '1',
       }, { deploymentEnvironment: 'staging' });
       let calls = 0;
@@ -585,7 +591,9 @@ test('openai screening timeout returns a truthful paid manual fallback', async (
   const configuration = readListingAiGatewayConfiguration({
     SIT_LISTING_AI_PROVIDER: 'openai',
     SIT_LISTING_AI_MODEL: listingAiOpenAiModel,
-    SIT_LISTING_AI_BUDGET_CENTS: '5',
+    SIT_LISTING_AI_BUDGET_CENTS: '10000',
+    SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: '500',
+    SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: '11111111-1111-4111-8111-111111111111',
     SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '1',
     SIT_LISTING_AI_TIMEOUT_MS: '250',
   }, { deploymentEnvironment: 'staging' });
@@ -621,7 +629,9 @@ test('openai multi-image screening failure reports all attempted paid calls', as
   const configuration = readListingAiGatewayConfiguration({
     SIT_LISTING_AI_PROVIDER: 'openai',
     SIT_LISTING_AI_MODEL: listingAiOpenAiModel,
-    SIT_LISTING_AI_BUDGET_CENTS: '5',
+    SIT_LISTING_AI_BUDGET_CENTS: '10000',
+    SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: '500',
+    SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: '11111111-1111-4111-8111-111111111111',
     SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '1',
   }, { deploymentEnvironment: 'staging' });
   let calls = 0;
