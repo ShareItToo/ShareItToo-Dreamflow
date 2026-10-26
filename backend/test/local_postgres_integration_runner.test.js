@@ -102,6 +102,12 @@ test('private-pilot listing activation suite is available through its focused ro
   assert.equal(integrationTestPlan().flat().filter((entry) => entry === target).length, 0);
 });
 
+test('booking payment lifecycle is available through an isolated foundation route', () => {
+  const target = 'backend/test/postgres_foundation.integration.test.js';
+  assert.deepEqual(integrationTestPlan({ focusedBookingPayment: true }), [[target]]);
+  assert.equal(integrationTestPlan().flat().filter((entry) => entry === target).length, 1);
+});
+
 test('notifications use the standard PG plan and their focused environment route', async (t) => {
   const target = 'backend/test/notification_lifecycle_postgres.integration.test.js';
   assert.deepEqual(integrationTestPlan({ focusedNotifications: true }), [[target]]);

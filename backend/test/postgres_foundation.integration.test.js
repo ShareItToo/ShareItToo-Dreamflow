@@ -7589,6 +7589,7 @@ if (!databaseUrl) {
       });
       assert.equal(b8Create.status, 201);
       const b8Created = await b8Create.json();
+      assert.equal(b8Created.booking.workflowStatus, 'requested');
       assert.equal(b8Created.booking.quote.securityDepositMinor, 0);
       const b8Accept = await fetch(`${baseUrl}/v1/bookings/b8-payment-flow/transitions`, {
         method: 'POST',
@@ -7596,6 +7597,7 @@ if (!databaseUrl) {
         body: JSON.stringify({ status: 'accepted' }),
       });
       assert.equal(b8Accept.status, 200);
+      assert.equal((await b8Accept.json()).booking.workflowStatus, 'accepted');
 
       const b8CheckoutRequest = () => fetch(`${baseUrl}/v1/bookings/b8-payment-flow/payment/checkout`, {
         method: 'POST',
@@ -7609,6 +7611,9 @@ if (!databaseUrl) {
       assert.equal(b8CheckoutPayload.payment.amountMinor, 3300);
       assert.equal(b8CheckoutPayload.payment.ownerPayoutMinor, 3000);
       assert.equal(b8CheckoutPayload.payment.platformFeeMinor, 300);
+      assert.equal(b8CheckoutPayload.providerMode, 'memory');
+      assert.equal(b8CheckoutPayload.payment.livemode, false);
+      assert.match(b8CheckoutPayload.checkoutUrl, /[?&]memory=1(?:&|$)/u);
       assert.match(b8CheckoutPayload.checkoutUrl, /^http/);
       const b8CheckoutReplay = await b8CheckoutRequest();
       assert.equal(b8CheckoutReplay.status, 200);
@@ -7719,6 +7724,31 @@ if (!databaseUrl) {
         body: JSON.stringify({ scenario: 'requires_action' }),
       });
       assert.equal(simulateRequiresAction.status, 200);
+      const authorizationOnlyReadback = await fetch(
+        `${baseUrl}/v1/bookings/b8-payment-flow/payment`,
+        { headers: renterAHeaders },
+      );
+      assert.equal(authorizationOnlyReadback.status, 200);
+      const pendingAuthorization = await authorizationOnlyReadback.json();
+      assert.equal(pendingAuthorization.bookingStatus, 'payment_pending');
+      assert.equal(pendingAuthorization.payment.status, 'requires_action');
+      assert.equal(pendingAuthorization.payment.capturedMinor, 0);
+      const memoryOnlyPaymentRow = await setupPool.query(
+        `SELECT payment.status, payment.captured_minor, payment.livemode,
+                payment.provider_payment_id, payment.provider_checkout_session_id,
+                booking.workflow_status
+           FROM payments AS payment
+           JOIN bookings AS booking ON booking.id = payment.booking_id
+          WHERE payment.id = $1`,
+        [paymentId],
+      );
+      assert.equal(memoryOnlyPaymentRow.rowCount, 1);
+      assert.equal(memoryOnlyPaymentRow.rows[0].status, 'requires_action');
+      assert.equal(Number(memoryOnlyPaymentRow.rows[0].captured_minor), 0);
+      assert.equal(memoryOnlyPaymentRow.rows[0].livemode, false);
+      assert.equal(memoryOnlyPaymentRow.rows[0].workflow_status, 'payment_pending');
+      assert.match(memoryOnlyPaymentRow.rows[0].provider_payment_id, /^pi_memory_/u);
+      assert.match(memoryOnlyPaymentRow.rows[0].provider_checkout_session_id, /^cs_memory_/u);
       const deterministicEvent = () => fetch(`${baseUrl}/v1/payments/${paymentId}/simulate`, {
         method: 'POST', headers: renterAHeaders,
         body: JSON.stringify({ scenario: 'succeeded', duplicate: true }),
