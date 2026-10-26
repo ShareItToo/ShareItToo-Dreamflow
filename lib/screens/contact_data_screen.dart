@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
@@ -10,7 +9,6 @@ import 'package:lendify/services/data_service.dart';
 import 'package:lendify/services/profile_mutation_service.dart';
 import 'package:lendify/services/shared_persistence_sync.dart';
 import 'package:lendify/theme.dart';
-import 'package:lendify/widgets/approx_location_map.dart';
 import 'package:lendify/widgets/profile_mutation_interaction.dart';
 import 'package:lendify/widgets/tracked_dialog_route.dart';
 
@@ -1122,204 +1120,6 @@ class _ContactDataScreenState extends State<ContactDataScreen> {
     }
   }
 
-  (double, double) _pseudoGeocode(String address) {
-    // Deterministic pseudo coordinates from address hash.
-    final seed =
-        address.codeUnits.fold<int>(0, (a, b) => (a * 31 + b) & 0x7fffffff);
-    final r = Random(seed);
-
-    // Rough bounding box around DACH region (privacy-friendly demo).
-    final lat = 46.6 + r.nextDouble() * (54.9 - 46.6);
-    final lng = 5.9 + r.nextDouble() * (15.2 - 5.9);
-    return (lat, lng);
-  }
-
-  Future<void> _confirmLocationOnMap() async {
-    final owner = _profileActions.capture();
-    if (owner == null) return;
-    if (!_hasRequiredAddressFields) {
-      await _profileActions.showOwnedDialog<void>(
-        context: context,
-        owner: owner,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Adresse noch unvollständig'),
-          content: const Text('Bitte vervollständige zuerst die Adresse.'),
-          actions: [
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-
-    final u = owner.context.user;
-
-    final address = _composeAddressLine();
-    final (lat0, lng0) = u.homeLat != null && u.homeLng != null
-        ? (u.homeLat!, u.homeLng!)
-        : _pseudoGeocode(address);
-
-    double lat = lat0;
-    double lng = lng0;
-    bool saving = false;
-    String? inlineError;
-
-    final result =
-        await _profileActions.showOwnedSheet<AccountProfileMutationResult>(
-      context: context,
-      owner: owner,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        return _SheetScaffold(
-          title: 'Standort auf Karte bestätigen',
-          subtitle:
-              'Wir speichern optionale GPS‑Koordinaten, um Entfernungen für die lokale Suche und sichere Übergabeplanung berechnen zu können.',
-          child: StatefulBuilder(
-            builder: (context, setLocal) {
-              return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (inlineError != null) ...[
-                      _InlineError(text: inlineError!),
-                      const SizedBox(height: 12),
-                    ],
-                    ApproxLocationMap(
-                        lat: lat, lng: lng, label: 'Dein Standort (ungefähr)'),
-                    const SizedBox(height: 12),
-                    Row(children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () {
-                            final (a, b) = _pseudoGeocode(
-                                '${address}_${DateTime.now().microsecondsSinceEpoch}');
-                            setLocal(() {
-                              lat = a;
-                              lng = b;
-                            });
-                          },
-                          icon: const Icon(Icons.refresh_rounded,
-                              color: Colors.white),
-                          label: const Text('Neu berechnen',
-                              style: TextStyle(color: Colors.white)),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: FilledButton(
-                          onPressed: saving
-                              ? null
-                              : () async {
-                                  setLocal(() => saving = true);
-                                  try {
-                                    if (!await _profileActions.isCurrent(
-                                      _profileMutationService,
-                                      owner,
-                                    )) {
-                                      return;
-                                    }
-                                    final mutation =
-                                        await _profileMutationService
-                                            .updateProfile(
-                                      context: owner.context,
-                                      updates: {
-                                        CurrentUserProfileField.homeLat: lat,
-                                        CurrentUserProfileField.homeLng: lng,
-                                      },
-                                    );
-                                    if (!await _profileActions.isCurrent(
-                                          _profileMutationService,
-                                          owner,
-                                        ) ||
-                                        !sheetContext.mounted) {
-                                      return;
-                                    }
-                                    Navigator.of(sheetContext).pop(mutation);
-                                  } on ProfileMutationFailure catch (failure) {
-                                    if (failure.kind ==
-                                            ProfileMutationFailureKind
-                                                .principalChanged ||
-                                        !await _profileActions.isCurrent(
-                                          _profileMutationService,
-                                          owner,
-                                        ) ||
-                                        !sheetContext.mounted) {
-                                      return;
-                                    }
-                                    setLocal(() {
-                                      inlineError = failure.remoteAccepted
-                                          ? 'Die Koordinaten wurden serverseitig gespeichert; der lokale Profilstand konnte noch nicht aktualisiert werden.'
-                                          : failure.kind ==
-                                                  ProfileMutationFailureKind
-                                                      .outcomeUnknown
-                                              ? 'Der Speicherstatus ist unklar. Lade dein Profil neu, bevor du erneut speicherst.'
-                                              : 'Der Standort wurde nicht gespeichert.';
-                                    });
-                                  } catch (e) {
-                                    debugPrint(
-                                      '[ContactData] save coords failed: '
-                                      '${e.runtimeType}',
-                                    );
-                                    if (!await _profileActions.isCurrent(
-                                          _profileMutationService,
-                                          owner,
-                                        ) ||
-                                        !sheetContext.mounted) {
-                                      return;
-                                    }
-                                    setLocal(() {
-                                      inlineError =
-                                          'Der Standort wurde nicht gespeichert. Bitte versuche es erneut.';
-                                    });
-                                  } finally {
-                                    if (sheetContext.mounted &&
-                                        _profileActions
-                                            .isSynchronouslyCurrent(owner)) {
-                                      setLocal(() => saving = false);
-                                    }
-                                  }
-                                },
-                          child: saving
-                              ? const _BusyButtonLabel()
-                              : const Text('Speichern'),
-                        ),
-                      ),
-                    ]),
-                  ]);
-            },
-          ),
-        );
-      },
-    );
-    if (result == null ||
-        !await _profileActions.isCurrent(_profileMutationService, owner)) {
-      return;
-    }
-    setState(() => _user = result.user);
-    _profileActions.replaceContext(ProfileMutationContext(
-      user: result.user,
-      owner: owner.context.owner,
-    ));
-    final refreshedOwner = _profileActions.capture();
-    if (refreshedOwner == null || !mounted) return;
-    await _profileActions.showOwnedDialog<void>(
-      context: context,
-      owner: refreshedOwner,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Standort gespeichert'),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final user = _user;
@@ -1557,25 +1357,11 @@ class _ContactDataScreenState extends State<ContactDataScreen> {
                                             Icon(Icons.apartment_outlined)),
                                   ),
                                   const SizedBox(height: 14),
-                                  if (_hasRequiredAddressFields)
-                                    OutlinedButton.icon(
-                                      onPressed: _confirmLocationOnMap,
-                                      icon: const Icon(Icons.map_outlined,
-                                          color: Colors.white),
-                                      label: const Text(
-                                          'Standort auf Karte bestätigen',
-                                          style:
-                                              TextStyle(color: Colors.white)),
-                                    ),
-                                  if (!_hasRequiredAddressFields)
-                                    Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: Text(
-                                        'Standortbestätigung ist optional (verfügbar, sobald die Pflichtfelder ausgefüllt sind).',
-                                        style: theme.textTheme.bodySmall
-                                            ?.copyWith(color: Colors.white60),
-                                      ),
-                                    ),
+                                  Text(
+                                    'Wir leiten aus deiner Adresse keinen Kartenstandort ab und speichern hier keine geschätzten GPS-Koordinaten. Für die Suche wählst du den Ort dort ausdrücklich selbst aus.',
+                                    style: theme.textTheme.bodySmall
+                                        ?.copyWith(color: Colors.white70),
+                                  ),
                                 ]),
                               ),
                               const SizedBox(height: 12),

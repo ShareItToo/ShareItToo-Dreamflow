@@ -226,7 +226,7 @@ void main() {
     controller.dispose();
   });
 
-  testWidgets('Account A map sheet closes before any mutation under B',
+  testWidgets('address save never infers or mutates home coordinates',
       (tester) async {
     final profile = _SwitchableProfileMutationService();
     final contact = _SwitchableContactContextService(profile);
@@ -238,18 +238,34 @@ void main() {
       ),
     );
 
-    final mapButton = find.text('Standort auf Karte bestätigen');
-    await tester.ensureVisible(mapButton);
-    await tester.tap(mapButton);
-    await tester.pumpAndSettle();
-    expect(find.text('Dein Standort (ungefähr)'), findsOneWidget);
+    expect(
+      find.text(
+        'Wir leiten aus deiner Adresse keinen Kartenstandort ab und speichern hier keine geschätzten GPS-Koordinaten. Für die Suche wählst du den Ort dort ausdrücklich selbst aus.',
+      ),
+      findsOneWidget,
+    );
+    await tester.ensureVisible(find.text('Änderungen speichern'));
+    await tester.tap(find.text('Änderungen speichern'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump();
 
-    profile.activateAccountB(notify: true);
-    await tester.pumpAndSettle();
-
-    expect(find.text('Dein Standort (ungefähr)'), findsNothing);
-    expect(profile.mutationCalls, 0);
-    expect(find.text(_userB.email), findsOneWidget);
+    expect(profile.mutationCalls, 1);
+    expect(profile.lastUpdates, isNotNull);
+    expect(
+      profile.lastUpdates!.containsKey(CurrentUserProfileField.homeLat),
+      isFalse,
+    );
+    expect(
+      profile.lastUpdates!.containsKey(CurrentUserProfileField.homeLng),
+      isFalse,
+    );
+    expect(
+      profile.lastUpdates![CurrentUserProfileField.homeLocation],
+      'A Straße 1, 74072 A-Stadt, Deutschland',
+    );
+    expect(profile.lastMutationUser?.homeLat, 49.1);
+    expect(profile.lastMutationUser?.homeLng, 8.4);
   });
 
   testWidgets('accepted A address result cannot surface or navigate under B',
@@ -289,7 +305,10 @@ final _userA = buildTestUser(
   name: 'Account A',
   email: 'account-a@example.invalid',
 ).copyWith(
+  phone: '+491701234567',
   homeLocation: 'A Straße 1, 74072 A-Stadt',
+  homeLat: 49.1,
+  homeLng: 8.4,
   addressStreet: 'A Straße',
   addressHouseNumber: '1',
   addressPostalCode: '74072',
@@ -341,6 +360,8 @@ class _SwitchableProfileMutationService extends ProfileMutationService {
   final AccountProfileMutationFailure? failure;
   bool accountBActive = false;
   int mutationCalls = 0;
+  Map<CurrentUserProfileField, Object?>? lastUpdates;
+  User? lastMutationUser;
 
   _SwitchableProfileMutationService({this.mutation, this.failure});
 
@@ -360,6 +381,8 @@ class _SwitchableProfileMutationService extends ProfileMutationService {
     required Map<CurrentUserProfileField, Object?> updates,
   }) {
     mutationCalls += 1;
+    lastUpdates = Map<CurrentUserProfileField, Object?>.of(updates);
+    lastMutationUser = context.user;
     if (failure case final failure?) {
       return Future<AccountProfileMutationResult>.error(failure);
     }

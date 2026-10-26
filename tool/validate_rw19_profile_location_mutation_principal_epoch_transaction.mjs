@@ -177,7 +177,7 @@ export function validateRw19ProfileLocationMutationPrincipalEpochTransaction({
     }],
     ['.updateProfile', {
       'lib/screens/change_address_screen.dart': 1,
-      'lib/screens/contact_data_screen.dart': 2,
+      'lib/screens/contact_data_screen.dart': 1,
       'lib/screens/edit_profile_screen.dart': 1,
       'lib/screens/edit_social_media_screen.dart': 1,
       'lib/screens/explore_screen.dart': 1,
