@@ -17,6 +17,15 @@ test('passwords use salted scrypt hashes', async () => {
   assert.equal(first.includes(acceptedCandidate), false);
 });
 
+test('high-entropy action tokens use a separate SHA-256 lookup hash', () => {
+  const token = security.newActionToken();
+  const tokenHash = security.hashActionToken(token);
+  assert.match(token, /^[A-Za-z0-9_-]{64}$/u);
+  assert.match(tokenHash, /^[a-f0-9]{64}$/u);
+  assert.equal(tokenHash.includes(token), false);
+  assert.equal(tokenHash.startsWith('scrypt$'), false);
+});
+
 test('access tokens reject tampering', () => {
   const token = security.signAccessToken(
     { id: 'user-1', email: 'test@example.com' },

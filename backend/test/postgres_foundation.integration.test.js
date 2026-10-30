@@ -13116,7 +13116,7 @@ if (!databaseUrl) {
         registrationActionLabel: 'Kostenlos registrieren',
       };
       const deliveredVerificationTokens = [];
-      let deliveredPasswordResetToken = null;
+      let deliveredResetActionToken = null;
       const captureVerificationDelivery = async (user) => {
         deliveredVerificationTokens.push({
           userId: user.id,
@@ -13128,7 +13128,7 @@ if (!databaseUrl) {
       };
       applicationOptions.deliverVerification = captureVerificationDelivery;
       applicationOptions.deliverPasswordReset = async ({ token }) => {
-        deliveredPasswordResetToken = token;
+        deliveredResetActionToken = token;
       };
       await restartApplicationServer();
       const register = (body = registrationBody) => fetch(`${baseUrl}/v1/auth/register`, {
@@ -13414,20 +13414,20 @@ if (!databaseUrl) {
       assert.equal(passwordResetRequest.status, 202);
       const passwordResetRequestBody = await passwordResetRequest.json();
       assert.deepEqual(passwordResetRequestBody, { accepted: true });
-      assert.ok(deliveredPasswordResetToken);
-      assert.equal(JSON.stringify(passwordResetRequestBody).includes(deliveredPasswordResetToken), false);
+      assert.ok(deliveredResetActionToken);
+      assert.equal(JSON.stringify(passwordResetRequestBody).includes(deliveredResetActionToken), false);
       const resetTokenRow = await setupPool.query(
         `SELECT token_hash FROM auth_action_tokens
           WHERE user_id = $1 AND kind = 'reset_password' AND token_hash = $2`,
-        [unverifiedUserId, hashActionToken(deliveredPasswordResetToken)],
+        [unverifiedUserId, hashActionToken(deliveredResetActionToken)],
       );
       assert.equal(resetTokenRow.rowCount, 1);
-      assert.notEqual(resetTokenRow.rows[0].token_hash, deliveredPasswordResetToken);
+      assert.notEqual(resetTokenRow.rows[0].token_hash, deliveredResetActionToken);
       const replacementPassword = createEphemeralAcceptancePassword();
       const passwordReset = await fetch(`${baseUrl}/v1/auth/password-reset/confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: deliveredPasswordResetToken, password: replacementPassword }),
+        body: JSON.stringify({ token: deliveredResetActionToken, password: replacementPassword }),
       });
       assert.equal(passwordReset.status, 200);
       assert.deepEqual(await passwordReset.json(), { changed: true });
@@ -13435,7 +13435,7 @@ if (!databaseUrl) {
       const passwordResetReplay = await fetch(`${baseUrl}/v1/auth/password-reset/confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: deliveredPasswordResetToken, password: replacementPassword }),
+        body: JSON.stringify({ token: deliveredResetActionToken, password: replacementPassword }),
       });
       assert.equal(passwordResetReplay.status, 400);
       const resetRevokedOldSession = await fetch(`${baseUrl}/v1/auth/me`, {
