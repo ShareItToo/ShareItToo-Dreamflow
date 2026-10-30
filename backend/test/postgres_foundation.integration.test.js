@@ -2903,7 +2903,23 @@ if (!databaseUrl) {
         wp255Client.release();
       }
 
-      const acceptanceWindow = futureAcceptanceWindow();
+      const acceptanceWindow = futureAcceptanceWindow({ daysAhead: 300 });
+      const acceptanceWindowBlocks = await setupPool.query(
+        `SELECT id, kind, starts_at, ends_at
+           FROM listing_availability_blocks
+          WHERE listing_id = 'listing-1'
+            AND tstzrange(starts_at, ends_at, '[)')
+                && tstzrange($1::timestamptz, $2::timestamptz, '[)')`,
+        [acceptanceWindow.start, acceptanceWindow.end],
+      );
+      assert.deepEqual(
+        acceptanceWindowBlocks.rows,
+        [],
+        `concurrent-acceptance fixture overlaps an availability block: ${JSON.stringify({
+          acceptanceWindow,
+          blocks: acceptanceWindowBlocks.rows,
+        })}`,
+      );
       for (const [id, renterId] of [['booking-a', 'renter-a'], ['booking-b', 'renter-b']]) {
         const payload = {
           id,
@@ -6779,7 +6795,29 @@ if (!databaseUrl) {
         acceptRequest('booking-a'),
         acceptRequest('booking-b'),
       ]);
-      assert.deepEqual(acceptanceResponses.map((response) => response.status).sort(), [200, 409]);
+      assert.deepEqual(
+        acceptanceResponses.map((response) => response.status).sort(),
+        [200, 409],
+        JSON.stringify({
+          acceptanceWindow,
+          responses: await Promise.all(acceptanceResponses.map(async (response) => ({
+            status: response.status,
+            body: await response.clone().json(),
+          }))),
+          availabilityBlocks: (await setupPool.query(
+            `SELECT id, kind, starts_at, ends_at
+               FROM listing_availability_blocks
+              WHERE listing_id = 'listing-1'
+                AND tstzrange(starts_at, ends_at, '[)')
+                    && tstzrange($1::timestamptz, $2::timestamptz, '[)')`,
+            [acceptanceWindow.start, acceptanceWindow.end],
+          )).rows,
+          bookings: (await setupPool.query(
+            `SELECT id, status, workflow_status, workflow_revision
+               FROM bookings WHERE id IN ('booking-a', 'booking-b') ORDER BY id`,
+          )).rows,
+        }),
+      );
       const conflictResponse = acceptanceResponses.find((response) => response.status === 409);
       assert.equal((await conflictResponse.json()).error, 'booking_period_unavailable');
 
@@ -6787,6 +6825,28 @@ if (!databaseUrl) {
       const acceptedBookingId = acceptedIndex === 0 ? 'booking-a' : 'booking-b';
       const acceptedRenterId = acceptedIndex === 0 ? 'renter-a' : 'renter-b';
       const acceptedRenterHeaders = acceptedIndex === 0 ? renterAHeaders : renterBHeaders;
+      const acceptanceState = await setupPool.query(
+        `SELECT id, status, workflow_status, workflow_revision
+           FROM bookings WHERE id IN ('booking-a', 'booking-b') ORDER BY id`,
+      );
+      assert.deepEqual(
+        acceptanceState.rows.map(({ id, status, workflow_status, workflow_revision }) => ({
+          id,
+          status,
+          workflow_status,
+          workflow_revision: Number(workflow_revision),
+        })),
+        acceptedIndex === 0
+          ? [
+            { id: 'booking-a', status: 'accepted', workflow_status: 'accepted', workflow_revision: 3 },
+            { id: 'booking-b', status: 'pending', workflow_status: 'requested', workflow_revision: 2 },
+          ]
+          : [
+            { id: 'booking-a', status: 'pending', workflow_status: 'requested', workflow_revision: 2 },
+            { id: 'booking-b', status: 'accepted', workflow_status: 'accepted', workflow_revision: 3 },
+          ],
+        `concurrent acceptance did not leave exactly one accepted booking: ${JSON.stringify(acceptanceState.rows)}`,
+      );
 
       const registerOwnerPush = await fetch(`${baseUrl}/v1/auth/devices/push`, {
         method: 'PUT',
