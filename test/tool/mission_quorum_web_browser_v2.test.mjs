@@ -123,6 +123,8 @@ const expectedRunnerInventories = [
     imageOS: 'ubuntu24', imageVersion: '20261004.327.1', arch: 'x64', node: '22.23.3', chrome: '154.0.8037.97' },
   { inventoryCommit: 'bf62c713fd9c48247e2a4d3ce99a9f0554cd745e',
     imageOS: 'ubuntu24', imageVersion: '20261023.334.3', arch: 'x64', node: '22.23.3', chrome: '155.0.8059.39' },
+  { inventoryCommit: '799bcd0daf03c14c460e2662bcc9ca94a4a8aaa8',
+    imageOS: 'ubuntu24', imageVersion: '20261026.354.1', arch: 'x64', node: '22.23.4', chrome: '156.0.8078.47' },
 ];
 const contract = expectedRunnerInventories[1];
 const counts = () => Object.fromEntries(networkReasonKeys.map(k => [k, 0]));
@@ -154,7 +156,7 @@ test('inventory diagnosis identifies every failed condition before adapter retur
   const base = fake(); const valid = await base.inventory();
   const changes = [
     ...Object.entries({ platform: 'darwin', arch: 'arm64', imageOS: 'ubuntu22',
-      imageVersion: '20261019.341.1', node: '22.23.4', chrome: '155.0.8059.40',
+      imageVersion: '20261019.341.1', node: '22.23.5', chrome: '155.0.8059.40',
       head: 'f'.repeat(40), clean: false, uid: 0, gid: 0 }).map(([key, value]) => [key, { ...valid, [key]: value }]),
     ...['uid', 'gid'].flatMap(key => [undefined, null, false, '1001', -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]
       .map(value => [key, { ...valid, [key]: value }])),
@@ -292,7 +294,7 @@ test('mixed tuples and independent runner drift fail before build and always cle
     for(const changed of [
       ...mixed,
       {imageVersion:expected.imageVersion+'0'},{chrome:expected.chrome+'0'},
-      {node:'22.23.4'},{imageOS:'ubuntu22'},{arch:'arm64'},
+      {node:'22.23.5'},{imageOS:'ubuntu22'},{arch:'arm64'},
       {platform:'darwin'},{head:'c'.repeat(40)},{clean:false},
     ]){
       let built=false;let cleaned=0;
@@ -318,7 +320,7 @@ test('controller passes selected inventory into worker which checks exact Node, 
     });
     assert.equal(execute({}),expected.chrome);
     for(const changed of [{env:{}},{env:{SIT_P7_V2_INVENTORY_COMMIT:'unknown'}},
-      {arch:'arm64'},{versions:{node:'22.23.4'}}])assert.throws(()=>execute(changed),/probe_inventory/u);
+      {arch:'arm64'},{versions:{node:'22.23.5'}}])assert.throws(()=>execute(changed),/probe_inventory/u);
   }
   assert.ok(worker.includes('data.Browser === `Chrome/${matchedInventory.chrome}`'));
   assert.doesNotMatch(worker,/contract\.chrome/u);

@@ -15,6 +15,8 @@ import { fileURLToPath } from 'node:url';
 // https://github.com/actions/runner-images/blob/e3fe113a581eb9a44ca43f479b69f9c93f36df34/images/ubuntu/Ubuntu2404-Readme.md
 // Additional official inventory, accessed 2026-10-25:
 // https://github.com/actions/runner-images/blob/7e7dc1bcc0ef464e5e315a2b4c33609590c6cffe/images/ubuntu/Ubuntu2404-Readme.md
+// Latest observed official inventory, accessed 2026-10-30 and matched to failed-run runtime readback:
+// https://github.com/actions/runner-images/blob/799bcd0daf03c14c460e2662bcc9ca94a4a8aaa8/images/ubuntu/Ubuntu2404-Readme.md
 export const inventoryContracts = Object.freeze([
   Object.freeze({ inventoryCommit: '1275e33f5019b02660b81ecc5622fe196211fa89',
     imageOS: 'ubuntu24', imageVersion: '20260927.320.1', arch: 'x64', node: '22.23.3', chrome: '154.0.8037.57' }),
@@ -22,6 +24,8 @@ export const inventoryContracts = Object.freeze([
     imageOS: 'ubuntu24', imageVersion: '20261004.327.1', arch: 'x64', node: '22.23.3', chrome: '154.0.8037.97' }),
   Object.freeze({ inventoryCommit: 'bf62c713fd9c48247e2a4d3ce99a9f0554cd745e',
     imageOS: 'ubuntu24', imageVersion: '20261023.334.3', arch: 'x64', node: '22.23.3', chrome: '155.0.8059.39' }),
+  Object.freeze({ inventoryCommit: '799bcd0daf03c14c460e2662bcc9ca94a4a8aaa8',
+    imageOS: 'ubuntu24', imageVersion: '20261026.354.1', arch: 'x64', node: '22.23.4', chrome: '156.0.8078.47' }),
 ]);
 const self = fileURLToPath(import.meta.url);
 const chrome = '/opt/google/chrome/chrome';
