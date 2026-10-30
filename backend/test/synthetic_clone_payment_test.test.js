@@ -9,7 +9,11 @@ import { assertSyntheticPaymentTestEnvelope, SYNTHETIC_PAYMENT_NOTICE } from '..
 const ownerId = '00000000-0000-4000-8000-000000000011';
 const renterId = '00000000-0000-4000-8000-000000000012';
 const runId = 'wp255-20260929120000-aabbccdd';
-const envelope = { requested: '1', cloneEnabled: true, localQa: true, deploymentEnvironment: 'test', bindHost: '127.0.0.1', transport: 'memory', livemode: false };
+const envelope = {
+  requested: '1', cloneEnabled: true, localQa: true,
+  deploymentEnvironment: 'test', targetKind: 'clone', bindHost: '127.0.0.1',
+  transport: 'memory', livemode: false, externalProviderExecutionAllowed: false,
+};
 function fixture(enabled = true) {
   const lane = createSyntheticCloneBookingLane({ enabled: true, stageANonBindingPilot: true, deploymentEnvironment: 'test', targetKind: 'clone', datasetId: 'wp255-green-clone-payment-test', runId, ownerId, renterId, secret: 'synthetic-local-only-secret-long-enough', ...(enabled ? { paymentTestEnvelope: envelope } : {}) });
   const booking = lane.createBooking({ actorId: renterId, listingId: 'synthetic_clone_listing_wp255' });
@@ -22,7 +26,7 @@ test('payment gate defaults off and rejects every unsafe envelope axis', () => {
   assert.equal(assertSyntheticPaymentTestEnvelope(), false);
   assert.equal(fixture(false).lane.paymentTest, null);
   assert.equal(assertSyntheticPaymentTestEnvelope(envelope), true);
-  for (const patch of [{ requested: 'true' }, { requested: '' }, { cloneEnabled: false }, { localQa: false }, { deploymentEnvironment: 'staging' }, { deploymentEnvironment: 'production' }, { bindHost: '0.0.0.0' }, { bindHost: '::1' }, { transport: 'stripe' }, { livemode: true }]) {
+  for (const patch of [{ requested: 'true' }, { requested: '' }, { cloneEnabled: false }, { localQa: false }, { deploymentEnvironment: 'staging' }, { deploymentEnvironment: 'production' }, { targetKind: 'green' }, { bindHost: '0.0.0.0' }, { bindHost: '::1' }, { transport: 'stripe' }, { livemode: true }, { externalProviderExecutionAllowed: true }]) {
     assert.throws(() => assertSyntheticPaymentTestEnvelope({ ...envelope, ...patch }));
   }
   assert.throws(() => createSyntheticCloneBookingLane({ enabled: true, stageANonBindingPilot: true, deploymentEnvironment: 'clone', targetKind: 'clone', datasetId: 'wp255-green-clone-payment-test', runId, ownerId, renterId, secret: 'synthetic-local-only-secret-long-enough', paymentTestEnvelope: envelope }), /clone_environment_mismatch/u);

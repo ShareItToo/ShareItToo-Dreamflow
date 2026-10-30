@@ -57,20 +57,31 @@ export function validateLocalWebOrigin(value) {
   return value;
 }
 
+export function resolveWebCloneSyntheticPaymentFlag(value) {
+  const flag = value ?? '0';
+  if (!['0', '1'].includes(flag)) fail('web_clone_synthetic_payment_flag_invalid');
+  return flag;
+}
+
 export function assertWebCloneEnvironment(env, { origin = WEB_CLONE_ORIGIN } = {}) {
   validateLocalWebOrigin(origin);
+  const paymentFlag = resolveWebCloneSyntheticPaymentFlag(
+    env?.SIT_WEB_CLONE_SYNTHETIC_PAYMENT,
+  );
   const guards = {
     NODE_ENV: 'test', DEPLOYMENT_ENVIRONMENT: 'test', BIND_HOST: '127.0.0.1',
     BOOKING_PILOT_MODE: 'pilot', PRIVATE_PILOT_V4_ENABLED: 'true',
     PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false',
-    SIT_LOCAL_QA_SYNTHETIC_PAYMENT_LANE: '0',
     SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '0',
     SIT_SYNTHETIC_CLONE_BOOKING_LANE: '1',
+    SIT_LOCAL_QA_SYNTHETIC_IMAGE_SCREENING: 'false',
+    TECHNICAL_SANDBOX_ENABLED: '0', TECHNICAL_SANDBOX_KILL_SWITCH: '1',
   };
   for (const [key, expected] of Object.entries(guards)) {
     if (env?.[key] !== expected) fail('web_clone_environment_guard_failed');
   }
-  if (env.CORS_ORIGINS !== origin || env.SIT_LISTING_AI_PROVIDER !== 'mock'
+  if (env.SIT_LOCAL_QA_SYNTHETIC_PAYMENT_LANE !== paymentFlag
+      || env.CORS_ORIGINS !== origin || env.SIT_LISTING_AI_PROVIDER !== 'mock'
       || env.MAIL_TRANSPORT !== 'memory' || env.PUSH_TRANSPORT !== 'memory'
       || env.IDENTITY_VERIFICATION_TRANSPORT !== 'memory'
       || env.SIT_SYNTHETIC_TARGET_KIND !== 'clone'
@@ -315,6 +326,9 @@ function secureSession({ runRoot, owner, renter, runId, datasetId }) {
 export async function startLocalWebClone({ origin = WEB_CLONE_ORIGIN, webRoot } = {}) {
   validateLocalWebOrigin(origin);
   if (new URL(origin).protocol !== 'http:' || origin !== WEB_CLONE_ORIGIN) fail('web_clone_origin_must_match_compiled_loopback_api');
+  const syntheticPaymentFlag = resolveWebCloneSyntheticPaymentFlag(
+    process.env.SIT_WEB_CLONE_SYNTHETIC_PAYMENT,
+  );
   const root = resolve(webRoot ?? process.env.SIT_WEB_BUILD_DIR ?? '');
   if (!webRoot && !process.env.SIT_WEB_BUILD_DIR) fail('web_clone_web_build_dir_required');
   if (!(await statFile(join(root, 'index.html')).catch(() => null))?.isFile()) fail('web_clone_web_build_invalid');
@@ -369,6 +383,7 @@ export async function startLocalWebClone({ origin = WEB_CLONE_ORIGIN, webRoot } 
       UPLOAD_DIR: uploadDirectory, MAIL_TRANSPORT: 'memory', PUSH_TRANSPORT: 'memory',
       PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false', BOOKING_PILOT_MODE: 'pilot',
       PRIVATE_PILOT_V4_ENABLED: 'false', SIT_LOCAL_QA_SYNTHETIC_PAYMENT_LANE: '0',
+      SIT_WEB_CLONE_SYNTHETIC_PAYMENT: syntheticPaymentFlag,
       PRIVATE_PILOT_ALLOWED_REGIONS: 'heilbronn_wave0', FIREBASE_AUTH_ENABLED: 'false',
       FIREBASE_PHONE_VERIFICATION_ENABLED: 'false', IDENTITY_VERIFICATION_TRANSPORT: 'memory',
       MFA_ENCRYPTION_KEY: crypto.randomBytes(32).toString('base64url'),
@@ -432,6 +447,7 @@ export async function startLocalWebClone({ origin = WEB_CLONE_ORIGIN, webRoot } 
     const cloneEnvironment = {
       ...baseEnvironment, PRIVATE_PILOT_V4_ENABLED: 'true',
       SIT_SYNTHETIC_CLONE_BOOKING_LANE: '1', SIT_SYNTHETIC_TARGET_KIND: 'clone',
+      SIT_LOCAL_QA_SYNTHETIC_PAYMENT_LANE: syntheticPaymentFlag,
       SIT_SYNTHETIC_DATASET_ID: datasetId, SIT_SYNTHETIC_CLONE_RUN_ID: runId,
       SIT_SYNTHETIC_CLONE_OWNER_ID: ownerId, SIT_SYNTHETIC_CLONE_RENTER_ID: renterId,
       SIT_SYNTHETIC_CLONE_CONFIRMATION_SECRET: cloneSecret,
@@ -446,13 +462,21 @@ export async function startLocalWebClone({ origin = WEB_CLONE_ORIGIN, webRoot } 
     if (laneStatus.principals?.ownerId !== ownerId || laneStatus.principals?.renterId !== renterId || laneStatus.cleaned !== false) {
       fail('web_clone_lane_principal_binding_failed');
     }
+    if (syntheticPaymentFlag === '1'
+        ? laneStatus.paymentTest?.enabled !== true
+        : laneStatus.paymentTest !== undefined) {
+      fail('web_clone_synthetic_payment_readback_invalid');
+    }
     const sessionPath = secureSession({ runRoot, owner: { ...owner, id: ownerId }, renter: { ...renter, id: renterId }, runId, datasetId });
     apiUiServer = createWebCloneServer({ origin, backendPort, webRoot: root });
     await listenLoopback(apiUiServer, 18080);
     const ready = {
       status: 'ready-loopback-web-clone', origin, apiBaseUrl: `${origin}/api/v1`,
       backendBinding: '127.0.0.1', database: 'ephemeral-postgresql',
-      payments: { transport: 'memory', livemode: false, syntheticPaymentLane: false },
+      payments: {
+        transport: 'memory', livemode: false,
+        syntheticPaymentLane: syntheticPaymentFlag === '1',
+      },
       listingAi: { provider: 'mock', externalExecution: false },
       stageANonBindingPilot: true, syntheticPrincipals: 2,
       datasetId, runId, sessionManifest: sessionPath,
@@ -473,7 +497,14 @@ export async function startLocalWebClone({ origin = WEB_CLONE_ORIGIN, webRoot } 
     if (cleanupSummary.cleanupVerified !== true || cleanupSummary.remainingResources?.bookings !== 0
         || cleanupSummary.auditRetained !== true || !Array.isArray(cleanupSummary.audit)
         || !cleanupSummary.audit.some((entry) => entry.action === 'synthetic_clone.cleanup_verified')
-        || cleanupSummary.auditEventCount !== cleanupSummary.audit.length) {
+        || cleanupSummary.auditEventCount !== cleanupSummary.audit.length
+        || (syntheticPaymentFlag === '1' && (
+          cleanupSummary.paymentTest?.enabled !== false
+          || cleanupSummary.paymentTest?.states !== 0
+          || cleanupSummary.paymentTest?.commands !== 0
+          || cleanupSummary.paymentTest?.auditEvents !== 0
+        ))
+        || (syntheticPaymentFlag === '0' && cleanupSummary.paymentTest !== undefined)) {
       fail('web_clone_cleanup_readback_invalid');
     }
   } catch (error) {

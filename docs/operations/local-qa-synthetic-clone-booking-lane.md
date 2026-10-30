@@ -62,3 +62,38 @@ The local-QA build is a debuggable APK for the loopback backend and is not a
 Play or Store candidate. The installed Play version and final Play successor
 are supplied by their respective external release gates; this document does
 not hardcode either observed version.
+
+## Local Web runner with synthetic payment
+
+`tool/run_local_qa_web_clone.mjs` serves only `http://127.0.0.1:18080`, uses an
+ephemeral PostgreSQL database and defaults the payment diagnostic to off. The
+opt-in is exact: `SIT_WEB_CLONE_SYNTHETIC_PAYMENT=1`. It maps only inside the
+clone successor to `SIT_LOCAL_QA_SYNTHETIC_PAYMENT_LANE=1`; any other value is
+rejected before the runner creates a temporary directory. The backend repeats
+the test/clone/loopback/memory/livemode-off/external-provider-off envelope before
+database startup. Image screening, Technical Sandbox, Stripe and every external
+provider remain disabled.
+
+The matching Flutter artifact must be a debug build because the payment screen
+rejects profile and release mode. Build and run it with matching explicit flags:
+
+```sh
+flutter build web --debug --no-pub \
+  --dart-define=SIT_BACKEND_ENABLED=true \
+  --dart-define=SIT_API_BASE_URL=http://127.0.0.1:18080/api/v1 \
+  --dart-define=SIT_RELEASE_CHANNEL=internal \
+  --dart-define=SIT_BUNDLE_ID=com.shareittoo.app.qa \
+  --dart-define=SIT_STAGE_A_NON_BINDING_PILOT=true \
+  --dart-define=SIT_SYNTHETIC_CLONE_BOOKING_LANE=true \
+  --dart-define=SIT_LOCAL_QA_SYNTHETIC_PAYMENT_LANE=true
+
+SIT_WEB_CLONE_SYNTHETIC_PAYMENT=1 \
+SIT_WEB_BUILD_DIR="$PWD/build/web" \
+node tool/run_local_qa_web_clone.mjs
+```
+
+The synthetic payment supports only the server-owned `challenge_then_capture`
+and `decline` cases, with idempotent replay and synthetic refund. Its persistent
+notice states that there is no real money, contract or payout. Shutdown invokes
+the same bounded cleanup and requires zero payment states, commands and audit
+events. Omitting the opt-in preserves the previous payment-disabled Web clone.

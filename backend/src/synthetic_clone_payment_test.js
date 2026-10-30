@@ -9,11 +9,23 @@ export class SyntheticPaymentTestError extends Error {
 }
 const fail = (status, code) => { throw new SyntheticPaymentTestError(status, code); };
 
-export function assertSyntheticPaymentTestEnvelope({ requested = '0', cloneEnabled, localQa, deploymentEnvironment, bindHost, transport, livemode } = {}) {
+export function assertSyntheticPaymentTestEnvelope({
+  requested = '0',
+  cloneEnabled,
+  localQa,
+  deploymentEnvironment,
+  targetKind,
+  bindHost,
+  transport,
+  livemode,
+  externalProviderExecutionAllowed,
+} = {}) {
   if (requested === '0' || requested === undefined) return false;
   if (requested !== '1') fail(503, 'synthetic_payment_flag_invalid');
   if (cloneEnabled !== true || localQa !== true || deploymentEnvironment !== 'test'
-      || bindHost !== '127.0.0.1' || transport !== 'memory' || livemode !== false) {
+      || targetKind !== 'clone' || bindHost !== '127.0.0.1'
+      || transport !== 'memory' || livemode !== false
+      || externalProviderExecutionAllowed !== false) {
     fail(503, 'synthetic_payment_local_qa_envelope_required');
   }
   return true;

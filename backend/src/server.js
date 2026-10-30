@@ -67,11 +67,14 @@ async function main() {
   const paymentTestEnvelope = {
     requested: process.env.SIT_LOCAL_QA_SYNTHETIC_PAYMENT_LANE ?? '0',
     cloneEnabled: syntheticCloneEnabled,
-    localQa: process.env.SIT_LOCAL_QA_SYNTHETIC_IMAGE_SCREENING === 'true',
+    localQa: process.env.SIT_LOCAL_QA_SYNTHETIC_IMAGE_SCREENING === 'true'
+      || process.env.SIT_WEB_CLONE_SYNTHETIC_PAYMENT === '1',
     deploymentEnvironment: config.deploymentEnvironment,
+    targetKind: process.env.SIT_SYNTHETIC_TARGET_KIND?.trim() || 'clone',
     bindHost: config.bindHost,
     transport: config.payments.transport,
     livemode: config.payments.livemode,
+    externalProviderExecutionAllowed: config.listingAi.externalProviderExecutionAllowed,
   };
   const paymentTestEnabled = assertSyntheticPaymentTestEnvelope(paymentTestEnvelope);
 

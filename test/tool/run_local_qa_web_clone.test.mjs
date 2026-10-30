@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
   assertWebCloneEnvironment,
+  resolveWebCloneSyntheticPaymentFlag,
   safeStaticPath,
   validateLocalWebOrigin,
   webCloneProxyAccessRecord,
@@ -18,12 +20,15 @@ function environment(overrides = {}) {
     BOOKING_PILOT_MODE: 'pilot', PRIVATE_PILOT_V4_ENABLED: 'true',
     PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false',
     SIT_LOCAL_QA_SYNTHETIC_PAYMENT_LANE: '0',
+    SIT_WEB_CLONE_SYNTHETIC_PAYMENT: '0',
     SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '0',
     SIT_SYNTHETIC_CLONE_BOOKING_LANE: '1', CORS_ORIGINS: validOrigin,
     SIT_SYNTHETIC_TARGET_KIND: 'clone', FIREBASE_AUTH_ENABLED: 'false',
     FIREBASE_PHONE_VERIFICATION_ENABLED: 'false',
     SIT_LISTING_AI_PROVIDER: 'mock', MAIL_TRANSPORT: 'memory',
     PUSH_TRANSPORT: 'memory', IDENTITY_VERIFICATION_TRANSPORT: 'memory',
+    SIT_LOCAL_QA_SYNTHETIC_IMAGE_SCREENING: 'false',
+    TECHNICAL_SANDBOX_ENABLED: '0', TECHNICAL_SANDBOX_KILL_SWITCH: '1',
     SIT_SYNTHETIC_DATASET_ID: 'wp255-green-clone-test',
     SIT_SYNTHETIC_CLONE_RUN_ID: 'wp255-20261026090000-a1b2c3d4',
     SIT_SYNTHETIC_CLONE_OWNER_ID: '00000000-0000-4000-8000-000000000011',
@@ -54,15 +59,30 @@ test('web clone accepts only exact HTTP(S) loopback origins', () => {
 
 test('web clone runtime envelope pins Stage-A, test, loopback, memory and mock AI', () => {
   assert.equal(assertWebCloneEnvironment(environment(), { origin: validOrigin }), true);
+  assert.equal(assertWebCloneEnvironment(environment({
+    SIT_WEB_CLONE_SYNTHETIC_PAYMENT: '1',
+    SIT_LOCAL_QA_SYNTHETIC_PAYMENT_LANE: '1',
+  }), { origin: validOrigin }), true);
+  assert.equal(resolveWebCloneSyntheticPaymentFlag(undefined), '0');
+  assert.equal(resolveWebCloneSyntheticPaymentFlag('1'), '1');
+  for (const value of ['', 'true', 'false', '2']) {
+    assert.throws(
+      () => resolveWebCloneSyntheticPaymentFlag(value),
+      /web_clone_synthetic_payment_flag_invalid/u,
+    );
+  }
   for (const [name, value] of [
     ['NODE_ENV', 'production'], ['DEPLOYMENT_ENVIRONMENT', 'staging'],
     ['BIND_HOST', '0.0.0.0'], ['BOOKING_PILOT_MODE', 'off'],
     ['PRIVATE_PILOT_V4_ENABLED', 'false'], ['PAYMENT_TRANSPORT', 'stripe'],
     ['STRIPE_LIVEMODE', 'true'], ['SIT_LOCAL_QA_SYNTHETIC_PAYMENT_LANE', '1'],
+    ['SIT_WEB_CLONE_SYNTHETIC_PAYMENT', '1'],
     ['SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', '1'],
     ['SIT_SYNTHETIC_CLONE_BOOKING_LANE', '0'], ['CORS_ORIGINS', '*'],
     ['SIT_SYNTHETIC_TARGET_KIND', 'green'], ['FIREBASE_AUTH_ENABLED', 'true'],
     ['SIT_LISTING_AI_PROVIDER', 'external'], ['MAIL_TRANSPORT', 'smtp'],
+    ['SIT_LOCAL_QA_SYNTHETIC_IMAGE_SCREENING', 'true'],
+    ['TECHNICAL_SANDBOX_ENABLED', '1'], ['TECHNICAL_SANDBOX_KILL_SWITCH', '0'],
   ]) assert.throws(
     () => assertWebCloneEnvironment(environment({ [name]: value }), { origin: validOrigin }),
     /web_clone_environment_guard_failed/u,
@@ -83,6 +103,22 @@ test('static app serving confines resolved paths to the selected build root', ()
   assert.equal(safeStaticPath(root, '/assets/flutter.js'), `${root}/assets/flutter.js`);
   assert.throws(() => safeStaticPath(root, '/%2e%2e/private/secrets'), /web_clone_static_path_invalid/u);
   assert.throws(() => safeStaticPath(root, '/%2fprivate/secrets'), /web_clone_static_path_invalid/u);
+});
+
+test('custom Flutter bootstrap pins CanvasKit to the self-hosted build directory', () => {
+  const bootstrap = readFileSync('web/flutter_bootstrap.js', 'utf8');
+  assert.match(bootstrap, /\{\{flutter_js\}\}/u);
+  assert.match(bootstrap, /\{\{flutter_build_config\}\}/u);
+  assert.match(bootstrap, /canvasKitBaseUrl:\s*["']canvaskit\/["']/u);
+  assert.match(bootstrap, /serviceWorkerVersion:\s*\{\{flutter_service_worker_version\}\}/u);
+  assert.doesNotMatch(bootstrap, /https?:\/\//u);
+
+  const runner = readFileSync('tool/run_local_qa_web_clone.mjs', 'utf8');
+  assert.match(
+    runner,
+    /content-security-policy': "default-src 'self' data: blob:; connect-src 'self' ws:\/\/127\.0\.0\.1:18080; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'"/u,
+  );
+  assert.doesNotMatch(runner, /script-src[^"\n]*https?:/u);
 });
 
 test('proxy access diagnostics record only method, query-free path and status', () => {

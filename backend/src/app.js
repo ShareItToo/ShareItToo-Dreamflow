@@ -2514,6 +2514,19 @@ export function createApp({
       'X-SIT-Evidence-SHA256',
     ],
   }));
+  app.use('/v1', (req, res, next) => {
+    // Dynamic app reads must always carry a complete representation. Flutter's
+    // HTTP client has no cached response body to combine with Express' automatic
+    // bodyless 304 response. Public upload bytes are content-addressed/static and
+    // retain their existing immutable cache behavior below.
+    if (req.path.startsWith('/uploads/')) return next();
+    res.set('Cache-Control', 'no-store');
+    if (req.method === 'GET' || req.method === 'HEAD') {
+      delete req.headers['if-none-match'];
+      delete req.headers['if-modified-since'];
+    }
+    next();
+  });
   const stagingAccessIpLimiter = createStagingAccessIpLimiter({
     skip: () => !config.stagingAccess.enabled,
     limitHandler: (req, res) => res.status(429).json(errorPayload(req, 'rate_limit_exceeded')),

@@ -57,9 +57,11 @@ test('runner drives actual adapter contract through UI steps and proves replay, 
       cloneEnabled: true,
       localQa: true,
       deploymentEnvironment: 'test',
+      targetKind: 'clone',
       bindHost: '127.0.0.1',
       transport: 'memory',
       livemode: false,
+      externalProviderExecutionAllowed: false,
     },
   };
   assert.throws(
