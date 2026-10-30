@@ -1108,7 +1108,7 @@
     },
     {
       "path": "lib/services/web_google_auth.dart",
-      "sha256": "60108d102f3192ccc0d7444a1095d23fb3c5445e32240920c16770cb36796be3"
+      "sha256": "fda3511db251d5fd430378a35b7a95705c9c18f5914011da927e6a3fe563c8fc"
     },
     {
       "path": "lib/screens/notification_settings_screen.dart",

@@ -12,15 +12,37 @@ const integrationSource = fs.readFileSync(
   'utf8',
 );
 
-test('parallel acceptance scenario derives one safely future shared booking window', () => {
+test('parallel acceptance scenario shares one safely future 300-day booking window and preserves conflict invariants', () => {
   assert.match(
     integrationSource,
     /function futureAcceptanceWindow\(\{[\s\S]+?daysAhead = 30,[\s\S]+?durationDays = 2,[\s\S]+?\}\s*=\s*\{\}\)\s*\{/u,
   );
   assert.match(
     integrationSource,
-    /const acceptanceWindow = futureAcceptanceWindow\(\);[\s\S]+?start: acceptanceWindow\.start,[\s\S]+?end: acceptanceWindow\.end,/u,
+    /const acceptanceWindow = futureAcceptanceWindow\(\{\s*daysAhead:\s*300\s*\}\);/u,
   );
+  assert.match(
+    integrationSource,
+    /const acceptanceWindowBlocks = await setupPool\.query\([\s\S]+?assert\.deepEqual\(\s*acceptanceWindowBlocks\.rows,\s*\[\]/u,
+  );
+  assert.match(
+    integrationSource,
+    /for \(const \[id, renterId\] of \[\['booking-a', 'renter-a'\], \['booking-b', 'renter-b'\]\]\) \{[\s\S]+?start: acceptanceWindow\.start,[\s\S]+?end: acceptanceWindow\.end,/u,
+  );
+  assert.equal(
+    [...integrationSource.matchAll(/const acceptanceWindow = futureAcceptanceWindow\(/gu)].length,
+    1,
+    'parallel requests must share one acceptance window',
+  );
+  assert.match(
+    integrationSource,
+    /assert\.deepEqual\(\s*acceptanceResponses\.map\(\(response\) => response\.status\)\.sort\(\),\s*\[200, 409\]/u,
+  );
+  assert.ok(integrationSource.includes(
+    "assert.equal((await conflictResponse.json()).error, 'booking_period_unavailable')",
+  ));
+  assert.ok(integrationSource.includes("workflow_status: 'accepted'"));
+  assert.ok(integrationSource.includes("workflow_status: 'requested'"));
   assert.doesNotMatch(
     integrationSource,
     /start:\s*'2026-09-10T10:00:00\.000Z'/u,
