@@ -168,6 +168,8 @@ GoogleEvidenceFixture googleCurrentReadbackEvidence(
   bool wrongOperator = false,
   bool wrongApiRestriction = false,
   void Function(Map<String, Object?> runtime)? mutateRuntime,
+  void Function(Map<String, Object?> service)? mutateService,
+  void Function(Map<String, Object?> decision)? mutateDecision,
 }) {
   final now = (at ?? googleFixtureNow).toUtc();
   final configMap = <String, String>{
@@ -247,6 +249,7 @@ GoogleEvidenceFixture googleCurrentReadbackEvidence(
     'firebaseEmulatorEnabled': false,
     'runtime': runtime,
   };
+  mutateService?.call(service);
   final serviceDigest = googleFixtureDigest(jsonEncode(service));
   final console = <String, Object?>{
     'schemaVersion': 1,
@@ -283,6 +286,7 @@ GoogleEvidenceFixture googleCurrentReadbackEvidence(
     'decidedAtUtc': now.toIso8601String(),
     'validUntilUtc': now.add(const Duration(minutes: 30)).toIso8601String(),
   };
+  mutateDecision?.call(decision);
   final decisionJson = jsonEncode(decision);
   final decisionDigest = googleFixtureDigest(decisionJson);
   final envelope = <String, Object?>{
@@ -427,12 +431,49 @@ void main() {
         ),
         isNull,
       );
+      final installedClientOptions = optionsFor(
+        googleCurrentReadbackEvidence(candidate),
+        runtimeNow: googleFixtureNow.add(const Duration(days: 30)),
+      );
+      expect(installedClientOptions?.appId, candidate.appId);
+      expect(installedClientOptions?.projectId, candidate.backendProjectId);
       expect(
         optionsFor(
-          googleCurrentReadbackEvidence(candidate),
-          runtimeNow: googleFixtureNow.add(const Duration(hours: 3)),
+          googleCurrentReadbackEvidence(
+            candidate,
+            at: googleFixtureNow.add(const Duration(days: 1)),
+          ),
+          runtimeNow: googleFixtureNow,
         ),
         isNull,
+        reason: 'future readback evidence remains rejected',
+      );
+      expect(
+        optionsFor(
+          googleCurrentReadbackEvidence(
+            candidate,
+            mutateService: (service) {
+              service['validUntilUtc'] = googleFixtureNow
+                  .add(const Duration(hours: 3))
+                  .toIso8601String();
+            },
+          ),
+          runtimeNow: googleFixtureNow.add(const Duration(days: 30)),
+        ),
+        isNull,
+        reason: 'validity windows remain limited to two hours',
+      );
+      expect(
+        optionsFor(
+          googleCurrentReadbackEvidence(
+            candidate,
+            mutateDecision: (decision) =>
+                decision['decision'] = 'revoked',
+          ),
+          runtimeNow: googleFixtureNow.add(const Duration(days: 30)),
+        ),
+        isNull,
+        reason: 'revoked evidence remains rejected',
       );
     },
   );

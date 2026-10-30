@@ -434,7 +434,7 @@ class WebGooglePublicConfig {
 
     final hashPattern = RegExp(r'^[a-f0-9]{64}$');
     final sourcePattern = RegExp(r'^[a-f0-9]{40}$');
-    const maxAge = Duration(hours: 2);
+    const maxValidityWindow = Duration(hours: 2);
     if (!exactKeys(readiness, _googleCurrentEnvelopeKeys) ||
         jsonEncode(readiness) != readinessJson ||
         _googleDigest(readinessJson) != approvedReadinessDigest ||
@@ -498,6 +498,9 @@ class WebGooglePublicConfig {
     final resource = c['apiKeyResourceId'];
     final apis = c['apiRestrictions'];
     final origins = c['websiteRestrictions'];
+    // Expiry gates build, seal and deployment. An accepted installed client
+    // keeps this exact digest-bound decision; runtime still rejects evidence
+    // from the future and validity windows longer than the two-hour bound.
     // Compare exact sets while rejecting duplicates and non-string values.
     bool exactSet(Object? value, List<String> expected) {
       if (value is! List || value.any((item) => item is! String)) return false;
@@ -575,21 +578,18 @@ class WebGooglePublicConfig {
         decided == null ||
         decisionUntil == null ||
         !serviceUntil.isAfter(serviceAt) ||
-        serviceUntil.difference(serviceAt) > maxAge ||
+        serviceUntil.difference(serviceAt) > maxValidityWindow ||
         !consoleUntil.isAfter(consoleAt) ||
-        consoleUntil.difference(consoleAt) > maxAge ||
+        consoleUntil.difference(consoleAt) > maxValidityWindow ||
         !decisionUntil.isAfter(decided) ||
-        decisionUntil.difference(decided) > maxAge ||
+        decisionUntil.difference(decided) > maxValidityWindow ||
         decisionUntil.isAfter(serviceUntil) ||
         decisionUntil.isAfter(consoleUntil) ||
         decided.isBefore(serviceAt) ||
         decided.isBefore(consoleAt) ||
         now.isBefore(serviceAt) ||
-        !now.isBefore(serviceUntil) ||
         now.isBefore(consoleAt) ||
-        !now.isBefore(consoleUntil) ||
-        now.isBefore(decided) ||
-        !now.isBefore(decisionUntil)) {
+        now.isBefore(decided)) {
       return false;
     }
     return true;
