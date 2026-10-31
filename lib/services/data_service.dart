@@ -529,6 +529,8 @@ class DataService {
   static bool
       _simulatePrincipalChangeDuringNextRentalRequestPersistenceForTesting =
       false;
+  static Future<void> Function(SharedPreferences prefs)?
+      _afterNextRentalRequestPersistenceWriteForTesting;
 
   @visibleForTesting
   static int get maxLocalReviewsForTesting => _maxLocalReviews;
@@ -546,6 +548,27 @@ class DataService {
       simulatePrincipalChangeDuringNextRentalRequestPersistenceForTesting() {
     _simulatePrincipalChangeDuringNextRentalRequestPersistenceForTesting = true;
   }
+
+  @visibleForTesting
+  static void afterNextRentalRequestPersistenceWriteForTesting(
+    Future<void> Function(SharedPreferences prefs) callback,
+  ) {
+    _afterNextRentalRequestPersistenceWriteForTesting = callback;
+  }
+
+  @visibleForTesting
+  static Future<List<RentalRequest>> getAllRentalRequestsForTesting() =>
+      _getAllRentalRequests();
+
+  @visibleForTesting
+  static Future<List<RentalRequest>> getAllRentalRequestsForOwnerForTesting({
+    required AuthSessionOwner owner,
+    required Future<void> Function() verifyAuthorization,
+  }) =>
+      _getAllRentalRequestsForOwner(
+        owner: owner,
+        verifyAuthorization: verifyAuthorization,
+      );
 
   static Future<T> _runWishlistForCurrentPrincipal<T>(
     Future<T> Function(LocalPrincipalIdentity principal) operation, {
@@ -9906,10 +9929,15 @@ class DataService {
     String? raw;
     if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
       try {
-        final remote = await BackendRepository.getRentalRequests();
-        raw = jsonEncode(remote);
+        final snapshot = await BackendRepository.getRentalRequestsSnapshot();
+        raw = jsonEncode(snapshot.copyRequests());
         _decodeRentalRequestsStrict(raw);
-        await _writePreferenceString(prefs, _rentalRequestsKey, raw);
+        await _persistRentalRequestsDocumentForOwner(
+          prefs: prefs,
+          encoded: raw,
+          verifyAuthorization: snapshot.assertCurrent,
+        );
+        await snapshot.assertCurrent();
       } catch (error) {
         debugPrint('[DataService] remote request load failed: $error');
         // In a backend-enabled runtime the server is authoritative. A cached
@@ -9944,15 +9972,20 @@ class DataService {
     final prefs = await SharedPreferences.getInstance();
     String? raw;
     if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
-      final remote = await BackendRepository.getRentalRequestsForOwner(owner);
+      final snapshot =
+          await BackendRepository.getRentalRequestsSnapshotForOwner(owner);
       await verifyAuthorization();
-      raw = jsonEncode(remote);
+      raw = jsonEncode(snapshot.copyRequests());
       _decodeRentalRequestsStrict(raw);
       await _persistRentalRequestsDocumentForOwner(
         prefs: prefs,
         encoded: raw,
-        verifyAuthorization: verifyAuthorization,
+        verifyAuthorization: () async {
+          await verifyAuthorization();
+          await snapshot.assertCurrent();
+        },
       );
+      await snapshot.assertCurrent();
     }
     raw ??= prefs.getString(_rentalRequestsKey);
     if (raw == null) return const <RentalRequest>[];
@@ -9971,13 +10004,18 @@ class DataService {
   }) async {
     _decodeRentalRequestsStrict(encoded);
     final previous = prefs.getString(_rentalRequestsKey);
+    final afterWrite = _afterNextRentalRequestPersistenceWriteForTesting;
+    _afterNextRentalRequestPersistenceWriteForTesting = null;
+    var writeAttempted = false;
     try {
       await verifyAuthorization();
       if (_failNextRentalRequestPersistenceForTesting) {
         _failNextRentalRequestPersistenceForTesting = false;
         throw StateError('Synthetic rental request persistence failure.');
       }
+      writeAttempted = true;
       await _writePreferenceString(prefs, _rentalRequestsKey, encoded);
+      await afterWrite?.call(prefs);
       if (_simulatePrincipalChangeDuringNextRentalRequestPersistenceForTesting) {
         _simulatePrincipalChangeDuringNextRentalRequestPersistenceForTesting =
             false;
@@ -9985,7 +10023,9 @@ class DataService {
       }
       await verifyAuthorization();
     } catch (_) {
-      if (prefs.getString(_rentalRequestsKey) == encoded) {
+      if (writeAttempted &&
+          prefs.getString(_rentalRequestsKey) == encoded &&
+          encoded != previous) {
         final restored = previous == null
             ? await prefs.remove(_rentalRequestsKey)
             : await prefs.setString(_rentalRequestsKey, previous);

@@ -115,6 +115,9 @@ void main() {
       );
     },
         () => MockClient((request) async {
+              if (request.url.path != '/api/v1/rental-requests') {
+                return http.Response('{"error":"unavailable"}', 503);
+              }
               calls++;
               expect(request.method, 'GET');
               expect(request.url.path, '/api/v1/rental-requests');
