@@ -47,6 +47,19 @@ function fail(code) {
   throw error;
 }
 
+export async function getFreshWebCloneCleanupToken({ login, readUserId, expectedUserId } = {}) {
+  if (typeof login !== 'function' || typeof readUserId !== 'function'
+      || typeof expectedUserId !== 'string' || expectedUserId.length === 0) {
+    fail('web_clone_cleanup_owner_input_invalid');
+  }
+  const token = await login();
+  if (typeof token !== 'string' || token.length < 16
+      || await readUserId(token) !== expectedUserId) {
+    fail('web_clone_cleanup_owner_mismatch');
+  }
+  return token;
+}
+
 export function validateLocalWebOrigin(value) {
   if (typeof value !== 'string' || value.length === 0 || value.trim() !== value
       || value === '*' || value.includes(',')) fail('web_clone_origin_invalid');
@@ -408,7 +421,8 @@ function secureSession({ runRoot, owner, renter, runId, datasetId }) {
   const descriptor = openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
   try {
     writeFileSync(descriptor, `${JSON.stringify({
-      synthetic: true, runId, datasetId, origin: WEB_CLONE_ORIGIN,
+      synthetic: true, containsProductionCredentials: false,
+      runId, datasetId, origin: WEB_CLONE_ORIGIN,
       accounts: [owner, renter],
       marker: 'Synthetischer Test – keine vertragliche oder finanzielle Wirkung',
     })}\n`);
@@ -588,8 +602,11 @@ export async function startLocalWebClone({ origin = WEB_CLONE_ORIGIN, webRoot } 
       process.once('SIGTERM', () => resolvePromise('SIGTERM'));
     });
     await Promise.race([waitForSignal(), new Promise((_, reject) => backend.once('close', () => reject(new Error('web_clone_backend_unexpected_exit'))))]);
+    const cleanupOwnerToken = await getFreshWebCloneCleanupToken({
+      login: () => login(owner), readUserId: me, expectedUserId: ownerId,
+    });
     const cleanupResponse = await fetch(`http://127.0.0.1:${backendPort}/v1/synthetic-clone/bookings`, {
-      method: 'DELETE', headers: { authorization: `Bearer ${ownerToken}` },
+      method: 'DELETE', headers: { authorization: `Bearer ${cleanupOwnerToken}` },
       signal: AbortSignal.timeout(5_000),
     });
     if (!cleanupResponse.ok) fail('web_clone_cleanup_failed');

@@ -5,6 +5,7 @@ import test from 'node:test';
 import {
   assertWebCloneEnvironment,
   assertLocalWebCloneBuildSource,
+  getFreshWebCloneCleanupToken,
   WEB_CLONE_PRIVATE_PILOT_ALLOWED_REGIONS,
   resolveWebCloneSyntheticPaymentFlag,
   safeStaticPath,
@@ -103,6 +104,23 @@ test('web clone runtime envelope pins Stage-A, test, loopback, memory and mock A
   );
 });
 
+test('cleanup obtains a fresh token and verifies it still belongs to the owner', async () => {
+  let loginCalls = 0;
+  const token = await getFreshWebCloneCleanupToken({
+    login: async () => { loginCalls++; return 'fresh-synthetic-owner-token'; },
+    readUserId: async (value) => value === 'fresh-synthetic-owner-token' ? 'owner-1' : 'owner-2',
+    expectedUserId: 'owner-1',
+  });
+  assert.equal(token, 'fresh-synthetic-owner-token');
+  assert.equal(loginCalls, 1);
+
+  await assert.rejects(getFreshWebCloneCleanupToken({
+    login: async () => 'fresh-synthetic-owner-token',
+    readUserId: async () => 'successor-owner',
+    expectedUserId: 'owner-1',
+  }), (error) => error?.code === 'web_clone_cleanup_owner_mismatch');
+});
+
 test('local clone region allowlist uses the backend city region code', () => {
   assert.equal(WEB_CLONE_PRIVATE_PILOT_ALLOWED_REGIONS, 'heilbronn');
   assert.equal(assertWebCloneEnvironment(environment(), { origin: validOrigin }), true);
@@ -151,6 +169,11 @@ test('custom Flutter bootstrap pins CanvasKit and permits local picker blob read
     /content-security-policy': "default-src 'self' data: blob:; connect-src 'self' blob: ws:\/\/127\.0\.0\.1:18080; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'"/u,
   );
   assert.doesNotMatch(runner, /script-src[^"\n]*https?:/u);
+});
+
+test('runner marks its private synthetic-session manifest as production-credential free', () => {
+  const runner = readFileSync('tool/run_local_qa_web_clone.mjs', 'utf8');
+  assert.match(runner, /synthetic:\s*true,\s*containsProductionCredentials:\s*false/u);
 });
 
 test('proxy access diagnostics record only method, query-free path and status', () => {

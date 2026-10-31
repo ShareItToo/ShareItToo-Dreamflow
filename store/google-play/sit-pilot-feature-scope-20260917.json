@@ -171,7 +171,7 @@
       "id": "profile_and_account_security",
       "route": "MainNavigation[4] -> ProfileScreen",
       "source": "lib/navigation/main_navigation.dart",
-      "reachabilityMarker": "const ProfileScreen()",
+      "reachabilityMarker": "ProfileScreen(sessionTransitionService: _sessionTransitions)",
       "effect": "owner-bound-profile-and-account-security-persistence",
       "pilot": "allowed",
       "proof": [
@@ -183,7 +183,7 @@
       "id": "profile",
       "route": "MainNavigation[4] -> ProfileScreen",
       "source": "lib/navigation/main_navigation.dart",
-      "reachabilityMarker": "const ProfileScreen()",
+      "reachabilityMarker": "ProfileScreen(sessionTransitionService: _sessionTransitions)",
       "effect": "current-account-profile-navigation-and-persistence",
       "pilot": "allowed",
       "proof": [

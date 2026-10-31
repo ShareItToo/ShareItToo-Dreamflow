@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { digest, repositoryRoot } from '../../backend/ops/green_staging_98_106_contract.mjs';
+import { successorSourcePaths } from '../../backend/ops/green_staging_106_106_binding.mjs';
 import { fixture } from '../../backend/test/fixtures/green_106106_readonly.js';
 import { parseArguments, prepareBinding } from '../../tool/prepare_green_staging_106_106_binding.mjs';
 
@@ -32,7 +33,10 @@ test('binding preparation verifies exact publication and scope bytes before prot
       outputName: 'binding.json',
     }, { root: repositoryRoot, git: f.git });
     assert.equal(result.status, 'binding_prepared');
-    assert.equal(result.sourceInventoryCount, 131);
+    const expectedSources = successorSourcePaths(repositoryRoot);
+    assert.equal(result.sourceInventoryCount, expectedSources.length);
+    assert.ok(expectedSources.includes('tool/collect_green_staging_106_106_scope.mjs'));
+    assert.ok(expectedSources.includes('backend/ops/prepare_green_staging_106_106_execution_inputs.mjs'));
     const bytes = fs.readFileSync(path.join(directory, 'binding.json'));
     assert.equal(digest(bytes), result.bindingSha256);
     const binding = JSON.parse(bytes.toString('utf8'));
@@ -40,6 +44,7 @@ test('binding preparation verifies exact publication and scope bytes before prot
     assert.equal(binding.opsCommit, f.binding.opsCommit);
     assert.equal(binding.publicationSha256, inputs.publicationSha256);
     assert.equal(binding.scope.api.id, f.binding.scope.api.id);
+    assert.deepEqual(Object.keys(binding.sourceInventory).sort(), expectedSources);
     assert.equal(binding.sourceInventory['backend/ops/green_staging_106_106_binding.mjs'].length, 64);
     assert.equal(fs.statSync(path.join(directory, 'binding.json')).mode & 0o777, 0o600);
   } finally {

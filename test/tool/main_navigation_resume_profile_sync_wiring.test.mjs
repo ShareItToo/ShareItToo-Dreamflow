@@ -13,7 +13,7 @@ test('native resume refresh stays on the profile channel', () => {
   assert.ok(method, 'resume refresh method is present');
   assert.match(
     method,
-    /syncCurrentUserForSessionOwner\(\s*owner,\s*notificationKey:\s*SharedPersistenceSync\.profileStateKey/u,
+    /syncCurrentUserForSessionOwner\(\s*owner\.authOwner,\s*notificationKey:\s*SharedPersistenceSync\.profileStateKey/u,
   );
   assert.doesNotMatch(method, /accountSecurityStateKey/u);
 });

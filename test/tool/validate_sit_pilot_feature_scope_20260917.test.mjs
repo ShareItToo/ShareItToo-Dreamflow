@@ -34,6 +34,10 @@ test('accepts the reachable identity and MFA status/action surfaces with explici
   assert.equal(result.status, 'PASS');
   assert.equal(result.blockerCount, 0);
   assert.equal(result.allowedCount, 23);
+  assert.equal(
+    manifest.reachablePaths.find((entry) => entry.id === 'profile_and_account_security')?.reachabilityMarker,
+    'ProfileScreen(sessionTransitionService: _sessionTransitions)',
+  );
   assert.equal(manifest.reachablePaths.find((entry) => entry.id === 'identity_verification')?.pilot, 'allowed');
   assert.equal(manifest.reachablePaths.find((entry) => entry.id === 'mfa')?.pilot, 'allowed');
 });
