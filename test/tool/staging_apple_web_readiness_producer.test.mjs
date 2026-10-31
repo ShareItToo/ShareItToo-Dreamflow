@@ -36,7 +36,7 @@ function fixture({ synthetic = true } = {}) {
     ['firebase-web-doc', APPLE_WEB_SOURCE_URLS.firebaseAppleWeb, 'GET', 200],
     ['firebase-web-app', `https://firebase.googleapis.com/v1beta1/projects/214007794438/webApps/${e.configuration.appId}/config`, 'GET', 200],
     ['firebase-apple-provider', `https://identitytoolkit.googleapis.com/admin/v2/projects/${e.configuration.projectId}/defaultSupportedIdpConfigs/apple.com`, 'GET', 200],
-    ['backend-runtime', 'https://staging.shareittoo.com/api/v1/version', 'GET', 200],
+    ['backend-runtime', 'https://staging.shareittoo.com/api/version', 'GET', 200],
     ['protected-secret-metadata', null, 'protected-mount-metadata', 'read-only-confirmed'],
   ];
   const input = {
@@ -139,6 +139,39 @@ test('candidate compose rejects expired, mismatched app/provider and incomplete 
     assert.throws(() => composeAppleWebCandidate(f.input, { now: now.getTime(), expectedSource: source,
       allowSyntheticFixture: true, sourceInventory: sourceFiles, sourceInventorySha256: inventorySha256 }), /apple_web_/u);
   }
+});
+
+test('Apple runtime register binds the public /api/version route, not a versioned API or internal URL', () => {
+  assert.equal(APPLE_WEB_SOURCE_URLS.stagingRuntimeVersion, 'https://staging.shareittoo.com/api/version');
+  const valid = fixture();
+  const compose = (input) => composeAppleWebCandidate(input, { now: now.getTime(), expectedSource: source,
+    allowSyntheticFixture: true, sourceInventory: sourceFiles, sourceInventorySha256: inventorySha256 });
+  assert.equal(compose(valid.input).backend.runtimeReadbackSha256, valid.input.backendReadback.runtimeReadbackSha256);
+  for (const incorrectUrl of ['https://staging.shareittoo.com/api/v1/version', 'http://127.0.0.1:8080/version']) {
+    const input = structuredClone(valid.input);
+    input.sourceRegister.find((entry) => entry.id === 'backend-runtime').sourceUrl = incorrectUrl;
+    assert.throws(() => compose(input), /apple_web_source_register_invalid_backend-runtime/u);
+  }
+});
+
+test('release-only metadata cannot replace backend evidence or infer enabled Apple capabilities', () => {
+  const f = fixture();
+  const compose = (input) => composeAppleWebCandidate(input, { now: now.getTime(), expectedSource: source,
+    allowSyntheticFixture: true, sourceInventory: sourceFiles, sourceInventorySha256: inventorySha256 });
+  const onlyRelease = structuredClone(f.input);
+  onlyRelease.backendReadback = { commit: source, version: 'synthetic-version', environment: 'test' };
+  assert.throws(() => compose(onlyRelease), /apple_web_producer_shape/u);
+  const disabled = structuredClone(f.input);
+  disabled.backendReadback.ownershipConfigured = false;
+  disabled.backendReadback.acquisitionEnabled = false;
+  disabled.backendReadback.revocationEnabled = false;
+  disabled.backendReadback.allowlistEnforced = false;
+  const candidate = compose(disabled);
+  assert.equal(candidate.activationEligible, false);
+  assert.equal(candidate.readiness.backendAppleOwnershipConfigured, false);
+  assert.equal(candidate.readiness.backendAppleAcquisitionEnabled, false);
+  assert.equal(candidate.backend.revocationEnabled, false);
+  assert.equal(candidate.backend.allowlistEnforced, false);
 });
 
 test('decision compose rejects reviewer reuse and expired approval', () => {

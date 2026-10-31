@@ -17,7 +17,12 @@ collected and independently reviewed, status remains unverified.
   endpoints embedded in the source register. The producer accepts only those
   exact project/app-bound URLs; these endpoints are evidence inputs, not a
   request to change configuration.
-- Runtime evidence is the fixed staging `GET /api/v1/version` readback. Secret
+- Release identity evidence is the fixed staging `GET /api/version` readback
+  (Caddy strips `/api`; the application route is `/version`). The formerly
+  specified `/api/v1/version` path is not the release endpoint and returned
+  HTTP 401 in the 2026-10-31 readback. Release metadata does not establish
+  ownership, acquisition, revocation, allowlists or protected-file state;
+  those fields require separate current protected runtime observations. Secret
   evidence is limited to protected file metadata and SHA-256 digests. Private
   key bytes, OAuth secrets, access tokens, API response bodies containing
   credentials, and their digests are prohibited from the input artifact.

@@ -11,6 +11,9 @@ import {
 export const APPLE_WEB_SOURCE_URLS = Object.freeze({
   appleWebConfiguration: 'https://developer.apple.com/help/account/capabilities/configure-sign-in-with-apple-for-the-web/',
   firebaseAppleWeb: 'https://firebase.google.com/docs/auth/web/apple',
+  // Caddy strips /api; the app serves /version, not /v1/version. This GET
+  // establishes release identity only, never Apple configuration or secrets.
+  stagingRuntimeVersion: 'https://staging.shareittoo.com/api/version',
 });
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 export const APPLE_WEB_SOURCE_CLOSURE = Object.freeze([
@@ -194,7 +197,7 @@ function verifyReadback(input, { now, expectedSource, allowSynthetic = false }) 
     'firebase-web-doc': APPLE_WEB_SOURCE_URLS.firebaseAppleWeb,
     'firebase-web-app': `https://firebase.googleapis.com/v1beta1/projects/${input.firebaseReadback.projectNumber}/webApps/${input.firebaseReadback.webAppId}/config`,
     'firebase-apple-provider': `https://identitytoolkit.googleapis.com/admin/v2/projects/${input.firebaseReadback.projectId}/defaultSupportedIdpConfigs/apple.com`,
-    'backend-runtime': 'https://staging.shareittoo.com/api/v1/version',
+    'backend-runtime': APPLE_WEB_SOURCE_URLS.stagingRuntimeVersion,
     'protected-secret-metadata': null,
   };
   for (const entry of input.sourceRegister) {

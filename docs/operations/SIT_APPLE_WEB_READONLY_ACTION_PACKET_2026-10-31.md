@@ -40,7 +40,7 @@ steps only if every prerequisite is positively observed.
 
 | Step | Read-only action | Sanitized output / stop rule |
 | --- | --- | --- |
-| 1. Source/runtime identity | Read the current source commit, served Web manifest, fixed Staging `GET /api/v1/version`, and label-verified active container/image identity. Compare actual schema/ledger with the deployed runtime contract. | Separate client candidate source, runtime commit/image and current schema evidence. Migration `106_apple_ownership_v2` must be present for v2. No inference from source migration files. |
+| 1. Source/runtime identity | Read the current source commit, served Web manifest, fixed Staging `GET /api/version`, and label-verified active container/image identity. Compare actual schema/ledger with the deployed runtime contract. | Separate client candidate source, runtime commit/image and current schema evidence. Migration `106_apple_ownership_v2` must be present for v2. No inference from source migration files. |
 | 2. Existing Firebase project/app | In the already authorized session, read the selected existing Web app configuration and `defaultSupportedIdpConfigs/apple.com` for `shareittoo-staging`. | Exact public project/app/authDomain/origin binding; provider enabled, Services ID and team/key identity agreement, OAuth secret configured. Read only necessary fields, redact credentials before retaining or hashing. A disabled provider ends activation readiness; do not turn it on. |
 | 3. Existing Apple account | Read the authorized Apple Developer account's existing primary App ID, Sign in with Apple capability, associated Web Services ID, enabled signing key, configured domain and Return URL. Refresh official Apple/Firebase field semantics before interpreting unfamiliar console fields. | Presence, association and equality proofs; team/key IDs represented as hashes. Use the actual configured **Direct-Web HTTPS Return URL under Staging**, never a fixture or the older Firebase-handler URL. Missing membership/access/key/configuration is a blocker, not permission to create it. |
 | 4. Effective backend configuration | On the exact container bound in step 1, inspect the already configured runtime values through a separately reviewed, read-only status procedure. Retain only configuration booleans and approved nonsecret digests. | Firebase Auth enabled, emulator absent; revocation enabled/configured; ownership configured, protocol 2, acquisition enabled, profile digest, exact Services ID/Return URL/team/key bindings and enforced allowlist. No full `docker inspect`, environment dump or raw config serialization. False/unknown means not eligible. |
@@ -119,3 +119,49 @@ No new Gemini gate is required for read-only inventory. An actual contradiction
 in Apple/Firebase token semantics or ownership/revocation evidence should become
 one narrowly bound protocol gate, not a general request to approve missing
 credentials or unobserved runtime facts.
+
+## Executed read-only subset, 2026-10-31
+
+At 12:28 UTC the existing authorized VPS connection reached the active,
+label-bound immutable Staging API container. Its image and APP_COMMIT bind to
+`1351bb97cc3c784acb18279c812f94531cf52bcc`; seven relevant runtime source/migration
+hashes match that exact Git source. Runtime UID/GID is 100/101. The container
+identity/start time remained unchanged across the readback. Schema contains
+106 migrations; migration 106's applied checksum matches the runtime SQL file.
+DB observations used a bounded `BEGIN READ ONLY` transaction and `ROLLBACK`.
+
+- Step 1: PASS for runtime/source/schema identity. Public Web identity is also
+  exact 1351. `/api/version` returned HTTP 200 and exact 1351 at 12:29 UTC;
+  `/api/health/ready` returned HTTP 200/ok. The old producer route
+  `/api/v1/version` returned HTTP 401, reconfirmed at 12:30 UTC. This is a
+  source URL contract defect, corrected by the accompanying bounded patch.
+- Step 4: FIX for Apple activation readiness. Fresh config parsing inside the
+  exact running container, using its existing environment, reports Firebase
+  Auth on/correct project/emulator absent, but Apple revocation false, signing
+  source none, ownership unconfigured, acquisition false, profile count zero
+  and Apple cohort count zero. The Staging access gate is valid/enabled with
+  six allowed users; this does not establish an Apple-linked cohort.
+- Step 5: FIX. No `APPLE_` environment variables, Apple mounts or configured
+  signing/encryption/coordination/history file variables were present. No
+  secret file was generated, read for export, repaired or mounted. This proves
+  missing runtime provisioning, not absence of credentials elsewhere.
+- Step 7: queue snapshot PASS: no ownership attempts, ownership materials or
+  Apple revocation-outbox rows. Worker activation remains FIX: the exact
+  ownership worker source returns without starting when ownership is
+  unconfigured. No cleanup run or provider revocation was triggered; general
+  cleanup worker execution was not independently instrumented.
+
+Sanitized original readback JSON and official documentation text are retained
+outside Git in owner-only evidence storage. Runtime record SHA-256:
+`c170ed5ff6dc06706b6621fb5a40e0b9745a697bd03ef04321878b55f60b1796`.
+Canonical/incorrect route comparison SHA-256:
+`f56566ec5fd4ae8e41298432efea97a15c98c54ae94d54c45bfe7e63a2023bd2`.
+The official Apple and Firebase pages were fetched fresh with HTTP 200;
+Firebase reports updated 2026-10-21. No private provider console was accessed.
+
+Still unknown: authorized Apple membership/team and primary App/Services ID,
+key status, exact Direct-Web Return URL/domain, Firebase Apple provider OAuth
+configuration and team/key equality, existing Apple-linked account pairs and
+an authorized intended Apple cohort. No claim of provider activation or a
+working Apple login follows. Complete the source route fix/review first;
+provider-console inventory and any later provisioning remain separate steps.
