@@ -15,6 +15,7 @@ const reviewInput = {
 
 function fakeReviewClient({ simulationOnly = false } = {}) {
   const commands = new Map();
+  const queries = [];
   let review = null;
   let reviewInsertCount = 0;
   let auditCount = 0;
@@ -26,10 +27,13 @@ function fakeReviewClient({ simulationOnly = false } = {}) {
     simulation_only: simulationOnly,
   };
   return {
+    queries,
+    setSimulationOnly(value) { booking.simulation_only = value; },
     get reviewInsertCount() { return reviewInsertCount; },
     get auditCount() { return auditCount; },
     get profileRatingUpdateCount() { return profileRatingUpdateCount; },
     async query(sql, params = []) {
+      queries.push(sql);
       if (sql.startsWith('INSERT INTO booking_commands')) {
         const key = params[0];
         if (commands.has(key)) return { rowCount: 0, rows: [] };
@@ -111,33 +115,55 @@ test('booking review idempotency replays, rejects payload drift, and never inser
   assert.equal(client.auditCount, 1);
 });
 
-test('Staging simulation reviews are blocked before review or profile-rating writes', async () => {
-  const client = fakeReviewClient({ simulationOnly: true });
-  await assert.rejects(
-    createBookingReview(client, {
-      actor,
-      bookingId: 'booking-review-1',
-      raw: reviewInput,
-      config: { deploymentEnvironment: 'staging', nonBindingSimulationEnabled: true },
-      idempotencyKey: 'staging-simulation-review',
-    }),
-    (error) => error.code === 'pilot_simulation_review_forbidden',
-  );
-  assert.equal(client.reviewInsertCount, 0);
-  assert.equal(client.auditCount, 0);
-  assert.equal(client.profileRatingUpdateCount, 0);
-});
+for (const config of [
+  undefined,
+  { deploymentEnvironment: 'staging', nonBindingSimulationEnabled: true },
+  { deploymentEnvironment: 'test', nonBindingSimulationEnabled: true },
+  { deploymentEnvironment: 'test', nonBindingSimulationEnabled: false },
+  { deploymentEnvironment: 'production', nonBindingSimulationEnabled: true },
+]) {
+  for (const idempotencyKey of [undefined, 'simulation-review']) {
+    test(`simulation reviews reject before all writes: ${JSON.stringify(config)}, key=${idempotencyKey}`, async () => {
+      const client = fakeReviewClient({ simulationOnly: true });
+      await assert.rejects(
+        createBookingReview(client, {
+          actor,
+          bookingId: 'booking-review-1',
+          raw: reviewInput,
+          config,
+          idempotencyKey,
+        }),
+        { status: 409, code: 'pilot_simulation_review_forbidden' },
+      );
+      assert.equal(client.queries.length, 1);
+      assert.match(client.queries[0], /^SELECT booking\.\*/u);
+      assert.equal(client.reviewInsertCount, 0);
+      assert.equal(client.auditCount, 0);
+      assert.equal(client.profileRatingUpdateCount, 0);
+    });
+  }
+}
 
-test('test-gated simulation reviews stay available in the isolated test environment', async () => {
-  const client = fakeReviewClient({ simulationOnly: true });
-  const result = await createBookingReview(client, {
+test('simulation marker prevents replaying a previously completed canonical review command', async () => {
+  const client = fakeReviewClient();
+  const request = {
     actor,
     bookingId: 'booking-review-1',
     raw: reviewInput,
     config: { deploymentEnvironment: 'test', nonBindingSimulationEnabled: true },
     idempotencyKey: 'test-simulation-review',
-  });
+  };
+  const result = await createBookingReview(client, request);
   assert.equal(result.replayed, false);
+  client.setSimulationOnly(true);
+  const priorQueryCount = client.queries.length;
+  await assert.rejects(
+    createBookingReview(client, request),
+    { status: 409, code: 'pilot_simulation_review_forbidden' },
+  );
+  const retryQueries = client.queries.slice(priorQueryCount);
+  assert.equal(retryQueries.length, 1);
+  assert.match(retryQueries[0], /^SELECT booking\.\*/u);
   assert.equal(client.reviewInsertCount, 1);
   assert.equal(client.auditCount, 1);
   assert.equal(client.profileRatingUpdateCount, 1);

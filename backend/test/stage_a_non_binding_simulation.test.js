@@ -85,6 +85,9 @@ test('full non-binding lifecycle requires staging or test and the existing pilot
   assert.equal(nonBindingTestLifecycleEnabled({
     deploymentEnvironment: 'staging', nonBindingSimulationEnabled: true,
   }), false);
+  assert.equal(nonBindingTestLifecycleEnabled({
+    deploymentEnvironment: 'test', nonBindingSimulationEnabled: true,
+  }), true);
   assert.equal(canTransitionWorkflow({
     current: 'requested', next: 'active', actorRole: 'renter', pilotWithoutPayment: true,
   }), false);
@@ -104,8 +107,9 @@ test('full non-binding lifecycle requires staging or test and the existing pilot
     current: 'returned', next: 'completed', actorRole: 'owner', pilotWithoutPayment: true,
   }), true);
   assert.match(app, /allowNonBindingSimulation: config\.nonBindingSimulationEnabled/u);
-  assert.match(app, /createBookingReview\(client,[\s\S]*config,[\s\S]*idempotencyKey: req\.get\('Idempotency-Key'\)/u);
-  assert.match(read('../src/moderation_workflow.js'), /pilot_simulation_review_forbidden/u);
+  const reviewRoute = app.slice(app.indexOf("app.post('/v1/bookings/:id/reviews'"), app.indexOf("app.get('/v1/users/:id/reviews'"));
+  assert.match(reviewRoute, /createBookingReview\(client,[\s\S]*idempotencyKey: req\.get\('Idempotency-Key'\)/u);
+  assert.doesNotMatch(reviewRoute, /\bconfig\b/u);
 });
 
 test('simulation never blocks availability or creates financial effects', () => {

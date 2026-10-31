@@ -11,7 +11,6 @@ import {
   shapeReview,
   shapeStaffUser,
 } from './moderation_domain.js';
-import { nonBindingTestLifecycleEnabled } from './booking_domain.js';
 import { blockUser } from './message_workflow.js';
 import { verifyPassword } from './security.js';
 import { persistModerationDecision } from './moderation_decision_workflow.js';
@@ -1259,7 +1258,7 @@ export async function setListingModeration(client, {
 }
 
 export async function createBookingReview(client, {
-  actor, bookingId, raw, config: applicationConfig = null,
+  actor, bookingId, raw,
   idempotencyKey: suppliedIdempotencyKey = null,
 }) {
   const candidate = normalizeReviewInput(raw);
@@ -1275,13 +1274,6 @@ export async function createBookingReview(client, {
   const commandRequest = suppliedIdempotencyKey
     ? { bookingId, candidate }
     : { bookingId, reviewerId: actor.id, direction: candidate.direction };
-  const replay = await startCommand(client, {
-    key: commandKey,
-    actorId: actor.id,
-    type: 'booking.review',
-    request: commandRequest,
-  });
-  if (replay) return replay;
   const booking = await client.query(
     `SELECT booking.*, listing.id AS resolved_listing_id
      FROM bookings AS booking JOIN listings AS listing ON listing.id = booking.listing_id
@@ -1291,9 +1283,18 @@ export async function createBookingReview(client, {
   if (!booking.rowCount) throw new ModerationWorkflowError(404, 'booking_not_found');
   const row = booking.rows[0];
   if (![row.owner_id, row.renter_id].includes(actor.id)) throw new ModerationWorkflowError(403, 'booking_forbidden');
-  if (row.simulation_only === true && !nonBindingTestLifecycleEnabled(applicationConfig)) {
+  // Simulation drafts stay private/run-scoped. Canonical reviews must reject
+  // simulations before any command write or replay, regardless of lifecycle gates.
+  if (row.simulation_only === true) {
     throw new ModerationWorkflowError(409, 'pilot_simulation_review_forbidden');
   }
+  const replay = await startCommand(client, {
+    key: commandKey,
+    actorId: actor.id,
+    type: 'booking.review',
+    request: commandRequest,
+  });
+  if (replay) return replay;
   if (row.workflow_status !== 'completed' || row.status !== 'completed') {
     throw new ModerationWorkflowError(409, 'review_requires_completed_booking');
   }
