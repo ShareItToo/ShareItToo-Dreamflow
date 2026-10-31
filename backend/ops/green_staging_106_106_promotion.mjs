@@ -18,7 +18,6 @@ export function temporaryPromotionName(inputs) {
   return name;
 }
 const promotionReadinessMatches = (value, env) => value?.live?.status === 200 && value.live.payload?.status === 'ok'
-  && value.health?.status === 200 && value.health.payload?.status === 'ok'
   && value.ready?.status === 200 && value.ready.payload?.status === 'ok'
   && value.version?.status === 200 && equal(value.version.payload, buildReleaseMetadata(env));
 export async function promotionGatewayReadback({ timeoutMs = 5000, signal } = {}) {

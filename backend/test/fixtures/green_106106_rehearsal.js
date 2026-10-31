@@ -130,7 +130,6 @@ export async function rehearsalFixture(directory, { restartPolicy = 'no', databa
         const env = Object.fromEntries(records[target].Config.Env.map(e => [e.slice(0, e.indexOf('=')), e.slice(e.indexOf('=') + 1)]));
         result = JSON.stringify({
           live: { status: 200, payload: { status: 'ok' } },
-          health: { status: 200, payload: health },
           ready: { status: 200, payload: health },
           version: { status: 200, payload: buildReleaseMetadata(env) },
         });

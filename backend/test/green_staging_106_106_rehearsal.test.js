@@ -5,7 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { objectDigest } from '../ops/green_staging_98_106_contract.mjs';
 import { assertCredentialCleanupEligible, credentialCleanupEligibilitySql, runSuccessorRehearsal,
-  rehearsalConfirmation } from '../ops/green_staging_106_106_rehearsal.mjs';
+  rehearsalConfirmation, readinessScript } from '../ops/green_staging_106_106_rehearsal.mjs';
 import { executionPreflight } from '../ops/green_staging_106_106_preflight.mjs';
 import { rehearsalFixture } from './fixtures/green_106106_rehearsal.js';
 
@@ -197,12 +197,23 @@ test('candidate start exit is classified without log or error content', async ()
   assert.equal(failure.candidateSubstage, 'start');
   assert.deepEqual(failure.candidateDiagnostic, {
     stateReadable: true, running: false, status: 'exited', exitCode: 1, oomKilled: false, dead: false,
-    runtimeErrorClass: 'none', readiness: { code: 'not_attempted', statuses: { live: null, health: null, ready: null, version: null }, attempts: 0 },
+    runtimeErrorClass: 'none', readiness: { code: 'not_attempted', statuses: { live: null, ready: null, version: null }, attempts: 0 },
   });
   assert.equal(Object.hasOwn(failure.candidateDiagnostic, 'logs'), false);
   assert.equal(Object.hasOwn(failure.candidateDiagnostic, 'errorText'), false);
   assert.equal(owned(f).length, 0);
 }));
+test('readiness probe does not call access-gated /health and retains unauthenticated contract endpoints', async () => {
+  const called = [], output = { value: '' };
+  const run = new Function('fetch', 'AbortSignal', 'process', `return (async()=>{${readinessScript}})()`);
+  await run(async input => {
+    const route = new URL(input).pathname; called.push(route);
+    if (route === '/health') return { status: 401, json: async () => ({ status: 'unauthorized' }) };
+    return { status: 200, json: async () => route === '/version' ? { commit: 'synthetic', environment: 'test' } : { status: 'ok' } };
+  }, AbortSignal, { stdout: { write: value => { output.value += value; } } });
+  assert.deepEqual(called, ['/health/live', '/health/ready', '/version']);
+  assert.deepEqual(Object.keys(JSON.parse(output.value)).sort(), ['live', 'ready', 'version']);
+});
 test('candidate readiness HTTP failure is separately classified with statuses only', async () => scoped(async (f, directory) => {
   const prior = f.dependencies.command;
   f.dependencies.command = async e => {
@@ -215,12 +226,25 @@ test('candidate readiness HTTP failure is separately classified with statuses on
   assert.equal(failure.stage, 'candidate_readiness'); assert.equal(failure.code, 'candidate_readiness_failed');
   assert.equal(failure.candidateSubstage, 'readiness');
   assert.deepEqual(failure.candidateDiagnostic.readiness, {
-    code: 'ready_http', statuses: { live: 200, health: 200, ready: 503, version: 200 }, attempts: 30,
+    code: 'ready_http', statuses: { live: 200, ready: 503, version: 200 }, attempts: 30,
   });
   assert.equal(failure.candidateDiagnostic.running, true);
   assert.deepEqual(Object.keys(failure.candidateDiagnostic).sort(),
     ['dead', 'exitCode', 'oomKilled', 'readiness', 'running', 'runtimeErrorClass', 'stateReadable', 'status'].sort());
   assert.equal(owned(f).length, 0);
+}));
+test('missing readiness endpoint fails closed', async () => scoped(async (f, directory) => {
+  const prior = f.dependencies.command;
+  f.dependencies.command = async entry => {
+    const result = await prior(entry);
+    if (entry.phase !== 'candidate_readiness') return result;
+    const value = JSON.parse(result); delete value.ready; return JSON.stringify(value);
+  };
+  await assert.rejects(runSuccessorRehearsal(f.data, f.options, f.dependencies));
+  const failure = JSON.parse(fs.readFileSync(path.join(directory, 'synthetic-run.failure.json')));
+  assert.equal(failure.stage, 'candidate_readiness');
+  assert.equal(failure.candidateDiagnostic.readiness.code, 'probe_shape');
+  assert.deepEqual(Object.keys(failure.candidateDiagnostic.readiness.statuses).sort(), ['live', 'ready', 'version']);
 }));
 test('post-start snapshot, auxiliary, and schema failures use fixed candidate substages', async t => {
   for (const substage of ['snapshot', 'aux', 'schema']) await t.test(substage, async () => scoped(async (f, directory) => {
