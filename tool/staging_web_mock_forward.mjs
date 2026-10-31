@@ -8,8 +8,8 @@ export function validateMockForwardCandidate(artifact, manifestHash, source) {
   if (manifest.target !== TARGET || manifest.api !== `${TARGET}/api/v1`
     || manifest.profile?.SIT_RELEASE_CHANNEL !== 'internal'
     || manifest.profile?.SIT_BLUE_OCEAN_LISTING_ASSISTANT !== 'true'
-    || manifest.profile?.SIT_STAGE_A_NON_BINDING_PILOT !== 'false'
-    || manifest.profile?.SIT_STAGE_A_PILOT_ID !== ''
+    || manifest.profile?.SIT_STAGE_A_NON_BINDING_PILOT !== 'true'
+    || manifest.profile?.SIT_STAGE_A_PILOT_ID !== 'heilbronn_wave0'
     || manifest.listingAiWebProfileVersion !== LISTING_AI_MOCK_WEB_PROFILE) {
     throw new Error('mock_forward_profile_required');
   }

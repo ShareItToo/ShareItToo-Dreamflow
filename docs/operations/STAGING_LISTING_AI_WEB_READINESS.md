@@ -37,7 +37,9 @@ revalidate the evidence binding and profile digest.
 
 For the private Staging Web pilot, use the separate
 `tool/deploy_staging_web_mock_forward.mjs` entry point with an artifact built
-using `--listing-ai-mock-web-readiness`. It accepts only the
+using `--stage-a-non-binding-pilot=heilbronn_wave0` and
+`--listing-ai-mock-web-readiness`. It accepts only the exact private Stage-A
+pilot profile and
 `staging-listing-ai-mock-web-v1` profile and revalidates its authenticated
 readiness through `staging_listing_ai_mock_web_readiness.mjs`: environment
 `staging`, provider/model `mock`/`listing-ai-mock-v1`, zero-cent budget,
