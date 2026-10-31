@@ -365,6 +365,18 @@ class AuthService {
         final removed = await prefs.remove(_sessionKey);
         if (!removed || prefs.containsKey(_sessionKey)) return null;
         _sessionGeneration += 1;
+        try {
+          if (runLogoutCleanup) {
+            await BackendRealtimeService.disconnect();
+          } else {
+            await BackendRealtimeService.disconnectIfAccessTokenMatches(
+              capturedSession.accessToken,
+            );
+          }
+        } catch (_) {
+          // The exact local session removal remains authoritative if socket
+          // cancellation fails; token matching protects any successor socket.
+        }
         final receipt = AuthSessionClearReceipt(
           owner: owner,
           completionEpoch: _sessionGeneration,
@@ -376,14 +388,6 @@ class AuthService {
             await BlueOceanDraftRecoveryService().clear();
           } catch (_) {
             // Account-bound draft cleanup is best effort after exact removal.
-          }
-          try {
-            // A successor realtime connection cannot start until this exact A
-            // disconnect completes because session persistence shares the
-            // mutation queue. Do not use a non-cancelling timeout here.
-            await BackendRealtimeService.disconnect();
-          } catch (_) {
-            // Local session removal remains authoritative while disconnected.
           }
           await runBestEffortLogoutCleanup(
             remoteLogout: () async {

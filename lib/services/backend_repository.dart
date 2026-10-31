@@ -294,6 +294,17 @@ class BackendRepository {
       '${owner.epoch}:'
       '${LocalPrincipalScope.tokenForSessionOwner(owner)}:${owner.sessionId}';
 
+  static Future<LocalPrincipalActionOwner?>
+      _captureConfirmedGuestAfterOwnerLoss(
+    LocalPrincipalActionOwner owner,
+  ) async {
+    if (owner.sessionOwner == null || await owner.isCurrent()) return null;
+    final guestOwner = await LocalPrincipalActionOwner.capture();
+    if (guestOwner.sessionOwner != null) return null;
+    await guestOwner.assertCurrent();
+    return guestOwner;
+  }
+
   static String? _staffStepUpToken;
 
   static Future<String> _token() async {
@@ -631,29 +642,86 @@ class BackendRepository {
     }
   }
 
+  static bool _isInvalidSession401(Object error) =>
+      error is BackendException &&
+      error.statusCode == 401 &&
+      error.code == 'invalid_or_expired_session';
+
+  static Future<List<Map<String, dynamic>>>
+      _readPublicListingsSnapshot() async {
+    final response = await BackendHttp.requestJson(
+      method: 'GET',
+      path: '/listings?sort=newest&limit=100',
+    );
+    final byId = <String, Map<String, dynamic>>{
+      for (final listing in _maps(response['listings']))
+        if ((listing['id']?.toString() ?? '').isNotEmpty)
+          listing['id'].toString(): listing,
+    };
+    return byId.values.toList();
+  }
+
   static Future<List<Map<String, dynamic>>> getListings() async {
     final owner = await LocalPrincipalActionOwner.capture();
     return _singleFlightSnapshot<List<Map<String, dynamic>>>(
       key: 'listings:${_snapshotPrincipalKey(owner)}',
       epoch: owner.epoch,
       load: () async {
-        final response = await BackendHttp.requestJson(
-          method: 'GET',
-          path: '/listings?sort=newest&limit=100',
-        );
-        await owner.assertCurrent();
+        final publicListings = await _readPublicListingsSnapshot();
+        try {
+          await owner.assertCurrent();
+        } on StateError catch (error, stackTrace) {
+          final guestOwner = await _captureConfirmedGuestAfterOwnerLoss(owner);
+          if (guestOwner == null) {
+            Error.throwWithStackTrace(error, stackTrace);
+          }
+          // The public response is safe to use only after confirming that the
+          // captured owner is gone and the replacement guest remains current.
+          await guestOwner.assertCurrent();
+          final result = _copySnapshotRows(publicListings);
+          await guestOwner.assertCurrent();
+          return result;
+        }
         final byId = <String, Map<String, dynamic>>{
-          for (final listing in _maps(response['listings']))
+          for (final listing in publicListings)
             if ((listing['id']?.toString() ?? '').isNotEmpty)
               listing['id'].toString(): listing,
         };
         final sessionOwner = owner.sessionOwner;
         if (sessionOwner != null) {
-          final mine = await _authorizedForOwner(
-            owner: sessionOwner,
-            method: 'GET',
-            path: '/listings/mine',
-          );
+          late final Map<String, dynamic> mine;
+          try {
+            mine = await _authorizedForOwner(
+              owner: sessionOwner,
+              method: 'GET',
+              path: '/listings/mine',
+            );
+          } on BackendException catch (error) {
+            if (!_isInvalidSession401(error)) rethrow;
+            final receipt = await AuthService.clearSessionOwnerIfMatches(
+              sessionOwner,
+              runLogoutCleanup: false,
+            );
+            if (receipt == null ||
+                !await AuthService.isSessionClearReceiptCurrent(receipt)) {
+              rethrow;
+            }
+            final guestOwner = await LocalPrincipalActionOwner.capture();
+            if (guestOwner.sessionOwner != null ||
+                guestOwner.epoch != receipt.completionEpoch ||
+                !await AuthService.isSessionClearReceiptCurrent(receipt)) {
+              rethrow;
+            }
+            return _singleFlightSnapshot<List<Map<String, dynamic>>>(
+              key: 'listings:${_snapshotPrincipalKey(guestOwner)}',
+              epoch: guestOwner.epoch,
+              load: () async {
+                final listings = await _readPublicListingsSnapshot();
+                await guestOwner.assertCurrent();
+                return listings;
+              },
+            );
+          }
           await owner.assertCurrent();
           for (final listing in _maps(mine['listings'])) {
             final id = listing['id']?.toString() ?? '';

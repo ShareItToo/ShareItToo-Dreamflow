@@ -174,8 +174,23 @@ class _ExploreScreenState extends State<ExploreScreen> {
     unawaited(_savedRefreshCoordinator.schedule(_loadData));
   }
 
+  Future<bool> _isConfirmedGuestAfterOwnerLoss(
+    AuthSessionOwner owner,
+  ) async {
+    final observedEpoch = AuthService.sessionEpoch;
+    if (observedEpoch == owner.epoch ||
+        await AuthService.isSessionOwnerDefinitelyCurrent(owner) ||
+        !await AuthService.isStoredSessionDefinitelyAbsent()) {
+      return false;
+    }
+    return observedEpoch == AuthService.sessionEpoch &&
+        await AuthService.isStoredSessionDefinitelyAbsent() &&
+        observedEpoch == AuthService.sessionEpoch;
+  }
+
   Future<void> _loadData() async {
     final revision = ++_loadRevision;
+    var publicCatalogCommitted = false;
     if (mounted) {
       setState(() {
         _isLoading = true;
@@ -188,6 +203,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
       final initialSessionOwner = initialSession == null
           ? null
           : AuthService.captureSessionOwner(initialSession);
+      var shouldLoadAccountEnrichment = initialSessionOwner != null;
       final items = await DataService.getPublicItems();
       final categories = await DataService.getCategories();
       // Public catalog truth must not wait for account-scoped presentation
@@ -207,13 +223,21 @@ class _ExploreScreenState extends State<ExploreScreen> {
           !await AuthService.isSessionOwnerDefinitelyCurrent(
             initialSessionOwner,
           )) {
-        _retryAfterPrincipalTransition(revision);
-        return;
+        if (!await _isConfirmedGuestAfterOwnerLoss(initialSessionOwner)) {
+          _retryAfterPrincipalTransition(revision);
+          return;
+        }
+        shouldLoadAccountEnrichment = false;
       }
       if (!mounted || revision != _loadRevision) return;
       final coarseMap = <String, String>{
         for (final c in categories) c.id: DataService.coarseCategoryFor(c.name)
       };
+      // The just-committed public snapshot is independent of any previous
+      // account presentation. Drop older action owners before awaiting the
+      // optional enrichment for the captured principal.
+      _profileActions.invalidate();
+      _listingActions.invalidate();
       setState(() {
         _items = List<Item>.from(items);
         _coarseByCatId = coarseMap;
@@ -224,12 +248,13 @@ class _ExploreScreenState extends State<ExploreScreen> {
         _extraTopBooked = <Item>[];
         _isLoading = false;
       });
+      publicCatalogCommitted = true;
       // The public guest catalog must not depend on an old or corrupt local
       // account document. Account-scoped presentation data is resolved only
       // when this load actually started with an authenticated session; a
       // later session re-read and the mutation contexts below still guard a
       // concurrent guest/account or account/account transition.
-      if (initialSession == null) {
+      if (!shouldLoadAccountEnrichment) {
         // The public snapshot above is already the complete guest result.
         // Do not read or initialize any account-scoped local document.
         return;
@@ -297,6 +322,23 @@ class _ExploreScreenState extends State<ExploreScreen> {
       }
     } catch (e) {
       if (!mounted || revision != _loadRevision) return;
+      if (publicCatalogCommitted) {
+        // Public listings have already succeeded. A failed account overlay or
+        // mutation context cannot turn that snapshot into a catalog error or
+        // leave presentation/actions from a stale account visible.
+        _profileActions.invalidate();
+        _listingActions.invalidate();
+        setState(() {
+          _isLoading = false;
+          _catalogError = null;
+          _usersById = <String, model.User>{};
+          _currentUserName = null;
+          _currentUserCity = null;
+          _savedIds = <String>{};
+          _extraTopBooked = <Item>[];
+        });
+        return;
+      }
       setState(() {
         _isLoading = false;
         _catalogError = 'Anzeigen konnten nicht geladen werden.';
@@ -746,9 +788,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
     // Now stores coarse/top-level category labels (not fine-grained IDs)
     final List<String> catGroups =
         (f?['categories'] as List<String>?) ?? const [];
-    final double minRating = isSyntheticCloneNonBinding
-        ? 0
-        : (f?['minRating'] as double?) ?? 0;
+    final double minRating =
+        isSyntheticCloneNonBinding ? 0 : (f?['minRating'] as double?) ?? 0;
     final List<String> delivery = (f?['delivery'] as List<String>?) ?? const [];
 
     final double minPerDay =
@@ -1009,8 +1050,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
                                   // Ordinary cards retain their 4:3 image and
                                   // compact price area. Test cards need room
                                   // for the full disclosure and opening action.
-                                  final cardH = max(cardW * (3 / 4) + 84,
-                                      featured.any((it) => it.isSyntheticCatalog)
+                                  final cardH = max(
+                                      cardW * (3 / 4) + 84,
+                                      featured.any(
+                                              (it) => it.isSyntheticCatalog)
                                           ? 280.0
                                           : 0.0);
                                   return SizedBox(
@@ -1030,7 +1073,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
                                             child: InkWell(
                                               onTap: () => ItemDetailsOverlay
                                                   .showFullPage(context,
-                                                      item: it, fresh: true, publicCatalogImage: true),
+                                                      item: it,
+                                                      fresh: true,
+                                                      publicCatalogImage: true),
                                               onLongPress: () =>
                                                   showListingOptionsDialog(
                                                       context,
@@ -2225,8 +2270,8 @@ class _ExploreListingCardContent extends StatelessWidget {
 
     return LongPressFeedbackWrapper(
       child: InkWell(
-        onTap: () =>
-            ItemDetailsOverlay.showFullPage(context, item: item, fresh: true, publicCatalogImage: true),
+        onTap: () => ItemDetailsOverlay.showFullPage(context,
+            item: item, fresh: true, publicCatalogImage: true),
         onLongPress: () => showListingOptionsDialog(context,
             publicCatalogImage: true,
             item: item,

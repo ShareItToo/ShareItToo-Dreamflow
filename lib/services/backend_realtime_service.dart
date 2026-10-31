@@ -99,6 +99,29 @@ class BackendRealtimeService {
     if (!_networkUnavailable) unawaited(_open());
   }
 
+  /// Stops only the realtime transport authenticated with [accessToken]. This
+  /// is used by exact stale-session recovery, where a successor session must
+  /// not be disconnected by cleanup for its predecessor.
+  static Future<bool> disconnectIfAccessTokenMatches(
+    String? accessToken,
+  ) async {
+    final expected = accessToken?.trim() ?? '';
+    if (expected.isEmpty || _accessToken != expected) return false;
+    await disconnect();
+    return true;
+  }
+
+  @visibleForTesting
+  static void scheduleReconnectForTesting(String accessToken) {
+    _stopped = false;
+    _networkUnavailable = false;
+    _accessToken = accessToken;
+    _scheduleReconnect();
+  }
+
+  @visibleForTesting
+  static bool get hasScheduledReconnectForTesting => _reconnectTimer != null;
+
   static Future<void> _startConnectivityMonitoring() async {
     final connectivity = Connectivity();
     _connectivityMonitoringStartedAt = DateTime.now();

@@ -5226,47 +5226,106 @@ class DataService {
   }
 
   static Future<PublicCatalogSnapshot> getPublicCatalogSnapshot() async {
-    final items = <Item>[];
-    final blockedUserIdsFuture = BlockedUsersService.getBlockedUserIds();
-    if (shouldUseDedicatedPublicRemoteCatalog(
+    if (!shouldUseDedicatedPublicRemoteCatalog(
       backendEnabled: BackendConfig.enabled,
       qaRuntimeEnabled: QaRuntimeService.isEnabled,
     )) {
-      // Explore is a public-catalog surface. Do not route it through
-      // getItems(), whose authenticated backend path deliberately merges
-      // /listings/mine for owner-management screens. A slow account-scoped
-      // owner request must never hold the public catalog spinner open.
-      // The public catalog remains readable without a session. When an
-      // authenticated staging session exists, carry its current access token
-      // as well so the staging cohort gate can authorize the same public
-      // catalog read without requiring a per-run fixture ID in deployment
-      // configuration. Production keeps the same public response semantics.
-      final remote = await withPublicCatalogAccessToken(
-        operation: (accessToken) => BackendRepository.searchListings(
-          sort: 'newest',
-          limit: 100,
-          accessToken: accessToken,
-        ),
+      final items = await getItems();
+      final blockedUserIds =
+          (await BlockedUsersService.getBlockedUserIds()).toSet();
+      final filtered = items
+          .where(isPublicCatalogItem)
+          .where((item) => !blockedUserIds.contains(item.ownerId))
+          .toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return PublicCatalogSnapshot(
+        items: filtered,
+        blockedOwnerIds: blockedUserIds,
       );
-      for (final entry in remote) {
-        try {
-          items.add(Item.fromJson(entry));
-        } catch (error) {
-          debugPrint('[DataService] skipped invalid public listing: $error');
-        }
-      }
-    } else {
-      items.addAll(await getItems());
     }
-    final blockedUserIds = (await blockedUserIdsFuture).toSet();
-    final filtered = items
-        .where(isPublicCatalogItem)
-        .where((item) => !blockedUserIds.contains(item.ownerId))
-        .toList();
-    filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    return PublicCatalogSnapshot(
-      items: filtered,
-      blockedOwnerIds: blockedUserIds,
+
+    var owner = await LocalPrincipalActionOwner.capture();
+    Object? lastError;
+    StackTrace? lastStackTrace;
+    for (var attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        final sessionOwner = owner.sessionOwner;
+        // Explore is a public-catalog surface. Keep the request principal
+        // exact while fetching the public listing snapshot; the blocked-owner
+        // overlay below is a separate, account-scoped read.
+        final remote = await withPublicCatalogAccessToken(
+          readAccessToken: () async {
+            final token = sessionOwner == null
+                ? null
+                : await AuthService.accessTokenForOwner(sessionOwner);
+            await owner.assertCurrent();
+            return token;
+          },
+          operation: (accessToken) => BackendRepository.searchListings(
+            sort: 'newest',
+            limit: 100,
+            accessToken: accessToken,
+          ),
+        );
+        await owner.assertCurrent();
+        final items = <Item>[];
+        for (final entry in remote) {
+          try {
+            items.add(Item.fromJson(entry));
+          } catch (error) {
+            debugPrint('[DataService] skipped invalid public listing: $error');
+          }
+        }
+
+        // A stable authenticated block-list failure must fail closed. Only a
+        // confirmed principal transition may restart this combined snapshot
+        // under the successor or guest principal.
+        final blockedUserIds =
+            (await BlockedUsersService.getBlockedUserIdsForOwner(owner))
+                .toSet();
+        await owner.assertCurrent();
+        final filtered = items
+            .where(isPublicCatalogItem)
+            .where((item) => !blockedUserIds.contains(item.ownerId))
+            .toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return PublicCatalogSnapshot(
+          items: filtered,
+          blockedOwnerIds: blockedUserIds,
+        );
+      } catch (error, stackTrace) {
+        lastError = error;
+        lastStackTrace = stackTrace;
+        final capturedSessionOwner = owner.sessionOwner;
+        if (error is BackendException &&
+            error.statusCode == 401 &&
+            error.code == 'invalid_or_expired_session' &&
+            capturedSessionOwner != null) {
+          final receipt = await AuthService.clearSessionOwnerIfMatches(
+            capturedSessionOwner,
+            runLogoutCleanup: false,
+          );
+          if (receipt != null &&
+              await AuthService.isSessionClearReceiptCurrent(receipt)) {
+            final guestOwner = await LocalPrincipalActionOwner.capture();
+            if (guestOwner.sessionOwner == null &&
+                guestOwner.epoch == receipt.completionEpoch &&
+                await AuthService.isSessionClearReceiptCurrent(receipt)) {
+              owner = guestOwner;
+              continue;
+            }
+          }
+        }
+        if (await owner.isCurrent()) {
+          Error.throwWithStackTrace(error, stackTrace);
+        }
+        owner = await LocalPrincipalActionOwner.capture();
+      }
+    }
+    Error.throwWithStackTrace(
+      lastError ??
+          StateError('Das öffentliche Angebot konnte nicht geladen werden.'),
+      lastStackTrace ?? StackTrace.current,
     );
   }
 
