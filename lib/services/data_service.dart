@@ -519,6 +519,8 @@ class DataService {
   static bool _clearSessionDuringNextListingPersistenceForTesting = false;
   static Future<void> Function(SharedPreferences prefs)?
       _afterNextListingPersistenceWriteForTesting;
+  static Future<void> Function(SharedPreferences prefs)?
+      _afterNextMessageThreadPersistenceWriteForTesting;
   static bool _failNextReviewPersistenceForTesting = false;
   static bool _failNextAccountProfilePersistenceForTesting = false;
   static bool _clearSessionDuringNextAccountProfilePersistenceForTesting =
@@ -941,6 +943,13 @@ class DataService {
     _afterNextListingPersistenceWriteForTesting = callback;
   }
 
+  @visibleForTesting
+  static void afterNextMessageThreadPersistenceWriteForTesting(
+    Future<void> Function(SharedPreferences prefs) callback,
+  ) {
+    _afterNextMessageThreadPersistenceWriteForTesting = callback;
+  }
+
   /// Read-only backend refreshes update the local cache but must not announce
   /// another logical data change. Announcing those cache writes makes every
   /// listening screen fetch again, which can create a refresh feedback loop.
@@ -1000,6 +1009,7 @@ class DataService {
     SharedPreferences prefs,
     List<dynamic> threads, {
     bool announceChange = true,
+    Future<void> Function()? verifyAuthorization,
   }) async {
     if (threads.length > _maxLocalMessageThreads ||
         threads.any((entry) => entry is! Map)) {
@@ -1012,11 +1022,34 @@ class DataService {
     if (parsed.map((entry) => entry.id).toSet().length != parsed.length) {
       throw const FormatException('Ungültiger lokaler Nachrichtenverlauf.');
     }
-    await _writePreferenceString(
-      prefs,
-      _messageThreadsKey,
-      jsonEncode(payload),
-    );
+    final encoded = jsonEncode(payload);
+    final previous = prefs.getString(_messageThreadsKey);
+    final afterWrite = _afterNextMessageThreadPersistenceWriteForTesting;
+    _afterNextMessageThreadPersistenceWriteForTesting = null;
+    var writeAttempted = false;
+    try {
+      await verifyAuthorization?.call();
+      writeAttempted = true;
+      await _writePreferenceString(prefs, _messageThreadsKey, encoded);
+      await afterWrite?.call(prefs);
+      await verifyAuthorization?.call();
+    } catch (_) {
+      // Roll back only our own write. A concurrent successor principal may
+      // already have replaced the global value while this write was pending.
+      if (writeAttempted &&
+          prefs.getString(_messageThreadsKey) == encoded &&
+          encoded != previous) {
+        final restored = previous == null
+            ? await prefs.remove(_messageThreadsKey)
+            : await prefs.setString(_messageThreadsKey, previous);
+        if (!restored || prefs.getString(_messageThreadsKey) != previous) {
+          throw StateError(
+            'Der lokale Nachrichtenverlauf konnte nicht wiederhergestellt werden.',
+          );
+        }
+      }
+      rethrow;
+    }
     if (announceChange) {
       SharedPersistenceSync.notify(SharedPersistenceSync.messageThreadsKey);
     }
@@ -1027,23 +1060,22 @@ class DataService {
     Duration remoteTimeout = const Duration(seconds: 20),
   }) async {
     if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
-      try {
-        final remote = await BackendRepository.getMessageThreads(
-          timeout: remoteTimeout,
-        );
-        final encoded = jsonEncode(remote);
-        _decodeMessageThreadsStrict(encoded);
-        await _persistMessageThreads(
-          prefs,
-          remote,
-          announceChange: shouldAnnounceMessageThreadCacheWrite(
-            readOnlyRemoteRefresh: true,
-          ),
-        );
-        return encoded;
-      } catch (error) {
-        debugPrint('[DataService] remote message load failed: $error');
-      }
+      final snapshot = await BackendRepository.getMessageThreadsSnapshot(
+        timeout: remoteTimeout,
+      );
+      final remote = snapshot.copyThreads();
+      final encoded = jsonEncode(remote);
+      _decodeMessageThreadsStrict(encoded);
+      await _persistMessageThreads(
+        prefs,
+        remote,
+        announceChange: shouldAnnounceMessageThreadCacheWrite(
+          readOnlyRemoteRefresh: true,
+        ),
+        verifyAuthorization: snapshot.assertCurrent,
+      );
+      await snapshot.assertCurrent();
+      return encoded;
     }
     return prefs.getString(_messageThreadsKey);
   }
@@ -13809,6 +13841,11 @@ class DataService {
     final thread = await createOrGetThreadForRequest(id);
     if (thread == null) throw StateError('condition_evidence_thread_missing');
     if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
+      final threadOwner = await LocalPrincipalActionOwner.capture();
+      final sessionOwner = threadOwner.sessionOwner;
+      if (sessionOwner == null) {
+        throw const BackendException(401, 'authentication_required');
+      }
       final upload = await BackendRepository.uploadMessageAttachment(
         bytes: bytes,
         filename: filename,
@@ -13837,8 +13874,16 @@ class DataService {
       // retryable failure.
       try {
         final prefs = await SharedPreferences.getInstance();
-        final remote = await BackendRepository.getMessageThreads();
-        await _persistMessageThreads(prefs, remote);
+        final snapshot =
+            await BackendRepository.getMessageThreadsSnapshotForOwner(
+          sessionOwner,
+          owner: threadOwner,
+        );
+        await _persistMessageThreads(
+          prefs,
+          snapshot.copyThreads(),
+          verifyAuthorization: snapshot.assertCurrent,
+        );
       } catch (error) {
         debugPrint('[DataService] evidence cache refresh failed: $error');
       }
@@ -14592,16 +14637,26 @@ class DataService {
     try {
       final prefs = await SharedPreferences.getInstance();
       if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
-        final remote = await BackendRepository.getMessageThreads(
+        final owner = await LocalPrincipalActionOwner.capture();
+        final sessionOwner = owner.sessionOwner;
+        if (sessionOwner == null) {
+          throw const BackendException(401, 'authentication_required');
+        }
+        final snapshot =
+            await BackendRepository.getMessageThreadsSnapshotForOwner(
+          sessionOwner,
+          owner: owner,
           includeArchived: true,
         );
         await _persistMessageThreads(
           prefs,
-          remote,
+          snapshot.copyThreads(),
           announceChange: shouldAnnounceMessageThreadCacheWrite(
             readOnlyRemoteRefresh: true,
           ),
+          verifyAuthorization: snapshot.assertCurrent,
         );
+        await snapshot.assertCurrent();
       }
       await _requireCurrentOperationalUser(requestedUserId: userId);
       final raw = BackendConfig.enabled && !QaRuntimeService.isEnabled
@@ -14648,13 +14703,14 @@ class DataService {
           archived: true,
         );
         final prefs = await SharedPreferences.getInstance();
-        final remote = await BackendRepository.getMessageThreadsForOwner(owner);
-        if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
-          throw StateError(
-              'Die Kontositzung hat während der Aktion gewechselt.');
-        }
+        final snapshot =
+            await BackendRepository.getMessageThreadsSnapshotForOwner(owner);
         await _assertCurrentOperationalUserId(current.id);
-        await _persistMessageThreads(prefs, remote);
+        await _persistMessageThreads(
+          prefs,
+          snapshot.copyThreads(),
+          verifyAuthorization: snapshot.assertCurrent,
+        );
         return;
       }
       await _operationalMutationQueue.run(() async {
@@ -14704,13 +14760,14 @@ class DataService {
           archived: false,
         );
         final prefs = await SharedPreferences.getInstance();
-        final remote = await BackendRepository.getMessageThreadsForOwner(owner);
-        if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
-          throw StateError(
-              'Die Kontositzung hat während der Aktion gewechselt.');
-        }
+        final snapshot =
+            await BackendRepository.getMessageThreadsSnapshotForOwner(owner);
         await _assertCurrentOperationalUserId(current.id);
-        await _persistMessageThreads(prefs, remote);
+        await _persistMessageThreads(
+          prefs,
+          snapshot.copyThreads(),
+          verifyAuthorization: snapshot.assertCurrent,
+        );
         return;
       }
       await _operationalMutationQueue.run(() async {
@@ -14763,13 +14820,14 @@ class DataService {
           archived: true,
         );
         final prefs = await SharedPreferences.getInstance();
-        final remote = await BackendRepository.getMessageThreadsForOwner(owner);
-        if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
-          throw StateError(
-              'Die Kontositzung hat während der Aktion gewechselt.');
-        }
+        final snapshot =
+            await BackendRepository.getMessageThreadsSnapshotForOwner(owner);
         await _assertCurrentOperationalUserId(current.id);
-        await _persistMessageThreads(prefs, remote);
+        await _persistMessageThreads(
+          prefs,
+          snapshot.copyThreads(),
+          verifyAuthorization: snapshot.assertCurrent,
+        );
         return;
       }
       await _operationalMutationQueue.run(() async {
@@ -14942,6 +15000,11 @@ class DataService {
           normalizedSenderId != currentUser.id) {
         return null;
       }
+      final threadOwner = await LocalPrincipalActionOwner.capture();
+      final sessionOwner = threadOwner.sessionOwner;
+      if (sessionOwner == null) {
+        throw const BackendException(401, 'authentication_required');
+      }
       final sent = await BackendRepository.sendThreadMessage(
         threadId: normalizedThreadId,
         text: normalizedText,
@@ -14950,9 +15013,17 @@ class DataService {
       );
       try {
         final prefs = await SharedPreferences.getInstance();
-        final remote = await BackendRepository.getMessageThreads();
+        final snapshot =
+            await BackendRepository.getMessageThreadsSnapshotForOwner(
+          sessionOwner,
+          owner: threadOwner,
+        );
         await _assertCurrentOperationalUserId(currentUser.id);
-        await _persistMessageThreads(prefs, remote);
+        await _persistMessageThreads(
+          prefs,
+          snapshot.copyThreads(),
+          verifyAuthorization: snapshot.assertCurrent,
+        );
       } catch (error) {
         debugPrint('[DataService] message cache refresh failed: $error');
       }
@@ -15023,6 +15094,11 @@ class DataService {
       return;
     }
     final current = await _requireCurrentOperationalUser();
+    final threadOwner = await LocalPrincipalActionOwner.capture();
+    final sessionOwner = threadOwner.sessionOwner;
+    if (sessionOwner == null) {
+      throw const BackendException(401, 'authentication_required');
+    }
     final thread = await getMessageThreadById(threadId);
     if (thread == null || !_isThreadParticipant(thread, current.id)) {
       throw StateError(
@@ -15042,9 +15118,16 @@ class DataService {
       attachmentIds: [upload['id'].toString()],
     );
     final prefs = await SharedPreferences.getInstance();
-    final remote = await BackendRepository.getMessageThreads();
+    final snapshot = await BackendRepository.getMessageThreadsSnapshotForOwner(
+      sessionOwner,
+      owner: threadOwner,
+    );
     await _assertCurrentOperationalUserId(current.id);
-    await _persistMessageThreads(prefs, remote);
+    await _persistMessageThreads(
+      prefs,
+      snapshot.copyThreads(),
+      verifyAuthorization: snapshot.assertCurrent,
+    );
   }
 
   /// Markiert alle Nachrichten in einem Thread als gelesen für einen User
@@ -15066,13 +15149,14 @@ class DataService {
           threadId: threadId,
         );
         final prefs = await SharedPreferences.getInstance();
-        final remote = await BackendRepository.getMessageThreadsForOwner(owner);
-        if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
-          throw StateError(
-              'Die Kontositzung hat während der Aktion gewechselt.');
-        }
+        final snapshot =
+            await BackendRepository.getMessageThreadsSnapshotForOwner(owner);
         await _assertCurrentOperationalUserId(current.id);
-        await _persistMessageThreads(prefs, remote);
+        await _persistMessageThreads(
+          prefs,
+          snapshot.copyThreads(),
+          verifyAuthorization: snapshot.assertCurrent,
+        );
         return;
       }
       await _operationalMutationQueue.run(() async {

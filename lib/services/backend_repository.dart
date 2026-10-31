@@ -57,6 +57,28 @@ class BackendListingsSnapshot {
       .toList(growable: false);
 }
 
+/// Authenticated owner and copied rows for one private message-thread read.
+/// The owner must remain current through any downstream cache write.
+class BackendMessageThreadsSnapshot {
+  final AuthSessionOwner sessionOwner;
+  final LocalPrincipalActionOwner owner;
+  final List<Map<String, dynamic>> _threads;
+
+  BackendMessageThreadsSnapshot._({
+    required this.sessionOwner,
+    required this.owner,
+    required List<Map<String, dynamic>> threads,
+  }) : _threads = threads
+            .map((row) => Map<String, dynamic>.from(row))
+            .toList(growable: false);
+
+  List<Map<String, dynamic>> copyThreads() => _threads
+      .map((row) => Map<String, dynamic>.from(row))
+      .toList(growable: false);
+
+  Future<void> assertCurrent() => owner.assertCurrent();
+}
+
 bool isValidTechnicalSandboxRunId(String value) =>
     _technicalSandboxRunIdPattern.hasMatch(value);
 
@@ -2661,28 +2683,67 @@ class BackendRepository {
     bool includeArchived = false,
     Duration timeout = const Duration(seconds: 20),
   }) async {
+    final snapshot = await getMessageThreadsSnapshot(
+      includeArchived: includeArchived,
+      timeout: timeout,
+    );
+    return snapshot.copyThreads();
+  }
+
+  static Future<BackendMessageThreadsSnapshot> getMessageThreadsSnapshot({
+    bool includeArchived = false,
+    Duration timeout = const Duration(seconds: 20),
+  }) async {
     final owner = await LocalPrincipalActionOwner.capture();
+    final sessionOwner = owner.sessionOwner;
+    if (sessionOwner == null) {
+      throw const BackendException(401, 'authentication_required');
+    }
+    return getMessageThreadsSnapshotForOwner(
+      sessionOwner,
+      owner: owner,
+      includeArchived: includeArchived,
+      timeout: timeout,
+    );
+  }
+
+  static Future<BackendMessageThreadsSnapshot>
+      getMessageThreadsSnapshotForOwner(
+    AuthSessionOwner sessionOwner, {
+    LocalPrincipalActionOwner? owner,
+    bool includeArchived = false,
+    Duration timeout = const Duration(seconds: 20),
+  }) async {
+    final capturedOwner = owner ?? await LocalPrincipalActionOwner.capture();
+    if (capturedOwner.sessionOwner == null ||
+        capturedOwner.sessionOwner!.epoch != sessionOwner.epoch ||
+        capturedOwner.sessionOwner!.userId != sessionOwner.userId ||
+        !await AuthService.isSessionOwnerDefinitelyCurrent(sessionOwner)) {
+      throw const BackendException(401, 'authentication_required');
+    }
     final response = await _singleFlightSnapshot<Map<String, dynamic>>(
       key:
-          'message-threads:${_snapshotPrincipalKey(owner)}:$includeArchived:${timeout.inMicroseconds}',
-      epoch: owner.epoch,
+          'message-threads:${_snapshotSessionOwnerKey(sessionOwner)}:$includeArchived:${timeout.inMicroseconds}',
+      epoch: sessionOwner.epoch,
       load: () async {
-        final sessionOwner = owner.sessionOwner;
         final path =
             '/message-threads${includeArchived ? '?includeArchived=true' : ''}';
-        final response = sessionOwner == null
-            ? await _authorized(method: 'GET', path: path, timeout: timeout)
-            : await _authorizedForOwner(
-                owner: sessionOwner,
-                method: 'GET',
-                path: path,
-                timeout: timeout,
-              );
-        await owner.assertCurrent();
+        final response = await _authorizedForOwner(
+          owner: sessionOwner,
+          method: 'GET',
+          path: path,
+          timeout: timeout,
+        );
+        await capturedOwner.assertCurrent();
         return response;
       },
     );
-    return _copySnapshotRows(_maps(response['threads']));
+    await capturedOwner.assertCurrent();
+    return BackendMessageThreadsSnapshot._(
+      sessionOwner: sessionOwner,
+      owner: capturedOwner,
+      threads: _maps(response['threads']),
+    );
   }
 
   static Future<List<Map<String, dynamic>>> getMessageThreadsForOwner(
@@ -2690,25 +2751,12 @@ class BackendRepository {
     bool includeArchived = false,
     Duration timeout = const Duration(seconds: 20),
   }) async {
-    if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
-      throw const BackendException(401, 'authentication_required');
-    }
-    final response = await _singleFlightSnapshot<Map<String, dynamic>>(
-      key:
-          'message-threads:${_snapshotSessionOwnerKey(owner)}:$includeArchived:${timeout.inMicroseconds}',
-      epoch: owner.epoch,
-      load: () => _authorizedForOwner(
-        owner: owner,
-        method: 'GET',
-        path:
-            '/message-threads${includeArchived ? '?includeArchived=true' : ''}',
-        timeout: timeout,
-      ),
+    final snapshot = await getMessageThreadsSnapshotForOwner(
+      owner,
+      includeArchived: includeArchived,
+      timeout: timeout,
     );
-    if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
-      throw const BackendException(401, 'authentication_required');
-    }
-    return _copySnapshotRows(_maps(response['threads']));
+    return snapshot.copyThreads();
   }
 
   static Future<Map<String, dynamic>> createOrGetBookingThread(
