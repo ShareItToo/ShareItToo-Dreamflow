@@ -34,6 +34,7 @@ import {
   SYNTHETIC_CLONE_PRINCIPALS,
 } from './synthetic_clone_booking_lane.js';
 import { assertSyntheticPaymentTestEnvelope } from './synthetic_clone_payment_test.js';
+import { createStageAFixtureLane } from './staging_non_binding_fixture.js';
 
 async function writeIdentityVerificationWorkerAudit(client, {
   actor = null,
@@ -77,6 +78,7 @@ async function main() {
     externalProviderExecutionAllowed: config.listingAi.externalProviderExecutionAllowed,
   };
   const paymentTestEnabled = assertSyntheticPaymentTestEnvelope(paymentTestEnvelope);
+  const stageAFixtureLane = createStageAFixtureLane({ environment: process.env, application: config });
 
   await initializeDatabase();
   await verifyMailer();
@@ -110,6 +112,7 @@ async function main() {
     }),
     identityVerificationProvider: identityProvider,
     syntheticCloneBookingLane,
+    stageAFixtureLane,
   });
   const server = http.createServer(app);
   attachRealtime(server);

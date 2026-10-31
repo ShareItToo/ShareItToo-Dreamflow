@@ -304,6 +304,8 @@ test('runs requested to completed with eight photos, two QR verifications and ze
   assert.equal(harness.calls.filter((entry) => entry.path.endsWith('/confirmation-challenges/verify')).length, 2);
   assert.equal(harness.calls.filter((entry) => entry.path.endsWith('/reviews')).length, 1);
   assert.equal(harness.calls.some((entry) => /payment|stripe/u.test(entry.path)), false);
+  assert.equal(harness.loginCount, 2,
+    'pickup and return QR checks must reuse the two already-bound role sessions');
   assert.equal(harness.logoutCount, harness.loginCount);
   assert.deepEqual(harness.qrVerified, { pickup: true, return: true });
   const expectedSlots = ['overview', 'detail', 'accessories', 'critical'];

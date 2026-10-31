@@ -162,7 +162,7 @@ function publicBooking(booking, { includeAudit = false } = {}) {
     renterId: booking.renterId,
     status: booking.status,
     workflowStatus: booking.status,
-    marker: SYNTHETIC_CLONE_NON_BINDING_MARKER,
+    marker: booking.marker ?? SYNTHETIC_CLONE_NON_BINDING_MARKER,
     listing: clone(booking.listing),
     photos: {
       pickup: booking.photos.pickup.map(publicPhoto),
@@ -271,6 +271,17 @@ export function createSyntheticCloneBookingLane({
     listingId,
     stageANonBindingPilot,
   });
+  return createInMemoryNonBindingLane({ deploymentEnvironment, datasetId, runId,
+    ownerId, renterId, listingId, secret, clock, fallbackCode, paymentTestEnvelope });
+}
+
+// Pure engine shared by independently gated entrypoints. Never mounts routes or
+// touches canonical persistence, providers or credentials.
+export function createInMemoryNonBindingLane({ deploymentEnvironment, datasetId, runId,
+  ownerId, renterId, listingId, secret, clock = () => new Date(),
+  fallbackCode = DEFAULT_FALLBACK_CODE, paymentTestEnvelope,
+  marker = SYNTHETIC_CLONE_NON_BINDING_MARKER, listingProjection = {},
+} = {}) {
   if (typeof secret !== 'string' || secret.length < 32) fail(503, 'synthetic_clone_secret_invalid');
   if (!/^\d{6}$/u.test(fallbackCode)) fail(503, 'synthetic_clone_fallback_code_invalid');
 
@@ -296,7 +307,7 @@ export function createSyntheticCloneBookingLane({
       action,
       actorId,
       bookingId,
-      metadata: Object.freeze({ ...metadata, marker: SYNTHETIC_CLONE_NON_BINDING_MARKER.mode }),
+      metadata: Object.freeze({ ...metadata, marker: marker.mode, runId }),
       at: timestamp(),
     }));
   }
@@ -325,13 +336,15 @@ export function createSyntheticCloneBookingLane({
       ownerId: principals.ownerId,
       renterId: principals.renterId,
       status: 'requested',
+      marker,
       listing: {
         id: principals.listingId,
         ownerId: principals.ownerId,
         title: 'SYNTHETIC TEST LISTING — NOT FOR RENTAL',
         status: 'active',
         isActive: true,
-        marker: SYNTHETIC_CLONE_NON_BINDING_MARKER,
+        ...listingProjection,
+        marker,
       },
       photos: { pickup: [], return: [] },
       challenges: new Map(),
@@ -472,7 +485,7 @@ export function createSyntheticCloneBookingLane({
       verifierRole: verifierRole(input.segment),
       confirmedAt: challenge.consumedAt,
       nonBinding: true,
-      marker: SYNTHETIC_CLONE_NON_BINDING_MARKER,
+      marker,
     };
     if (input.segment === 'pickup') booking.status = 'active';
     if (input.segment === 'return') {
@@ -560,8 +573,9 @@ export function createSyntheticCloneBookingLane({
         title: 'SYNTHETIC TEST LISTING — NOT FOR RENTAL',
         status: 'active',
         isActive: true,
+        ...listingProjection,
       }),
-      marker: SYNTHETIC_CLONE_NON_BINDING_MARKER,
+      marker,
     };
   }
 
@@ -592,7 +606,7 @@ export function createSyntheticCloneBookingLane({
     const after = { bookings: bookings.size, listings: 0, photos: 0, challenges: 0, chatMessages: 0, reviewDrafts: 0 };
     record('synthetic_clone.cleanup_verified', { actorId, metadata: { before, after } });
     return {
-      marker: SYNTHETIC_CLONE_NON_BINDING_MARKER,
+      marker,
       cleanupVerified: true,
       remainingResources: after,
       ...(paymentCleanup ? { paymentTest: paymentCleanup } : {}),
@@ -610,7 +624,7 @@ export function createSyntheticCloneBookingLane({
   function status() {
     const bookingValues = [...bookings.values()];
     return {
-      marker: SYNTHETIC_CLONE_NON_BINDING_MARKER,
+      marker,
       datasetId,
       runId,
       principals: clone(principals),

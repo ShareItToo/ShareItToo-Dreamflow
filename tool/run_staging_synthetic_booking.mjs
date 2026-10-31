@@ -642,10 +642,22 @@ async function verifySyntheticBookingConfirmation({
   accounts,
   fixture,
   segment,
+  roleTokens = null,
 }) {
+  if (roleTokens !== null && (
+    typeof roleTokens !== 'object'
+    || Array.isArray(roleTokens)
+    || Object.keys(roleTokens).sort().join('|') !== 'owner|renter'
+    || !['owner', 'renter'].every((role) => typeof roleTokens[role] === 'string'
+      && /^[\x21-\x7e]{20,8192}$/u.test(roleTokens[role]))
+    || roleTokens.owner === roleTokens.renter
+  )) fail('The pre-bound synthetic role sessions are invalid.');
   const presenterRole = segment === 'pickup' ? 'owner' : 'renter';
   const verifierRole = presenterRole === 'owner' ? 'renter' : 'owner';
-  const presenterToken = await login(fetchImpl, accounts.get(presenterRole));
+  // A caller that already verified both principals owns their session lifetime.
+  // Reuse those sessions instead of accumulating nested diagnostic logins.
+  const presenterToken = roleTokens?.[presenterRole]
+    ?? await login(fetchImpl, accounts.get(presenterRole));
   const issued = await request(
     fetchImpl,
     `/bookings/${encodeURIComponent(fixture.bookingId)}/confirmation-challenges`,
@@ -661,7 +673,8 @@ async function verifySyntheticBookingConfirmation({
       || !qrPayload.startsWith(`shareittoo:v3:${segment}:${presenterRole}:`)) {
     fail(`The synthetic ${segment} confirmation challenge is invalid.`);
   }
-  const verifierToken = await login(fetchImpl, accounts.get(verifierRole));
+  const verifierToken = roleTokens?.[verifierRole]
+    ?? await login(fetchImpl, accounts.get(verifierRole));
   const verified = await request(
     fetchImpl,
     `/bookings/${encodeURIComponent(fixture.bookingId)}/confirmation-challenges/verify`,

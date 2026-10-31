@@ -451,6 +451,7 @@ async function runStagingNonBindingSimulationImpl({
   if (!checkpointAtLeast(progress, 'pickup-qr-verified')) {
   pickupChallenge = await verifySyntheticBookingConfirmation({
     fetchImpl, accounts, fixture: { bookingId }, segment: 'pickup',
+    roleTokens: { owner: ownerToken, renter: renterToken },
   });
   persistSimulationCheckpoint(vaultPath, vault, 'pickup-qr-verified', {
     pickupQrVerified: pickupChallenge.status === 'passed',
@@ -508,6 +509,7 @@ async function runStagingNonBindingSimulationImpl({
   if (!checkpointAtLeast(progress, 'return-qr-verified')) {
   returnChallenge = await verifySyntheticBookingConfirmation({
     fetchImpl, accounts, fixture: { bookingId }, segment: 'return',
+    roleTokens: { owner: ownerToken, renter: renterToken },
   });
   persistSimulationCheckpoint(vaultPath, vault, 'return-qr-verified', {
     returnQrVerified: returnChallenge.status === 'passed',

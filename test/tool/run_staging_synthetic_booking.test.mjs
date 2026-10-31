@@ -18,6 +18,7 @@ import {
   resolveSyntheticEndpointContext,
   sendSyntheticBookingDiagnosticMessage,
   transitionSyntheticBookingFixture,
+  verifySyntheticBookingConfirmation,
 } from '../../tool/run_staging_synthetic_booking.mjs';
 import {
   assertListingPhotoTruthPolicy,
@@ -28,6 +29,56 @@ import {
 import { createTestTempTracker } from './test_temp_fixtures.mjs';
 
 const tempFixtures = createTestTempTracker();
+
+test('QR checks reuse the pre-bound presenter and verifier sessions for both segments', async () => {
+  const roleTokens = {
+    owner: 'synthetic-owner-access-token-0123456789',
+    renter: 'synthetic-renter-access-token-0123456789',
+  };
+  for (const segment of ['pickup', 'return']) {
+    const presenterRole = segment === 'pickup' ? 'owner' : 'renter';
+    const verifierRole = segment === 'pickup' ? 'renter' : 'owner';
+    const calls = [];
+    const result = await verifySyntheticBookingConfirmation({
+      fixture: { bookingId: 'synthetic-role-session-reuse' }, segment, roleTokens,
+      fetchImpl: async (url, options) => {
+        const route = new URL(url).pathname;
+        calls.push(route);
+        if (route.endsWith('/confirmation-challenges')) {
+          assert.equal(options.headers.Authorization, `Bearer ${roleTokens[presenterRole]}`);
+          return new Response(JSON.stringify({
+            challenge: { qrPayload: `shareittoo:v3:${segment}:${presenterRole}:synthetic` },
+          }), { status: 201 });
+        }
+        assert.ok(route.endsWith('/confirmation-challenges/verify'));
+        assert.equal(options.headers.Authorization, `Bearer ${roleTokens[verifierRole]}`);
+        return new Response(JSON.stringify({ confirmation: {
+          verificationVersion: 3, presenterRole, confirmedByRole: verifierRole,
+        } }), { status: 200 });
+      },
+    });
+    assert.equal(result.status, 'passed');
+    assert.equal(calls.length, 2);
+    assert.ok(calls.every(route => !route.includes('/auth/')));
+  }
+});
+
+test('invalid pre-bound role sessions fail before login or challenge mutation', async () => {
+  const valid = {
+    owner: 'synthetic-owner-access-token-0123456789',
+    renter: 'synthetic-renter-access-token-0123456789',
+  };
+  for (const roleTokens of [{}, [], 'invalid', { owner: valid.owner },
+    { ...valid, renter: valid.owner }, { ...valid, renter: 'too-short' },
+    { ...valid, unexpected: valid.owner }]) {
+    let requests = 0;
+    await assert.rejects(verifySyntheticBookingConfirmation({
+      fixture: { bookingId: 'synthetic-invalid-session' }, segment: 'pickup', roleTokens,
+      fetchImpl: async () => { requests += 1; throw Error('unexpected request'); },
+    }), /pre-bound synthetic role sessions are invalid/u);
+    assert.equal(requests, 0);
+  }
+});
 
 function createEphemeralFixturePassword() {
   return `Aa9!${crypto.randomBytes(24).toString('base64url')}`;

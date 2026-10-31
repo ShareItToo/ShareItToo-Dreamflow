@@ -381,6 +381,7 @@ import {
   listFinancialDocuments,
 } from './financial_documents.js';
 import { releaseMetadata } from './release.js';
+import { registerStageAFixtureRoutes, stageAFixtureCanonicalGuard } from './staging_non_binding_fixture.js';
 import { isSyntheticCatalogListing, syntheticCatalogProjection,
   syntheticCatalogMutationGuard, SyntheticCatalogError } from './staging_synthetic_catalog.js';
 import {
@@ -2373,6 +2374,7 @@ export function createApp({
   screenBlueOceanListingImage,
   openAiListingAiProvider,
   syntheticCloneBookingLane = null,
+  stageAFixtureLane = null,
   resolveMissionSupplyRecipient = null,
 } = {}) {
   const app = express();
@@ -2587,6 +2589,11 @@ export function createApp({
   }));
   app.use(express.urlencoded({ extended: false, limit: '20kb' }));
   app.use(syntheticCatalogMutationGuard({ configuration: config.syntheticCatalog }));
+  app.use(stageAFixtureCanonicalGuard({ lane: stageAFixtureLane }));
+  if (stageAFixtureLane) {
+    registerStageAFixtureRoutes(app, { lane: stageAFixtureLane,
+      requireAuth, requireActiveAccount, asyncRoute });
+  }
   if (syntheticCloneBookingLane) {
     registerSyntheticCloneBookingLaneRoutes(app, {
       lane: syntheticCloneBookingLane,
