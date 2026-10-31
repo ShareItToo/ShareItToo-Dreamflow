@@ -3028,10 +3028,29 @@ class DataService {
 
   static const bool _launchQaSeedingEnabled = true;
 
+  @visibleForTesting
+  static bool canSeedQaFixturesForRuntime({
+    required bool debugMode,
+    required bool backendEnabled,
+    required bool qaRuntimeEnabled,
+    required bool launchQaSeedingEnabled,
+  }) =>
+      debugMode &&
+      launchQaSeedingEnabled &&
+      (!backendEnabled || qaRuntimeEnabled);
+
   static Future<void> _ensureQaMessagesAndNotificationsForUserOnce(
     String userId,
   ) async {
-    if (userId.isEmpty || !kDebugMode || !_launchQaSeedingEnabled) return;
+    if (userId.isEmpty ||
+        !canSeedQaFixturesForRuntime(
+          debugMode: kDebugMode,
+          backendEnabled: BackendConfig.enabled,
+          qaRuntimeEnabled: QaRuntimeService.isEnabled,
+          launchQaSeedingEnabled: _launchQaSeedingEnabled,
+        )) {
+      return;
+    }
     if (_qaSeedUsersInProgress.contains(userId)) return;
     _qaSeedUsersInProgress.add(userId);
     try {

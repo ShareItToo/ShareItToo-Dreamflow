@@ -36,8 +36,9 @@ test('debug-only QA fixtures remain explicit and current-user bound', () => {
   assert.match(source, /_qaMessagesAndNotifsSeedFlagPrefix/u);
   assert.match(
     source,
-    /if \(userId\.isEmpty \|\| !kDebugMode \|\| !_launchQaSeedingEnabled\) return;/u,
+    /canSeedQaFixturesForRuntime\([\s\S]*backendEnabled: BackendConfig\.enabled,[\s\S]*qaRuntimeEnabled: QaRuntimeService\.isEnabled,[\s\S]*launchQaSeedingEnabled: _launchQaSeedingEnabled/u,
   );
+  assert.match(source, /\(!backendEnabled \|\| qaRuntimeEnabled\)/u);
   assert.match(source, /if \(me == null \|\| me\.id != userId\) return;/u);
   assert.match(source, /applyQaFixturesForScreenAudit/u);
 });
