@@ -1001,15 +1001,16 @@ class _CreateListingScreenState extends State<CreateListingScreen>
       return;
     }
     if (!_blueOceanConsentAccepted) {
-      setState(() => _blueOceanError =
-          'Bitte lies den Hinweis und stimme der ausgewählten Bildanalyse zu.');
+      setState(() => _blueOceanError = capability.mode == 'mock'
+          ? 'Bitte lies den Hinweis und stimme dem synthetischen Beispielentwurf zu.'
+          : 'Bitte lies den Hinweis und stimme der ausgewählten Bildanalyse zu.');
       _focusBlueOceanMessage();
       return;
     }
     if (_pickedImages.isEmpty || _pickedImages.length > capability.imageLimit) {
       setState(() => _blueOceanError = _pickedImages.isEmpty
           ? 'Wähle zuerst mindestens ein Foto aus.'
-          : 'Für die KI-Analyse sind höchstens ${capability.imageLimit} Fotos möglich. Entferne '
+          : 'Für den Entwurf sind höchstens ${capability.imageLimit} Fotos möglich. Entferne '
               'weitere Fotos oder nutze den manuellen Editor.');
       _focusBlueOceanMessage();
       return;
@@ -1023,9 +1024,11 @@ class _CreateListingScreenState extends State<CreateListingScreen>
     }
     setState(() {
       _blueOceanBusy = true;
-      _blueOceanProgress = capability.mode == 'on_device'
-          ? 'Fotos werden lokal auf diesem Gerät analysiert …'
-          : 'Fotos werden für die serverseitige Analyse vorbereitet …';
+      _blueOceanProgress = capability.mode == 'mock'
+          ? 'Synthetischer Beispielentwurf wird vorbereitet …'
+          : capability.mode == 'on_device'
+              ? 'Fotos werden lokal auf diesem Gerät analysiert …'
+              : 'Fotos werden für die serverseitige Analyse vorbereitet …';
       _blueOceanError = null;
     });
     try {
@@ -1038,15 +1041,19 @@ class _CreateListingScreenState extends State<CreateListingScreen>
         return;
       }
       if (mounted) {
-        setState(() => _blueOceanProgress =
-            'Lokale Bildanalyse abgeschlossen. Fotos werden sicher vorbereitet …');
+        setState(() => _blueOceanProgress = capability.mode == 'mock'
+            ? 'Fotos werden für den synthetischen Beispielentwurf vorbereitet …'
+            : capability.mode == 'on_device'
+                ? 'Lokale Bildanalyse abgeschlossen. Fotos werden sicher vorbereitet …'
+                : 'Fotos werden sicher vorbereitet …');
       }
       final photoUrls = <String>[];
       for (var index = 0; index < _pickedImages.length; index++) {
         if (mounted &&
             await _listingActions.isCurrent(_listingMutationService, owner)) {
-          setState(() => _blueOceanProgress =
-              'Foto ${index + 1} von ${_pickedImages.length} wird vorbereitet …');
+          setState(() => _blueOceanProgress = capability.mode == 'mock'
+              ? 'Foto ${index + 1} von ${_pickedImages.length} wird für den synthetischen Beispielentwurf übertragen …'
+              : 'Foto ${index + 1} von ${_pickedImages.length} wird vorbereitet …');
         }
         final file = _pickedImages[index];
         final bytes = await file.readAsBytes();
@@ -1061,8 +1068,9 @@ class _CreateListingScreenState extends State<CreateListingScreen>
       }
       final draftId = 'listing_ai_draft_${_newBlueOceanUuid()}';
       if (mounted) {
-        setState(() => _blueOceanProgress =
-            'Datenschutzprüfung und Entwurfserstellung laufen …');
+        setState(() => _blueOceanProgress = capability.mode == 'mock'
+            ? 'Synthetischer Beispielentwurf wird erstellt …'
+            : 'Datenschutzprüfung und Entwurfserstellung laufen …');
       }
       final assistant = await _listingMutationService.analyzeBlueOceanDraft(
         context: owner.context,
@@ -2562,7 +2570,9 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                 child: FilledButton.icon(
                   onPressed: _blueOceanBusy ? null : _startBlueOceanAssistant,
                   icon: const Icon(Icons.photo_camera_back_outlined),
-                  label: const Text('Ausgewählte Fotos analysieren'),
+                  label: Text(capability?.mode == 'mock'
+                      ? 'Synthetischen Beispielentwurf erstellen'
+                      : 'Ausgewählte Fotos analysieren'),
                 ),
               ),
               if (_blueOceanBusy || _blueOceanProgress.isNotEmpty) ...[

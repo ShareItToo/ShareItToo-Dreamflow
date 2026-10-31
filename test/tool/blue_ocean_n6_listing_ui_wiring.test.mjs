@@ -32,7 +32,11 @@ test('UI requires exact disclosure, opt-in, explicit initiation and never promis
   assert.match(screen, /capability\.disclosureText/u);
   assert.match(screen, /capability\.handshake/u);
   assert.match(screen, /_blueOceanConsentAccepted/u);
+  assert.match(screen, /capability\?\.mode == 'mock'[\s\S]*?Synthetischen Beispielentwurf erstellen/u);
   assert.match(screen, /Ausgewählte Fotos analysieren/u);
+  assert.match(screen, /Synthetischer Beispielentwurf wird vorbereitet/u);
+  assert.match(screen, /Synthetischer Beispielentwurf wird erstellt/u);
+  assert.match(screen, /Fotos werden für den synthetischen Beispielentwurf vorbereitet/u);
   assert.match(screen, /capability\?\.disclosureText/u);
 });
 

@@ -154,6 +154,10 @@ function normalizeConsent(raw, {
   });
 }
 
+export function assertListingAiImageConsent(raw, options = {}) {
+  return normalizeConsent(raw, options);
+}
+
 function normalizeVisualSignals(raw) {
   if (raw == null) return [];
   if (!Array.isArray(raw) || raw.length > 12) {

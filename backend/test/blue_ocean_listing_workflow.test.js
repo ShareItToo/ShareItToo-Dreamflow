@@ -144,7 +144,7 @@ test('regional price rules bind exact catalog pairs rather than broad categories
   );
 });
 
-test('trusted local preflight composes N4, mock N3 and an editable non-published draft', async () => {
+test('mock N3 creates a synthetic editable non-published draft without N4 photo processing', async () => {
   const workflow = createBlueOceanListingWorkflow({
     configuration: config(),
     screenImage: async () => ({
@@ -171,8 +171,9 @@ test('trusted local preflight composes N4, mock N3 and an editable non-published
   assert.equal(result.revision.fields.model.value, null);
   assert.equal(result.revision.fields.model.confidence, 'LOW');
   assert.equal(result.revision.clarificationQuestions.length, 2);
-  assert.equal(result.imageReview.realImageSafetyReviewCompleted, true);
-  assert.equal(result.imageReview.temporaryDerivativeBytesPurged, true);
+  assert.equal(result.imageReview.photoContentAnalyzed, false);
+  assert.equal(result.imageReview.derivativeProcessingPerformed, false);
+  assert.equal(result.imageReview.realImageSafetyReviewCompleted, false);
   assert.equal(result.billedCostCents, 0);
   assert.equal(result.autoPublishAllowed, false);
 });
@@ -421,8 +422,14 @@ test('workflow consumes the exact capability disclosure in every provider mode',
   assert.equal(externalCalls, 2);
 });
 
-test('default incomplete local screening fails closed and preserves the manual editor', async () => {
-  const workflow = createBlueOceanListingWorkflow({ configuration: config() });
+test('mock creates a synthetic editable draft without screening or processing photo content', async () => {
+  let screeningCalls = 0;
+  let derivativeCalls = 0;
+  const workflow = createBlueOceanListingWorkflow({
+    configuration: config(),
+    screenImage: async () => { screeningCalls += 1; throw new Error('mock must not inspect photo bytes'); },
+    screenDerivative: async () => { derivativeCalls += 1; throw new Error('mock must not create derivatives'); },
+  });
   const result = await workflow.analyze({
     draftId,
     ownerId,
@@ -434,12 +441,76 @@ test('default incomplete local screening fails closed and preserves the manual e
     }],
     consent: consent(),
   });
+  assert.equal(result.status, 'draft_ready');
+  assert.equal(result.imageReview.photoContentAnalyzed, false);
+  assert.equal(result.imageReview.derivativeProcessingPerformed, false);
+  assert.equal(result.imageReview.externalProviderCallPerformed, false);
+  assert.equal(result.imageReview.realImageSafetyReviewCompleted, false);
+  assert.equal(result.imageReview.temporaryDerivativeCreated, false);
+  assert.equal(result.imageReview.autoPublishAllowed, false);
+  assert.equal(result.imageReview.estimatedCostCents, 0);
+  assert.equal(result.imageReview.billedCostCents, 0);
+  assert.equal(result.providerCallCount, 1);
+  assert.equal(result.paidCallPerformed, false);
+  assert.equal(result.estimatedCostCents, 0);
+  assert.equal(result.billedCostCents, 0);
+  assert.equal(result.autoPublishAllowed, false);
+  assert.equal(screeningCalls, 0);
+  assert.equal(derivativeCalls, 0);
+});
+
+test('mock still requires exact consent and rejects forbidden photo truth declarations', async () => {
+  const workflow = createBlueOceanListingWorkflow({ configuration: config() });
+  const image = {
+    imageReference: 'listing_image_12345678',
+    mimeType: 'image/png',
+    bytes: await fixtureImage(),
+  };
+  await assert.rejects(workflow.analyze({
+    draftId,
+    ownerId,
+    generationKey: key('mock-bad-consent'),
+    images: [image],
+    consent: { ...consent(), disclosureText: 'not the exact disclosure' },
+  }), (error) => error.code === 'listing_ai_image_consent_required');
+  for (const truthClassification of ['generated', 'materially_altered']) {
+    await assert.rejects(workflow.analyze({
+      draftId,
+      ownerId,
+      generationKey: key(`mock-forbidden-${truthClassification}`),
+      images: [{ ...image, truthClassification }],
+      consent: consent(),
+    }), (error) => error instanceof BlueOceanListingWorkflowError
+      && error.code === 'listing_photo_truth_forbidden_image');
+  }
+});
+
+test('non-mock providers remain fail-closed when derivative visual review is incomplete', async () => {
+  const configuration = readListingAiGatewayConfiguration({
+    SIT_LISTING_AI_PROVIDER: 'openai',
+    SIT_LISTING_AI_MODEL: listingAiOpenAiModel,
+    SIT_LISTING_AI_BUDGET_CENTS: '10000',
+    SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: '500',
+    SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: '11111111-1111-4111-8111-111111111111',
+    SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '1',
+  }, { deploymentEnvironment: 'staging' });
+  const workflow = createBlueOceanListingWorkflow({
+    configuration,
+    screenDerivative: async () => ({
+      visualScanCompleted: false,
+      visualSignals: [],
+      usage: { inputUnits: 0, outputUnits: 0, estimatedCostCents: 0, billedCostCents: null },
+    }),
+  });
+  const result = await workflow.analyze({
+    draftId,
+    ownerId,
+    generationKey: key('openai-incomplete-visual-review'),
+    images: [{ imageReference: 'listing_image_12345678', mimeType: 'image/png', bytes: await fixtureImage() }],
+    consent: consent('openai'),
+  });
   assert.equal(result.status, 'manual_fallback');
   assert.equal(result.reasonCode, 'blue_ocean_image_review_required');
-  assert.equal(result.openManualEditor, true);
-  assert.equal(result.photosPreserved, true);
-  assert.equal(result.manualInputsPreserved, true);
-  assert.equal(result.paidCallPerformed, false);
   assert.equal(result.autoPublishAllowed, false);
 });
 

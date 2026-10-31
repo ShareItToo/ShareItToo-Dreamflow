@@ -16,6 +16,7 @@ import {
   listingAiImageDisclosureVersion,
   listingAiOnDeviceDisclosureText,
   listingAiOnDeviceDisclosureVersion,
+  assertListingAiImageConsent,
   runListingAiImagePrivacyPipeline,
 } from './listing_ai_image_pipeline.js';
 import {
@@ -316,6 +317,26 @@ function imageReviewMetadata(preflight, truthClassifications = []) {
   });
 }
 
+function mockImageReviewMetadata(images, truthClassifications = []) {
+  return deepFreeze({
+    imageOrder: images.map((image) => image.imageReference),
+    imageWarnings: [],
+    missingPhotoSuggestions: [],
+    originalMetadataRetained: null,
+    temporaryDerivativeCreated: false,
+    temporaryDerivativeBytesPurged: null,
+    photoContentAnalyzed: false,
+    derivativeProcessingPerformed: false,
+    externalProviderCallPerformed: false,
+    realImageSafetyReviewCompleted: false,
+    autoPublishAllowed: false,
+    estimatedCostCents: 0,
+    billedCostCents: 0,
+    truthPolicyVersion: listingPhotoTruthPolicyVersion,
+    truthClassifications: Object.freeze([...truthClassifications]),
+  });
+}
+
 function manualFallback(
   reasonCode,
   preflight = null,
@@ -397,6 +418,7 @@ export function createBlueOceanListingWorkflow({
           throw error;
         }
         truthClassifications.push(truthClassification);
+        if (configuration.provider === 'mock') continue;
         const screening = configuration.provider === 'on_device'
           ? onDeviceScreening(boundOnDeviceAnalysis[index])
           : normalizeScreening(await screenImage({
@@ -409,6 +431,53 @@ export function createBlueOceanListingWorkflow({
           originalFilename: null,
           bytes: value.bytes,
           localScreening: screening,
+        });
+      }
+      if (configuration.provider === 'mock') {
+        assertListingAiImageConsent(consent, {
+          disclosureVersion: disclosure.version,
+          disclosureText: disclosure.text,
+        });
+        const imageReferences = images.map((image) => identifier(
+          image.imageReference,
+          'blue_ocean_image_reference_invalid',
+        ));
+        if (new Set(imageReferences).size !== imageReferences.length) {
+          fail(400, 'listing_ai_image_reference_duplicate');
+        }
+        const generated = await gateway.generate({
+          draftId,
+          ownerId,
+          generationKey,
+          revision: 1,
+          imageReferences,
+          untrustedOcr: [],
+          manualInputPresent: true,
+        });
+        if (generated?.status !== 'draft_ready') {
+          return deepFreeze({
+            ...manualFallback(generated?.reasonCode ?? 'blue_ocean_generation_failed', null, generated, {
+              truthClassifications,
+            }),
+            disclosureVersion: disclosure.version,
+            disclosureText: disclosure.text,
+          });
+        }
+        return deepFreeze({
+          workflowVersion: blueOceanListingWorkflowVersion,
+          status: 'draft_ready',
+          revision: generated.revision,
+          imageReview: mockImageReviewMetadata(images, truthClassifications),
+          disclosureVersion: disclosure.version,
+          disclosureText: disclosure.text,
+          disclosureAccepted: true,
+          clarificationLimit: 3,
+          ownerConfirmationIds: listingAiOwnerConfirmationIds,
+          providerCallCount: generated.providerCallCount,
+          paidCallPerformed: false,
+          estimatedCostCents: 0,
+          billedCostCents: 0,
+          autoPublishAllowed: false,
         });
       }
       let preflight;
