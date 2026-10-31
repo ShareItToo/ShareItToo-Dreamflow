@@ -215,8 +215,7 @@ export async function executionPreflight({ binding, publicationBytes, target, co
     require(hash(schema) && schema === manifest.physicalSchemaSha256, 'physical_schema');
     require(String(await command({ args, input: constraintsSql })).trim() === '0', 'physical_constraints');
     const database = decodeSnapshot(await command({ args, input: snapshotSql }));
-    if (recoveryCandidateId) assertRecoveryBaseline(target.database, database, now());
-    else require(equal(database, target.database), 'preflight_database');
+    assertRecoveryBaseline(target.database, database, now());
     held.recheck(); await inspectState(); held.recheck();
     require(String(await command({ args, input: physicalSchemaSql })).trim() === schema, 'physical_schema');
     require(String(await command({ args, input: constraintsSql })).trim() === '0', 'physical_constraints');

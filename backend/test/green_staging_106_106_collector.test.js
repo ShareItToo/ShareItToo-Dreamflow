@@ -33,6 +33,10 @@ test('default plan makes zero Docker calls and rejects mutation modes', async ()
   assert.throws(() => parseArguments(['--mode', 'promote']));
 });
 test('source bytes, commit, complete closure and runtime migration checks fail before Docker', async t => {
+  const requiredOperationalHelpers = ['backend/ops/green_staging_106_106_collector.mjs',
+    'tool/collect_green_staging_106_106_scope.mjs',
+    'backend/ops/prepare_green_staging_106_106_execution_inputs.mjs'];
+  assert.ok(requiredOperationalHelpers.every(file => successorSourcePaths().includes(file)));
   for (const [label, change] of Object.entries({ missing: f => { delete f.binding.sourceInventory[successorSourcePaths()[0]]; },
     extra: f => { f.binding.sourceInventory.extra = hex(99); }, hash: f => { f.binding.sourceInventory[successorSourcePaths()[0]] = hex(99); },
     head: f => { f.binding.opsCommit = 'd'.repeat(40); }, schema: f => { f.binding.schemaVersion = 2; },

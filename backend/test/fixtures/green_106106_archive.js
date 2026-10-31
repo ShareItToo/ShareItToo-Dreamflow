@@ -17,15 +17,15 @@ export function tar(entries) {
   }
   return Buffer.concat([...buffers, Buffer.alloc(1024)]);
 }
-export function candidateArchive(env, { changeEntries = () => {}, extraLayers = [] } = {}) {
+export function candidateArchive(env, { changeEntries = () => {}, extraLayers = [], user = 'sitworker' } = {}) {
   const entries = ['app', 'app/sql', 'app/sql/migrations', 'etc'].map(name => ({ name, type: '5', mode: 0o755 }));
-  entries.push({ name: 'etc/passwd', data: 'root:x:0:0:root:/root:/bin/sh\nsitworker:x:10001:10001:worker:/app:/bin/false\n' },
-    { name: 'etc/group', data: 'root:x:0:\nsitworker:x:10001:\n' });
+  entries.push({ name: 'etc/passwd', data: `root:x:0:0:root:/root:/bin/sh\n${user}:x:10001:10001:worker:/app:/bin/false\n` },
+    { name: 'etc/group', data: `root:x:0:\n${user}:x:10001:\n` });
   for (const row of migrationInventory()) entries.push({ name: `app/sql/migrations/${row.name}`,
     data: fs.readFileSync(`${repositoryRoot}/backend/sql/migrations/${row.name}`) });
   changeEntries(entries);
   const layers = [tar(entries), ...extraLayers.map(tar)];
-  const config = { config: { User: 'sitworker', Entrypoint: null, Cmd: ['node', 'src/server.js'], Env: [...env, `APP_COMMIT=${'a'.repeat(40)}`, 'APP_VERSION=synthetic', 'APP_BUILD_TIME=2020-01-01T00:00:00.000Z'],
+  const config = { config: { User: user, Entrypoint: null, Cmd: ['node', 'src/server.js'], Env: [...env, `APP_COMMIT=${'a'.repeat(40)}`, 'APP_VERSION=synthetic', 'APP_BUILD_TIME=2020-01-01T00:00:00.000Z'],
     Labels: { 'org.opencontainers.image.revision': 'a'.repeat(40), 'org.opencontainers.image.version': 'synthetic', 'org.opencontainers.image.created': '2020-01-01T00:00:00.000Z' } },
     rootfs: { type: 'layers', diff_ids: layers.map(l => `sha256:${digest(l)}`) } };
   const configBytes = Buffer.from(JSON.stringify(config));

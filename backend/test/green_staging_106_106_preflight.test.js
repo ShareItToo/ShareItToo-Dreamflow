@@ -24,6 +24,35 @@ test('read-only running and sealed preflight execute all bindings and leave auth
     for (const key of ['namespaceReadabilityVerified', 'rehearsalPassed', 'promotionAuthorized', 'mutationAdapterImplemented']) assert.equal(result[key], false);
   }
 });
+test('ordinary preflight tolerates only healthy alert-free watchdog heartbeats since target', async t => {
+  for (const count of [0, 3]) await t.test(`${count} healthy increments`, async () => {
+    const s = await inputs(), watchdog = s.f.sqlRows[2][0];
+    if (count > 0) {
+      watchdog.attempt_count += count;
+      watchdog.success_count += count;
+      const time = `2020-01-01T00:00:${String(count).padStart(2, '0')}.000Z`;
+      watchdog.last_started_at = watchdog.last_succeeded_at = watchdog.updated_at = time;
+    }
+    const result = await executionPreflight(s.data, s.dependencies);
+    assert.equal(result.status, 'read_only_preflight_passed');
+  });
+  const failures = {
+    failedRun: w => { w.attempt_count++; w.last_started_at = w.updated_at = '2020-01-01T00:00:01.000Z'; },
+    alert: w => { w.last_alert_count++; },
+    inspectedCount: w => { w.last_inspected_count++; },
+  };
+  for (const [label, change] of Object.entries(failures)) await t.test(label, async () => {
+    const s = await inputs(); change(s.f.sqlRows[2][0]);
+    await assert.rejects(executionPreflight(s.data, s.dependencies));
+  });
+  for (const [label, change] of Object.entries({
+    business: s => { s.f.sqlRows[1].mission_needs.count++; },
+    readiness: s => { s.f.sqlRows[3].supportNextUpdateOverdue.push({}); },
+  })) await t.test(label, async () => {
+    const s = await inputs(); change(s);
+    await assert.rejects(executionPreflight(s.data, s.dependencies));
+  });
+});
 test('sealed exact source and full membership CAS reject every altered identity or extra member', async t => {
   const changes = {
     running: s => { s.f.records[hex(1)].State.Running = true; },
