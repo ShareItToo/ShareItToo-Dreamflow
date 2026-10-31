@@ -134,7 +134,8 @@ function validateBoundTarget(binding, target, targetSha256, runId, apiId) {
 }
 
 export async function prepareExecutionInputs({ bindingFile, bindingSha256, targetFile, targetSha256, runId,
-  apiId, evidenceDirectory }, dependencies = {}) {
+  apiId, evidenceDirectory, listingAiProfile }, dependencies = {}) {
+  require(listingAiProfile === undefined || listingAiProfile === 'staging-mock-v1', 'listing_ai_profile');
   require(runIdPattern.test(runId) && dockerId(apiId) && hash(bindingSha256) && hash(targetSha256), 'arguments');
   require(process.getuid?.() === 0 || dependencies.allowNonRootForTests === true, 'operator_root');
   const io = dependencies.fs ?? fs;
@@ -190,9 +191,11 @@ export async function prepareExecutionInputs({ bindingFile, bindingSha256, targe
   require(envBytes.length <= 1024 * 1024, 'runtime_environment_size');
   const envName = names[0], configName = names[1], manifestName = names[2];
   const envPath = path.join(directory.directory, envName);
-  const config = { kind: 'sit-green-staging-106-106-execution-config', schemaVersion: 1,
+  const config = { kind: 'sit-green-staging-106-106-execution-config', schemaVersion: 2,
     sourceState: 'running', sealedSourceName: `sit-green-106-106-sealed-${runId}`, runId, uid, gid,
-    materials, envFile: { source: envPath, destination: null, sha256: digest(envBytes), uid: 0, gid: 0, mode: 0o600 } };
+    materials, envFile: { source: envPath, destination: null, sha256: digest(envBytes), uid: 0, gid: 0, mode: 0o600 },
+    listingAiTransition: listingAiProfile === 'staging-mock-v1'
+      ? { schemaVersion: 1, from: 'on_device', to: 'staging-mock-v1', sourceEnvironmentSha256: digest(envBytes) } : null };
   const dbArgs = ['exec', '-i', binding.scope.database.id, 'psql', '-X', '-q', '-At', '-v',
     'ON_ERROR_STOP=1', '-U', binding.scope.databaseUser, '-d', binding.scope.databaseName];
   const physicalSchemaSha256 = String(await read({ args: dbArgs, input: physicalSchemaSql })).trim();
@@ -245,10 +248,12 @@ export async function prepareExecutionInputs({ bindingFile, bindingSha256, targe
   } finally { envBytes.fill(0); }
 }
 
-const accepted = new Set(['binding', 'binding-sha256', 'target', 'target-sha256', 'run-id', 'api-id', 'evidence-directory']);
+const requiredArguments = new Set(['binding', 'binding-sha256', 'target', 'target-sha256', 'run-id', 'api-id', 'evidence-directory']);
+const accepted = new Set([...requiredArguments, 'listing-ai-profile']);
 export function parseArguments(args) {
   const values = new Map();
-  require(Array.isArray(args) && args.length === accepted.size * 2, 'arguments');
+  require(Array.isArray(args) && args.length % 2 === 0 && args.length >= requiredArguments.size * 2
+    && args.length <= accepted.size * 2, 'arguments');
   for (let index = 0; index < args.length; index += 2) {
     const raw = args[index], key = typeof raw === 'string' && raw.startsWith('--') ? raw.slice(2) : '';
     const value = args[index + 1];
@@ -256,10 +261,10 @@ export function parseArguments(args) {
       && value.length > 0 && !value.startsWith('--'), 'arguments');
     values.set(key, value);
   }
-  require([...accepted].every(key => values.has(key)), 'arguments');
+  require([...requiredArguments].every(key => values.has(key)) && (!values.has('listing-ai-profile') || values.get('listing-ai-profile') === 'staging-mock-v1'), 'arguments');
   return { bindingFile: values.get('binding'), bindingSha256: values.get('binding-sha256'),
     targetFile: values.get('target'), targetSha256: values.get('target-sha256'), runId: values.get('run-id'),
-    apiId: values.get('api-id'), evidenceDirectory: values.get('evidence-directory') };
+    apiId: values.get('api-id'), evidenceDirectory: values.get('evidence-directory'), listingAiProfile: values.get('listing-ai-profile') };
 }
 
 export async function runCli(args, { stdout = process.stdout, stderr = process.stderr, dependencies } = {}) {

@@ -97,6 +97,21 @@ test('fresh protected inputs resolve a named candidate user from its exact image
   }
 }));
 
+test('mock opt-in is written into the protected versioned config and binds exact source env bytes', async () => run(async root => {
+  const f = fixture(root);
+  const result = await prepareExecutionInputs({ bindingFile: f.bindingFile.filename, bindingSha256: f.bindingFile.sha256,
+    targetFile: f.targetFile.filename, targetSha256: f.targetFile.sha256, runId, apiId: f.apiId, evidenceDirectory: root,
+    listingAiProfile: 'staging-mock-v1' }, f.dependencies);
+  const configPath = result.artifacts.find(file => file.path.endsWith('.execution-config.json')).path;
+  const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  const envPath = result.artifacts.find(file => file.path.endsWith('.runtime.env')).path;
+  assert.equal(config.schemaVersion, 2);
+  assert.deepEqual(config.listingAiTransition, { schemaVersion: 1, from: 'on_device', to: 'staging-mock-v1',
+    sourceEnvironmentSha256: digest(fs.readFileSync(envPath)) });
+  assert.equal(result.configObjectSha256, objectDigest(config));
+  assert.equal(JSON.stringify(result).includes('private-value'), false);
+}));
+
 test('rejects candidate archives with missing or ambiguous named user/group records before writing', async t => {
   const cases = [
     ['missing user', { changeEntries: entries => {
@@ -168,6 +183,8 @@ test('CLI parser accepts only one complete option set', () => {
     '--target', '/private/target.json', '--target-sha256', 'b'.repeat(64), '--run-id', runId,
     '--api-id', id('c'), '--evidence-directory', '/private/evidence'];
   assert.equal(parseArguments(args).runId, runId);
+  assert.equal(parseArguments([...args, '--listing-ai-profile', 'staging-mock-v1']).listingAiProfile, 'staging-mock-v1');
+  assert.throws(() => parseArguments([...args, '--listing-ai-profile', 'openai']));
   assert.throws(() => parseArguments([...args, '--run-id', runId]));
   assert.throws(() => parseArguments(args.slice(0, -2)));
 });

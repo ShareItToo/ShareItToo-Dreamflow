@@ -10,9 +10,27 @@ import { readCandidateArchive } from './green_staging_106_106_image.mjs';
 import { decodeSnapshot, snapshotSql } from './green_staging_106_106_database.mjs';
 import { assertRecoveryBaseline } from './green_staging_106_106_database.mjs';
 import { strictSupplementalGroups } from './green_staging_106_106_resources.mjs';
+import { assertStagingMockListingAiProfile } from './staging_listing_ai_mock_profile.mjs';
 
 const hash = v => typeof v === 'string' && /^[a-f0-9]{64}$/u.test(v);
 const exact = (v, keys, code) => require(v && Object.getPrototypeOf(v) === Object.prototype && equal(Object.keys(v).sort(), [...keys].sort()), code);
+const listingAiKeys = new Set(['SIT_LISTING_AI_PROVIDER', 'SIT_LISTING_AI_MODEL', 'SIT_LISTING_AI_BUDGET_CENTS',
+  'SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', 'SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS',
+  'SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID', 'SIT_STAGING_LISTING_AI_PROFILE', 'OPENAI_API_KEY', 'OPENAI_API_KEY_FILE']);
+const mockListingAiValues = Object.freeze({ SIT_LISTING_AI_PROVIDER: 'mock', SIT_LISTING_AI_MODEL: 'listing-ai-mock-v1',
+  SIT_LISTING_AI_BUDGET_CENTS: '0', SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '0',
+  SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: '0', SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: '',
+  SIT_STAGING_LISTING_AI_PROFILE: 'staging-mock-v1', OPENAI_API_KEY: '', OPENAI_API_KEY_FILE: '' });
+export function listingAiTransitionBinding(config) {
+  const transition = config.listingAiTransition ?? null;
+  if (transition === null) return { listingAiTransitionSha256: objectDigest(null), sourceEnvironmentSha256: config.envFile.sha256 };
+  exact(transition, ['schemaVersion', 'from', 'to', 'sourceEnvironmentSha256'], 'listing_ai_transition');
+  require(transition.schemaVersion === 1 && transition.from === 'on_device' && transition.to === 'staging-mock-v1'
+    && hash(transition.sourceEnvironmentSha256) && transition.sourceEnvironmentSha256 === config.envFile.sha256,
+  'listing_ai_transition');
+  return { listingAiTransitionSha256: objectDigest(transition), sourceEnvironmentSha256: transition.sourceEnvironmentSha256 };
+}
+export const stagingMockListingAiValues = mockListingAiValues;
 export const physicalSchemaSql = `BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY;
 SELECT encode(digest(jsonb_build_object(
  'columns',(SELECT coalesce(jsonb_agg(to_jsonb(x) ORDER BY table_name,ordinal_position),'[]') FROM (SELECT table_name,column_name,ordinal_position,column_default,is_nullable,data_type,udt_schema,udt_name,character_maximum_length,numeric_precision,numeric_scale,datetime_precision,collation_name,is_identity,identity_generation,is_generated,generation_expression FROM information_schema.columns WHERE table_schema='public') x),
@@ -45,8 +63,11 @@ export function preflightRead(entry) {
   return collectorRead(entry);
 }
 export function validateExecutionInputs(config, manifest, binding, target) {
-  exact(config, ['kind', 'schemaVersion', 'sourceState', 'sealedSourceName', 'runId', 'uid', 'gid', 'materials', 'envFile'], 'execution_config');
-  require(config.kind === 'sit-green-staging-106-106-execution-config' && config.schemaVersion === 1
+  require(config?.schemaVersion === 1 || config?.schemaVersion === 2, 'execution_config');
+  exact(config, config.schemaVersion === 1
+    ? ['kind', 'schemaVersion', 'sourceState', 'sealedSourceName', 'runId', 'uid', 'gid', 'materials', 'envFile']
+    : ['kind', 'schemaVersion', 'sourceState', 'sealedSourceName', 'runId', 'uid', 'gid', 'materials', 'envFile', 'listingAiTransition'], 'execution_config');
+  require(config.kind === 'sit-green-staging-106-106-execution-config' && [1, 2].includes(config.schemaVersion)
     && ['running', 'sealed'].includes(config.sourceState) && /^[a-z0-9][a-z0-9-]{7,47}$/u.test(config.runId)
     && config.sealedSourceName === `sit-green-106-106-sealed-${config.runId}`
     && Number.isSafeInteger(config.uid) && config.uid > 0 && Number.isSafeInteger(config.gid) && config.gid > 0, 'execution_config');
@@ -72,6 +93,7 @@ export function validateExecutionInputs(config, manifest, binding, target) {
   }
   require(new Set(config.materials.map(m => m.destination)).size === config.materials.length
     && new Set([...config.materials, config.envFile].map(m => m.source)).size === config.materials.length + 1, 'material_duplicate');
+  listingAiTransitionBinding(config);
   return true;
 }
 export function bindExecutionMaterials(config, api, candidate, io = fs) {
@@ -123,17 +145,38 @@ export function bindExecutionMaterials(config, api, candidate, io = fs) {
     };
     const effective = parseEnv(api.Config.Env), merged = parseEnv(candidate.Config.Env);
     const seen = new Set();
+    const protectedSource = new Map();
     for (const line of envBytes.split(/\r?\n/u).filter(line => line && !line.startsWith('#'))) {
       const match = /^([A-Z_][A-Z0-9_]*)=(.*)$/u.exec(line);
       require(match && !seen.has(match[1]) && !['APP_VERSION', 'APP_COMMIT', 'APP_BUILD_TIME'].includes(match[1])
-        && effective.get(match[1]) === match[2], 'material_environment'); seen.add(match[1]); merged.set(match[1], match[2]);
+        && effective.get(match[1]) === match[2], 'material_environment'); seen.add(match[1]); protectedSource.set(match[1], match[2]);
     }
     require(seen.size > 0, 'material_environment');
-    for (const key of ['APP_VERSION', 'APP_COMMIT', 'APP_BUILD_TIME']) { merged.delete(key); effective.delete(key); }
-    require(equal([...merged].sort(), [...effective].sort()), 'material_environment_incomplete');
+    for (const key of ['APP_VERSION', 'APP_COMMIT', 'APP_BUILD_TIME']) { protectedSource.delete(key); effective.delete(key); merged.delete(key); }
+    const transition = config.listingAiTransition ?? null;
+    if (transition === null) {
+      for (const [key, value] of protectedSource) merged.set(key, value);
+      require(equal([...merged].sort(), [...effective].sort()), 'material_environment_incomplete');
+    }
+    else {
+      require(equal([...protectedSource].sort(), [...effective].sort()), 'material_environment_incomplete');
+      for (const [key, value] of protectedSource) merged.set(key, value);
+      for (const [key, value] of Object.entries(mockListingAiValues)) merged.set(key, value);
+      const changed = new Set([...new Set([...effective.keys(), ...merged.keys()])]
+        .filter(key => effective.get(key) !== merged.get(key)));
+      require([...changed].every(key => listingAiKeys.has(key)) && Object.keys(mockListingAiValues).every(key =>
+        merged.get(key) === mockListingAiValues[key]), 'material_environment_transition');
+      try { assertStagingMockListingAiProfile({ ...Object.fromEntries(effective), ...Object.fromEntries(merged) }, { deploymentEnvironment: 'test' }); }
+      catch { require(false, 'material_environment_transition'); }
+      require(digest(Buffer.from(envBytes, 'utf8')) === transition.sourceEnvironmentSha256
+        && effective.get('SIT_LISTING_AI_PROVIDER') === 'on_device'
+        && !effective.has('SIT_STAGING_LISTING_AI_PROFILE'),
+      'material_environment_transition');
+    }
     held.forEach(stable);
     return { recheck: () => held.forEach(stable), close: () => held.splice(0).reverse().forEach(e => io.closeSync(e.fd)),
       sha256: objectDigest({ materials: config.materials, envFile: config.envFile }),
+      ...listingAiTransitionBinding(config),
       supplementalGroups, namespaceReadabilityVerified: false };
   } catch (error) { held.reverse().forEach(e => io.closeSync(e.fd)); throw error; }
 }
@@ -222,6 +265,7 @@ export async function executionPreflight({ binding, publicationBytes, target, co
     if (config.sourceState === 'sealed') require(String(await command({ args, input: writersSql })).trim() === '0', 'preflight_writer');
     return { kind: 'sit-green-staging-106-106-preflight', schemaVersion: 2, status: 'read_only_preflight_passed', createdAt: new Date(now()).toISOString(),
       targetSha256: manifest.targetSha256, configSha256: manifest.configSha256, physicalSchemaSha256: schema,
+      ...listingAiTransitionBinding(config),
       materialBindingSha256: held.sha256, candidateContent: content,
       resources: disposableResourcePlan(config.runId, binding.candidateImageId, binding.scope.database.imageId),
       namespaceReadabilityVerified: false, rehearsalPassed: false, promotionAuthorized: false, mutationAdapterImplemented: false };

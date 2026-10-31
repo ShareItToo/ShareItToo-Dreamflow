@@ -91,7 +91,7 @@ raw-byte argument. Default remains `plan`; mutation requires the separate explic
 `rehearse` or `promote` mode described below. Generic `execute` remains rejected.
 The source closure includes preflight, image reader and rehearsal dependencies.
 
-`green_staging_106_106_preflight.mjs` defines separate version-1 kinds
+`green_staging_106_106_preflight.mjs` defines separate versioned kinds
 `sit-green-staging-106-106-execution-config` and
 `sit-green-staging-106-106-runtime`. The config binds `sourceState`
 (`running` or `sealed`), `sealedSourceName`, `runId`, resolved `uid`/`gid`,
@@ -120,6 +120,20 @@ independently bound collection. A sealed source additionally requires zero
 other database connections before and after. This is not a backup or a frozen
 database: sequence current values, materialized-view contents and restore
 compatibility are separately checked by the rehearsal package.
+
+The execution-input preparer keeps `on_device` as its default. An operator may
+explicitly pass `--listing-ai-profile staging-mock-v1`; this writes a schema-2
+`listingAiTransition` into the protected execution config, bound to the SHA-256
+of the protected source environment bytes. The transition is accepted only from
+the exact on-device source profile and may change only Listing-AI environment
+keys. Its digest and source-environment digest are repeated in preflight,
+rehearsal, and promotion evidence and the promotion lock. Preflight and the
+isolated rehearsal verify zero budgets, empty activation and OpenAI inputs,
+the private staging allowlist boundary, disabled external execution and
+publication, and the exact mock model. Rehearsal and promotion require runtime
+health/readiness to report `syntheticOnly=true` and
+`productionEligible=false`. Missing opt-in preserves the existing on-device
+path; release deployment entrypoints do not enable this profile.
 
 `green_staging_106_106_image.mjs` consumes `docker image save` stdout only,
 without extraction, pulls, temporary files or new containers. Its bounded tar

@@ -4,7 +4,8 @@ import { equal, objectDigest, networkMembers } from './green_staging_98_106_cont
 import { canonicalMounts, containerFingerprint, requiredEnvironment } from './green_staging_98_106_promotion.mjs';
 import { assertArtifactFamily, exclusiveArtifact, openArtifact, verifyArtifact, closeArtifact, privateDirectory, writeArtifact } from './green_staging_98_106_evidence.mjs';
 import { requireBinding as require } from './green_staging_106_106_binding.mjs';
-import { executionPreflight, bindExecutionMaterials, physicalSchemaSql, constraintsSql, writersSql } from './green_staging_106_106_preflight.mjs';
+import { executionPreflight, bindExecutionMaterials, physicalSchemaSql, constraintsSql, writersSql,
+  listingAiTransitionBinding, stagingMockListingAiValues } from './green_staging_106_106_preflight.mjs';
 import { rehearsalCommand, auxiliarySql, readinessScript } from './green_staging_106_106_rehearsal.mjs';
 import { decodeSnapshot, snapshotSql, assertSuccessorStartup, assertRecoveryBaseline } from './green_staging_106_106_database.mjs';
 import { strictSupplementalGroups, dockerObject, supportedCanonicalRestartPolicy, assertSuccessorContainerSpec, canonicalPersistence } from './green_staging_106_106_resources.mjs';
@@ -18,9 +19,17 @@ export function temporaryPromotionName(inputs) {
   require(name !== inputs.binding.scope.api.name && name !== 'shareittoo-staging-api', 'promotion_temporary_name');
   return name;
 }
-const promotionReadinessMatches = (value, env) => value?.live?.status === 200 && value.live.payload?.status === 'ok'
+const mockListingAiReadbackMatches = payload => {
+  const ai = payload?.checks?.listingAi;
+  return ai?.provider === 'mock' && ai?.model === 'listing-ai-mock-v1' && ai?.budgetCents === 0
+    && ai?.stagingSmokeBudgetCents === 0 && ai?.stagingSmokeActivationId === null
+    && ai?.externalProviderExecutionAllowed === false && ai?.automaticPublicationAllowed === false
+    && ai?.productionEligible === false && ai?.syntheticOnly === true;
+};
+const promotionReadinessMatches = (value, env, listingAiProvider = 'on_device') => value?.live?.status === 200 && value.live.payload?.status === 'ok'
   && value.ready?.status === 200 && value.ready.payload?.status === 'ok'
-  && value.version?.status === 200 && equal(value.version.payload, buildReleaseMetadata(env));
+  && value.version?.status === 200 && equal(value.version.payload, buildReleaseMetadata(env))
+  && (listingAiProvider !== 'mock' || mockListingAiReadbackMatches(value.ready.payload));
 export async function promotionGatewayReadback({ timeoutMs = 5000, signal } = {}) {
   require(Number.isSafeInteger(timeoutMs) && timeoutMs > 0 && timeoutMs <= 5000, 'promotion_gateway_timeout');
   const timeout = AbortSignal.timeout(timeoutMs), bounded = signal ? AbortSignal.any([signal, timeout]) : timeout;
@@ -66,6 +75,8 @@ export function validatePromotionReceipt(receipt, inputs, now, { allowExpired = 
     && receipt.runtimeCommit === inputs.binding.runtimeCommit && receipt.opsCommit === inputs.binding.opsCommit
     && receipt.targetSha256 === inputs.manifest.targetSha256 && receipt.configSha256 === inputs.manifest.configSha256
     && receipt.physicalSchemaSha256 === inputs.manifest.physicalSchemaSha256
+    && receipt.listingAiTransitionSha256 === listingAiTransitionBinding(inputs.config).listingAiTransitionSha256
+    && receipt.sourceEnvironmentSha256 === listingAiTransitionBinding(inputs.config).sourceEnvironmentSha256
     && receipt.materialBindingSha256 === objectDigest({ materials: inputs.config.materials, envFile: inputs.config.envFile })
     && ['backupSha256', 'preflightSha256', 'auxiliarySha256'].every(k => hash(receipt[k]))
     && receipt.restoreVerified === true
@@ -96,7 +107,30 @@ export function canonicalSuccessorSpec(source, image, inputs) {
   for (const [k, v] of Object.entries(requiredEnvironment).filter(([key]) => !listingAiKeys.has(key))) {
     require(env[k] === v, 'promotion_provider_modes');
   }
+  if (inputs.config.listingAiTransition) {
+    const transition = inputs.config.listingAiTransition;
+    require(transition.schemaVersion === 1 && transition.from === 'on_device' && transition.to === 'staging-mock-v1'
+      && transition.sourceEnvironmentSha256 === inputs.config.envFile.sha256
+      && oldEnv.SIT_LISTING_AI_PROVIDER === 'on_device' && !Object.hasOwn(oldEnv, 'SIT_STAGING_LISTING_AI_PROFILE')
+      && Object.entries(requiredEnvironment).filter(([key]) => listingAiKeys.has(key)).every(([key, value]) => oldEnv[key] === value)
+      && (!Object.hasOwn(oldEnv, 'SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS') || oldEnv.SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS === '0')
+      && (!Object.hasOwn(oldEnv, 'SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID') || oldEnv.SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID === '')
+      && (!oldEnv.OPENAI_API_KEY || oldEnv.OPENAI_API_KEY === '')
+      && (!oldEnv.OPENAI_API_KEY_FILE || oldEnv.OPENAI_API_KEY_FILE === ''),
+    'promotion_provider_modes');
+    Object.assign(env, stagingMockListingAiValues);
+  }
+  const changedEnvironmentKeys = new Set([...new Set([...Object.keys(oldEnv), ...Object.keys(env)])]
+    .filter(key => oldEnv[key] !== env[key]));
+  require([...changedEnvironmentKeys].every(key => listingAiKeys.has(key)
+    || immutable.includes(key)) && Object.entries(oldEnv).every(([key, value]) => listingAiKeys.has(key)
+      || immutable.includes(key) || env[key] === value), 'promotion_provider_modes');
   if (env.SIT_STAGING_LISTING_AI_PROFILE === 'staging-mock-v1') {
+    const transition = inputs.config.listingAiTransition;
+    require(transition?.schemaVersion === 1 && transition.from === 'on_device' && transition.to === 'staging-mock-v1'
+      && transition.sourceEnvironmentSha256 === inputs.config.envFile.sha256
+      && oldEnv.SIT_LISTING_AI_PROVIDER === 'on_device' && !Object.hasOwn(oldEnv, 'SIT_STAGING_LISTING_AI_PROFILE')
+      && Object.entries(stagingMockListingAiValues).every(([key, value]) => env[key] === value), 'promotion_provider_modes');
     try { assertStagingMockListingAiProfile(env, { deploymentEnvironment: 'test' }); }
     catch { require(false, 'promotion_provider_modes'); }
   } else {
@@ -203,7 +237,9 @@ export async function runSuccessorPromotion(inputs, options = {}, dependencies =
         const value = JSON.parse(lockFile.toString('utf8'));
         require(value.kind === 'sit-green-staging-106-106-promotion-lock' && value.schemaVersion === 1
           && value.opsCommit === inputs.binding.opsCommit && value.runtimeCommit === inputs.binding.runtimeCommit
-          && value.rehearsalSha256 === options.rehearsalSha256, 'promotion_recovery_lock');
+          && value.rehearsalSha256 === options.rehearsalSha256
+          && value.listingAiTransitionSha256 === listingAiTransitionBinding(inputs.config).listingAiTransitionSha256
+          && value.sourceEnvironmentSha256 === listingAiTransitionBinding(inputs.config).sourceEnvironmentSha256, 'promotion_recovery_lock');
       } finally { lockFile.fill(0); }
       failureHandle = openArtifact(path.join(directory.directory, names[3]));
       const failureFile = verifyArtifact(failureHandle, { expectedDigest: options.promotionFailureSha256 }).bytes;
@@ -239,7 +275,9 @@ export async function runSuccessorPromotion(inputs, options = {}, dependencies =
       }
     };
     held = (dependencies.materials ?? bindExecutionMaterials)(inputs.config, original, image);
-    require(held.sha256 === receipt.materialBindingSha256, 'promotion_materials');
+    require(held.sha256 === receipt.materialBindingSha256
+      && held.listingAiTransitionSha256 === receipt.listingAiTransitionSha256
+      && held.sourceEnvironmentSha256 === receipt.sourceEnvironmentSha256, 'promotion_materials');
     backup = openArtifact(path.join(directory.directory, `${base}.pgdump`));
     const bound = verifyArtifact(backup, { expectedDigest: receipt.backupSha256 });
     try { require(bound.bytes.subarray(0, 5).toString() === 'PGDMP', 'promotion_backup'); } finally { bound.bytes.fill(0); }
@@ -266,7 +304,9 @@ export async function runSuccessorPromotion(inputs, options = {}, dependencies =
       require(await lookup() === '' && await lookup(source.name) === '', 'promotion_collision');
       lock = exclusiveArtifact(directory, names[0]); locked = true;
       fs.writeFileSync(lock.fd, `${JSON.stringify({ kind: 'sit-green-staging-106-106-promotion-lock', schemaVersion: 1,
-        opsCommit: inputs.binding.opsCommit, runtimeCommit: inputs.binding.runtimeCommit, rehearsalSha256: options.rehearsalSha256 })}\n`);
+        opsCommit: inputs.binding.opsCommit, runtimeCommit: inputs.binding.runtimeCommit, rehearsalSha256: options.rehearsalSha256,
+        listingAiTransitionSha256: listingAiTransitionBinding(inputs.config).listingAiTransitionSha256,
+        sourceEnvironmentSha256: listingAiTransitionBinding(inputs.config).sourceEnvironmentSha256 })}\n`);
       fs.fsyncSync(lock.fd); verifyArtifact(lock).bytes.fill(0);
       stage = 'create';
       // Mutation response loss is a failure, not an instruction to repeat create.
@@ -290,7 +330,7 @@ export async function runSuccessorPromotion(inputs, options = {}, dependencies =
     for (let attempt = 0; attempt < 30 && !ready; attempt++) {
       try {
         const value = JSON.parse(String(await command({ phase: 'promotion_readiness', args: ['exec', candidateId, 'node', '--input-type=module', '-e', readinessScript] })));
-        ready = promotionReadinessMatches(value, spec.env);
+        ready = promotionReadinessMatches(value, spec.env, inputs.config.listingAiTransition ? 'mock' : 'on_device');
       } catch { /* Bounded read-only polling only. */ }
       if (!ready && attempt < 29) await (dependencies.delay ?? (ms => new Promise(r => setTimeout(r, ms))))(1000);
     }
@@ -301,7 +341,7 @@ export async function runSuccessorPromotion(inputs, options = {}, dependencies =
     await sourceCas(); held.recheck(); await candidate(); await membership(true);
     await candidate(); await membership(true); await sourceCas(); await databaseCas(); held.recheck();
     const finalReadback = JSON.parse(String(await command({ phase: 'promotion_readiness', args: ['exec', candidateId, 'node', '--input-type=module', '-e', readinessScript] })));
-    require(promotionReadinessMatches(finalReadback, spec.env), 'promotion_pre_boundary_readiness');
+    require(promotionReadinessMatches(finalReadback, spec.env, inputs.config.listingAiTransition ? 'mock' : 'on_device'), 'promotion_pre_boundary_readiness');
     require(equal(await snapshot(), after) && await auxiliary() === receipt.auxiliarySha256
       && await sql(physicalSchemaSql) === receipt.physicalSchemaSha256 && await sql(constraintsSql) === '0', 'promotion_pre_boundary_database');
     require(await lookup(source.name) === '' && await lookup() === candidateId, 'promotion_pre_boundary_name'); await inventory();
@@ -328,6 +368,7 @@ export async function runSuccessorPromotion(inputs, options = {}, dependencies =
     const gateway = await convergePromotionGateway(buildReleaseMetadata(spec.env), {
       read: dependencies.publicReadback ?? promotionGatewayReadback, delay: dependencies.delay,
       monotonic: dependencies.monotonic });
+    if (inputs.config.listingAiTransition) require(mockListingAiReadbackMatches(gateway.ready), 'promotion_gateway_mock_readback');
     await candidate(); await membership(true); await inventory(); await sourceCas(); await databaseCas(); held.recheck();
     require(equal(await snapshot(), after) && await auxiliary() === receipt.auxiliarySha256
       && await sql(physicalSchemaSql) === receipt.physicalSchemaSha256 && await sql(constraintsSql) === '0', 'promotion_post_boundary_database');
@@ -346,6 +387,7 @@ export async function runSuccessorPromotion(inputs, options = {}, dependencies =
     result = { status: 'promoted_owner_smoke_pending', schemaVersion: 2, kind: 'sit-green-staging-106-106-promotion',
       candidateId, sourceId: source.id, runtimeCommit: inputs.binding.runtimeCommit, opsCommit: inputs.binding.opsCommit,
       rehearsalSha256: options.rehearsalSha256, backupSha256: receipt.backupSha256,
+      listingAiTransitionSha256: receipt.listingAiTransitionSha256, sourceEnvironmentSha256: receipt.sourceEnvironmentSha256,
       ...(recovering ? { recoveryOpsCommit: options.recoveryOpsCommit, promotionLockSha256: options.promotionLockSha256,
         promotionFailureSha256: options.promotionFailureSha256 } : {}),
       ownerSmokePassed: false, publicReleaseComplete: false, oldImageRestarted: false, lockRetained: true,

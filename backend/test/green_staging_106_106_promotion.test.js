@@ -49,6 +49,18 @@ test('exact rehearsed schema106 successor preserves canonical resources and stop
   assert.equal(evidence.gatewayReadbackSha256, result.gatewayReadbackSha256);
   assert.ok(!f.calls.some(e => e.args[0] === 'start' && e.args[1] === f.source.Id));
 }));
+test('mock transition survives rehearsal receipt, promotion lock, candidate readback and gateway capability readback', async () => scoped(async f => {
+  assert.equal(f.data.config.listingAiTransition.to, 'staging-mock-v1');
+  const result = await runSuccessorPromotion(f.data, f.options, f.dependencies);
+  assert.equal(result.status, 'promoted_owner_smoke_pending');
+  assert.equal(result.listingAiTransitionSha256, objectDigest(f.data.config.listingAiTransition));
+  assert.equal(result.sourceEnvironmentSha256, f.data.config.envFile.sha256);
+  assert.equal(f.records[result.candidateId].Config.Env.some(value => value === 'SIT_LISTING_AI_PROVIDER=mock'), true);
+  const lock = JSON.parse(fs.readFileSync(path.join(f.options.evidenceDirectory, 'synthetic-run.promotion-lock.json'), 'utf8'));
+  assert.equal(lock.listingAiTransitionSha256, result.listingAiTransitionSha256);
+  assert.equal(lock.sourceEnvironmentSha256, result.sourceEnvironmentSha256);
+  assert.equal(f.routing.some(entry => entry.phase === 'gateway' && entry.resolved[0] === result.candidateId), true);
+}, { listingAiMock: true }));
 test('promotion accepts only the two Docker-equivalent HostConfig defaults and rejects non-default drift', async t => {
   await t.test('empty Dns/null and null/false OomKillDisable', () => scoped(async f => {
     assert.equal(f.source.HostConfig.Dns.length, 0); assert.equal(f.source.HostConfig.OomKillDisable, null);
@@ -255,27 +267,42 @@ test('receipt rejects wrong commit/hash/snapshot/probes/freshness and payment-mo
   const source = structuredClone(f.source); source.Config.Env = source.Config.Env.map(e => e.startsWith('PAYMENT_TRANSPORT=') ? 'PAYMENT_TRANSPORT=stripe' : e);
   assert.throws(() => canonicalSuccessorSpec(source, f.c.image, f.data), /provider_modes/u);
 }));
-test('Green successor uses the mock profile only when explicitly bound and zero-cost', async () => scoped(async f => {
-  const source = structuredClone(f.source);
-  const env = Object.fromEntries(source.Config.Env.map(entry => {
+test('Green successor defaults to on_device and applies only the protected zero-cost mock delta when requested', async () => scoped(async f => {
+  const source = structuredClone(f.source), config = structuredClone(f.data.config);
+  const sourceEnv = Object.fromEntries(source.Config.Env.map(entry => {
     const i = entry.indexOf('='); return [entry.slice(0, i), entry.slice(i + 1)];
   }));
-  Object.assign(env, { DEPLOYMENT_ENVIRONMENT: 'test', SIT_STAGING_PILOT_ID: 'heilbronn_wave0',
-    SIT_STAGING_ACCESS_GATE_ENABLED: 'true', SIT_STAGING_COMPOSE_PROJECT: 'sit-green',
-    SIT_STAGING_LISTING_AI_PROFILE: 'staging-mock-v1', SIT_LISTING_AI_PROVIDER: 'mock',
-    SIT_LISTING_AI_MODEL: 'listing-ai-mock-v1', SIT_LISTING_AI_BUDGET_CENTS: '0',
-    SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: '0', SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: '',
-    SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '0', OPENAI_API_KEY: '', OPENAI_API_KEY_FILE: '' });
-  source.Config.Env = Object.entries(env).map(([k, v]) => `${k}=${v}`);
-  assert.equal(canonicalSuccessorSpec(source, f.c.image, f.data).spec.env.SIT_LISTING_AI_PROVIDER, 'mock');
-  for (const [name, value] of [['SIT_LISTING_AI_BUDGET_CENTS', '1'],
+  Object.assign(sourceEnv, { SIT_STAGING_PILOT_ID: 'heilbronn_wave0', SIT_STAGING_COMPOSE_PROJECT: 'sit-green' });
+  source.Config.Env = Object.entries(sourceEnv).map(([k, v]) => `${k}=${v}`);
+  const base = { ...f.data, config: { ...config, schemaVersion: 2,
+    listingAiTransition: { schemaVersion: 1, from: 'on_device', to: 'staging-mock-v1', sourceEnvironmentSha256: config.envFile.sha256 } } };
+  const defaultSpec = canonicalSuccessorSpec(source, f.c.image, f.data).spec;
+  assert.equal(defaultSpec.env.SIT_LISTING_AI_PROVIDER, 'on_device');
+  const mockSpec = canonicalSuccessorSpec(source, f.c.image, base).spec;
+  assert.deepEqual(Object.fromEntries(['SIT_STAGING_LISTING_AI_PROFILE', 'SIT_LISTING_AI_PROVIDER', 'SIT_LISTING_AI_MODEL',
+    'SIT_LISTING_AI_BUDGET_CENTS', 'SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS', 'SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID',
+    'SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', 'OPENAI_API_KEY', 'OPENAI_API_KEY_FILE'].map(k => [k, mockSpec.env[k]])), {
+    SIT_STAGING_LISTING_AI_PROFILE: 'staging-mock-v1', SIT_LISTING_AI_PROVIDER: 'mock', SIT_LISTING_AI_MODEL: 'listing-ai-mock-v1',
+    SIT_LISTING_AI_BUDGET_CENTS: '0', SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: '0',
+    SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: '', SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '0', OPENAI_API_KEY: '', OPENAI_API_KEY_FILE: '' });
+  for (const [key, value] of Object.entries(sourceEnv)) if (!key.startsWith('APP_') && !key.startsWith('SIT_LISTING_AI_')
+    && key !== 'SIT_STAGING_LISTING_AI_PROFILE' && key !== 'OPENAI_API_KEY' && key !== 'OPENAI_API_KEY_FILE') {
+    assert.equal(mockSpec.env[key], value, `preserve ${key}`);
+  }
+  for (const [name, value] of [['SIT_LISTING_AI_PROVIDER', 'mock'], ['SIT_LISTING_AI_BUDGET_CENTS', '1'],
     ['SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS', '1'], ['SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', '1'],
-    ['OPENAI_API_KEY', 'secret'], ['SIT_STAGING_LISTING_AI_PROFILE', '']]) {
+    ['OPENAI_API_KEY', 'secret'], ['SIT_STAGING_LISTING_AI_PROFILE', 'staging-mock-v1']]) {
     const broken = structuredClone(source);
     broken.Config.Env = broken.Config.Env.map(entry => entry.startsWith(`${name}=`) ? `${name}=${value}` : entry);
     if (!broken.Config.Env.some(entry => entry.startsWith(`${name}=`))) broken.Config.Env.push(`${name}=${value}`);
-    assert.throws(() => canonicalSuccessorSpec(broken, f.c.image, f.data), /provider_modes/u);
+    assert.throws(() => canonicalSuccessorSpec(broken, f.c.image, base), /provider_modes/u);
   }
+  const implicitMock = structuredClone(source);
+  implicitMock.Config.Env = implicitMock.Config.Env.map(entry => entry.startsWith('SIT_LISTING_AI_PROVIDER=')
+    ? 'SIT_LISTING_AI_PROVIDER=mock' : entry);
+  implicitMock.Config.Env.push('SIT_STAGING_LISTING_AI_PROFILE=staging-mock-v1');
+  const unbound = structuredClone(base); delete unbound.config.listingAiTransition;
+  assert.throws(() => canonicalSuccessorSpec(implicitMock, f.c.image, unbound), /provider_modes/u);
 }));
 test('receipt accepts only healthy watchdog progress since the collected database baseline', async () => scoped(async f => {
   const receipt = structuredClone(f.receipt), prior = f.data.target.database.watchdog;

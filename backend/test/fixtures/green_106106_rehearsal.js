@@ -9,8 +9,8 @@ import { hex } from './green_106106_readonly.js';
 import { buildReleaseMetadata } from '../../src/release.js';
 
 // Strict stateful Docker/SQL adapter; synthetic proof only, no daemon calls.
-export async function rehearsalFixture(directory, { restartPolicy = 'no', databaseRestartPolicy = 'no' } = {}) {
-  const s = await inputs(), records = s.f.records, source = records[hex(1)], dbSource = records[hex(2)];
+export async function rehearsalFixture(directory, { restartPolicy = 'no', databaseRestartPolicy = 'no', listingAiMock = false } = {}) {
+  const s = await inputs({ listingAiMock }), records = s.f.records, source = records[hex(1)], dbSource = records[hex(2)];
   source.HostConfig.RestartPolicy = { Name: restartPolicy, MaximumRetryCount: 0 };
   dbSource.HostConfig.RestartPolicy = { Name: databaseRestartPolicy, MaximumRetryCount: 0 };
   s.config.materials[0].destination = source.Mounts[1].Destination = '/run/secrets/mfa-encryption-key';
@@ -125,9 +125,13 @@ export async function rehearsalFixture(directory, { restartPolicy = 'no', databa
       else if (entry.input === 'SHOW server_version_num') result = '160015';
       else if (entry.phase === 'synthetic_mfa_identity') { probeRan = true; result = JSON.stringify({ mfa: 'enroll-pending-cancel-passed', identity: 'start-status-resume-revoke-passed' }); }
       else if (entry.phase === 'candidate_readiness') {
-        const health = { status: 'ok', checks: { technicalSandbox: { available: false, reason: 'disabled', provider: 'stripe', mode: 'disabled', amountMinor: 100,
-          currency: 'EUR', maxRunsPerUser24h: 3, professionalReview: false, syntheticOnly: true }, identityVerification: { provider: 'memory' }, listingAi: { provider: 'on_device' } } };
         const env = Object.fromEntries(records[target].Config.Env.map(e => [e.slice(0, e.indexOf('=')), e.slice(e.indexOf('=') + 1)]));
+        const listingAi = env.SIT_LISTING_AI_PROVIDER === 'mock' ? { provider: 'mock', model: env.SIT_LISTING_AI_MODEL,
+          budgetCents: 0, stagingSmokeBudgetCents: 0, stagingSmokeActivationId: null,
+          externalProviderExecutionAllowed: false, automaticPublicationAllowed: false, productionEligible: false, syntheticOnly: true }
+          : { provider: 'on_device' };
+        const health = { status: 'ok', checks: { technicalSandbox: { available: false, reason: 'disabled', provider: 'stripe', mode: 'disabled', amountMinor: 100,
+          currency: 'EUR', maxRunsPerUser24h: 3, professionalReview: false, syntheticOnly: true }, identityVerification: { provider: 'memory' }, listingAi } };
         result = JSON.stringify({
           live: { status: 200, payload: { status: 'ok' } },
           ready: { status: 200, payload: health },

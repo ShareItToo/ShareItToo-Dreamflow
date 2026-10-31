@@ -15,7 +15,9 @@ export async function promotionFixture(directory, policies) {
   if (f.promotionDockerDefaults) Object.assign(f.source.HostConfig, { Dns: [], OomKillDisable: null });
   f.source.Config.Labels['com.shareittoo.sit.green.run_id'] = 'synthetic-source-run';
   for (const n of f.f.binding.scope.networks) f.records[n.id].Containers[f.source.Id].Name = 'shareittoo-staging-api';
-  f.source.Config.Env.push('DATABASE_URL=postgresql://synthetic:synthetic@canonical-db:5432/synthetic');
+  if (!f.source.Config.Env.some(value => value.startsWith('DATABASE_URL='))) {
+    f.source.Config.Env.push('DATABASE_URL=postgresql://synthetic:synthetic@canonical-db:5432/synthetic');
+  }
   Object.assign(f.c, candidateArchive(f.source.Config.Env));
   f.f.binding.candidateImageId = f.c.image.Id; f.records[f.c.image.Id] = f.c.image;
   const collected = await collectSuccessor({ binding: f.f.binding, publicationBytes: f.f.publicationBytes, mode: 'collect' }, f.dependencies);
@@ -98,7 +100,12 @@ export async function promotionFixture(directory, policies) {
     const ids = caddyResolve(); if (ids.length !== 1) throw Error('gateway unavailable');
     const r = f.records[ids[0]], env = Object.fromEntries(r.Config.Env.map(v => [v.slice(0, v.indexOf('=')), v.slice(v.indexOf('=') + 1)]));
     routing.push({ phase: 'gateway', resolved: ids });
-    return { version: buildReleaseMetadata(env), ready: { status: 'ok' } };
+    const ready = env.SIT_LISTING_AI_PROVIDER === 'mock'
+      ? { status: 'ok', checks: { listingAi: { provider: 'mock', model: 'listing-ai-mock-v1', budgetCents: 0,
+        stagingSmokeBudgetCents: 0, stagingSmokeActivationId: null, externalProviderExecutionAllowed: false,
+        automaticPublicationAllowed: false, productionEligible: false, syntheticOnly: true } } }
+      : { status: 'ok' };
+    return { version: buildReleaseMetadata(env), ready };
   };
   return { ...f, options, receipt: JSON.parse(receipt), failures, promotionLosses: losses, routing, caddyResolve,
     dependencies: { ...f.dependencies, command, publicReadback } };

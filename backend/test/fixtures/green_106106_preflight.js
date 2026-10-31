@@ -3,13 +3,17 @@ import fs from "node:fs";
 import { digest, objectDigest } from "../../ops/green_staging_98_106_contract.mjs";
 import { collectSuccessor } from "../../ops/green_staging_106_106_collector.mjs";
 import { physicalSchemaSql, writersSql, constraintsSql, bindExecutionMaterials } from "../../ops/green_staging_106_106_preflight.mjs";
+import { protectedEnvText } from "../../ops/prepare_green_staging_106_106_execution_inputs.mjs";
 import { fixture, hex } from "./green_106106_readonly.js";
 import { candidateArchive } from "./green_106106_archive.js";
-export async function inputs() {
-  const f = fixture(), c = candidateArchive(f.records[hex(1)].Config.Env);
+export async function inputs({ listingAiMock = false } = {}) {
+  const f = fixture();
+  if (listingAiMock) f.records[hex(1)].Config.Env.push('SIT_STAGING_PILOT_ID=heilbronn_wave0', 'SIT_STAGING_COMPOSE_PROJECT=sit-green',
+    'DATABASE_URL=postgresql://synthetic:synthetic@canonical-db:5432/synthetic');
+  const c = candidateArchive(f.records[hex(1)].Config.Env);
   f.binding.candidateImageId = c.image.Id; f.records[c.image.Id] = c.image;
   const bytes = Buffer.from('synthetic-runtime-material'), firebaseBytes = Buffer.from('{"synthetic":true}'),
-    env = Buffer.from('PAYMENT_TRANSPORT=memory\n');
+    env = listingAiMock ? protectedEnvText(f.records[hex(1)].Config.Env) : Buffer.from('PAYMENT_TRANSPORT=memory\n');
   const material = { source: '/private/sit-preflight/mfa', destination: '/run/secrets/mfa', sha256: digest(bytes), uid: 0, gid: 10001, mode: 0o640 };
   const firebase = { source: '/private/sit-preflight/firebase', destination: '/run/secrets/firebase-service-account.json',
     sha256: digest(firebaseBytes), uid: 0, gid: 65532, mode: 0o640 };
@@ -18,9 +22,11 @@ export async function inputs() {
     ({ Type: 'bind', Source: entry.source, Destination: entry.destination, RW: false })));
   const target = (await collectSuccessor({ binding: f.binding, publicationBytes: f.publicationBytes, mode: 'collect' },
     { command: f.command, sourceOptions: { git: f.git } })).target;
-  const config = { kind: 'sit-green-staging-106-106-execution-config', schemaVersion: 1,
+  const config = { kind: 'sit-green-staging-106-106-execution-config', schemaVersion: listingAiMock ? 2 : 1,
     sourceState: 'running', sealedSourceName: 'sit-green-106-106-sealed-synthetic-run', runId: 'synthetic-run', uid: 10001, gid: 10001,
-    materials: [material, firebase], envFile: { source: '/private/sit-preflight/env', destination: null, sha256: digest(env), uid: 0, gid: 0, mode: 0o600 } };
+    materials: [material, firebase], envFile: { source: '/private/sit-preflight/env', destination: null, sha256: digest(env), uid: 0, gid: 0, mode: 0o600 },
+    ...(listingAiMock ? { listingAiTransition: { schemaVersion: 1, from: 'on_device', to: 'staging-mock-v1',
+      sourceEnvironmentSha256: digest(env) } } : {}) };
   const manifest = { kind: 'sit-green-staging-106-106-runtime', schemaVersion: 1, opsCommit: f.binding.opsCommit,
     runtimeCommit: f.binding.runtimeCommit, bindingSha256: objectDigest(f.binding), targetSha256: objectDigest(target),
     configSha256: objectDigest(config), physicalSchemaSha256: hex(80) };

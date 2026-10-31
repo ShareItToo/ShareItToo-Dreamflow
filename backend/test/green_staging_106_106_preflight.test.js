@@ -82,6 +82,20 @@ test('versioned execution/runtime inputs reject hash/version/unknown-field and m
     const s = await inputs(); change(s); assert.throws(() => validateExecutionInputs(s.config, s.manifest, s.f.binding, s.target));
   }
 });
+test('execution config schema v2 binds an explicit transition while schema v1 remains the on_device historical shape', async () => {
+  const s = await inputs();
+  assert.equal(validateExecutionInputs(s.config, s.manifest, s.f.binding, s.target), true);
+  const config = { ...structuredClone(s.config), schemaVersion: 2, listingAiTransition: null };
+  const manifest = { ...s.manifest, configSha256: objectDigest(config) };
+  assert.equal(validateExecutionInputs(config, manifest, s.f.binding, s.target), true);
+  config.listingAiTransition = { schemaVersion: 1, from: 'on_device', to: 'staging-mock-v1',
+    sourceEnvironmentSha256: config.envFile.sha256 };
+  manifest.configSha256 = objectDigest(config);
+  assert.equal(validateExecutionInputs(config, manifest, s.f.binding, s.target), true);
+  config.listingAiTransition.sourceEnvironmentSha256 = 'f'.repeat(64);
+  manifest.configSha256 = objectDigest(config);
+  assert.throws(() => validateExecutionInputs(config, manifest, s.f.binding, s.target), /listing_ai_transition/u);
+});
 test('stable material descriptors reject changed bytes, metadata, path identity and env/image overrides', async t => {
   const changes = {
     bytes: s => { s.files.set(s.config.materials[0].source, Buffer.from('changed')); },

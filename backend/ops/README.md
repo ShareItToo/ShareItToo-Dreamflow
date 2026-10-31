@@ -416,6 +416,14 @@ OpenAI key inputs are empty, external execution and automatic publication are
 disabled, and readiness reports `productionEligible=false` with
 `syntheticOnly=true`. No provider call or listing publication is permitted.
 
+For the 106-to-106 successor runner specifically, the execution-input
+preparation command defaults to `on_device`; only an explicit
+`--listing-ai-profile staging-mock-v1` creates a protected transition bound to
+the source environment bytes. The preflight, isolated rehearsal, promotion
+receipt and promotion lock all carry that transition binding, and runtime
+health/readiness must confirm the mock model and synthetic-only boundary.
+Omitting the option leaves the current `on_device` successor unchanged.
+
 Existing `on_device` remains the default Green profile. OpenAI stays behind its
 separate secret, budget and receipt gates. The Green runner's atomic rollback
 and forward-migration recovery rules remain unchanged: after a forward migration

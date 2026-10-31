@@ -7,7 +7,8 @@ import { assertArtifactFamily, closeArtifact, exclusiveArtifact, privateDirector
 import { assertGreenRuntimeReadbacks } from './green_staging_promotion.mjs';
 import { runMfaProbe } from './staging_controlled_acceptance.mjs';
 import { requireBinding as require } from './green_staging_106_106_binding.mjs';
-import { bindExecutionMaterials, executionPreflight, physicalSchemaSql, constraintsSql, writersSql, preflightRead } from './green_staging_106_106_preflight.mjs';
+import { bindExecutionMaterials, executionPreflight, physicalSchemaSql, constraintsSql, writersSql, preflightRead,
+  listingAiTransitionBinding, stagingMockListingAiValues } from './green_staging_106_106_preflight.mjs';
 import { assertRecoveryBaseline, assertSuccessorStartup, decodeSnapshot, snapshotSql } from './green_staging_106_106_database.mjs';
 import { SuccessorDocker, dockerObject, isolatedSpec, supportedCanonicalRestartPolicy } from './green_staging_106_106_resources.mjs';
 import { buildReleaseMetadata } from '../src/release.js';
@@ -51,7 +52,7 @@ const emptyStatuses = () => Object.fromEntries(readinessKeys.map(key => [key, nu
 function readinessStatus(value) {
   return Number.isInteger(value) && value >= 0 && value <= 599 ? value : null;
 }
-export function evaluateCandidateReadinessProbe(probe, { expectedVersion, runtimeCommit } = {}) {
+export function evaluateCandidateReadinessProbe(probe, { expectedVersion, runtimeCommit, listingAiProvider = 'on_device' } = {}) {
   const statuses = emptyStatuses();
   if (!probe || Object.getPrototypeOf(probe) !== Object.prototype
       || !equal(Object.keys(probe).sort(), [...readinessKeys].sort())) {
@@ -69,7 +70,7 @@ export function evaluateCandidateReadinessProbe(probe, { expectedVersion, runtim
     }
   }
   const value = Object.fromEntries(readinessKeys.map(key => [key, probe[key].payload]));
-  try { assertGreenRuntimeReadbacks({ version: value.version, health: value.ready, ready: value.ready, runtimeCommit }); }
+  try { assertGreenRuntimeReadbacks({ version: value.version, health: value.ready, ready: value.ready, runtimeCommit, listingAiProvider }); }
   catch { return { ok: false, diagnostic: { code: 'runtime_contract', statuses } }; }
   if (!equal(value.version, expectedVersion)) return { ok: false, diagnostic: { code: 'release_metadata', statuses } };
   if (value.live.status !== 'ok') return { ok: false, diagnostic: { code: 'live_payload', statuses } };
@@ -115,6 +116,8 @@ export function validatePreflightReceipt(receipt, sha256, inputs, now = Date.now
     && receipt.status === 'read_only_preflight_passed' && objectDigest(receipt) === sha256
     && receipt.targetSha256 === inputs.manifest.targetSha256 && receipt.configSha256 === inputs.manifest.configSha256
     && receipt.physicalSchemaSha256 === inputs.manifest.physicalSchemaSha256
+    && receipt.listingAiTransitionSha256 === listingAiTransitionBinding(inputs.config).listingAiTransitionSha256
+    && receipt.sourceEnvironmentSha256 === listingAiTransitionBinding(inputs.config).sourceEnvironmentSha256
     && receipt.candidateContent?.imageId === inputs.binding.candidateImageId
     && receipt.promotionAuthorized === false && receipt.rehearsalPassed === false
     && receipt.mutationAdapterImplemented === false && receipt.namespaceReadabilityVerified === false,
@@ -182,6 +185,16 @@ export async function runSuccessorRehearsal(inputs, options, dependencies = {}) 
       JWT_SECRET: crypto.randomBytes(48).toString('base64url'), PORT: '8080', BIND_HOST: '0.0.0.0',
       MFA_ENCRYPTION_KEY_FILE: mfa.destination, APP_PUBLIC_URL: 'http://127.0.0.1:8080', PUBLIC_BASE_URL: 'http://127.0.0.1:8080/v1',
       CORS_ORIGINS: 'http://127.0.0.1:8080', APPLE_REVOCATION_ENABLED: 'false', APPLE_OWNERSHIP_ACQUISITION_ENABLED: 'false' };
+    if (inputs.config.listingAiTransition) {
+      const sourceEnv = Object.fromEntries(sourceRecord.Config.Env.map(entry => {
+        const at = entry.indexOf('='); return [entry.slice(0, at), entry.slice(at + 1)];
+      }));
+      require(inputs.config.listingAiTransition.to === 'staging-mock-v1'
+        && ['SIT_STAGING_PILOT_ID', 'SIT_STAGING_ACCESS_GATE_ENABLED', 'SIT_STAGING_COMPOSE_PROJECT', 'SIT_STAGING_ALLOWED_USER_IDS']
+          .every(key => typeof sourceEnv[key] === 'string' && sourceEnv[key].length > 0), 'rehearsal_mock_source_boundary');
+      Object.assign(neutral, Object.fromEntries(['SIT_STAGING_PILOT_ID', 'SIT_STAGING_COMPOSE_PROJECT', 'SIT_STAGING_ALLOWED_USER_IDS']
+        .map(key => [key, sourceEnv[key]])), stagingMockListingAiValues, { SIT_STAGING_ACCESS_GATE_ENABLED: 'true' });
+    }
     const user = `${fresh.candidateContent.uid}:${fresh.candidateContent.gid}`;
     const paths = inputs.config.materials.map(m => m.destination);
     const supplementalGroups = entries => [...new Set(entries.map(material => String(material.gid))
@@ -274,7 +287,8 @@ export async function runSuccessorRehearsal(inputs, options, dependencies = {}) 
         lastReadiness = { code: 'probe_json', statuses: emptyStatuses(), attempts };
         return false;
       }
-      const evaluated = evaluateCandidateReadinessProbe(probe, { expectedVersion, runtimeCommit: inputs.binding.runtimeCommit });
+      const evaluated = evaluateCandidateReadinessProbe(probe, { expectedVersion, runtimeCommit: inputs.binding.runtimeCommit,
+        listingAiProvider: inputs.config.listingAiTransition ? 'mock' : 'on_device' });
       lastReadiness = { ...evaluated.diagnostic, attempts };
       if (!evaluated.ok) return false;
       acceptedReadiness = evaluated.value;
@@ -307,6 +321,7 @@ export async function runSuccessorRehearsal(inputs, options, dependencies = {}) 
       restoreVerified,
       runtimeCommit: inputs.binding.runtimeCommit, opsCommit: inputs.binding.opsCommit, preflightSha256: options.preflightSha256,
       targetSha256: inputs.manifest.targetSha256, configSha256: inputs.manifest.configSha256,
+      ...listingAiTransitionBinding(inputs.config),
       backupSha256: backupBinding.sha256, materialBindingSha256: materials.sha256,
       source: before, started, auxiliarySha256: beforeAux, physicalSchemaSha256: inputs.manifest.physicalSchemaSha256,
       probes, namespaceReadabilityVerified: true, fixtureCleanupVerified: true, cleanupVerified: true,

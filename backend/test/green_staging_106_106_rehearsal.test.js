@@ -5,7 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { objectDigest } from '../ops/green_staging_98_106_contract.mjs';
 import { assertCredentialCleanupEligible, credentialCleanupEligibilitySql, runSuccessorRehearsal,
-  rehearsalConfirmation, readinessScript } from '../ops/green_staging_106_106_rehearsal.mjs';
+  rehearsalConfirmation, readinessScript, evaluateCandidateReadinessProbe } from '../ops/green_staging_106_106_rehearsal.mjs';
 import { executionPreflight } from '../ops/green_staging_106_106_preflight.mjs';
 import { rehearsalFixture } from './fixtures/green_106106_rehearsal.js';
 
@@ -16,6 +16,22 @@ async function scoped(run) {
 }
 const owned = f => Object.values(f.records).filter(r => r.Name?.includes('sit-106-106-'));
 const groupAdds = call => call.args.flatMap((value, index) => value === '--group-add' ? [call.args[index + 1]] : []);
+test('mock rehearsal readiness requires exact synthetic-only capability readback', () => {
+  const runtimeCommit = 'a'.repeat(40), version = { commit: runtimeCommit, environment: 'test' };
+  const ready = { status: 'ok', checks: { technicalSandbox: { available: false, reason: 'disabled', provider: 'stripe', mode: 'disabled',
+    amountMinor: 100, currency: 'EUR', maxRunsPerUser24h: 3, professionalReview: false, syntheticOnly: true },
+  identityVerification: { provider: 'memory' }, listingAi: { provider: 'mock', model: 'listing-ai-mock-v1', budgetCents: 0,
+    stagingSmokeBudgetCents: 0, stagingSmokeActivationId: null, externalProviderExecutionAllowed: false,
+    automaticPublicationAllowed: false, productionEligible: false, syntheticOnly: true } } };
+  const probe = { live: { status: 200, payload: { status: 'ok' } }, ready: { status: 200, payload: ready }, version: { status: 200, payload: version } };
+  assert.equal(evaluateCandidateReadinessProbe(probe, { expectedVersion: version, runtimeCommit, listingAiProvider: 'mock' }).ok, true);
+  for (const [key, value] of [['provider', 'on_device'], ['model', 'openai'], ['budgetCents', 1],
+    ['stagingSmokeBudgetCents', 1], ['externalProviderExecutionAllowed', true], ['automaticPublicationAllowed', true],
+    ['productionEligible', true], ['syntheticOnly', false]]) {
+    const changed = structuredClone(probe); changed.ready.payload.checks.listingAi[key] = value;
+    assert.equal(evaluateCandidateReadinessProbe(changed, { expectedVersion: version, runtimeCommit, listingAiProvider: 'mock' }).ok, false, key);
+  }
+});
 test('isolated lifecycle seals by exact ID, verifies backup/restore106/startup/probes and cleanup before PASS', async () => scoped(async (f, directory) => {
   const baseline = structuredClone(f.states.get(f.dbSource.Id));
   let result;
@@ -38,6 +54,20 @@ test('isolated lifecycle seals by exact ID, verifies backup/restore106/startup/p
   assert.deepEqual(groupAdds(f.calls.find(c => c.phase === 'create_candidate')), []);
   for (const call of f.calls.filter(c => c.args[0] === 'create')) assert.equal(call.args[call.args.indexOf('--restart') + 1], 'no');
 }));
+test('explicit mock transition reaches the isolated candidate and receipt only after synthetic-only readiness readback', async () => {
+  const directory = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'sit-successor-mock-rehearsal-'));
+  fs.chmodSync(directory, 0o700);
+  try {
+    const f = await rehearsalFixture(directory, { listingAiMock: true });
+    const result = await runSuccessorRehearsal(f.data, f.options, f.dependencies);
+    assert.equal(result.status, 'rehearsal_passed_services_sealed');
+    const receipt = JSON.parse(fs.readFileSync(path.join(directory, 'synthetic-run.rehearsal.json'), 'utf8'));
+    assert.equal(receipt.listingAiTransitionSha256, objectDigest(f.config.listingAiTransition));
+    assert.equal(receipt.sourceEnvironmentSha256, f.config.envFile.sha256);
+    assert.equal(receipt.providerTraffic, false);
+    assert.equal(f.calls.some(call => call.phase === 'candidate_readiness'), true);
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
 test('candidate receives exactly the supplemental gid required by its mounted material', async () => scoped(async f => {
   const [mfa, firebase] = f.config.materials;
   f.io.lstatSync(mfa.source); f.io.lstatSync(firebase.source);
