@@ -127,4 +127,6 @@ test('production alert unit explicitly selects transition-only notification poli
   assert.match(unit, /^Environment=ALERT_NOTIFICATION_POLICY=transitions-only$/m);
   assert.match(unit, /^StateDirectory=shareittoo-alerts$/m);
   assert.match(unit, /^ProtectSystem=strict$/m);
+  const wrapper = await fs.readFile(path.resolve(currentDir, '../ops/alert.sh'), 'utf8');
+  assert.match(wrapper, /^exec python3 -B "\$task_ops_dir\/alert_state\.py" "\$@"$/m);
 });

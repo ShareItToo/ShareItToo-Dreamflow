@@ -70,7 +70,7 @@ print(json.dumps({'_SYSTEMD_UNIT':'shareittoo-health.service',
 `, { mode: 0o755 });
   const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, ALERT_ENV_FILE: envFile,
     ALERT_STATE_DIR: state, ALERT_NOTIFICATION_POLICY: 'transitions-only', ALERT_CAPTURE: path.join(root, 'capture'),
-    FAKE_SECRET: secret, FAKE_STATE_NAME: stateName(), FAKE_NOW: '2000000000' };
+    ALERT_RECOVERY_DEBOUNCE_SECONDS: '0', FAKE_SECRET: secret, FAKE_STATE_NAME: stateName(), FAKE_NOW: '2000000000' };
   return { root, state, envFile, env, secret,
     call: (mode = 'failure', key = service, extra = {}) => run('bash', [path.join(ops, 'alert.sh'), key, mode], { env: { ...env, ...extra } }),
     read: async (key = service) => JSON.parse(await fs.readFile(path.join(state, stateName(key)), 'utf8')),
@@ -178,14 +178,14 @@ test('valid v1 state migrates without losing closed truth or generating another 
   assert.equal((await f.call('recovery')).code, 0);
   assert.equal((await f.messages()).length, 0);
   assert.deepEqual(await f.read(), {
-    version: 3, service, phase: 'closed', kind: 'recovery',
+    version: 4, service, phase: 'closed', kind: 'recovery',
     last_attempt: historical.last_attempt, delivery: 'delivered',
     failure_fingerprint: createHash('sha256').update(`legacy\n${service}`).digest('hex'),
-    recovery_streak: 0,
+    recovery_streak: 0, recovery_started_at: null, recovery_last_success_at: null,
   });
   await f.call();
   assert.equal((await f.messages()).length, 1);
-  assert.equal((await f.read()).version, 3);
+  assert.equal((await f.read()).version, 4);
 });
 
 test('v1 and v2 open incidents migrate with incident truth and reset streak on failure', async (t) => {
@@ -210,6 +210,21 @@ test('v1 and v2 open incidents migrate with incident truth and reset streak on f
   }
 });
 
+test('v3 recovery-pending state migrates to v4 and conservatively restarts confirmation', async (t) => {
+  const f = await fixture(t);
+  const old = { version: 3, service, phase: 'open', kind: 'failure', last_attempt: 1_900_000_000,
+    delivery: 'delivered', failure_fingerprint: 'a'.repeat(64), recovery_streak: 2 };
+  await fs.writeFile(path.join(f.state, stateName()), `${JSON.stringify(old)}\n`, { mode: 0o600 });
+  assert.equal((await f.call('failure')).code, 0);
+  const current = await f.read();
+  assert.equal(current.version, 4);
+  assert.equal(current.phase, 'open');
+  assert.equal(current.recovery_streak, 0);
+  assert.equal(current.recovery_started_at, null);
+  assert.equal(current.recovery_last_success_at, null);
+  assert.equal((await f.messages()).length, 0);
+});
+
 test('recovery requires three consecutive successes; any failure resets the streak', async (t) => {
   const f = await fixture(t);
   await f.call('failure');
@@ -231,6 +246,148 @@ test('recovery requires three consecutive successes; any failure resets the stre
   assert.equal((await f.read()).phase, 'closed');
   assert.equal((await f.read()).recovery_streak, 3);
   assert.equal((await f.messages()).length, 2);
+});
+
+test('Health recovery waits for a continuous 30-minute window and a failure resets it without another failure mail', async (t) => {
+  const f = await fixture(t);
+  const debounce = { ALERT_RECOVERY_DEBOUNCE_SECONDS: '1800' };
+  const firstFailure = 2_000_000_000;
+  assert.equal((await f.call('failure', service, { FAKE_NOW: String(firstFailure) })).code, 0);
+  assert.equal((await f.messages()).length, 1);
+
+  const resetFailure = firstFailure + 600;
+  for (const at of [firstFailure + 1, firstFailure + 301]) {
+    assert.equal((await f.call('recovery', service, { ...debounce, FAKE_NOW: String(at) })).code, 0);
+  }
+  assert.equal((await f.read()).recovery_started_at, firstFailure + 1);
+  assert.equal((await f.call('failure', service, {
+    ...debounce, FAKE_NOW: String(resetFailure), FAKE_INVOCATION_ID: 'b'.repeat(32),
+  })).code, 0);
+  assert.equal((await f.read()).phase, 'open');
+  assert.equal((await f.read()).recovery_streak, 0);
+  assert.equal((await f.read()).recovery_started_at, null);
+  assert.equal((await f.read()).recovery_last_success_at, null);
+  assert.equal((await f.messages()).length, 1, 'failure within an open incident must remain suppressed');
+  assert.equal(JSON.stringify(await f.read()).includes(f.secret), false);
+
+  const recoveredAt = resetFailure + 300;
+  for (let elapsed = 0; elapsed < 1800; elapsed += 300) {
+    const result = await f.call('recovery', service, {
+      ...debounce, FAKE_NOW: String(recoveredAt + elapsed),
+    });
+    assert.equal(result.code, 0, result.stderr);
+  }
+  const beforeBoundary = await f.call('recovery', service, {
+    ...debounce, FAKE_NOW: String(recoveredAt + 1799),
+  });
+  assert.equal(beforeBoundary.code, 0, beforeBoundary.stderr);
+  assert.equal((await f.read()).phase, 'open');
+  assert.equal((await f.read()).recovery_streak, 3);
+  assert.equal((await f.read()).recovery_started_at, recoveredAt);
+  assert.equal((await f.messages()).length, 1, 'must remain open one second before confirmation');
+
+  const confirmed = await f.call('recovery', service, {
+    ...debounce, FAKE_NOW: String(recoveredAt + 1800),
+  });
+  assert.equal(confirmed.code, 0, confirmed.stderr);
+  assert.equal(`${confirmed.stdout}${confirmed.stderr}`.includes(f.secret), false);
+  assert.equal((await f.read()).phase, 'closed');
+  assert.equal((await f.messages()).length, 2);
+  assert.match((await f.messages())[1].message, /service recovered/);
+
+  assert.equal((await f.call('failure', service, {
+    FAKE_NOW: String(recoveredAt + 1801), FAKE_INVOCATION_ID: 'c'.repeat(32),
+  })).code, 0);
+  assert.equal((await f.read()).phase, 'open');
+  assert.equal((await f.messages()).length, 3, 'a new incident is allowed only after confirmed recovery');
+});
+
+test('Health recovery keeps 420-second timer gaps continuous and restarts after 421 seconds', async (t) => {
+  const f = await fixture(t);
+  const debounce = { ALERT_RECOVERY_DEBOUNCE_SECONDS: '1800' };
+  const start = 2_000_100_000;
+  await f.call('failure', service, { FAKE_NOW: String(start) });
+  await f.call('recovery', service, { ...debounce, FAKE_NOW: String(start + 1) });
+  await f.call('recovery', service, { ...debounce, FAKE_NOW: String(start + 421) });
+  assert.equal((await f.read()).recovery_started_at, start + 1);
+  assert.equal((await f.read()).recovery_last_success_at, start + 421);
+  assert.equal((await f.read()).recovery_streak, 2);
+
+  for (const elapsed of [841, 1261, 1681]) {
+    await f.call('recovery', service, { ...debounce, FAKE_NOW: String(start + elapsed) });
+  }
+  assert.equal((await f.read()).phase, 'open');
+  const recovered = await f.call('recovery', service, { ...debounce, FAKE_NOW: String(start + 1801) });
+  assert.equal(recovered.code, 0, recovered.stderr);
+  assert.equal((await f.read()).phase, 'closed');
+  assert.equal((await f.messages()).length, 2);
+
+  const nextStart = start + 2000;
+  await f.call('failure', service, { FAKE_NOW: String(nextStart), FAKE_INVOCATION_ID: 'b'.repeat(32) });
+  await f.call('recovery', service, { ...debounce, FAKE_NOW: String(nextStart + 1) });
+  await f.call('recovery', service, { ...debounce, FAKE_NOW: String(nextStart + 422) });
+  assert.equal((await f.read()).recovery_started_at, nextStart + 422);
+  assert.equal((await f.read()).recovery_last_success_at, nextStart + 422);
+  assert.equal((await f.read()).recovery_streak, 1);
+  assert.equal((await f.read()).phase, 'open');
+  assert.equal((await f.messages()).length, 3);
+});
+
+test('Health service defaults to 30-minute recovery debounce when the old unit omits the new setting', async (t) => {
+  const f = await fixture(t);
+  const environment = { ...f.env };
+  delete environment.ALERT_RECOVERY_DEBOUNCE_SECONDS;
+  const call = (mode, at) => run('bash', [path.join(ops, 'alert.sh'), service, mode], {
+    env: { ...environment, FAKE_NOW: String(at) },
+  });
+  const start = 2_000_200_000;
+  assert.equal((await call('failure', start)).code, 0);
+  for (const elapsed of [0, 300, 600, 900, 1200, 1500, 1799]) {
+    const result = await call('recovery', start + elapsed);
+    assert.equal(result.code, 0, result.stderr);
+  }
+  assert.equal((await f.read()).phase, 'open');
+  const result = await call('recovery', start + 1800);
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal((await f.read()).phase, 'closed');
+  assert.equal((await f.messages()).length, 2);
+});
+
+test('malformed version-4 recovery timestamps fail closed without leaking secrets or sending', async (t) => {
+  const f = await fixture(t);
+  await f.call('failure');
+  const file = path.join(f.state, stateName());
+  const state = await f.read();
+  state.version = 4;
+  state.recovery_streak = 1;
+  state.recovery_started_at = 'not-a-timestamp';
+  state.recovery_last_success_at = 2_000_000_000;
+  await fs.writeFile(file, `${JSON.stringify(state)}\n`, { mode: 0o600 });
+  const result = await f.call('recovery', service, { ALERT_RECOVERY_DEBOUNCE_SECONDS: '1800' });
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /state unavailable/);
+  assert.equal(`${result.stdout}${result.stderr}`.includes(f.secret), false);
+  assert.equal((await f.messages()).length, 1);
+});
+
+test('backup and restore keep zero-time recovery debounce by default', async (t) => {
+  const f = await fixture(t);
+  const serviceName = 'shareittoo-backup.service';
+  const stateFile = path.join(f.state, stateName(serviceName));
+  const environment = { ...f.env };
+  delete environment.ALERT_RECOVERY_DEBOUNCE_SECONDS;
+  const call = (mode, extra = {}) => run('bash', [path.join(ops, 'alert.sh'), serviceName, mode], {
+    env: { ...environment, ...extra },
+  });
+  await call('failure');
+  for (let index = 0; index < 3; index++) {
+    const result = await call('recovery', { FAKE_NOW: String(2_000_000_001 + index) });
+    assert.equal(result.code, 0, result.stderr);
+  }
+  assert.equal(JSON.parse(await fs.readFile(stateFile, 'utf8')).phase, 'closed');
+  assert.equal((await f.messages()).length, 2);
+  assert.notEqual((await call('recovery', { ALERT_RECOVERY_DEBOUNCE_SECONDS: '1800' })).code, 0,
+    'non-health services cannot opt into the health debounce');
 });
 
 test('state or held lock replacement during classification fails explicitly before suppression', async (t) => {
@@ -346,13 +503,13 @@ test('post-send persistence failure is explicit and never claims confirmed deliv
   assert.equal((await fs.readdir(f.state)).some((name) => name.endsWith('.tmp')), false);
 });
 
-test('legacy open marker migrates, recovers after debounce, then permits a new incident', async (t) => {
+test('legacy open marker migrates, recovers after confirmation, then permits a new incident', async (t) => {
   const f = await fixture(t);
   const legacy = path.join(f.state, `${service}.last`);
   await fs.writeFile(legacy, '2000000000\n', { mode: 0o600 });
   await f.call();
   assert.equal((await f.messages()).length, 0);
-  assert.equal((await f.read()).version, 3);
+  assert.equal((await f.read()).version, 4);
   await f.call('recovery');
   await f.call('recovery');
   await f.call('recovery');
@@ -383,6 +540,11 @@ test('invalid modes and unsupported notification policies fail before send', asy
   for (const policy of ['', 'daily', 'bad']) {
     assert.notEqual((await f.call('failure', service, { ALERT_NOTIFICATION_POLICY: policy })).code, 0);
   }
+  for (const value of ['-1', '01', '86401', 'not-a-number']) {
+    assert.notEqual((await f.call('recovery', service, {
+      ALERT_RECOVERY_DEBOUNCE_SECONDS: value,
+    })).code, 0);
+  }
   assert.equal((await f.messages()).length, 0);
 });
 
@@ -398,12 +560,19 @@ test('units explicitly configure transition-only alerts and retain sandbox and s
     assert.match(source, /^OnFailure=shareittoo-alert@%n.service$/m);
     if (name === 'health') {
       assert.match(source, /^ExecStartPost=-\/docker\/shareittoo\/backend\/ops\/alert.sh %n recovery$/m);
+      assert.match(source, /^Environment=ALERT_RECOVERY_DEBOUNCE_SECONDS=1800$/m);
     } else {
       assert.doesNotMatch(source, /^ExecStartPost=/m);
+      assert.doesNotMatch(source, /^Environment=ALERT_RECOVERY_DEBOUNCE_SECONDS=/m);
     }
     assert.match(source, /^Environment=ALERT_NOTIFICATION_POLICY=transitions-only$/m);
     assert.doesNotMatch(source, /^ExecStopPost=/m);
   }
+  const healthTimer = await fs.readFile(path.join(ops, 'systemd/shareittoo-health.timer'), 'utf8');
+  assert.match(healthTimer, /^OnUnitActiveSec=5m$/m);
+  assert.match(healthTimer, /^RandomizedDelaySec=30s$/m);
+  assert.doesNotMatch(healthTimer, /^AccuracySec=/m,
+    'accuracy is the systemd default and must be checked from the effective timer readback');
 });
 
 test('backup/restore recovery requires completed work, and notification failure remains best effort', async (t) => {

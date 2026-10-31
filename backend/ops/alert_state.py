@@ -3,9 +3,10 @@
 
 SMTP cannot guarantee exactly-once recipient delivery. A durable pending attempt
 is therefore treated as unknown after interruption, never as permission to retry.
-Recovery requires three consecutive successful invocations; an open service
-incident never sends another failure notification, even when its observed
-failure classification changes.
+Recovery requires three consecutive successful invocations; Health additionally
+requires its configured continuous-healthy window. An open service incident
+never sends another failure notification, even when its observed failure
+classification changes.
 """
 import email.utils
 import fcntl
@@ -84,20 +85,23 @@ def load_state(directory, name, service):
             return None
         if not re.fullmatch(rb'[0-9]{1,16}\n', legacy):
             raise AlertError('state unavailable')
-        value = dict(version=3, service=service, phase='open', kind='failure',
+        value = dict(version=4, service=service, phase='open', kind='failure',
                      last_attempt=int(legacy), delivery='unknown',
                      failure_fingerprint=hashlib.sha256(('legacy\n' + service).encode()).hexdigest(),
-                     recovery_streak=0)
+                     recovery_streak=0, recovery_started_at=None,
+                     recovery_last_success_at=None)
         replace_state(directory, name, value)
         return value
     try:
         value = json.loads(data)
         base_keys = {'version', 'service', 'phase', 'kind', 'last_attempt', 'delivery'}
         if (not isinstance(value, dict)
-                or type(value.get('version')) is not int or value['version'] not in (1, 2, 3)
+                or type(value.get('version')) is not int or value['version'] not in (1, 2, 3, 4)
                 or set(value) != (base_keys if value['version'] == 1
                                   else base_keys | {'failure_fingerprint'} if value['version'] == 2
-                                  else base_keys | {'failure_fingerprint', 'recovery_streak'})
+                                  else base_keys | {'failure_fingerprint', 'recovery_streak'} if value['version'] == 3
+                                  else base_keys | {'failure_fingerprint', 'recovery_streak',
+                                                    'recovery_started_at', 'recovery_last_success_at'})
                 or value['service'] != service or value['phase'] not in ('open', 'closed')
                 or value['kind'] not in ('failure', 'reminder', 'recovery')
                 or (value['phase'] == 'closed') != (value['kind'] == 'recovery')
@@ -117,15 +121,32 @@ def load_state(directory, name, service):
                 and type(value['recovery_streak']) is int
                 and 0 <= value['recovery_streak'] <= 3):
             raise ValueError()
+        if value['version'] == 4:
+            started = value['recovery_started_at']
+            last_success = value['recovery_last_success_at']
+            times_valid = ((started is None and last_success is None)
+                           or (type(started) is int and type(last_success) is int
+                               and 0 <= started <= last_success <= 2**53))
+            pending_valid = ((value['recovery_streak'] == 0 and started is None and last_success is None)
+                             or (value['recovery_streak'] > 0 and type(started) is int
+                                 and type(last_success) is int))
+            if not (value['kind'] in ('failure', 'recovery')
+                    and isinstance(value['failure_fingerprint'], str)
+                    and re.fullmatch(r'[a-f0-9]{64}', value['failure_fingerprint'])
+                    and type(value['recovery_streak']) is int
+                    and 0 <= value['recovery_streak'] <= 3
+                    and times_valid and pending_valid):
+                raise ValueError()
     except (ValueError, TypeError, UnicodeError):
         raise AlertError('state unavailable') from None
-    if value['version'] < 3:
+    if value['version'] < 4:
         fingerprint = value.get('failure_fingerprint')
         if fingerprint is None:
             fingerprint = hashlib.sha256(('legacy\n' + service).encode()).hexdigest()
-        value = dict(version=3, service=service, phase=value['phase'], kind=value['kind'],
+        value = dict(version=4, service=service, phase=value['phase'], kind=value['kind'],
                      last_attempt=value['last_attempt'], delivery=value['delivery'],
-                     failure_fingerprint=fingerprint, recovery_streak=0)
+                     failure_fingerprint=fingerprint, recovery_streak=0,
+                     recovery_started_at=None, recovery_last_success_at=None)
         replace_state(directory, name, value)
     if value['delivery'] == 'pending':
         value['delivery'] = 'unknown'
@@ -314,28 +335,55 @@ def incident(directory, service, mode):
             raise AlertError('state unavailable')
         opened = previous is not None and previous['phase'] == 'open'
         unsent = previous is not None and previous['delivery'] == 'not_sent'
+        default_debounce = '1800' if service == 'shareittoo-health.service' else '0'
+        recovery_debounce = int(os.environ.get('ALERT_RECOVERY_DEBOUNCE_SECONDS', default_debounce))
         if mode == 'recovery':
             if opened:
-                recovery_streak = previous['recovery_streak'] + 1
-                if recovery_streak < 3:
-                    previous['recovery_streak'] = recovery_streak
+                recovery_streak = min(previous['recovery_streak'] + 1, 3)
+                recovery_started_at = (previous['recovery_started_at']
+                                       if previous['recovery_started_at'] is not None else now)
+                if recovery_debounce > 0:
+                    recovery_last_success = previous['recovery_last_success_at']
+                    # OnUnitActiveSec is five minutes; allow the timer's one-minute
+                    # accuracy, 30-second random delay and 30-second execution/host
+                    # reserve. A wider gap cannot prove continuous health.
+                    if (recovery_last_success is None or now <= recovery_last_success
+                            or now - recovery_last_success > 420):
+                        recovery_started_at = now
+                        recovery_streak = 1
+                previous['recovery_streak'] = recovery_streak
+                previous['recovery_started_at'] = recovery_started_at
+                previous['recovery_last_success_at'] = now
+                recovery_elapsed = now - recovery_started_at
+                if recovery_streak < 3 or recovery_elapsed < recovery_debounce:
                     replace_state(directory, name, previous)
-                    print('ShareItToo alert recovery confirmation %d/3 for %s' % (
+                    print('ShareItToo alert recovery pending %d/3 for %s' % (
                         recovery_streak, service))
                     return 0
             elif not unsent:
                 return 0
         if mode == 'failure' and opened:
-            if previous['recovery_streak']:
+            if (previous['recovery_streak'] or previous['recovery_started_at'] is not None
+                    or previous['recovery_last_success_at'] is not None):
                 previous['recovery_streak'] = 0
+                previous['recovery_started_at'] = None
+                previous['recovery_last_success_at'] = None
                 replace_state(directory, name, previous)
             if not unsent:
                 print('ShareItToo alert suppressed open incident for ' + service)
                 return 0
         kind = 'recovery' if mode == 'recovery' else 'failure'
-        state = dict(version=3, service=service, phase='closed' if mode == 'recovery' else 'open',
+        recovery_started = None
+        recovery_last_success = None
+        if mode == 'recovery':
+            previous_start = previous.get('recovery_started_at') if previous is not None else None
+            recovery_started = previous_start if previous_start is not None else now
+            recovery_last_success = now
+        state = dict(version=4, service=service, phase='closed' if mode == 'recovery' else 'open',
                      kind=kind, last_attempt=now, delivery='pending',
-                     failure_fingerprint=fingerprint, recovery_streak=3 if mode == 'recovery' else 0)
+                     failure_fingerprint=fingerprint, recovery_streak=3 if mode == 'recovery' else 0,
+                     recovery_started_at=recovery_started if mode == 'recovery' else None,
+                     recovery_last_success_at=recovery_last_success)
         # Reserve durably before any transport. A crash cannot grant rapid retry.
         replace_state(directory, name, state)
         try:
@@ -361,8 +409,13 @@ def main():
     service = sys.argv[1] if len(sys.argv) >= 2 else ''
     mode = sys.argv[2] if len(sys.argv) >= 3 else 'failure'
     policy = os.environ.get('ALERT_NOTIFICATION_POLICY', 'transitions-only')
+    default_debounce = '1800' if service == 'shareittoo-health.service' else '0'
+    recovery_debounce_text = os.environ.get('ALERT_RECOVERY_DEBOUNCE_SECONDS', default_debounce)
     if (len(sys.argv) > 3 or not re.fullmatch(r'[A-Za-z0-9_.@:-]{1,160}', service)
-            or mode not in ('failure', 'recovery') or policy != 'transitions-only'):
+            or mode not in ('failure', 'recovery') or policy != 'transitions-only'
+            or not re.fullmatch(r'0|[1-9][0-9]{0,5}', recovery_debounce_text)
+            or int(recovery_debounce_text) > 86400
+            or (service != 'shareittoo-health.service' and int(recovery_debounce_text) != 0)):
         print('Invalid alert service, mode or notification policy', file=sys.stderr)
         return 2
     state_dir = os.environ.get('ALERT_STATE_DIR', '/var/lib/shareittoo-alerts')

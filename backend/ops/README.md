@@ -632,21 +632,29 @@ critical notification to `ALERT_EMAIL_TO` (default:
 and calls the adjacent Python 3 stdlib helper `alert_state.py`. The source units
 explicitly select `ALERT_NOTIFICATION_POLICY=transitions-only`, also the helper's
 default and its only accepted policy. An incident gets one immediate failure
-attempt. An unchanged open failure stays quiet indefinitely; elapsed time and a
-new timer invocation do not send reminders. A changed failure class or target
-gets one new attempt. A later verified success gets one recovery attempt, and
-the next failure after that recovery opens a new incident immediately.
-`ALERT_COOLDOWN_SECONDS` no longer determines notification eligibility.
+attempt. Every later failure stays quiet while that incident is open, including
+a changed failure class, health-tag set or target. Recovery requires three
+consecutive verified successes. The health service additionally requires at
+least 1800 seconds of continuous success, with at most 420 seconds between
+success hooks; a failure, non-monotonic timestamp or wider gap restarts that
+window. Backup and restore retain their existing three-success confirmation
+without an additional elapsed-time window. Only confirmed recovery closes the
+incident, after which the next failure opens a new incident immediately. A
+non-zero `ALERT_RECOVERY_DEBOUNCE_SECONDS` is health-only and defaults to 1800
+seconds there. `ALERT_COOLDOWN_SECONDS` no longer determines notification
+eligibility.
 
-Version-2 state binds the exact service, systemd result/exit tuple and, for the
-health service, a sorted set of allowlisted health failure tags. The helper
-resolves the currently failed service with `systemctl show`; health tags must
-come from exactly one failure record in that same invocation's journal. When
-systemd provides `MONITOR_UNIT` and `MONITOR_INVOCATION_ID`, both must match the
-observed target. The invocation ID is an evidence binding, not part of the
-deduplication fingerprint. A reordered tag set stays quiet; changed health tags,
-service target or exit class are distinct transitions. Other service classes
-use their systemd result/exit tuple, not arbitrary stderr text.
+Version-4 state binds the exact service, systemd result/exit tuple, recovery
+streak and the first and latest timestamps in the current healthy window. For
+the health service, the failure fingerprint also contains a sorted set of
+allowlisted health failure tags. The helper resolves the currently failed
+service with `systemctl show`; health tags must come from exactly one failure
+record in that same invocation's journal. When systemd provides `MONITOR_UNIT`
+and `MONITOR_INVOCATION_ID`, both must match the observed target. The invocation
+ID is an evidence binding, not part of the deduplication fingerprint. Reordered
+or changed health tags, service targets and exit classes remain part of the
+already-open incident and do not create a repeat failure attempt. Other service
+classes use their systemd result/exit tuple, not arbitrary stderr text.
 
 Missing, corrupt, non-failed or mismatched invocation evidence fails explicitly
 before SMTP and before claiming suppression. It leaves the previous incident
@@ -665,17 +673,19 @@ immediately. Only started or uncertain transport attempts consume the limit.
 Sanitized failures remain visible in the journal. No SMTP error or credential is
 printed. TLS is required for authenticated and IP-allowlisted relay delivery.
 
-The health unit's best-effort success hook reports recovery. Backup and restore
+The health unit's best-effort success hook advances both the three-success
+confirmation and the health-only continuous-success window. Backup and restore
 scripts call recovery only after verified completion: their lock-busy exit 0 is
-a skipped job, not evidence of recovery. Notification errors do not fail an
-otherwise successful job. Version-1 JSON remains readable without redefining its
-historical schema. A closed, delivered v1 recovery stays unchanged and sends no
-extra recovery mail. A legacy `.last` timestamp is retained unchanged. An open
-v1/legacy incident has no recorded failure class, so its next independently
-classified failure gets one v2 successor attempt; later identical failures stay
-quiet. Malformed state, unsafe permissions, a replaced held lock or state drift
-fails explicitly before sending or claiming suppression. Do not delete state
-to restart alerts, or downgrade v2 state into a v1-only helper.
+a skipped job, not evidence of recovery, and their zero-second debounce remains
+unchanged. Notification errors do not fail an otherwise successful job.
+Version-1, version-2 and version-3 JSON remain readable and migrate
+conservatively to version 4 without carrying a healthy window forward. A
+closed, delivered historical recovery stays closed and sends no extra recovery
+mail. A legacy `.last` timestamp remains an open incident; later failures stay
+suppressed until a confirmed recovery. Malformed state, unsafe permissions, a
+replaced held lock or state drift fails explicitly before sending or claiming
+suppression. Do not delete state to restart alerts or downgrade version-4 state
+into an older helper.
 
 Installing this source requires Python 3 with `fcntl` and directory-fsync support
 on the target Linux host, plus systemctl/journalctl and existing curl/Docker tooling. Source tests do
@@ -709,9 +719,11 @@ Verify installed hashes, the effective transition-only policy and preserved
 sandbox/masks/timers without dumping SMTP environments. Observe the next natural
 timer cycle using only safe journal classifications. Do not call `alert.sh`,
 force a failed check, start a recovery hook or reset incident state to test mail.
-A first installation or timer enablement is a separate operational step. A
-rollback after v2 state exists must use a state-compatible reviewed helper and
-retain that evidence; blindly restoring the old reminder helper is not safe.
+A first installation or timer enablement is a separate operational step. After
+any version-4 state write, rollback must use a reviewed helper that can read and
+preserve version-4 semantics and must retain that evidence. An older helper may
+be restored only before the first natural invocation can migrate or write
+state. Never delete or downgrade incident state during rollback.
 
 ## B10 quality and load acceptance
 

@@ -9,6 +9,7 @@ OnFailure=shareittoo-alert@%n.service
 Type=oneshot
 ExecStart=/docker/shareittoo/backend/ops/healthcheck.sh
 Environment=ALERT_NOTIFICATION_POLICY=transitions-only
+Environment=ALERT_RECOVERY_DEBOUNCE_SECONDS=1800
 ExecStartPost=-/docker/shareittoo/backend/ops/alert.sh %n recovery
 User=root
 Group=root
