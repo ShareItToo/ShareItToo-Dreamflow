@@ -130,6 +130,10 @@ export function webCloneProxyAccessRecord(method, requestPath, status) {
 }
 
 const SYNTHETIC_HEILBRONN_PLACE_ID = 'sit-synthetic-heilbronn-v1';
+const SYNTHETIC_HEILBRONN_AUTOCOMPLETE_INPUTS = new Set([
+  'Heilbronn',
+  'Heilbronn Hauptbahnhof',
+]);
 
 /**
  * Local-only Maps fixture for listing creation. Every Maps request is handled
@@ -158,7 +162,7 @@ export async function resolveWebCloneMapsFixture({
 
   if (parsed.pathname === '/api/v1/maps/places/autocomplete'
       && parsed.searchParams.size === 3
-      && parsed.searchParams.get('input') === 'Heilbronn'
+      && SYNTHETIC_HEILBRONN_AUTOCOMPLETE_INPUTS.has(parsed.searchParams.get('input'))
       && parsed.searchParams.get('language') === 'de'
       && parsed.searchParams.get('country') === 'de') {
     return { status: 200, body: { suggestions: [{

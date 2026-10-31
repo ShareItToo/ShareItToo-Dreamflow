@@ -169,7 +169,11 @@ test('Maps fixture is synthetic, exact-query, principal-bound and fails closed',
   const renterToken = 'synthetic-renter-token';
   const boundPrincipalToken = async (token) => token === 'rotated-owner-token'
     || token === 'rotated-renter-token';
-  const autocomplete = '/api/v1/maps/places/autocomplete?input=Heilbronn&language=de&country=de';
+  const autocompleteInputs = [
+    '/api/v1/maps/places/autocomplete?input=Heilbronn&language=de&country=de',
+    '/api/v1/maps/places/autocomplete?input=Heilbronn+Hauptbahnhof&language=de&country=de',
+  ];
+  const autocomplete = autocompleteInputs[0];
   const details = '/api/v1/maps/places/sit-synthetic-heilbronn-v1?language=de';
 
   assert.equal((await resolveWebCloneMapsFixture({
@@ -180,13 +184,15 @@ test('Maps fixture is synthetic, exact-query, principal-bound and fails closed',
     method: 'GET', requestPath: autocomplete, authorization: 'Bearer other-token',
     ownerToken, renterToken, isBoundPrincipalToken: boundPrincipalToken,
   })).status, 401);
-  const suggestions = await resolveWebCloneMapsFixture({
-    method: 'GET', requestPath: autocomplete, authorization: 'Bearer rotated-owner-token',
-    ownerToken, renterToken, isBoundPrincipalToken: boundPrincipalToken,
-  });
-  assert.deepEqual(suggestions, { status: 200, body: { suggestions: [{
-    description: 'Heilbronn, Deutschland', placeId: 'sit-synthetic-heilbronn-v1',
-  }] } });
+  for (const requestPath of autocompleteInputs) {
+    const suggestions = await resolveWebCloneMapsFixture({
+      method: 'GET', requestPath, authorization: 'Bearer rotated-owner-token',
+      ownerToken, renterToken, isBoundPrincipalToken: boundPrincipalToken,
+    });
+    assert.deepEqual(suggestions, { status: 200, body: { suggestions: [{
+      description: 'Heilbronn, Deutschland', placeId: 'sit-synthetic-heilbronn-v1',
+    }] } });
+  }
   const place = await resolveWebCloneMapsFixture({
     method: 'GET', requestPath: details, authorization: `Bearer ${renterToken}`,
     ownerToken, renterToken, isBoundPrincipalToken: boundPrincipalToken,
@@ -197,6 +203,12 @@ test('Maps fixture is synthetic, exact-query, principal-bound and fails closed',
   } } });
   assert.equal((await resolveWebCloneMapsFixture({
     method: 'GET', requestPath: `${autocomplete}&extra=provider`, authorization: `Bearer ${ownerToken}`,
+    ownerToken, renterToken, isBoundPrincipalToken: boundPrincipalToken,
+  })).status, 404);
+  assert.equal((await resolveWebCloneMapsFixture({
+    method: 'GET',
+    requestPath: '/api/v1/maps/places/autocomplete?input=Neckarsulm&language=de&country=de',
+    authorization: `Bearer ${ownerToken}`,
     ownerToken, renterToken, isBoundPrincipalToken: boundPrincipalToken,
   })).status, 404);
   assert.equal((await resolveWebCloneMapsFixture({
