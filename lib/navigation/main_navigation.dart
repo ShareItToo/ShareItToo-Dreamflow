@@ -16,10 +16,10 @@ import 'package:lendify/services/localization_service.dart';
 import 'package:lendify/widgets/user_avatar.dart';
 import 'package:lendify/navigation/main_nav_controller.dart';
 import 'package:lendify/services/developer_preview_service.dart';
-import 'package:lendify/services/auth_service.dart';
 import 'package:lendify/services/backend_config.dart';
 import 'package:lendify/services/shared_persistence_sync.dart';
 import 'package:lendify/services/contact_verification_service.dart';
+import 'package:lendify/services/session_transition_service.dart';
 import 'package:lendify/widgets/login_nudge_sheet.dart';
 
 bool shouldGateAccountTab({
@@ -60,7 +60,13 @@ Widget mainNavigationTouchTarget(Widget child) {
 
 class MainNavigation extends StatefulWidget {
   final int initialIndex;
-  const MainNavigation({super.key, this.initialIndex = 0});
+  final SessionTransitionService sessionTransitionService;
+
+  const MainNavigation({
+    super.key,
+    this.initialIndex = 0,
+    this.sessionTransitionService = const SessionTransitionService(),
+  });
 
   @override
   State<MainNavigation> createState() => _MainNavigationState();
@@ -73,22 +79,35 @@ class _MainNavigationState extends State<MainNavigation>
   String? _verificationBannerStatus;
   bool _resendingVerification = false;
   StreamSubscription<String>? _profileSubscription;
+  late final SessionTransitionService _sessionTransitions;
+  late final List<Widget> _screens;
+  int _profileLoadRevision = 0;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _sessionTransitions = widget.sessionTransitionService;
+    _screens = [
+      const ExploreScreen(),
+      const RentalCartScreen(),
+      const BookingsScreen(),
+      const MessagesScreen(),
+      ProfileScreen(sessionTransitionService: _sessionTransitions),
+    ];
     _currentIndex = widget.initialIndex.clamp(0, _screens.length - 1);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       context.read<MainNavController>().setIndex(_currentIndex);
     });
-    _loadUser();
+    unawaited(_loadUser());
     _profileSubscription = SharedPersistenceSync.changes.listen((key) {
       if (!mounted || !SharedPersistenceSync.affectsProfileSync(key)) {
         return;
       }
-      _loadUser();
+      unawaited(_loadUser(
+        neutralize: key == SharedPersistenceSync.accountSecurityStateKey,
+      ));
     });
   }
 
@@ -108,15 +127,18 @@ class _MainNavigationState extends State<MainNavigation>
 
   Future<void> _refreshUserAfterResume() async {
     try {
-      final session = await AuthService.readSession();
-      if (session == null) return;
-      final owner = AuthService.captureSessionOwner(session);
+      final session = await _sessionTransitions.readSession();
+      if (session == null) {
+        await _loadUser(neutralize: true);
+        return;
+      }
+      final owner = _sessionTransitions.captureOwner(session);
+      if (!await _sessionTransitions.isOwnerCurrent(owner)) return;
       // Returning from a native picker only refreshes the current profile.
-      // Publishing that read through the account-security channel makes
-      // account-bound editors correctly interpret it as a principal change
-      // and close themselves, even though the same session is still active.
+      // Publish the refreshed profile through the profile-state channel so
+      // mounted identity surfaces re-read the same exact session owner.
       await DataService.syncCurrentUserForSessionOwner(
-        owner,
+        owner.authOwner,
         notificationKey: SharedPersistenceSync.profileStateKey,
       );
       await _loadUser();
@@ -125,16 +147,71 @@ class _MainNavigationState extends State<MainNavigation>
     }
   }
 
-  Future<void> _loadUser() async {
+  Future<void> _loadUser({bool neutralize = false}) async {
+    final revision = ++_profileLoadRevision;
+    final startingEpoch = _sessionTransitions.sessionEpoch;
+    if (neutralize && mounted) {
+      setState(() {
+        _currentUser = null;
+        _verificationBannerStatus = null;
+      });
+    }
     try {
-      final u = await DataService.getCurrentUser();
-      if (mounted) {
-        setState(() {
-          _currentUser = u;
-          if (u?.emailVerified == true) _verificationBannerStatus = null;
-        });
+      final session = await _sessionTransitions.readSession();
+      if (!mounted || revision != _profileLoadRevision) return;
+      if (session == null) {
+        final confirmedEmptyEpoch = _sessionTransitions.sessionEpoch;
+        if (confirmedEmptyEpoch < startingEpoch ||
+            !await _sessionTransitions.isNoSessionEpochCurrent(
+              confirmedEmptyEpoch,
+            ) ||
+            !mounted ||
+            revision != _profileLoadRevision) {
+          return;
+        }
+        setState(() => _currentUser = null);
+        return;
       }
+
+      var owner = _sessionTransitions.captureOwner(session);
+      final user = await _sessionTransitions.currentUserForOwner(owner);
+      if (user == null || !mounted || revision != _profileLoadRevision) {
+        return;
+      }
+      owner = _sessionTransitions.captureOwner(
+        session,
+        profileUserId: user.id,
+      );
+      if (!await _sessionTransitions.isOwnerCurrent(owner) ||
+          !mounted ||
+          revision != _profileLoadRevision) {
+        return;
+      }
+      setState(() {
+        _currentUser = user;
+        if (user.emailVerified) _verificationBannerStatus = null;
+      });
     } catch (_) {}
+  }
+
+  Future<({bool hasSession, model.User? user})> _readAccountTabAccess() async {
+    try {
+      final session = await _sessionTransitions.readSession();
+      if (session == null) return (hasSession: false, user: null);
+      var owner = _sessionTransitions.captureOwner(session);
+      final user = await _sessionTransitions.currentUserForOwner(owner);
+      if (user == null) return (hasSession: true, user: null);
+      owner = _sessionTransitions.captureOwner(
+        session,
+        profileUserId: user.id,
+      );
+      if (!await _sessionTransitions.isOwnerCurrent(owner)) {
+        return (hasSession: false, user: null);
+      }
+      return (hasSession: true, user: user);
+    } catch (_) {
+      return (hasSession: false, user: null);
+    }
   }
 
   Future<void> _resendVerification() async {
@@ -209,46 +286,20 @@ class _MainNavigationState extends State<MainNavigation>
     );
   }
 
-  final List<Widget> _screens = [
-    const ExploreScreen(),
-    const RentalCartScreen(),
-    const BookingsScreen(),
-    const MessagesScreen(),
-    const ProfileScreen(),
-  ];
-
   Widget _navIcon(IconData icon, int index) =>
       _HoveringNavIcon(icon: icon, active: _currentIndex == index);
 
   Widget _buildProfileNavIcon({required bool active}) {
-    return FutureBuilder<AuthSession?>(
-      future: AuthService.readSession(),
-      builder: (context, sessionSnap) {
-        final hasSession = sessionSnap.data != null;
-        if (!hasSession) {
-          return KeyedSubtree(
-            key: ValueKey('profile_guest_${active ? 'active' : 'idle'}'),
-            child: _ProfileNavIcon(photoUrl: null, active: active),
-          );
-        }
-        return FutureBuilder<model.User?>(
-          future: DataService.getCurrentUser(),
-          builder: (context, userSnap) {
-            final user = userSnap.data;
-            final rawPhotoUrl = user?.photoURL?.trim();
-            final photoUrl = rawPhotoUrl != null && rawPhotoUrl.isNotEmpty
-                ? rawPhotoUrl
-                : null;
-            final keySuffix = photoUrl == null
-                ? 'profile_guest_${active ? 'active' : 'idle'}'
-                : 'profile_${user?.id ?? 'unknown'}_${photoUrl}_${active ? 'active' : 'idle'}';
-            return KeyedSubtree(
-              key: ValueKey(keySuffix),
-              child: _ProfileNavIcon(photoUrl: photoUrl, active: active),
-            );
-          },
-        );
-      },
+    final user = _currentUser;
+    final rawPhotoUrl = user?.photoURL?.trim();
+    final photoUrl =
+        rawPhotoUrl != null && rawPhotoUrl.isNotEmpty ? rawPhotoUrl : null;
+    final keySuffix = photoUrl == null
+        ? 'profile_guest_${active ? 'active' : 'idle'}'
+        : 'profile_${user?.id ?? 'unknown'}_${photoUrl}_${active ? 'active' : 'idle'}';
+    return KeyedSubtree(
+      key: ValueKey(keySuffix),
+      child: _ProfileNavIcon(photoUrl: photoUrl, active: active),
     );
   }
 
@@ -300,14 +351,10 @@ class _MainNavigationState extends State<MainNavigation>
             currentIndex: _currentIndex,
             onTap: (index) async {
               final preview = context.read<DeveloperPreviewController>();
-              final session = await AuthService.readSession();
-              final currentUser =
-                  session == null ? null : await DataService.getCurrentUser();
-              if (mounted && _currentUser?.id != currentUser?.id) {
-                setState(() => _currentUser = currentUser);
-              }
+              final accountAccess = await _readAccountTabAccess();
+              final currentUser = accountAccess.user;
               final isGuest = shouldGateAccountTab(
-                hasSession: session != null,
+                hasSession: accountAccess.hasSession,
                 hasCurrentUser: currentUser != null,
                 backendEnabled: BackendConfig.enabled,
                 releaseMode: kReleaseMode,

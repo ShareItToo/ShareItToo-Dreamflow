@@ -114,6 +114,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   int _myListingsCount = 0;
   int _completedBookingsCount = 0;
   bool _isLoading = true;
+  bool _hydrationFailed = false;
   bool _hasNewRequests = false;
   bool _isLoggedOutUser = false;
   bool _hasActiveSession = false;
@@ -391,6 +392,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (owner != null && handle != null) {
       unawaited(_dismissLogoutDialogIfOwnerChanged(owner, handle));
     }
+    // Account changes must synchronously remove the previous principal from
+    // every profile surface. The replacement is published only after _load
+    // has rebound it to the exact current session owner.
+    if (mounted) {
+      setState(() {
+        _user = null;
+        _myListingsCount = 0;
+        _completedBookingsCount = 0;
+        _isLoading = true;
+        _hydrationFailed = false;
+        _hasNewRequests = false;
+        _isLoggedOutUser = false;
+        _hasActiveSession = false;
+      });
+    }
     unawaited(_load());
   }
 
@@ -424,10 +440,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
       debugPrint(st.toString());
       // Keep the exact session-bound cached profile visible while offline.
       // A real logout or mismatched cache continues to fail closed.
-      session ??= await _sessionTransitions.readSession();
-      if (session != null) {
-        owner ??= _sessionTransitions.captureOwner(session);
-        maybeUser = await _sessionTransitions.cachedCurrentUserForOwner(owner);
+      try {
+        session ??= await _sessionTransitions.readSession();
+        if (session != null) {
+          owner ??= _sessionTransitions.captureOwner(session);
+          maybeUser =
+              await _sessionTransitions.cachedCurrentUserForOwner(owner);
+        }
+      } catch (fallbackError) {
+        debugPrint(
+          '[Profile] Session hydration remains unresolved: '
+          '${fallbackError.runtimeType}',
+        );
+        // Unknown auth storage state is not a confirmed guest transition.
+        // Keep the neutral startup surface rather than exposing guest actions.
+        _showHydrationFailure(revision);
+        return;
       }
     }
 
@@ -441,16 +469,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
           !await _sessionTransitions.isNoSessionEpochCurrent(
             confirmedEmptyEpoch,
           )) {
+        _showHydrationFailure(revision);
         return;
       }
     }
+    if (session != null && !hasSession) {
+      _showHydrationFailure(revision);
+      return;
+    }
     if (!hasSession) maybeUser = null;
+    // An existing exact session without a readable matching profile is an
+    // unresolved account load, not evidence that this person is a guest.
+    if (hasSession && maybeUser == null) {
+      _showHydrationFailure(revision);
+      return;
+    }
     if (hasSession && maybeUser != null) {
       owner = _sessionTransitions.captureOwner(
         session,
         profileUserId: maybeUser.id,
       );
-      if (!await _sessionTransitions.isOwnerCurrent(owner)) return;
+      if (!await _sessionTransitions.isOwnerCurrent(owner)) {
+        _showHydrationFailure(revision);
+        return;
+      }
     }
 
     final bool loggedOut = !hasSession || maybeUser == null;
@@ -470,6 +512,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _myListingsCount = 0;
       _completedBookingsCount = 0;
       _isLoading = false;
+      _hydrationFailed = false;
       _hasNewRequests = false;
       _isLoggedOutUser = loggedOut;
       _hasActiveSession = hasSession;
@@ -479,6 +522,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // The session-bound profile is useful immediately, even while offline.
     // Network-backed counters may take longer and update independently.
     unawaited(_loadProfileStats(user, owner!));
+  }
+
+  void _showHydrationFailure(int revision) {
+    if (!mounted || revision != _loadRevision) return;
+    setState(() {
+      _isLoading = false;
+      _hydrationFailed = true;
+    });
+  }
+
+  Future<void> _retryHydration() async {
+    if (!mounted || _isLoading) return;
+    setState(() {
+      _isLoading = true;
+      _hydrationFailed = false;
+    });
+    await _load();
   }
 
   Future<void> _loadProfileStats(
@@ -629,6 +689,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final l10n = context.watch<LocalizationController>();
     context.watch<DeveloperPreviewController>();
+    if (_isLoading) {
+      return Scaffold(
+        key: const ValueKey('profile_auth_hydration_loading'),
+        backgroundColor: Colors.transparent,
+        body: Center(
+          child: Semantics(
+            label: 'Konto wird geladen',
+            child: const CircularProgressIndicator(),
+          ),
+        ),
+      );
+    }
+    if (_hydrationFailed) {
+      return Scaffold(
+        key: const ValueKey('profile_auth_hydration_error'),
+        backgroundColor: Colors.transparent,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.cloud_off_outlined, size: 36),
+                const SizedBox(height: 12),
+                const Text(
+                  'Konto konnte nicht geladen werden.',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: _retryHydration,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Erneut versuchen'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     final isGuest = !_hasActiveSession || _isLoggedOutUser;
     // Never invent account details while the real profile is loading.
     final userForDisplay = _user ?? _guestUser();
