@@ -28,6 +28,35 @@ class _EpochSnapshotFlight {
   const _EpochSnapshotFlight(this.epoch, this.future);
 }
 
+enum BackendListingsSnapshotProvenance {
+  authenticatedPublicAndPrivate,
+  guestPublicOnly,
+}
+
+/// Carries the principal and privacy boundary that owned one listings read.
+/// Rows are copied at both construction and access so callers cannot mutate a
+/// completed repository flight's result.
+class BackendListingsSnapshot {
+  final LocalPrincipalActionOwner owner;
+  final BackendListingsSnapshotProvenance provenance;
+  final List<Map<String, dynamic>> _rows;
+
+  BackendListingsSnapshot._({
+    required this.owner,
+    required this.provenance,
+    required List<Map<String, dynamic>> rows,
+  }) : _rows = rows
+            .map((row) => Map<String, dynamic>.from(row))
+            .toList(growable: false);
+
+  bool get isGuestPublicOnly =>
+      provenance == BackendListingsSnapshotProvenance.guestPublicOnly;
+
+  List<Map<String, dynamic>> copyListings() => _rows
+      .map((row) => Map<String, dynamic>.from(row))
+      .toList(growable: false);
+}
+
 bool isValidTechnicalSandboxRunId(String value) =>
     _technicalSandboxRunIdPattern.hasMatch(value);
 
@@ -662,8 +691,14 @@ class BackendRepository {
   }
 
   static Future<List<Map<String, dynamic>>> getListings() async {
+    final snapshot = await getListingsSnapshot();
+    await snapshot.owner.assertCurrent();
+    return snapshot.copyListings();
+  }
+
+  static Future<BackendListingsSnapshot> getListingsSnapshot() async {
     final owner = await LocalPrincipalActionOwner.capture();
-    return _singleFlightSnapshot<List<Map<String, dynamic>>>(
+    return _singleFlightSnapshot<BackendListingsSnapshot>(
       key: 'listings:${_snapshotPrincipalKey(owner)}',
       epoch: owner.epoch,
       load: () async {
@@ -675,12 +710,9 @@ class BackendRepository {
           if (guestOwner == null) {
             Error.throwWithStackTrace(error, stackTrace);
           }
-          // The public response is safe to use only after confirming that the
-          // captured owner is gone and the replacement guest remains current.
-          await guestOwner.assertCurrent();
-          final result = _copySnapshotRows(publicListings);
-          await guestOwner.assertCurrent();
-          return result;
+          // The captured request is public and unauthenticated. Reusing only
+          // those rows is safe once the replacement guest is confirmed.
+          return _publicListingsSnapshotForGuest(guestOwner, publicListings);
         }
         final byId = <String, Map<String, dynamic>>{
           for (final listing in publicListings)
@@ -696,42 +728,95 @@ class BackendRepository {
               method: 'GET',
               path: '/listings/mine',
             );
+            await owner.assertCurrent();
           } on BackendException catch (error) {
-            if (!_isInvalidSession401(error)) rethrow;
-            final receipt = await AuthService.clearSessionOwnerIfMatches(
-              sessionOwner,
-              runLogoutCleanup: false,
-            );
-            if (receipt == null ||
-                !await AuthService.isSessionClearReceiptCurrent(receipt)) {
-              rethrow;
+            if (_isInvalidSession401(error)) {
+              final receipt = await AuthService.clearSessionOwnerIfMatches(
+                sessionOwner,
+                runLogoutCleanup: false,
+              );
+              if (receipt != null &&
+                  await AuthService.isSessionClearReceiptCurrent(receipt)) {
+                final guestOwner = await _captureConfirmedGuestAfterOwnerLoss(
+                  owner,
+                );
+                if (guestOwner != null &&
+                    guestOwner.epoch == receipt.completionEpoch &&
+                    await AuthService.isSessionClearReceiptCurrent(receipt)) {
+                  return _readGuestPublicListingsSnapshot(guestOwner);
+                }
+              }
             }
-            final guestOwner = await LocalPrincipalActionOwner.capture();
-            if (guestOwner.sessionOwner != null ||
-                guestOwner.epoch != receipt.completionEpoch ||
-                !await AuthService.isSessionClearReceiptCurrent(receipt)) {
-              rethrow;
+            final guestOwner =
+                await _captureConfirmedGuestAfterOwnerLoss(owner);
+            if (guestOwner != null) {
+              return _publicListingsSnapshotForGuest(
+                guestOwner,
+                publicListings,
+              );
             }
-            return _singleFlightSnapshot<List<Map<String, dynamic>>>(
-              key: 'listings:${_snapshotPrincipalKey(guestOwner)}',
-              epoch: guestOwner.epoch,
-              load: () async {
-                final listings = await _readPublicListingsSnapshot();
-                await guestOwner.assertCurrent();
-                return listings;
-              },
+            rethrow;
+          } on StateError catch (error, stackTrace) {
+            final guestOwner = await _captureConfirmedGuestAfterOwnerLoss(
+              owner,
             );
+            if (guestOwner == null) {
+              Error.throwWithStackTrace(error, stackTrace);
+            }
+            return _publicListingsSnapshotForGuest(
+                guestOwner, byId.values.toList());
           }
-          await owner.assertCurrent();
           for (final listing in _maps(mine['listings'])) {
             final id = listing['id']?.toString() ?? '';
             if (id.isNotEmpty) byId[id] = listing;
           }
         }
         await owner.assertCurrent();
-        return byId.values.toList();
+        return BackendListingsSnapshot._(
+          owner: owner,
+          provenance: sessionOwner == null
+              ? BackendListingsSnapshotProvenance.guestPublicOnly
+              : BackendListingsSnapshotProvenance.authenticatedPublicAndPrivate,
+          rows: byId.values.toList(),
+        );
       },
-    ).then(_copySnapshotRows);
+    );
+  }
+
+  static Future<BackendListingsSnapshot> _readGuestPublicListingsSnapshot(
+    LocalPrincipalActionOwner guestOwner,
+  ) {
+    if (guestOwner.sessionOwner != null) {
+      throw StateError('A private listings snapshot requires its exact owner.');
+    }
+    return _singleFlightSnapshot<BackendListingsSnapshot>(
+      key: 'listings:${_snapshotPrincipalKey(guestOwner)}',
+      epoch: guestOwner.epoch,
+      load: () async {
+        final listings = await _readPublicListingsSnapshot();
+        await guestOwner.assertCurrent();
+        return BackendListingsSnapshot._(
+          owner: guestOwner,
+          provenance: BackendListingsSnapshotProvenance.guestPublicOnly,
+          rows: listings,
+        );
+      },
+    );
+  }
+
+  static Future<BackendListingsSnapshot> _publicListingsSnapshotForGuest(
+    LocalPrincipalActionOwner guestOwner,
+    List<Map<String, dynamic>> rows,
+  ) async {
+    if (guestOwner.sessionOwner != null) {
+      throw StateError('A private listings snapshot requires its exact owner.');
+    }
+    await guestOwner.assertCurrent();
+    return BackendListingsSnapshot._(
+      owner: guestOwner,
+      provenance: BackendListingsSnapshotProvenance.guestPublicOnly,
+      rows: rows,
+    );
   }
 
   /// Saved-cart prerequisite read: never adopt B's private listings or refresh

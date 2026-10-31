@@ -517,6 +517,8 @@ class DataService {
   static String? _lastBackendProfileHydrationSessionKey;
   static bool _failNextListingPersistenceForTesting = false;
   static bool _clearSessionDuringNextListingPersistenceForTesting = false;
+  static Future<void> Function(SharedPreferences prefs)?
+      _afterNextListingPersistenceWriteForTesting;
   static bool _failNextReviewPersistenceForTesting = false;
   static bool _failNextAccountProfilePersistenceForTesting = false;
   static bool _clearSessionDuringNextAccountProfilePersistenceForTesting =
@@ -884,6 +886,8 @@ class DataService {
     final encoded = jsonEncode(items.map((item) => item.toJson()).toList());
     _decodeListingsStrict(encoded);
     final previous = prefs.getString(_itemsKey);
+    final afterWrite = _afterNextListingPersistenceWriteForTesting;
+    _afterNextListingPersistenceWriteForTesting = null;
     try {
       await verifyAuthorization?.call();
       if (previous != encoded) {
@@ -893,6 +897,7 @@ class DataService {
         }
       }
       await _writePreferenceString(prefs, _itemsKey, encoded);
+      await afterWrite?.call(prefs);
       if (_clearSessionDuringNextListingPersistenceForTesting) {
         _clearSessionDuringNextListingPersistenceForTesting = false;
         await AuthService.clearSession();
@@ -927,6 +932,13 @@ class DataService {
   @visibleForTesting
   static void clearSessionDuringNextListingPersistenceForTesting() {
     _clearSessionDuringNextListingPersistenceForTesting = true;
+  }
+
+  @visibleForTesting
+  static void afterNextListingPersistenceWriteForTesting(
+    Future<void> Function(SharedPreferences prefs) callback,
+  ) {
+    _afterNextListingPersistenceWriteForTesting = callback;
   }
 
   /// Read-only backend refreshes update the local cache but must not announce
@@ -2285,10 +2297,21 @@ class DataService {
     final prefs = await SharedPreferences.getInstance();
     if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
       try {
-        final remote = await BackendRepository.getListings();
-        final items = _decodeListingsStrict(jsonEncode(remote));
+        final snapshot = await BackendRepository.getListingsSnapshot();
+        final owner = snapshot.owner;
+        if (snapshot.isGuestPublicOnly != (owner.sessionOwner == null)) {
+          throw StateError('Listing snapshot provenance is inconsistent.');
+        }
+        await owner.assertCurrent();
+        final items = _decodeListingsStrict(
+          jsonEncode(snapshot.copyListings()),
+        );
         items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        await _persistListings(prefs, items);
+        await _persistListings(
+          prefs,
+          items,
+          verifyAuthorization: owner.assertCurrent,
+        );
         return items;
       } catch (error) {
         debugPrint('[DataService] remote listings load failed: $error');
