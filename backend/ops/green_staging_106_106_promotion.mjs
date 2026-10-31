@@ -109,15 +109,27 @@ export function canonicalSuccessorSpec(source, image, inputs) {
   }
   if (inputs.config.listingAiTransition) {
     const transition = inputs.config.listingAiTransition;
-    require(transition.schemaVersion === 1 && transition.from === 'on_device' && transition.to === 'staging-mock-v1'
-      && transition.sourceEnvironmentSha256 === inputs.config.envFile.sha256
-      && oldEnv.SIT_LISTING_AI_PROVIDER === 'on_device' && !Object.hasOwn(oldEnv, 'SIT_STAGING_LISTING_AI_PROFILE')
-      && Object.entries(requiredEnvironment).filter(([key]) => listingAiKeys.has(key)).every(([key, value]) => oldEnv[key] === value)
-      && (!Object.hasOwn(oldEnv, 'SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS') || oldEnv.SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS === '0')
-      && (!Object.hasOwn(oldEnv, 'SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID') || oldEnv.SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID === '')
-      && (!oldEnv.OPENAI_API_KEY || oldEnv.OPENAI_API_KEY === '')
-      && (!oldEnv.OPENAI_API_KEY_FILE || oldEnv.OPENAI_API_KEY_FILE === ''),
-    'promotion_provider_modes');
+    require(transition.schemaVersion === 1
+      && ['on_device', 'staging-mock-v1'].includes(transition.from)
+      && transition.to === 'staging-mock-v1'
+      && transition.sourceEnvironmentSha256 === inputs.config.envFile.sha256, 'promotion_provider_modes');
+    if (transition.from === 'staging-mock-v1') {
+      require(Object.entries(stagingMockListingAiValues).every(([key, value]) => oldEnv[key] === value),
+        'promotion_provider_modes');
+      try { assertStagingMockListingAiProfile(oldEnv, { deploymentEnvironment: 'test' }); }
+      catch { require(false, 'promotion_provider_modes'); }
+    } else {
+      require(oldEnv.SIT_LISTING_AI_PROVIDER === 'on_device'
+        && !Object.hasOwn(oldEnv, 'SIT_STAGING_LISTING_AI_PROFILE')
+        && Object.entries(requiredEnvironment).filter(([key]) => listingAiKeys.has(key))
+          .every(([key, value]) => oldEnv[key] === value)
+        && (!Object.hasOwn(oldEnv, 'SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS')
+          || oldEnv.SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS === '0')
+        && (!Object.hasOwn(oldEnv, 'SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID')
+          || oldEnv.SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID === '')
+        && (!oldEnv.OPENAI_API_KEY || oldEnv.OPENAI_API_KEY === '')
+        && (!oldEnv.OPENAI_API_KEY_FILE || oldEnv.OPENAI_API_KEY_FILE === ''), 'promotion_provider_modes');
+    }
     Object.assign(env, stagingMockListingAiValues);
   }
   const changedEnvironmentKeys = new Set([...new Set([...Object.keys(oldEnv), ...Object.keys(env)])]
@@ -127,10 +139,19 @@ export function canonicalSuccessorSpec(source, image, inputs) {
       || immutable.includes(key) || env[key] === value), 'promotion_provider_modes');
   if (env.SIT_STAGING_LISTING_AI_PROFILE === 'staging-mock-v1') {
     const transition = inputs.config.listingAiTransition;
-    require(transition?.schemaVersion === 1 && transition.from === 'on_device' && transition.to === 'staging-mock-v1'
+    require(transition?.schemaVersion === 1
+      && ['on_device', 'staging-mock-v1'].includes(transition.from)
+      && transition.to === 'staging-mock-v1'
       && transition.sourceEnvironmentSha256 === inputs.config.envFile.sha256
-      && oldEnv.SIT_LISTING_AI_PROVIDER === 'on_device' && !Object.hasOwn(oldEnv, 'SIT_STAGING_LISTING_AI_PROFILE')
-      && Object.entries(stagingMockListingAiValues).every(([key, value]) => env[key] === value), 'promotion_provider_modes');
+      && Object.entries(stagingMockListingAiValues).every(([key, value]) => env[key] === value),
+    'promotion_provider_modes');
+    if (transition.from === 'staging-mock-v1') {
+      require(Object.entries(stagingMockListingAiValues).every(([key, value]) => oldEnv[key] === value),
+        'promotion_provider_modes');
+    } else {
+      require(oldEnv.SIT_LISTING_AI_PROVIDER === 'on_device'
+        && !Object.hasOwn(oldEnv, 'SIT_STAGING_LISTING_AI_PROFILE'), 'promotion_provider_modes');
+    }
     try { assertStagingMockListingAiProfile(env, { deploymentEnvironment: 'test' }); }
     catch { require(false, 'promotion_provider_modes'); }
   } else {

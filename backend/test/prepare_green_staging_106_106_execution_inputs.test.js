@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { digest, objectDigest } from '../ops/green_staging_98_106_contract.mjs';
-import { canonicalMounts, containerFingerprint } from '../ops/green_staging_98_106_promotion.mjs';
+import { canonicalMounts, containerFingerprint, requiredEnvironment } from '../ops/green_staging_98_106_promotion.mjs';
 import { physicalSchemaSql } from '../ops/green_staging_106_106_preflight.mjs';
 import { candidateArchive } from './fixtures/green_106106_archive.js';
 import { parseArguments, prepareExecutionInputs, protectedEnvText } from '../ops/prepare_green_staging_106_106_execution_inputs.mjs';
@@ -25,16 +25,21 @@ function protectedJson(root, name, value) {
   return { filename, sha256: digest(bytes) };
 }
 
-function fixture(root, overrides = {}, archiveOptions = {}) {
+function fixture(root, overrides = {}, archiveOptions = {}, { sourceOnDevice = false } = {}) {
   const apiId = id('a'), databaseId = id('d'), apiImage = image('1'), databaseImage = image('2');
   const candidateImage = candidateArchive([], { user: 'shareittoo', ...archiveOptions });
   const candidateImageId = candidateImage.image.Id;
   const candidate = candidateImage.image;
   const runtimeCommit = '1'.repeat(40), opsCommit = '2'.repeat(40);
   const mount = { Type: 'bind', Source: '/staging/secrets/firebase.json', Destination: '/run/secrets/firebase.json', RW: false };
+  const sourceEnvironment = sourceOnDevice
+    ? { ...requiredEnvironment, SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: '0',
+      SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: '', OPENAI_API_KEY: '', OPENAI_API_KEY_FILE: '' }
+    : { NODE_ENV: 'production' };
   const api = { Id: apiId, Name: '/staging-api', Image: apiImage,
     State: { Running: true, Paused: false }, Config: { User: '10001:10001', Env: [
-      'NODE_ENV=production', 'DB_PASSWORD=private-value', 'APP_VERSION=1.0',
+      ...Object.entries(sourceEnvironment).map(([key, value]) => `${key}=${value}`),
+      'DB_PASSWORD=private-value', 'APP_VERSION=1.0',
       `APP_COMMIT=${runtimeCommit}`, 'APP_BUILD_TIME=2026-10-31T00:00:00.000Z'],
       Labels: { 'com.shareittoo.sit.green': 'true' } },
     HostConfig: { GroupAdd: [] }, Mounts: [mount], NetworkSettings: { Networks: {} } };
@@ -98,7 +103,7 @@ test('fresh protected inputs resolve a named candidate user from its exact image
 }));
 
 test('mock opt-in is written into the protected versioned config and binds exact source env bytes', async () => run(async root => {
-  const f = fixture(root);
+  const f = fixture(root, {}, {}, { sourceOnDevice: true });
   const result = await prepareExecutionInputs({ bindingFile: f.bindingFile.filename, bindingSha256: f.bindingFile.sha256,
     targetFile: f.targetFile.filename, targetSha256: f.targetFile.sha256, runId, apiId: f.apiId, evidenceDirectory: root,
     listingAiProfile: 'staging-mock-v1' }, f.dependencies);

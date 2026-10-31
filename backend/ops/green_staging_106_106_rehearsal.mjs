@@ -9,6 +9,7 @@ import { runMfaProbe } from './staging_controlled_acceptance.mjs';
 import { requireBinding as require } from './green_staging_106_106_binding.mjs';
 import { bindExecutionMaterials, executionPreflight, physicalSchemaSql, constraintsSql, writersSql, preflightRead,
   listingAiTransitionBinding, stagingMockListingAiValues } from './green_staging_106_106_preflight.mjs';
+import { assertStagingMockListingAiProfile } from './staging_listing_ai_mock_profile.mjs';
 import { assertRecoveryBaseline, assertSuccessorStartup, decodeSnapshot, snapshotSql } from './green_staging_106_106_database.mjs';
 import { SuccessorDocker, dockerObject, isolatedSpec, supportedCanonicalRestartPolicy } from './green_staging_106_106_resources.mjs';
 import { buildReleaseMetadata } from '../src/release.js';
@@ -205,6 +206,19 @@ export async function runSuccessorRehearsal(inputs, options, dependencies = {}) 
       require(inputs.config.listingAiTransition.to === 'staging-mock-v1'
         && ['SIT_STAGING_PILOT_ID', 'SIT_STAGING_ACCESS_GATE_ENABLED', 'SIT_STAGING_COMPOSE_PROJECT', 'SIT_STAGING_ALLOWED_USER_IDS']
           .every(key => typeof sourceEnv[key] === 'string' && sourceEnv[key].length > 0), 'rehearsal_mock_source_boundary');
+      if (inputs.config.listingAiTransition.from === 'staging-mock-v1') {
+        require(Object.entries(stagingMockListingAiValues).every(([key, value]) => sourceEnv[key] === value),
+          'rehearsal_mock_source_boundary');
+        try { assertStagingMockListingAiProfile(sourceEnv, { deploymentEnvironment: 'test' }); }
+        catch { require(false, 'rehearsal_mock_source_boundary'); }
+      } else {
+        require(inputs.config.listingAiTransition.from === 'on_device'
+          && sourceEnv.SIT_LISTING_AI_PROVIDER === 'on_device'
+          && !Object.hasOwn(sourceEnv, 'SIT_STAGING_LISTING_AI_PROFILE')
+          && (!sourceEnv.OPENAI_API_KEY || sourceEnv.OPENAI_API_KEY === '')
+          && (!sourceEnv.OPENAI_API_KEY_FILE || sourceEnv.OPENAI_API_KEY_FILE === ''),
+        'rehearsal_mock_source_boundary');
+      }
       const probeIdentity = rehearsalProbeIdentity(inputs.config.runId, sourceEnv.SIT_STAGING_ALLOWED_USER_IDS);
       Object.assign(neutral, Object.fromEntries(['SIT_STAGING_PILOT_ID', 'SIT_STAGING_COMPOSE_PROJECT', 'SIT_STAGING_ALLOWED_USER_IDS']
         .map(key => [key, sourceEnv[key]])), stagingMockListingAiValues, { SIT_STAGING_ACCESS_GATE_ENABLED: 'true',

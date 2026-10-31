@@ -418,11 +418,16 @@ disabled, and readiness reports `productionEligible=false` with
 
 For the 106-to-106 successor runner specifically, the execution-input
 preparation command defaults to `on_device`; only an explicit
-`--listing-ai-profile staging-mock-v1` creates a protected transition bound to
-the source environment bytes. The preflight, isolated rehearsal, promotion
-receipt and promotion lock all carry that transition binding, and runtime
+`--listing-ai-profile staging-mock-v1` creates a protected source-aware binding
+to the exact source environment bytes. It records either the first
+`on_device` to `staging-mock-v1` transition or preservation of an already exact
+`staging-mock-v1` source. Preservation accepts no provider, budget, activation,
+key or other environment drift; only `APP_VERSION`, `APP_COMMIT` and
+`APP_BUILD_TIME` may change in the canonical successor. The preflight, isolated
+rehearsal, promotion receipt and promotion lock carry that binding, and runtime
 health/readiness must confirm the mock model and synthetic-only boundary.
-Omitting the option leaves the current `on_device` successor unchanged.
+Omitting the option keeps the existing `on_device` path; an existing mock
+source then lacks the binding required for mock promotion and fails closed.
 
 Existing `on_device` remains the default Green profile. OpenAI stays behind its
 separate secret, budget and receipt gates. The Green runner's atomic rollback

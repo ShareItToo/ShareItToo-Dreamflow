@@ -25,7 +25,9 @@ export function listingAiTransitionBinding(config) {
   const transition = config.listingAiTransition ?? null;
   if (transition === null) return { listingAiTransitionSha256: objectDigest(null), sourceEnvironmentSha256: config.envFile.sha256 };
   exact(transition, ['schemaVersion', 'from', 'to', 'sourceEnvironmentSha256'], 'listing_ai_transition');
-  require(transition.schemaVersion === 1 && transition.from === 'on_device' && transition.to === 'staging-mock-v1'
+  require(transition.schemaVersion === 1
+    && ['on_device', 'staging-mock-v1'].includes(transition.from)
+    && transition.to === 'staging-mock-v1'
     && hash(transition.sourceEnvironmentSha256) && transition.sourceEnvironmentSha256 === config.envFile.sha256,
   'listing_ai_transition');
   return { listingAiTransitionSha256: objectDigest(transition), sourceEnvironmentSha256: transition.sourceEnvironmentSha256 };
@@ -160,6 +162,18 @@ export function bindExecutionMaterials(config, api, candidate, io = fs) {
     }
     else {
       require(equal([...protectedSource].sort(), [...effective].sort()), 'material_environment_incomplete');
+      const preservingMock = transition.from === 'staging-mock-v1';
+      if (preservingMock) {
+        const sourceMockTuple = Object.fromEntries(Object.keys(mockListingAiValues)
+          .map(key => [key, protectedSource.get(key)]));
+        require(equal(sourceMockTuple, mockListingAiValues), 'material_environment_transition');
+        try { assertStagingMockListingAiProfile(Object.fromEntries(protectedSource), { deploymentEnvironment: 'test' }); }
+        catch { require(false, 'material_environment_transition'); }
+      } else {
+        require(transition.from === 'on_device'
+          && effective.get('SIT_LISTING_AI_PROVIDER') === 'on_device'
+          && !effective.has('SIT_STAGING_LISTING_AI_PROFILE'), 'material_environment_transition');
+      }
       for (const [key, value] of protectedSource) merged.set(key, value);
       for (const [key, value] of Object.entries(mockListingAiValues)) merged.set(key, value);
       const changed = new Set([...new Set([...effective.keys(), ...merged.keys()])]
@@ -169,8 +183,11 @@ export function bindExecutionMaterials(config, api, candidate, io = fs) {
       try { assertStagingMockListingAiProfile({ ...Object.fromEntries(effective), ...Object.fromEntries(merged) }, { deploymentEnvironment: 'test' }); }
       catch { require(false, 'material_environment_transition'); }
       require(digest(Buffer.from(envBytes, 'utf8')) === transition.sourceEnvironmentSha256
-        && effective.get('SIT_LISTING_AI_PROVIDER') === 'on_device'
-        && !effective.has('SIT_STAGING_LISTING_AI_PROFILE'),
+        && (preservingMock
+          ? effective.get('SIT_STAGING_LISTING_AI_PROFILE') === 'staging-mock-v1'
+            && effective.get('SIT_LISTING_AI_PROVIDER') === 'mock'
+          : effective.get('SIT_LISTING_AI_PROVIDER') === 'on_device'
+            && !effective.has('SIT_STAGING_LISTING_AI_PROFILE')),
       'material_environment_transition');
     }
     held.forEach(stable);

@@ -4,13 +4,15 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { digest, equal, objectDigest, readProtectedJson } from './green_staging_98_106_contract.mjs';
 import { privateDirectory, recheckDirectory, assertArtifactFamily } from './green_staging_98_106_evidence.mjs';
-import { canonicalMounts, containerFingerprint } from './green_staging_98_106_promotion.mjs';
+import { canonicalMounts, containerFingerprint, requiredEnvironment } from './green_staging_98_106_promotion.mjs';
 import { physicalSchemaSql, validateExecutionInputs } from './green_staging_106_106_preflight.mjs';
 import { validateSuccessorSource, requireBinding as require } from './green_staging_106_106_binding.mjs';
 import { verifyCollectedTarget } from './green_staging_106_106_collector.mjs';
 import { strictSupplementalGroups } from './green_staging_106_106_resources.mjs';
 import { readCandidateArchive } from './green_staging_106_106_image.mjs';
 import { preflightRead } from './green_staging_106_106_preflight.mjs';
+import { stagingMockListingAiValues } from './green_staging_106_106_preflight.mjs';
+import { assertStagingMockListingAiProfile, parseListingAiEnvironment } from './staging_listing_ai_mock_profile.mjs';
 
 const hash = value => typeof value === 'string' && /^[a-f0-9]{64}$/u.test(value);
 const commit = value => typeof value === 'string' && /^[a-f0-9]{40}$/u.test(value);
@@ -36,6 +38,35 @@ export function protectedEnvText(entries) {
   }
   require(lines.length > 0, 'runtime_environment_empty');
   return Buffer.from(`${lines.join('\n')}\n`, 'utf8');
+}
+
+export function listingAiTransitionForSource(entries, requestedProfile, sourceEnvironmentSha256) {
+  if (requestedProfile === undefined) return null;
+  require(requestedProfile === 'staging-mock-v1' && hash(sourceEnvironmentSha256), 'listing_ai_profile');
+  const source = parseListingAiEnvironment(entries);
+  const sourceIsMock = Object.hasOwn(source, 'SIT_STAGING_LISTING_AI_PROFILE')
+    || source.SIT_LISTING_AI_PROVIDER === 'mock';
+  if (sourceIsMock) {
+    require(Object.entries(stagingMockListingAiValues)
+      .every(([key, value]) => source[key] === value), 'listing_ai_source_mock_profile');
+    try { assertStagingMockListingAiProfile(source, { deploymentEnvironment: 'test' }); }
+    catch { require(false, 'listing_ai_source_mock_profile'); }
+    return { schemaVersion: 1, from: 'staging-mock-v1', to: 'staging-mock-v1', sourceEnvironmentSha256 };
+  }
+  const listingAiKeys = new Set(['SIT_LISTING_AI_PROVIDER', 'SIT_LISTING_AI_MODEL', 'SIT_LISTING_AI_BUDGET_CENTS',
+    'SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', 'SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS',
+    'SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID', 'SIT_STAGING_LISTING_AI_PROFILE', 'OPENAI_API_KEY', 'OPENAI_API_KEY_FILE']);
+  require(source.SIT_LISTING_AI_PROVIDER === 'on_device'
+    && !Object.hasOwn(source, 'SIT_STAGING_LISTING_AI_PROFILE')
+    && Object.entries(requiredEnvironment).filter(([key]) => listingAiKeys.has(key))
+      .every(([key, value]) => source[key] === value)
+    && (!Object.hasOwn(source, 'SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS')
+      || source.SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS === '0')
+    && (!Object.hasOwn(source, 'SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID')
+      || source.SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID === '')
+    && (!source.OPENAI_API_KEY || source.OPENAI_API_KEY === '')
+    && (!source.OPENAI_API_KEY_FILE || source.OPENAI_API_KEY_FILE === ''), 'listing_ai_source_on_device');
+  return { schemaVersion: 1, from: 'on_device', to: 'staging-mock-v1', sourceEnvironmentSha256 };
 }
 
 export function readSourceMaterial(source, { io = fs, maxBytes = 1024 * 1024 } = {}) {
@@ -194,8 +225,7 @@ export async function prepareExecutionInputs({ bindingFile, bindingSha256, targe
   const config = { kind: 'sit-green-staging-106-106-execution-config', schemaVersion: 2,
     sourceState: 'running', sealedSourceName: `sit-green-106-106-sealed-${runId}`, runId, uid, gid,
     materials, envFile: { source: envPath, destination: null, sha256: digest(envBytes), uid: 0, gid: 0, mode: 0o600 },
-    listingAiTransition: listingAiProfile === 'staging-mock-v1'
-      ? { schemaVersion: 1, from: 'on_device', to: 'staging-mock-v1', sourceEnvironmentSha256: digest(envBytes) } : null };
+    listingAiTransition: listingAiTransitionForSource(api.Config.Env, listingAiProfile, digest(envBytes)) };
   const dbArgs = ['exec', '-i', binding.scope.database.id, 'psql', '-X', '-q', '-At', '-v',
     'ON_ERROR_STOP=1', '-U', binding.scope.databaseUser, '-d', binding.scope.databaseName];
   const physicalSchemaSha256 = String(await read({ args: dbArgs, input: physicalSchemaSql })).trim();

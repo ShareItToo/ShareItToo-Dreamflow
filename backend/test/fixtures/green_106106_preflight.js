@@ -3,13 +3,26 @@ import fs from "node:fs";
 import { digest, objectDigest } from "../../ops/green_staging_98_106_contract.mjs";
 import { collectSuccessor } from "../../ops/green_staging_106_106_collector.mjs";
 import { physicalSchemaSql, writersSql, constraintsSql, bindExecutionMaterials } from "../../ops/green_staging_106_106_preflight.mjs";
+import { stagingMockListingAiValues } from "../../ops/green_staging_106_106_preflight.mjs";
 import { protectedEnvText } from "../../ops/prepare_green_staging_106_106_execution_inputs.mjs";
 import { fixture, hex } from "./green_106106_readonly.js";
 import { candidateArchive } from "./green_106106_archive.js";
-export async function inputs({ listingAiMock = false } = {}) {
+export async function inputs({ listingAiMock = false, listingAiSourceMock = false } = {}) {
+  assert.ok(!listingAiSourceMock || listingAiMock);
   const f = fixture();
-  if (listingAiMock) f.records[hex(1)].Config.Env.push('SIT_STAGING_PILOT_ID=heilbronn_wave0', 'SIT_STAGING_COMPOSE_PROJECT=sit-green',
-    'DATABASE_URL=postgresql://synthetic:synthetic@canonical-db:5432/synthetic');
+  if (listingAiMock) {
+    const apiEnv = f.records[hex(1)].Config.Env;
+    apiEnv.push('SIT_STAGING_PILOT_ID=heilbronn_wave0', 'SIT_STAGING_COMPOSE_PROJECT=sit-green',
+      'DATABASE_URL=postgresql://synthetic:synthetic@canonical-db:5432/synthetic');
+    if (listingAiSourceMock) {
+      const keys = new Set(Object.keys(stagingMockListingAiValues));
+      f.records[hex(1)].Config.Env = apiEnv.filter(entry => !keys.has(entry.slice(0, entry.indexOf('=')))
+        && !entry.startsWith('SIT_STAGING_LISTING_AI_PROFILE='));
+      Object.entries(stagingMockListingAiValues).forEach(([key, value]) => {
+        f.records[hex(1)].Config.Env.push(`${key}=${value}`);
+      });
+    }
+  }
   const c = candidateArchive(f.records[hex(1)].Config.Env);
   f.binding.candidateImageId = c.image.Id; f.records[c.image.Id] = c.image;
   const bytes = Buffer.from('synthetic-runtime-material'), firebaseBytes = Buffer.from('{"synthetic":true}'),
@@ -25,7 +38,8 @@ export async function inputs({ listingAiMock = false } = {}) {
   const config = { kind: 'sit-green-staging-106-106-execution-config', schemaVersion: listingAiMock ? 2 : 1,
     sourceState: 'running', sealedSourceName: 'sit-green-106-106-sealed-synthetic-run', runId: 'synthetic-run', uid: 10001, gid: 10001,
     materials: [material, firebase], envFile: { source: '/private/sit-preflight/env', destination: null, sha256: digest(env), uid: 0, gid: 0, mode: 0o600 },
-    ...(listingAiMock ? { listingAiTransition: { schemaVersion: 1, from: 'on_device', to: 'staging-mock-v1',
+    ...(listingAiMock ? { listingAiTransition: { schemaVersion: 1,
+      from: listingAiSourceMock ? 'staging-mock-v1' : 'on_device', to: 'staging-mock-v1',
       sourceEnvironmentSha256: digest(env) } } : {}) };
   const manifest = { kind: 'sit-green-staging-106-106-runtime', schemaVersion: 1, opsCommit: f.binding.opsCommit,
     runtimeCommit: f.binding.runtimeCommit, bindingSha256: objectDigest(f.binding), targetSha256: objectDigest(target),

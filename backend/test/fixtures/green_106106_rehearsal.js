@@ -9,8 +9,10 @@ import { hex } from './green_106106_readonly.js';
 import { buildReleaseMetadata } from '../../src/release.js';
 
 // Strict stateful Docker/SQL adapter; synthetic proof only, no daemon calls.
-export async function rehearsalFixture(directory, { restartPolicy = 'no', databaseRestartPolicy = 'no', listingAiMock = false } = {}) {
-  const s = await inputs({ listingAiMock }), records = s.f.records, source = records[hex(1)], dbSource = records[hex(2)];
+export async function rehearsalFixture(directory, { restartPolicy = 'no', databaseRestartPolicy = 'no',
+  listingAiMock = false, listingAiSourceMock = false } = {}) {
+  const s = await inputs({ listingAiMock, listingAiSourceMock }), records = s.f.records,
+    source = records[hex(1)], dbSource = records[hex(2)];
   source.HostConfig.RestartPolicy = { Name: restartPolicy, MaximumRetryCount: 0 };
   dbSource.HostConfig.RestartPolicy = { Name: databaseRestartPolicy, MaximumRetryCount: 0 };
   s.config.materials[0].destination = source.Mounts[1].Destination = '/run/secrets/mfa-encryption-key';
