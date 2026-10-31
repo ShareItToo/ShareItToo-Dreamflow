@@ -243,6 +243,7 @@ test('protected intent binds both prior policies before the first exact-ID updat
 }));
 test('receipt rejects wrong commit/hash/snapshot/probes/freshness and payment-mode drift', async () => scoped(async f => {
   for (const mutate of [r => { r.opsCommit = '0'.repeat(40); }, r => { r.backupSha256 = 'bad'; },
+    r => { delete r.restoreVerified; }, r => { r.restoreVerified = false; },
     r => { r.cleanupVerified = false; }, r => { r.source.data.business.users.count++; },
     r => { r.probes.identity = 'not_run'; }, r => { r.createdAt = '2020-01-01T00:00:00Z'; },
     r => { r.createdAt = new Date(Date.now() + 100000).toISOString(); }]) {

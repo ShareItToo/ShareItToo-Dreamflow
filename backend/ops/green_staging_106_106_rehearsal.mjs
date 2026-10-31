@@ -161,6 +161,7 @@ export async function runSuccessorRehearsal(inputs, options, dependencies = {}) 
     return record;
   };
   let backup, materials, error, cleanupError, result, candidate, candidateDiagnostic;
+  let restoreVerified = false;
   let stage = 'namespace_prerequisites', candidateSubstage = null;
   let lastReadiness = { code: 'not_attempted', statuses: emptyStatuses(), attempts: 0 };
   try {
@@ -240,6 +241,7 @@ export async function runSuccessorRehearsal(inputs, options, dependencies = {}) 
     require(equal(await snapshot(db.id), before) && await auxiliary(db.id) === beforeAux
       && await sql(db.id, physicalSchemaSql, 'isolated_schema') === inputs.manifest.physicalSchemaSha256
       && await sql(db.id, constraintsSql, 'isolated_constraints') === '0', 'rehearsal_restore_mismatch');
+    restoreVerified = true;
     assertCredentialCleanupEligible(await sql(db.id, credentialCleanupEligibilitySql, 'credential_cleanup_eligibility'));
     const databaseRecord = await owned.inspect('container', db.id); owned.assertOwned(databaseRecord, db);
     const address = databaseRecord.NetworkSettings.Networks[network.name].IPAddress;
@@ -303,6 +305,7 @@ export async function runSuccessorRehearsal(inputs, options, dependencies = {}) 
       && await sql(sourceDb.id, physicalSchemaSql, 'source_schema') === inputs.manifest.physicalSchemaSha256, 'rehearsal_source_final');
     await executionPreflight(sealedInputs, { command, sourceOptions: dependencies.sourceOptions, materials: dependencies.materials, now });
     result = { kind: 'sit-green-staging-106-106-rehearsal', schemaVersion: 1, status: 'passed',
+      restoreVerified,
       runtimeCommit: inputs.binding.runtimeCommit, opsCommit: inputs.binding.opsCommit, preflightSha256: options.preflightSha256,
       targetSha256: inputs.manifest.targetSha256, configSha256: inputs.manifest.configSha256,
       backupSha256: backupBinding.sha256, materialBindingSha256: materials.sha256,
@@ -331,7 +334,7 @@ export async function runSuccessorRehearsal(inputs, options, dependencies = {}) 
       : stage === 'candidate_start' ? 'candidate_start_failed'
         : stage === 'candidate_readiness' ? 'candidate_readiness_failed' : 'rehearsal_failed';
     writeArtifact(evidence, names[2], { kind: 'sit-green-staging-106-106-rehearsal-failure', schemaVersion: 1,
-      status: 'failed', stage, code, cleanupVerified: !cleanupError,
+      status: 'failed', stage, code, cleanupVerified: !cleanupError, restoreVerified: false,
       candidateSubstage: ['start', 'readiness', 'snapshot', 'aux', 'schema'].includes(candidateSubstage) ? candidateSubstage : null,
       ...(candidateDiagnostic ? { candidateDiagnostic } : {}),
       oldImageRestarted: false, canonicalPromotionImplemented: false, publicReleaseComplete: false });

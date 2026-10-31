@@ -68,6 +68,7 @@ export function validatePromotionReceipt(receipt, inputs, now, { allowExpired = 
     && receipt.physicalSchemaSha256 === inputs.manifest.physicalSchemaSha256
     && receipt.materialBindingSha256 === objectDigest({ materials: inputs.config.materials, envFile: inputs.config.envFile })
     && ['backupSha256', 'preflightSha256', 'auxiliarySha256'].every(k => hash(receipt[k]))
+    && receipt.restoreVerified === true
     && ['namespaceReadabilityVerified', 'fixtureCleanupVerified', 'cleanupVerified', 'servicesRemainSealed'].every(k => receipt[k] === true)
     && receipt.canonicalPromotionImplemented === false && receipt.publicReleaseComplete === false
     && receipt.providerTraffic === false, 'promotion_receipt');

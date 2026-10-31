@@ -26,6 +26,7 @@ test('isolated lifecycle seals by exact ID, verifies backup/restore106/startup/p
   assert.equal(owned(f).length, 0); assert.deepEqual([...f.volumes], ['green-uploads']);
   assert.deepEqual(f.states.get(f.dbSource.Id), baseline); assert.equal(f.open.size, 0);
   const receipt = JSON.parse(fs.readFileSync(path.join(directory, 'synthetic-run.rehearsal.json')));
+  assert.equal(receipt.restoreVerified, true);
   for (const field of ['cleanupVerified', 'fixtureCleanupVerified', 'namespaceReadabilityVerified', 'servicesRemainSealed']) assert.equal(receipt[field], true);
   assert.equal(receipt.canonicalPromotionImplemented, false);
   const starts = f.calls.filter(c => c.args[0] === 'start'); assert.ok(starts.length > 0);
@@ -121,6 +122,7 @@ test('prerequisite/start/probe failures never restart the source and leave no ow
     assert.ok(!f.calls.some(c => c.args[0] === 'start' && c.args[1] === f.source.Id));
     assert.ok(!fs.existsSync(path.join(directory, 'synthetic-run.rehearsal.json')));
     assert.equal(JSON.parse(fs.readFileSync(path.join(directory, 'synthetic-run.failure.json'))).cleanupVerified, true);
+    if (phase === 'restore106') assert.equal(JSON.parse(fs.readFileSync(path.join(directory, 'synthetic-run.failure.json'))).restoreVerified, false);
   }));
 });
 test('foreign network member prevents progress and cleanup failure overrides all successful checks', async () => scoped(async (f, directory) => {
