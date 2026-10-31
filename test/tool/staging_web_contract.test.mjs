@@ -9,6 +9,11 @@ import { fileURLToPath } from 'node:url';
 import { TARGET, profile, cleanSource, sealArtifact, validateArtifact, deploy, sha256, stagingBootstrap, stagingBootstrapFor, retirementWorker } from '../../tool/staging_web_contract.mjs';
 import { GOOGLE_WEB_PROFILE_V2 } from '../../tool/staging_google_web_readiness.mjs';
 import { syntheticGoogleBinding } from './staging_google_web_readiness_fixture.mjs';
+import { bindListingAiMockWebReadiness, LISTING_AI_MOCK_WEB_PROFILE } from '../../tool/staging_listing_ai_mock_web_readiness.mjs';
+import { syntheticListingAiMockWebEvidence } from './staging_listing_ai_mock_web_readiness_fixture.mjs';
+import { bindListingAiWebReadiness } from '../../tool/staging_listing_ai_web_readiness.mjs';
+import { syntheticListingAiWebEvidence } from './staging_listing_ai_web_readiness_fixture.mjs';
+import { validateMockForwardCandidate } from '../../tool/staging_web_mock_forward.mjs';
 import { buildArchive, verifyArchive } from '../../tool/staging_web_archive.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -21,10 +26,10 @@ function fixture(t, googleWeb = null) {
   git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-m', 'fixture');
   const source = git('rev-parse', 'HEAD');
   const googleBinding = typeof googleWeb === 'function' ? googleWeb(source) : googleWeb;
-  function artifact(name, version = '1.0.0+2026092905', binding = null) {
+  function artifact(name, version = '1.0.0+2026092905', binding = null, listingAi = null) {
     const directory = path.join(temp, name); fs.mkdirSync(path.join(directory, 'web'), { recursive: true });
     for (const [file, text] of Object.entries({ 'index.html': '<script src="flutter_bootstrap.js" async></script>', 'main.dart.js': 'compiled fixture', 'manifest.json': '{"name":"ShareItToo"}', 'flutter_bootstrap.js': '_flutter.loader.load();' })) fs.writeFileSync(path.join(directory, 'web', file), text);
-    const hash = sealArtifact({ directory, source, version, flutterVersion: { frameworkVersion: 'fixture' }, builderDigest: 'a'.repeat(64), googleWeb: binding });
+    const hash = sealArtifact({ directory, source, version, flutterVersion: { frameworkVersion: 'fixture' }, builderDigest: 'a'.repeat(64), googleWeb: binding, listingAiWeb: listingAi });
     return { directory, hash };
   }
   const old = artifact('old', '1.0.0+2026092904'); const candidate = artifact('candidate', undefined, googleBinding);
@@ -32,7 +37,7 @@ function fixture(t, googleWeb = null) {
   fs.cpSync(old.directory, path.join(root, 'releases', old.hash), { recursive: true });
   fs.symlinkSync(`releases/${old.hash}/web`, path.join(root, 'current'));
   const args = { root, target: TARGET, artifact: candidate.directory, manifestHash: candidate.hash, sourceRoot, source, currentHash: old.hash, verify: () => {} };
-  return { temp, root, old, candidate, args, sourceRoot, source, googleBinding };
+  return { temp, root, old, candidate, args, sourceRoot, source, googleBinding, artifact };
 }
 
 function googleHandoff(t) {
@@ -149,6 +154,54 @@ test('preflight has no filesystem mutation; execution preserves validated rollba
   assert.equal(fs.readlinkSync(path.join(f.root, 'current')), `releases/${f.candidate.hash}/web`);
   assert.equal(fs.readlinkSync(path.join(f.root, 'previous')), `releases/${f.old.hash}/web`);
   validateArtifact(path.join(f.root, 'releases', f.old.hash), f.old.hash);
+});
+test('mock forward path accepts only zero-cost mock and uses the retained previous release for rollback', (t) => {
+  const f = fixture(t); const now = new Date();
+  const evidence = syntheticListingAiMockWebEvidence(f.source, '1.0.0+2026092905', { now });
+  const binding = bindListingAiMockWebReadiness(evidence.evidence, evidence.digest, {
+    now, expectedSource: f.source, expectedVersion: '1.0.0+2026092905',
+  });
+  const failedMock = f.artifact('mock-forward-failure-candidate', undefined, null, binding);
+  const manifest = validateMockForwardCandidate(failedMock.directory, failedMock.hash, f.source);
+  assert.equal(manifest.listingAiWebProfileVersion, LISTING_AI_MOCK_WEB_PROFILE);
+  assert.equal(validateMockForwardCandidate(failedMock.directory, failedMock.hash, f.source).profile.SIT_API_BASE_URL,
+    `${TARGET}/api/v1`);
+  const before = fs.readdirSync(f.root);
+  const failedForward = { ...f.args, artifact: failedMock.directory, manifestHash: failedMock.hash };
+  assert.equal(deploy(failedForward).status, 'preflight-passed-no-mutation');
+  assert.deepEqual(fs.readdirSync(f.root), before);
+  assert.throws(() => deploy({ ...failedForward, execute: true,
+    verify: () => { throw Error('mock_static_readback_failed'); } }), /mock_static_readback_failed/u);
+  assert.equal(fs.readlinkSync(path.join(f.root, 'current')), `releases/${f.old.hash}/web`);
+  assert.equal(fs.existsSync(path.join(f.root, '.deployment-lock')), false);
+  const retryVersion = '1.0.0+2026092906';
+  const retryEvidence = syntheticListingAiMockWebEvidence(f.source, retryVersion, { now });
+  const retryBinding = bindListingAiMockWebReadiness(retryEvidence.evidence, retryEvidence.digest, {
+    now, expectedSource: f.source, expectedVersion: retryVersion,
+  });
+  const mock = f.artifact('mock-forward-retry-candidate', retryVersion, null, retryBinding);
+  const forward = { ...f.args, artifact: mock.directory, manifestHash: mock.hash };
+  assert.equal(deploy({ ...forward, execute: true }).status, 'deployed');
+  assert.equal(fs.readlinkSync(path.join(f.root, 'previous')), `releases/${f.old.hash}/web`);
+  const rollback = { ...forward, artifact: f.old.directory, manifestHash: f.old.hash,
+    currentHash: mock.hash, rollback: true };
+  assert.equal(deploy({ ...rollback, execute: true }).status, 'deployed');
+  assert.equal(fs.readlinkSync(path.join(f.root, 'current')), `releases/${f.old.hash}/web`);
+  assert.equal(fs.readlinkSync(path.join(f.root, 'previous')), `releases/${mock.hash}/web`);
+});
+test('mock forward path rejects disabled assistant and external OpenAI profiles', (t) => {
+  const f = fixture(t);
+  assert.throws(() => validateMockForwardCandidate(f.candidate.directory, f.candidate.hash, f.source),
+    /mock_forward_profile_required/u);
+  const now = new Date();
+  const external = syntheticListingAiWebEvidence(f.source, '1.0.0+2026092905', { now });
+  // The externally reviewed artifact remains valid to its original generic
+  // contract but cannot enter this mock-only forward lane.
+  const externalBinding = bindListingAiWebReadiness(external.evidence, external.digest,
+    { now, expectedSource: f.source, expectedVersion: '1.0.0+2026092905' });
+  const externalArtifact = f.artifact('external-openai-candidate', undefined, null, externalBinding);
+  assert.throws(() => validateMockForwardCandidate(externalArtifact.directory,
+    externalArtifact.hash, f.source), /mock_forward_profile_required/u);
 });
 for (const target of ['https://shareittoo.com', 'https://www.shareittoo.com', 'http://staging.shareittoo.com', `${TARGET}/`, 'https://staging.shareittoo.com.evil.invalid']) {
   test(`refuse non-exact target ${target}`, (t) => assert.throws(() => deploy({ ...fixture(t).args, target }), /target_forbidden/));

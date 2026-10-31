@@ -32,3 +32,31 @@ profile schema plus readiness, configuration, capability, decision and
 validation-time digests. Candidate validation checks freshness again before
 deployment. Artifact, archive, deployment and served release-identity readbacks
 revalidate the evidence binding and profile digest.
+
+## Synthetic mock forward path
+
+For the private Staging Web pilot, use the separate
+`tool/deploy_staging_web_mock_forward.mjs` entry point with an artifact built
+using `--listing-ai-mock-web-readiness`. It accepts only the
+`staging-listing-ai-mock-web-v1` profile and revalidates its authenticated
+readiness through `staging_listing_ai_mock_web_readiness.mjs`: environment
+`staging`, provider/model `mock`/`listing-ai-mock-v1`, zero-cent budget,
+external-provider execution disabled, automatic publication disabled, and
+`productionEligible=false`. The destination and API are fixed to the Staging
+origin. The entry point probes static release bytes only; it does not call the
+API or an AI provider.
+
+Default invocation is a no-mutation preflight. Add `--execute` only when the
+Staging change is separately authorized. The existing deployment transaction
+retains the current release as `previous`, switches `current` atomically, and
+restores the old pointer if served static readback fails. To recover after a
+successful switch, use the normal `deploy_staging_web.mjs` rollback flow with
+the exact retained prior artifact and both manifest hashes. OpenAI readiness
+continues through the existing generic path and is not accepted by this
+mock-only entry point; on-device behavior is outside this Web deploy path.
+
+```sh
+node tool/deploy_staging_web_mock_forward.mjs https://staging.shareittoo.com \
+  ABS_CLEAN_SOURCE EXACT_HEAD ABS_MOCK_ARTIFACT MOCK_MANIFEST_SHA CURRENT_MANIFEST_SHA
+# After separate deployment authorization, append --execute.
+```
