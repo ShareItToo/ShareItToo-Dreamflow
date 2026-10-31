@@ -9,6 +9,7 @@ import 'package:lendify/services/auth_service.dart';
 import 'package:lendify/services/developer_preview_service.dart';
 import 'package:lendify/utils/registration_consent_bundle.dart';
 import 'package:lendify/widgets/social_auth_button.dart';
+import 'package:lendify/widgets/social_auth_status.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -60,13 +61,16 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.byType(SocialAuthButton), findsNWidgets(3));
-    expect(find.text('Im Privatpiloten nicht verfügbar'), findsNWidgets(2));
+    expect(find.byType(SocialAuthButton), findsOneWidget);
+    expect(find.byType(SocialAuthStatus), findsNWidgets(2));
+    expect(find.text('Im Privatpiloten nicht verfügbar'), findsNothing);
+    expect(find.text('Apple-Anmeldung ist derzeit nicht verfügbar.'),
+        findsOneWidget);
+    expect(find.text('Facebook-Anmeldung ist derzeit nicht verfügbar.'),
+        findsOneWidget);
 
     for (final entry in {
       'Mit Google anmelden': Tristate.isTrue,
-      'Mit Apple anmelden': Tristate.isFalse,
-      'Mit Facebook anmelden': Tristate.isFalse,
     }.entries) {
       final node = tester.getSemantics(find.text(entry.key));
       expect(node.flagsCollection.isEnabled, entry.value, reason: entry.key);
@@ -80,15 +84,20 @@ void main() {
   }, skip: !_googleOnlyProfileUnderTest);
 
   testWidgets(
-    'Google-only registration enables Google and keeps Facebook login-only',
+    'Google-only registration enables Google and reports other providers plainly',
     (tester) async {
       SharedPreferences.setMockInitialValues({});
       final semantics = tester.ensureSemantics();
 
       await tester.pumpWidget(const MaterialApp(home: RegisterScreen()));
       await tester.pumpAndSettle();
-      expect(find.byType(SocialAuthButton), findsNWidgets(2));
-      expect(find.text('Im Privatpiloten nicht verfügbar'), findsOneWidget);
+      expect(find.byType(SocialAuthButton), findsOneWidget);
+      expect(find.byType(SocialAuthStatus), findsNWidgets(2));
+      expect(find.text('Im Privatpiloten nicht verfügbar'), findsNothing);
+      expect(find.text('Apple-Anmeldung ist derzeit nicht verfügbar.'),
+          findsOneWidget);
+      expect(find.text('Facebook-Anmeldung ist derzeit nicht verfügbar.'),
+          findsOneWidget);
       expect(find.text('Mit Facebook registrieren'), findsNothing);
       expect(
         find.bySemanticsLabel(
@@ -97,15 +106,12 @@ void main() {
         findsNothing,
       );
       expect(
-        find.text(
-          'Facebook ist nur zur Anmeldung bestehender Konten verfügbar.',
-        ),
-        findsOneWidget,
-      );
+          find.text(
+              'Facebook ist nur zur Anmeldung bestehender Konten verfügbar.'),
+          findsNothing);
 
       for (final entry in {
         'Mit Google registrieren': Tristate.isTrue,
-        'Mit Apple registrieren': Tristate.isFalse,
       }.entries) {
         final node = tester.getSemantics(find.text(entry.key));
         expect(node.flagsCollection.isEnabled, entry.value, reason: entry.key);

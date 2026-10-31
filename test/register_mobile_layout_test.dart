@@ -4,9 +4,10 @@ import 'package:lendify/screens/register_screen.dart';
 import 'package:lendify/services/auth_service.dart';
 import 'package:lendify/utils/registration_consent_bundle.dart';
 import 'package:lendify/widgets/social_auth_button.dart';
+import 'package:lendify/widgets/social_auth_status.dart';
 
-const _facebookLoginOnlyNotice =
-    'Facebook ist nur zur Anmeldung bestehender Konten verfügbar.';
+const _facebookUnavailableNotice =
+    'Facebook-Anmeldung ist derzeit nicht verfügbar.';
 
 Future<void> pumpRegistration(
   WidgetTester tester, {
@@ -61,8 +62,8 @@ void main() {
       await tester.ensureVisible(cta);
       await tester.pumpAndSettle();
       final ctaRect = tester.getRect(cta);
-      final providerRect = tester.getRect(find.byType(SocialAuthButton).last);
-      final facebookNotice = find.text(_facebookLoginOnlyNotice);
+      final providerRect = tester.getRect(find.byType(SocialAuthStatus).first);
+      final facebookNotice = find.text(_facebookUnavailableNotice);
       expect(facebookNotice, findsOneWidget);
       final noticeRect = tester.getRect(facebookNotice);
       expect(providerRect.bottom, lessThan(noticeRect.top));
@@ -116,7 +117,7 @@ void main() {
   });
 
   testWidgets(
-      'consent follows registration availability; Facebook is login-only',
+      'consent follows registration availability; unavailable providers are text-only',
       (tester) async {
     await pumpRegistration(tester);
     expect(
@@ -125,7 +126,6 @@ void main() {
       findsOneWidget,
     );
     var unavailable = 0;
-    expect(find.byType(SocialAuthButton), findsNWidgets(2));
     for (final entry in {
       AuthSocialProvider.google: 'Mit Google registrieren',
       AuthSocialProvider.apple: 'Mit Apple registrieren',
@@ -136,16 +136,23 @@ void main() {
         find.bySemanticsLabel(registrationConsentActionText(entry.value)),
         available ? findsOneWidget : findsNothing,
       );
-      final buttonFinder = find.ancestor(
-        of: find.text(entry.value),
-        matching: find.byType(SocialAuthButton),
-      );
-      expect(buttonFinder, findsOneWidget);
-      final button = tester.widget<SocialAuthButton>(buttonFinder);
-      expect(button.available, available);
-      expect(button.onTap, available ? isNotNull : isNull);
-      if (!available) {
+      if (available) {
+        final buttonFinder = find.ancestor(
+          of: find.text(entry.value),
+          matching: find.byType(SocialAuthButton),
+        );
+        expect(buttonFinder, findsOneWidget);
+        final button = tester.widget<SocialAuthButton>(buttonFinder);
+        expect(button.available, isTrue);
+        expect(button.onTap, isNotNull);
+      } else {
         unavailable++;
+        final providerName = entry.key.name == 'google' ? 'Google' : 'Apple';
+        expect(
+          find.text('$providerName-Anmeldung ist derzeit nicht verfügbar.'),
+          findsOneWidget,
+        );
+        expect(find.text(entry.value), findsNothing);
       }
     }
     expect(find.text('Mit Facebook registrieren'), findsNothing);
@@ -154,9 +161,23 @@ void main() {
           registrationConsentActionText('Mit Facebook registrieren')),
       findsNothing,
     );
-    expect(find.text(_facebookLoginOnlyNotice), findsOneWidget);
-    expect(find.text('Im Privatpiloten nicht verfügbar'),
-        findsNWidgets(unavailable));
+    if (AuthService.socialProviderEnabled(AuthSocialProvider.facebook)) {
+      expect(
+          find.text(
+              'Facebook ist nur zur Anmeldung bestehender Konten verfügbar.'),
+          findsOneWidget);
+    } else {
+      expect(find.text(_facebookUnavailableNotice), findsOneWidget);
+      unavailable++;
+    }
+    final enabledRegistrationCount = [
+      AuthSocialProvider.google,
+      AuthSocialProvider.apple,
+    ].where(AuthService.socialRegistrationProviderEnabled).length;
+    expect(
+        find.byType(SocialAuthButton), findsNWidgets(enabledRegistrationCount));
+    expect(find.byType(SocialAuthStatus), findsNWidgets(unavailable));
+    expect(find.text('Im Privatpiloten nicht verfügbar'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

@@ -20,6 +20,7 @@ import 'package:lendify/utils/registration_input_policy.dart';
 import 'package:lendify/widgets/app_popup.dart';
 import 'package:lendify/widgets/mfa_challenge_dialog.dart';
 import 'package:lendify/widgets/social_auth_button.dart';
+import 'package:lendify/widgets/social_auth_status.dart';
 import 'package:lendify/widgets/social_auth_feedback.dart';
 import 'package:lendify/widgets/tracked_dialog_route.dart';
 import 'package:provider/provider.dart';
@@ -947,23 +948,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                                       ),
                                                       const SizedBox(height: 4),
                                                     ],
-                                                    SocialAuthButton(
+                                                    if (AuthService
+                                                        .socialRegistrationProviderEnabled(
+                                                            AuthSocialProvider
+                                                                .google))
+                                                      SocialAuthButton(
                                                         brand: SocialAuthBrand
                                                             .google,
                                                         label:
                                                             'Mit Google registrieren',
-                                                        available: AuthService
-                                                            .socialProviderEnabled(
-                                                                AuthSocialProvider
-                                                                    .google),
-                                                        onTap: _busy ||
-                                                                !AuthService.socialProviderEnabled(
-                                                                    AuthSocialProvider
-                                                                        .google)
+                                                        onTap: _busy
                                                             ? null
                                                             : () => _socialRegister(
                                                                 AuthSocialProvider
-                                                                    .google)),
+                                                                    .google),
+                                                      )
+                                                    else
+                                                      const SocialAuthStatus(
+                                                          providerName:
+                                                              'Google'),
                                                     const SizedBox(height: 8),
                                                     if (AuthService
                                                         .socialProviderEnabled(
@@ -978,30 +981,39 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                                       ),
                                                       const SizedBox(height: 4),
                                                     ],
-                                                    SocialAuthButton(
+                                                    if (AuthService
+                                                        .socialRegistrationProviderEnabled(
+                                                            AuthSocialProvider
+                                                                .apple))
+                                                      SocialAuthButton(
                                                         brand: SocialAuthBrand
                                                             .apple,
                                                         label:
                                                             'Mit Apple registrieren',
-                                                        available: AuthService
-                                                            .socialProviderEnabled(
-                                                                AuthSocialProvider
-                                                                    .apple),
-                                                        onTap: _busy ||
-                                                                !AuthService
-                                                                    .socialProviderEnabled(
-                                                                        AuthSocialProvider
-                                                                            .apple)
+                                                        onTap: _busy
                                                             ? null
                                                             : () => _socialRegister(
                                                                 AuthSocialProvider
-                                                                    .apple)),
+                                                                    .apple),
+                                                      )
+                                                    else
+                                                      const SocialAuthStatus(
+                                                          providerName:
+                                                              'Apple'),
                                                     const SizedBox(height: 8),
-                                                    const Text(
-                                                      'Facebook ist nur zur Anmeldung bestehender Konten verfügbar.',
-                                                      textAlign:
-                                                          TextAlign.center,
-                                                    ),
+                                                    if (AuthService
+                                                        .socialProviderEnabled(
+                                                            AuthSocialProvider
+                                                                .facebook))
+                                                      const Text(
+                                                        'Facebook ist nur zur Anmeldung bestehender Konten verfügbar.',
+                                                        textAlign:
+                                                            TextAlign.center,
+                                                      )
+                                                    else
+                                                      const SocialAuthStatus(
+                                                          providerName:
+                                                              'Facebook'),
                                                   ]),
                                             ),
                                           ),

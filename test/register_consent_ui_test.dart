@@ -20,12 +20,14 @@ void main() {
 
     expect(find.byType(CheckboxListTile), findsNothing);
     expect(find.text('Kostenlos registrieren'), findsOneWidget);
-    expect(find.text('Mit Google registrieren'), findsOneWidget);
-    expect(find.text('Mit Apple registrieren'), findsOneWidget);
+    expect(find.text('Mit Google registrieren'), findsNothing);
+    expect(find.text('Mit Apple registrieren'), findsNothing);
     expect(find.text('Mit Facebook registrieren'), findsNothing);
-    expect(
-        find.text(
-            'Facebook ist nur zur Anmeldung bestehender Konten verfügbar.'),
+    expect(find.text('Google-Anmeldung ist derzeit nicht verfügbar.'),
+        findsOneWidget);
+    expect(find.text('Apple-Anmeldung ist derzeit nicht verfügbar.'),
+        findsOneWidget);
+    expect(find.text('Facebook-Anmeldung ist derzeit nicht verfügbar.'),
         findsOneWidget);
     expect(find.text('SIT-Plattformbedingungen'), findsWidgets);
     expect(find.text('Datenschutzerklärung'), findsWidgets);

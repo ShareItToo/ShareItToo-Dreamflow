@@ -19,6 +19,7 @@ import 'package:lendify/widgets/app_popup.dart';
 import 'package:lendify/widgets/blur_modal.dart';
 import 'package:lendify/widgets/mfa_challenge_dialog.dart';
 import 'package:lendify/widgets/social_auth_button.dart';
+import 'package:lendify/widgets/social_auth_status.dart';
 import 'package:lendify/widgets/social_auth_feedback.dart';
 import 'package:lendify/widgets/tracked_dialog_route.dart';
 import 'package:provider/provider.dart';
@@ -991,58 +992,57 @@ class _LoginScreenState extends State<LoginScreen> {
                                               const SizedBox(height: 14),
                                               const SocialAuthOrDivider(),
                                               const SizedBox(height: 12),
-                                              SocialAuthButton(
+                                              if (AuthService
+                                                  .socialProviderEnabled(
+                                                      AuthSocialProvider
+                                                          .google))
+                                                SocialAuthButton(
                                                   brand: SocialAuthBrand.google,
                                                   label: 'Mit Google anmelden',
-                                                  available: AuthService
-                                                      .socialProviderEnabled(
+                                                  onTap: _busy
+                                                      ? null
+                                                      : () => _socialSignIn(
                                                           AuthSocialProvider
                                                               .google),
-                                                  onTap: _busy ||
-                                                          !AuthService
-                                                              .socialProviderEnabled(
-                                                                  AuthSocialProvider
-                                                                      .google)
-                                                      ? null
-                                                      : () => _socialSignIn(
-                                                          AuthSocialProvider
-                                                              .google)),
+                                                )
+                                              else
+                                                const SocialAuthStatus(
+                                                    providerName: 'Google'),
                                               const SizedBox(height: 10),
-                                              SocialAuthButton(
+                                              if (AuthService
+                                                  .socialProviderEnabled(
+                                                      AuthSocialProvider.apple))
+                                                SocialAuthButton(
                                                   brand: SocialAuthBrand.apple,
                                                   label: 'Mit Apple anmelden',
-                                                  available: AuthService
-                                                      .socialProviderEnabled(
-                                                          AuthSocialProvider
-                                                              .apple),
-                                                  onTap: _busy ||
-                                                          !AuthService
-                                                              .socialProviderEnabled(
-                                                                  AuthSocialProvider
-                                                                      .apple)
+                                                  onTap: _busy
                                                       ? null
                                                       : () => _socialSignIn(
                                                           AuthSocialProvider
-                                                              .apple)),
+                                                              .apple),
+                                                )
+                                              else
+                                                const SocialAuthStatus(
+                                                    providerName: 'Apple'),
                                               const SizedBox(height: 10),
-                                              SocialAuthButton(
+                                              if (AuthService
+                                                  .socialProviderEnabled(
+                                                      AuthSocialProvider
+                                                          .facebook))
+                                                SocialAuthButton(
                                                   brand:
                                                       SocialAuthBrand.facebook,
                                                   label:
                                                       'Mit Facebook anmelden',
-                                                  available: AuthService
-                                                      .socialProviderEnabled(
-                                                          AuthSocialProvider
-                                                              .facebook),
-                                                  onTap: _busy ||
-                                                          !AuthService
-                                                              .socialProviderEnabled(
-                                                                  AuthSocialProvider
-                                                                      .facebook)
+                                                  onTap: _busy
                                                       ? null
                                                       : () => _socialSignIn(
                                                           AuthSocialProvider
-                                                              .facebook)),
+                                                              .facebook),
+                                                )
+                                              else
+                                                const SocialAuthStatus(
+                                                    providerName: 'Facebook'),
                                               const SizedBox(height: 14),
                                               Row(
                                                   mainAxisAlignment:
