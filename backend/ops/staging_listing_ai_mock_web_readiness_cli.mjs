@@ -162,7 +162,8 @@ export async function runStagingListingAiMockWebReadinessCli(argv, dependencies 
     const sourceCommit = currentClientSource(repositoryRoot, args['--source-commit'], args['--client-version']);
     token = dependencies.token ?? readStagingListingAiSessionToken(args['--session-file'], repositoryRoot);
     const collector = createStagingListingAiMockWebCollector({ token, sourceCommit,
-      clientVersion: args['--client-version'], runtimeReader: dependencies.runtimeReader ?? dockerRuntimeReader(dependencies.execute),
+      clientVersion: args['--client-version'], runtimeReader: dependencies.runtimeReader
+        ?? (() => dockerRuntimeReader(dependencies.execute)),
       fetchImpl: dependencies.fetchImpl, now: dependencies.now ?? Date.now });
     const result = await collector.collect();
     const written = writeProtectedEvidence(args['--evidence-dir'],

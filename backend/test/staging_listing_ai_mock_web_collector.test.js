@@ -151,3 +151,51 @@ test('CLI writes owner-only canonical evidence and returns the binder SHA', asyn
     { now: new Date('2026-10-31T12:00:00.000Z'), expectedSource: sourceCommit, expectedVersion: clientVersion }));
   assert.equal(evidence.syntheticFixture, false);
 });
+
+test('CLI defers Docker runtime reads and checks both collection fences without injected runtimeReader', async (t) => {
+  const output = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sit-listing-ai-mock-docker-cli-')));
+  fs.chmodSync(output, 0o700);
+  t.after(() => fs.rmSync(output, { recursive: true, force: true }));
+  const containerImage = `sha256:${'c'.repeat(64)}`;
+  const image = { Id: containerImage, Config: { Labels: { 'org.opencontainers.image.revision': runtime.runtimeCommit } },
+    RepoDigests: [`ghcr.io/shareittoo/shareittoo-api@${runtime.imageDigest}`] };
+  const container = (environmentEntries) => ({ Id: 'a'.repeat(64), Name: '/shareittoo-staging-api', Image: containerImage,
+    State: { Running: true }, Config: { Labels: {
+      'com.shareittoo.sit.green': 'true', 'org.opencontainers.image.revision': runtime.runtimeCommit,
+    }, Env: environmentEntries } });
+  const args = (runId) => ['--source-commit', sourceCommit, '--client-version', clientVersion,
+    '--session-file', '/unused-in-injected-test', '--evidence-dir', output, '--run-id', runId];
+  let containerReads = 0;
+  let imageReads = 0;
+  const stableExecute = (_command, dockerArgs) => {
+    if (dockerArgs[0] === 'image') { imageReads += 1; return JSON.stringify(image); }
+    containerReads += 1; return JSON.stringify(container(runtime.environmentEntries));
+  };
+  const fetchImpl = async (url, options) => {
+    assert.equal(String(url), 'https://staging.shareittoo.com/api/v1/blue-ocean/listing-drafts/capabilities');
+    assert.equal(options.method, 'GET');
+    return { status: 200, text: async () => JSON.stringify(apiCapability()) };
+  };
+  await runStagingListingAiMockWebReadinessCli(args('docker-fence-ok'), { repositoryRoot: sourceRoot,
+    token, execute: stableExecute, fetchImpl, now: () => Date.parse('2026-10-31T12:00:00.000Z') });
+  assert.equal(containerReads, 4);
+  assert.equal(imageReads, 2);
+
+  containerReads = 0;
+  imageReads = 0;
+  const driftingExecute = (_command, dockerArgs) => {
+    if (dockerArgs[0] === 'image') { imageReads += 1; return JSON.stringify(image); }
+    containerReads += 1;
+    const environmentEntries = containerReads >= 3
+      ? runtime.environmentEntries.map((entry) => entry === 'SIT_STAGING_ALLOWED_USER_IDS=qa_user_12345'
+        ? 'SIT_STAGING_ALLOWED_USER_IDS=qa_user_54321' : entry)
+      : runtime.environmentEntries;
+    return JSON.stringify(container(environmentEntries));
+  };
+  await assert.rejects(runStagingListingAiMockWebReadinessCli(args('docker-fence-drift'), {
+    repositoryRoot: sourceRoot, token, execute: driftingExecute, fetchImpl,
+    now: () => Date.parse('2026-10-31T12:00:00.000Z'),
+  }), /staging_listing_ai_mock_web_not_verified/u);
+  assert.equal(containerReads, 4);
+  assert.equal(imageReads, 2);
+});
