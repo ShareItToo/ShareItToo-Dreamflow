@@ -21,6 +21,13 @@ final RegExp _technicalSandboxPaymentIntentIdPattern = RegExp(
   r'^pi_[A-Za-z0-9_]+$',
 );
 
+class _EpochSnapshotFlight {
+  final int epoch;
+  final Future<Object?> future;
+
+  const _EpochSnapshotFlight(this.epoch, this.future);
+}
+
 bool isValidTechnicalSandboxRunId(String value) =>
     _technicalSandboxRunIdPattern.hasMatch(value);
 
@@ -245,6 +252,48 @@ class TechnicalSandboxRun {
 }
 
 class BackendRepository {
+  static final Map<String, _EpochSnapshotFlight> _snapshotFlights =
+      <String, _EpochSnapshotFlight>{};
+
+  /// Coalesces only concurrent reads for the same resource and session epoch.
+  /// Completed values are removed immediately; this is not a response cache.
+  static Future<T> _singleFlightSnapshot<T>({
+    required String key,
+    required int epoch,
+    required Future<T> Function() load,
+  }) {
+    final pending = _snapshotFlights[key];
+    if (pending != null && pending.epoch == epoch) {
+      return pending.future.then((value) => value as T);
+    }
+
+    late final Future<T> flight;
+    flight = load().whenComplete(() {
+      if (identical(_snapshotFlights[key]?.future, flight)) {
+        _snapshotFlights.remove(key);
+      }
+    });
+    _snapshotFlights[key] = _EpochSnapshotFlight(epoch, flight);
+    return flight;
+  }
+
+  static List<Map<String, dynamic>> _copySnapshotRows(
+    List<Map<String, dynamic>> rows,
+  ) =>
+      rows.map((row) => Map<String, dynamic>.from(row)).toList();
+
+  static String _snapshotPrincipalKey(LocalPrincipalActionOwner owner) {
+    final sessionOwner = owner.sessionOwner;
+    final principal = sessionOwner == null
+        ? 'guest'
+        : LocalPrincipalScope.tokenForSessionOwner(sessionOwner);
+    return '${owner.epoch}:$principal:${sessionOwner?.sessionId ?? 'guest'}';
+  }
+
+  static String _snapshotSessionOwnerKey(AuthSessionOwner owner) =>
+      '${owner.epoch}:'
+      '${LocalPrincipalScope.tokenForSessionOwner(owner)}:${owner.sessionId}';
+
   static String? _staffStepUpToken;
 
   static Future<String> _token() async {
@@ -344,19 +393,51 @@ class BackendRepository {
       _strictMaps(value);
 
   static Future<Map<String, dynamic>> getCurrentProfile() async {
-    final response = await _authorized(method: 'GET', path: '/auth/me');
-    return Map<String, dynamic>.from(response['user'] as Map);
+    final actionOwner = await LocalPrincipalActionOwner.capture();
+    final sessionOwner = actionOwner.sessionOwner;
+    final response = await _singleFlightSnapshot<Map<String, dynamic>>(
+      key: 'auth-me:${_snapshotPrincipalKey(actionOwner)}',
+      epoch: actionOwner.epoch,
+      load: () async {
+        final response = sessionOwner == null
+            ? await _authorized(method: 'GET', path: '/auth/me')
+            : await _authorizedForOwner(
+                owner: sessionOwner,
+                method: 'GET',
+                path: '/auth/me',
+              );
+        await actionOwner.assertCurrent();
+        return Map<String, dynamic>.from(response['user'] as Map);
+      },
+    );
+    return Map<String, dynamic>.from(response);
   }
 
   static Future<Map<String, dynamic>> getCurrentProfileForOwner(
     AuthSessionOwner owner,
   ) async {
-    final response = await _authorizedForOwner(
-      owner: owner,
-      method: 'GET',
-      path: '/auth/me',
+    if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+      throw const BackendException(401, 'authentication_required');
+    }
+    final response = await _singleFlightSnapshot<Map<String, dynamic>>(
+      key: 'auth-me:${_snapshotSessionOwnerKey(owner)}',
+      epoch: owner.epoch,
+      load: () async {
+        final response = await _authorizedForOwner(
+          owner: owner,
+          method: 'GET',
+          path: '/auth/me',
+        );
+        if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+          throw const BackendException(401, 'authentication_required');
+        }
+        return Map<String, dynamic>.from(response['user'] as Map);
+      },
     );
-    return Map<String, dynamic>.from(response['user'] as Map);
+    if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+      throw const BackendException(401, 'authentication_required');
+    }
+    return Map<String, dynamic>.from(response);
   }
 
   static Future<List<Map<String, dynamic>>> getAuthSessions() async {
@@ -551,23 +632,38 @@ class BackendRepository {
   }
 
   static Future<List<Map<String, dynamic>>> getListings() async {
-    final response = await BackendHttp.requestJson(
-      method: 'GET',
-      path: '/listings?sort=newest&limit=100',
-    );
-    final byId = <String, Map<String, dynamic>>{
-      for (final listing in _maps(response['listings']))
-        if ((listing['id']?.toString() ?? '').isNotEmpty)
-          listing['id'].toString(): listing,
-    };
-    if (await AuthService.readSession() != null) {
-      final mine = await _authorized(method: 'GET', path: '/listings/mine');
-      for (final listing in _maps(mine['listings'])) {
-        final id = listing['id']?.toString() ?? '';
-        if (id.isNotEmpty) byId[id] = listing;
-      }
-    }
-    return byId.values.toList();
+    final owner = await LocalPrincipalActionOwner.capture();
+    return _singleFlightSnapshot<List<Map<String, dynamic>>>(
+      key: 'listings:${_snapshotPrincipalKey(owner)}',
+      epoch: owner.epoch,
+      load: () async {
+        final response = await BackendHttp.requestJson(
+          method: 'GET',
+          path: '/listings?sort=newest&limit=100',
+        );
+        await owner.assertCurrent();
+        final byId = <String, Map<String, dynamic>>{
+          for (final listing in _maps(response['listings']))
+            if ((listing['id']?.toString() ?? '').isNotEmpty)
+              listing['id'].toString(): listing,
+        };
+        final sessionOwner = owner.sessionOwner;
+        if (sessionOwner != null) {
+          final mine = await _authorizedForOwner(
+            owner: sessionOwner,
+            method: 'GET',
+            path: '/listings/mine',
+          );
+          await owner.assertCurrent();
+          for (final listing in _maps(mine['listings'])) {
+            final id = listing['id']?.toString() ?? '';
+            if (id.isNotEmpty) byId[id] = listing;
+          }
+        }
+        await owner.assertCurrent();
+        return byId.values.toList();
+      },
+    ).then(_copySnapshotRows);
   }
 
   /// Saved-cart prerequisite read: never adopt B's private listings or refresh
@@ -2339,34 +2435,62 @@ class BackendRepository {
   }
 
   static Future<List<Map<String, dynamic>>> getRentalRequests() async {
-    final response = await _authorized(
-      method: 'GET',
-      path: '/rental-requests',
-    );
-    final requests = response['requests'];
-    if (requests is! List || requests.any((entry) => entry is! Map)) {
-      throw const BackendException(200, 'invalid_server_response');
-    }
-    return requests
-        .map((entry) => Map<String, dynamic>.from(entry as Map))
-        .toList(growable: false);
+    final owner = await LocalPrincipalActionOwner.capture();
+    return _singleFlightSnapshot<List<Map<String, dynamic>>>(
+      key: 'rental-requests:${_snapshotPrincipalKey(owner)}',
+      epoch: owner.epoch,
+      load: () async {
+        final sessionOwner = owner.sessionOwner;
+        final response = sessionOwner == null
+            ? await _authorized(
+                method: 'GET',
+                path: '/rental-requests',
+              )
+            : await _authorizedForOwner(
+                owner: sessionOwner,
+                method: 'GET',
+                path: '/rental-requests',
+              );
+        await owner.assertCurrent();
+        final requests = response['requests'];
+        if (requests is! List || requests.any((entry) => entry is! Map)) {
+          throw const BackendException(200, 'invalid_server_response');
+        }
+        return requests
+            .map((entry) => Map<String, dynamic>.from(entry as Map))
+            .toList(growable: false);
+      },
+    ).then(_copySnapshotRows);
   }
 
   static Future<List<Map<String, dynamic>>> getRentalRequestsForOwner(
     AuthSessionOwner owner,
   ) async {
-    final response = await _authorizedForOwner(
-      owner: owner,
-      method: 'GET',
-      path: '/rental-requests',
-    );
-    final requests = response['requests'];
-    if (requests is! List || requests.any((entry) => entry is! Map)) {
-      throw const BackendException(200, 'invalid_server_response');
+    if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+      throw const BackendException(401, 'authentication_required');
     }
-    return requests
-        .map((entry) => Map<String, dynamic>.from(entry as Map))
-        .toList(growable: false);
+    final requests = await _singleFlightSnapshot<List<Map<String, dynamic>>>(
+      key: 'rental-requests:${_snapshotSessionOwnerKey(owner)}',
+      epoch: owner.epoch,
+      load: () async {
+        final response = await _authorizedForOwner(
+          owner: owner,
+          method: 'GET',
+          path: '/rental-requests',
+        );
+        final value = response['requests'];
+        if (value is! List || value.any((entry) => entry is! Map)) {
+          throw const BackendException(200, 'invalid_server_response');
+        }
+        return value
+            .map((entry) => Map<String, dynamic>.from(entry as Map))
+            .toList(growable: false);
+      },
+    );
+    if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+      throw const BackendException(401, 'authentication_required');
+    }
+    return _copySnapshotRows(requests);
   }
 
   static Future<List<Map<String, dynamic>>> syncRentalRequests(
@@ -2384,12 +2508,28 @@ class BackendRepository {
     bool includeArchived = false,
     Duration timeout = const Duration(seconds: 20),
   }) async {
-    final response = await _authorized(
-      method: 'GET',
-      path: '/message-threads${includeArchived ? '?includeArchived=true' : ''}',
-      timeout: timeout,
+    final owner = await LocalPrincipalActionOwner.capture();
+    final response = await _singleFlightSnapshot<Map<String, dynamic>>(
+      key:
+          'message-threads:${_snapshotPrincipalKey(owner)}:$includeArchived:${timeout.inMicroseconds}',
+      epoch: owner.epoch,
+      load: () async {
+        final sessionOwner = owner.sessionOwner;
+        final path =
+            '/message-threads${includeArchived ? '?includeArchived=true' : ''}';
+        final response = sessionOwner == null
+            ? await _authorized(method: 'GET', path: path, timeout: timeout)
+            : await _authorizedForOwner(
+                owner: sessionOwner,
+                method: 'GET',
+                path: path,
+                timeout: timeout,
+              );
+        await owner.assertCurrent();
+        return response;
+      },
     );
-    return _maps(response['threads']);
+    return _copySnapshotRows(_maps(response['threads']));
   }
 
   static Future<List<Map<String, dynamic>>> getMessageThreadsForOwner(
@@ -2397,13 +2537,25 @@ class BackendRepository {
     bool includeArchived = false,
     Duration timeout = const Duration(seconds: 20),
   }) async {
-    final response = await _authorizedForOwner(
-      owner: owner,
-      method: 'GET',
-      path: '/message-threads${includeArchived ? '?includeArchived=true' : ''}',
-      timeout: timeout,
+    if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+      throw const BackendException(401, 'authentication_required');
+    }
+    final response = await _singleFlightSnapshot<Map<String, dynamic>>(
+      key:
+          'message-threads:${_snapshotSessionOwnerKey(owner)}:$includeArchived:${timeout.inMicroseconds}',
+      epoch: owner.epoch,
+      load: () => _authorizedForOwner(
+        owner: owner,
+        method: 'GET',
+        path:
+            '/message-threads${includeArchived ? '?includeArchived=true' : ''}',
+        timeout: timeout,
+      ),
     );
-    return _maps(response['threads']);
+    if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) {
+      throw const BackendException(401, 'authentication_required');
+    }
+    return _copySnapshotRows(_maps(response['threads']));
   }
 
   static Future<Map<String, dynamic>> createOrGetBookingThread(

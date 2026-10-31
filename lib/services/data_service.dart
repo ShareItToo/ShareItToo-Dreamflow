@@ -758,10 +758,23 @@ class DataService {
     String key,
     String value,
   ) async {
+    await writePreferenceStringIfChanged(prefs, key, value);
+  }
+
+  /// Skips no-op Web storage writes so identical readbacks do not emit
+  /// cross-tab `storage` events that recursively reload shared data.
+  @visibleForTesting
+  static Future<bool> writePreferenceStringIfChanged(
+    SharedPreferences prefs,
+    String key,
+    String value,
+  ) async {
+    if (prefs.getString(key) == value) return false;
     final accepted = await prefs.setString(key, value);
     if (!accepted || prefs.getString(key) != value) {
       throw StateError('Local persistence failed for $key.');
     }
+    return true;
   }
 
   static Future<void> _removePreferenceKey(
@@ -873,9 +886,11 @@ class DataService {
     final previous = prefs.getString(_itemsKey);
     try {
       await verifyAuthorization?.call();
-      if (_failNextListingPersistenceForTesting) {
-        _failNextListingPersistenceForTesting = false;
-        throw StateError('Synthetic local listing persistence failure.');
+      if (previous != encoded) {
+        if (_failNextListingPersistenceForTesting) {
+          _failNextListingPersistenceForTesting = false;
+          throw StateError('Synthetic local listing persistence failure.');
+        }
       }
       await _writePreferenceString(prefs, _itemsKey, encoded);
       if (_clearSessionDuringNextListingPersistenceForTesting) {
@@ -1753,9 +1768,9 @@ class DataService {
   }) {
     // Days
     final int days = rentalCalendarDays(req.start, req.end).clamp(
-          1,
-          365,
-        );
+      1,
+      365,
+    );
     final priced = computeTotalWithDiscounts(item: item, days: days);
     final double basePerDay = item.pricePerDay;
     final double baseTotal = priced.$2; // before discount
@@ -2649,11 +2664,20 @@ class DataService {
     if (!validatedUsers.any((entry) => entry.id == current.id)) {
       throw StateError('Das aktuelle Profil fehlt im lokalen Profilbestand.');
     }
+    final currentChanged = previousCurrent != nextCurrent;
+    final usersChanged = previousUsers != nextUsers;
+    final deletedMarkerChanged = hadDeletedMarker;
     try {
       await verifyAuthorization?.call();
-      final usersWritten = await prefs.setString(_usersKey, nextUsers);
-      if (!usersWritten || prefs.getString(_usersKey) != nextUsers) {
-        throw StateError('Der lokale Profilbestand wurde nicht gespeichert.');
+      if (!currentChanged && !usersChanged && !deletedMarkerChanged) {
+        await verifyAuthorization?.call();
+        return;
+      }
+      if (usersChanged) {
+        final usersWritten = await prefs.setString(_usersKey, nextUsers);
+        if (!usersWritten || prefs.getString(_usersKey) != nextUsers) {
+          throw StateError('Der lokale Profilbestand wurde nicht gespeichert.');
+        }
       }
       if (_clearSessionDuringNextAccountProfilePersistenceForTesting) {
         _clearSessionDuringNextAccountProfilePersistenceForTesting = false;
@@ -2664,16 +2688,21 @@ class DataService {
         throw StateError(
             'Synthetic local account profile persistence failure.');
       }
-      final currentWritten =
-          await prefs.setString(_currentUserKey, nextCurrent);
-      if (!currentWritten || prefs.getString(_currentUserKey) != nextCurrent) {
-        throw StateError('Das lokale Kontoprofil wurde nicht gespeichert.');
+      if (currentChanged) {
+        final currentWritten =
+            await prefs.setString(_currentUserKey, nextCurrent);
+        if (!currentWritten ||
+            prefs.getString(_currentUserKey) != nextCurrent) {
+          throw StateError('Das lokale Kontoprofil wurde nicht gespeichert.');
+        }
       }
-      if (!await prefs.remove(_accountDeletedKey) ||
-          prefs.containsKey(_accountDeletedKey)) {
-        throw StateError(
-          'Der kontogebundene Löschstatus konnte nicht zurückgesetzt werden.',
-        );
+      if (hadDeletedMarker) {
+        if (!await prefs.remove(_accountDeletedKey) ||
+            prefs.containsKey(_accountDeletedKey)) {
+          throw StateError(
+            'Der kontogebundene Löschstatus konnte nicht zurückgesetzt werden.',
+          );
+        }
       }
       _decodeLocalUsersStrict(prefs.getString(_usersKey)!);
       final persistedCurrent =
@@ -4388,7 +4417,7 @@ class DataService {
   /// mutation queue.
   static Future<User?> syncCurrentUserForSessionOwner(
     AuthSessionOwner owner, {
-    String notificationKey = SharedPersistenceSync.accountSecurityStateKey,
+    String notificationKey = SharedPersistenceSync.profileStateKey,
   }) async {
     if (!await AuthService.isSessionOwnerDefinitelyCurrent(owner)) return null;
 
@@ -4478,11 +4507,12 @@ class DataService {
     if (normalized.isEmpty) return;
 
     if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
-      final remote = await BackendRepository.getCurrentProfile();
-      final user = User.fromJson(remote);
-      await setCurrentUser(
-        user,
-        recoverCorruptBackendProfileCache: true,
+      final session = await AuthService.readSession();
+      if (session == null || session.email.trim().toLowerCase() != normalized) {
+        return;
+      }
+      await syncCurrentUserForSessionOwner(
+        AuthService.captureSessionOwner(session),
       );
       return;
     }
