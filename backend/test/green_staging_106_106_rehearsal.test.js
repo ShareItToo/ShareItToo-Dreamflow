@@ -5,8 +5,9 @@ import path from 'node:path';
 import test from 'node:test';
 import { objectDigest } from '../ops/green_staging_98_106_contract.mjs';
 import { assertCredentialCleanupEligible, credentialCleanupEligibilitySql, runSuccessorRehearsal,
-  rehearsalConfirmation, readinessScript, evaluateCandidateReadinessProbe } from '../ops/green_staging_106_106_rehearsal.mjs';
+  rehearsalConfirmation, rehearsalProbeIdentity, readinessScript, evaluateCandidateReadinessProbe } from '../ops/green_staging_106_106_rehearsal.mjs';
 import { executionPreflight } from '../ops/green_staging_106_106_preflight.mjs';
+import { runMfaProbe } from '../ops/staging_controlled_acceptance.mjs';
 import { rehearsalFixture } from './fixtures/green_106106_rehearsal.js';
 
 async function scoped(run) {
@@ -51,7 +52,11 @@ test('isolated lifecycle seals by exact ID, verifies backup/restore106/startup/p
   assert.ok(!f.calls.some(c => c.args.includes('--publish') || (c.args[0] === 'volume' && ['rm', 'create'].includes(c.args[1]))));
   assert.deepEqual(groupAdds(f.calls.find(c => c.phase === 'create_materials')), ['65532']);
   assert.deepEqual(groupAdds(f.calls.find(c => c.phase === 'create_database')), []);
-  assert.deepEqual(groupAdds(f.calls.find(c => c.phase === 'create_candidate')), []);
+  const candidate = f.calls.find(c => c.phase === 'create_candidate');
+  assert.deepEqual(groupAdds(candidate), []);
+  assert.equal(candidate.env.SIT_LISTING_AI_PROVIDER, 'on_device');
+  assert.equal(Object.hasOwn(candidate.env, 'SIT_STAGING_ALLOWED_USER_IDS'), false);
+  assert.equal(Object.hasOwn(candidate.env, 'SIT_GREEN_REHEARSAL_PROBE_USER_ID'), false);
   for (const call of f.calls.filter(c => c.args[0] === 'create')) assert.equal(call.args[call.args.indexOf('--restart') + 1], 'no');
 }));
 test('explicit mock transition reaches the isolated candidate and receipt only after synthetic-only readiness readback', async () => {
@@ -66,7 +71,40 @@ test('explicit mock transition reaches the isolated candidate and receipt only a
     assert.equal(receipt.sourceEnvironmentSha256, f.config.envFile.sha256);
     assert.equal(receipt.providerTraffic, false);
     assert.equal(f.calls.some(call => call.phase === 'candidate_readiness'), true);
+    const candidate = f.calls.find(call => call.phase === 'create_candidate');
+    const probe = f.calls.find(call => call.phase === 'synthetic_mfa_identity');
+    const identity = rehearsalProbeIdentity(f.config.runId, 'synthetic-only');
+    assert.equal(candidate.env.SIT_STAGING_ALLOWED_USER_IDS, identity.allowedUserIds);
+    assert.equal(candidate.env.SIT_GREEN_REHEARSAL_PROBE_USER_ID, identity.userId);
+    assert.equal(Object.hasOwn(candidate.env, 'SIT_GREEN_REHEARSAL'), false);
+    assert.deepEqual(f.source.Config.Env.filter(value => value.startsWith('SIT_STAGING_ALLOWED_USER_IDS=')),
+      ['SIT_STAGING_ALLOWED_USER_IDS=synthetic-only']);
+    assert.match(probe.input, /SIT_GREEN_REHEARSAL_PROBE_USER_ID/u);
+    assert.match(probe.input, /rehearsalProbeUserId \+ '@example\.invalid'/u);
+    assert.match(probe.input, /if \(createdUser\) await pool\.query\('DELETE FROM users/u);
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+test('rehearsal probe identity is deterministic and rejects malformed, duplicate, or colliding allowlists', () => {
+  const identity = rehearsalProbeIdentity('synthetic-run', 'synthetic-only,other.user');
+  assert.deepEqual(identity, rehearsalProbeIdentity('synthetic-run', 'synthetic-only,other.user'));
+  assert.match(identity.userId, /^sit_rehearsal_[a-f0-9]{32}$/u);
+  assert.equal(identity.email, `${identity.userId}@example.invalid`);
+  assert.equal(identity.allowedUserIds, `synthetic-only,other.user,${identity.userId}`);
+  assert.throws(() => rehearsalProbeIdentity('bad run id', 'synthetic-only'));
+  assert.throws(() => rehearsalProbeIdentity('synthetic-run', 'synthetic-only,synthetic-only'));
+  assert.throws(() => rehearsalProbeIdentity('synthetic-run', identity.userId));
+});
+test('MFA stdin probe consumes rehearsal ID in the create/delete path without selecting synthetic-password mode', async () => {
+  const identity = rehearsalProbeIdentity('synthetic-run', 'synthetic-only'); let script = '';
+  await runMfaProbe({ container: 'a'.repeat(64), commandRunner: async (_program, _args, input) => {
+    script = input; return JSON.stringify({ mfa: 'enroll-pending-cancel-passed', identity: 'start-status-resume-revoke-passed' });
+  } });
+  assert.match(script, /const greenRehearsal = process\.env\.SIT_GREEN_REHEARSAL === '1'/u);
+  assert.match(script, /const rehearsalProbeUserId = process\.env\.SIT_GREEN_REHEARSAL_PROBE_USER_ID/u);
+  assert.match(script, /const userId = greenRehearsal \? syntheticUser\.id : rehearsalProbeUserId \|\| runId \+ '-user'/u);
+  assert.match(script, new RegExp(`const email = greenRehearsal \\? syntheticUser\\.email : rehearsalProbeUserId\\n  \\? rehearsalProbeUserId \\+ '@example\\.invalid'`));
+  assert.match(script, /if \(createdUser\) await pool\.query\('DELETE FROM users/u);
+  assert.equal(identity.email, `${identity.userId}@example.invalid`);
 });
 test('candidate receives exactly the supplemental gid required by its mounted material', async () => scoped(async f => {
   const [mfa, firebase] = f.config.materials;

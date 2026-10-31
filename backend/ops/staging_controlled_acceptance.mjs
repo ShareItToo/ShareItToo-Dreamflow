@@ -266,15 +266,21 @@ import { hashPassword, signAccessToken } from '/app/src/security.js';
 import { IDENTITY_CONSENT_VERSION } from '/app/src/identity_verification_workflow.js';
 
 const greenRehearsal = process.env.SIT_GREEN_REHEARSAL === '1';
+const rehearsalProbeUserId = process.env.SIT_GREEN_REHEARSAL_PROBE_USER_ID ?? '';
+if (greenRehearsal && rehearsalProbeUserId) throw new Error('green_probe_identity_mode_conflict');
+if (rehearsalProbeUserId && !/^sit_rehearsal_[a-f0-9]{32}$/u.test(rehearsalProbeUserId)) {
+  throw new Error('green_probe_identity_invalid');
+}
 const syntheticUser = {
   id: 'synthetic_sandbox_user_pilot_20260919',
   email: 'synthetic_sandbox_user_pilot_20260919@example.invalid',
   marker: 'sit_technical_sandbox_pilot_v1',
 };
 const runId = 'controlled-acceptance-' + crypto.randomUUID();
-const userId = greenRehearsal ? syntheticUser.id : runId + '-user';
+const userId = greenRehearsal ? syntheticUser.id : rehearsalProbeUserId || runId + '-user';
 const sessionId = crypto.randomUUID();
-const email = greenRehearsal ? syntheticUser.email : runId + '@example.invalid';
+const email = greenRehearsal ? syntheticUser.email : rehearsalProbeUserId
+  ? rehearsalProbeUserId + '@example.invalid' : runId + '@example.invalid';
 let password;
 let createdUser = false;
 let createdSession = false;

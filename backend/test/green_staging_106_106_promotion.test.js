@@ -279,6 +279,8 @@ test('Green successor defaults to on_device and applies only the protected zero-
   const defaultSpec = canonicalSuccessorSpec(source, f.c.image, f.data).spec;
   assert.equal(defaultSpec.env.SIT_LISTING_AI_PROVIDER, 'on_device');
   const mockSpec = canonicalSuccessorSpec(source, f.c.image, base).spec;
+  assert.equal(mockSpec.env.SIT_STAGING_ALLOWED_USER_IDS, sourceEnv.SIT_STAGING_ALLOWED_USER_IDS);
+  assert.equal(Object.hasOwn(mockSpec.env, 'SIT_GREEN_REHEARSAL_PROBE_USER_ID'), false);
   assert.deepEqual(Object.fromEntries(['SIT_STAGING_LISTING_AI_PROFILE', 'SIT_LISTING_AI_PROVIDER', 'SIT_LISTING_AI_MODEL',
     'SIT_LISTING_AI_BUDGET_CENTS', 'SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS', 'SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID',
     'SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', 'OPENAI_API_KEY', 'OPENAI_API_KEY_FILE'].map(k => [k, mockSpec.env[k]])), {

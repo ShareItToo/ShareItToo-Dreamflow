@@ -103,6 +103,19 @@ function candidateStateDiagnostic(record, readiness) {
   });
 }
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const stagingIdentifier = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,119}$/u;
+export function rehearsalProbeIdentity(runId, allowedUserIds) {
+  require(typeof runId === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/u.test(runId), 'rehearsal_probe_run_id');
+  require(typeof allowedUserIds === 'string' && allowedUserIds.trim().length > 0, 'rehearsal_probe_allowlist');
+  const allowed = allowedUserIds.split(',').map(value => value.trim());
+  require(allowed.every(value => stagingIdentifier.test(value)) && new Set(allowed).size === allowed.length,
+    'rehearsal_probe_allowlist');
+  const userId = `sit_rehearsal_${crypto.createHash('sha256').update(`sit-green-mfa-probe:${runId}`).digest('hex').slice(0, 32)}`;
+  require(!allowed.includes(userId), 'rehearsal_probe_allowlist_collision');
+  const email = `${userId}@example.invalid`;
+  require(/^[a-z0-9_]+@example\.invalid$/u.test(email), 'rehearsal_probe_email');
+  return Object.freeze({ userId, email, allowedUserIds: `${allowedUserIds},${userId}` });
+}
 async function poll(check, delay) {
   for (let attempt = 0; attempt < 30; attempt++) {
     try { if (await check()) return; } catch { /* Only bounded read-only polling. */ }
@@ -192,8 +205,11 @@ export async function runSuccessorRehearsal(inputs, options, dependencies = {}) 
       require(inputs.config.listingAiTransition.to === 'staging-mock-v1'
         && ['SIT_STAGING_PILOT_ID', 'SIT_STAGING_ACCESS_GATE_ENABLED', 'SIT_STAGING_COMPOSE_PROJECT', 'SIT_STAGING_ALLOWED_USER_IDS']
           .every(key => typeof sourceEnv[key] === 'string' && sourceEnv[key].length > 0), 'rehearsal_mock_source_boundary');
+      const probeIdentity = rehearsalProbeIdentity(inputs.config.runId, sourceEnv.SIT_STAGING_ALLOWED_USER_IDS);
       Object.assign(neutral, Object.fromEntries(['SIT_STAGING_PILOT_ID', 'SIT_STAGING_COMPOSE_PROJECT', 'SIT_STAGING_ALLOWED_USER_IDS']
-        .map(key => [key, sourceEnv[key]])), stagingMockListingAiValues, { SIT_STAGING_ACCESS_GATE_ENABLED: 'true' });
+        .map(key => [key, sourceEnv[key]])), stagingMockListingAiValues, { SIT_STAGING_ACCESS_GATE_ENABLED: 'true',
+        SIT_STAGING_ALLOWED_USER_IDS: probeIdentity.allowedUserIds,
+        SIT_GREEN_REHEARSAL_PROBE_USER_ID: probeIdentity.userId });
     }
     const user = `${fresh.candidateContent.uid}:${fresh.candidateContent.gid}`;
     const paths = inputs.config.materials.map(m => m.destination);
