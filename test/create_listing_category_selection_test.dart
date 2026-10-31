@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
+import 'dart:ui' show SemanticsAction;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
 import 'package:lendify/config/private_pilot_config.dart';
 import 'package:lendify/models/item.dart';
 import 'package:lendify/screens/create_listing_screen.dart';
@@ -48,6 +51,124 @@ void main() {
     WidgetController.hitTestWarningShouldBeFatal = true;
   });
   tearDown(() => WidgetController.hitTestWarningShouldBeFatal = false);
+
+  testWidgets('selected photo is rendered in the listing publish preview',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final originalPicker = ImagePickerPlatform.instance;
+    final picker = _SyntheticListingPhotoPicker(_testPng);
+    ImagePickerPlatform.instance = picker;
+    addTearDown(() => ImagePickerPlatform.instance = originalPicker);
+
+    final service = _CategoryStore();
+    await tester.pumpWidget(ChangeNotifierProvider(
+      create: (_) => LocalizationController(),
+      child: MaterialApp(
+        home: CreateListingScreen(listingMutationService: service),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tapVisible(tester, find.byIcon(Icons.add_a_photo));
+    await tapVisible(tester, find.text('Aus Galerie auswählen'));
+    await tester.pumpAndSettle();
+    expect(picker.calls, 1);
+
+    final title = find.byWidgetPredicate((widget) =>
+        widget is TextField && widget.decoration?.labelText == 'Titel');
+    final description = find.byWidgetPredicate((widget) =>
+        widget is TextField && widget.decoration?.labelText == 'Beschreibung');
+    await tester.ensureVisible(title);
+    await tester.enterText(title, 'Synthetische Kamera-Vorschau');
+    await tester.ensureVisible(description);
+    await tester.enterText(description, 'Lokaler Foto-Vorschautest.');
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
+    await tapVisible(tester, find.widgetWithText(FilledButton, 'Weiter'));
+
+    final price = find.byWidgetPredicate((widget) =>
+        widget is TextField && widget.decoration?.hintText == '0,00');
+    await tester.ensureVisible(price);
+    await tester.enterText(price, '18');
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
+    await tapVisible(tester, find.widgetWithText(FilledButton, 'Weiter'));
+
+    final preview =
+        find.byKey(const ValueKey('selected-listing-photo-preview'));
+    expect(preview, findsOneWidget);
+    expect(find.descendant(of: preview, matching: find.byType(Image)),
+        findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'edit subcategory stays readable, selectable and semantic on narrow 2x mobile',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final service = _CategoryStore();
+    final existing = Item.fromJson({
+      ...buildTestItem(
+        id: 'narrow-subcategory-edit',
+        ownerId: service.context.user.id,
+        title: 'Synthetischer Kameraentwurf',
+      ).toJson(),
+      'categoryId': 'cat3',
+      'subcategory': 'Sonstiges',
+      'description': 'Synthetischer Text für den mobilen Bearbeitungstest.',
+      'status': 'draft',
+      'isActive': false,
+    });
+    final semantics = tester.ensureSemantics();
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider(
+        create: (_) => LocalizationController(),
+        child: MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: const TextScaler.linear(2),
+            ),
+            child: child!,
+          ),
+          home: CreateListingScreen(
+            existing: existing,
+            listingMutationService: service,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final subcategory = field('Unterkategorie');
+    await tester.ensureVisible(subcategory);
+    expect(tester.getSize(subcategory).height, greaterThanOrEqualTo(48));
+    expect(
+        tester.state<FormFieldState<String>>(subcategory).value, 'Sonstiges');
+    final dropdown = find.descendant(
+      of: subcategory,
+      matching: find.byType(DropdownButton<String>),
+    );
+    expect(
+      tester.getSemantics(dropdown).getSemanticsData().hasAction(
+            SemanticsAction.tap,
+          ),
+      isTrue,
+    );
+
+    await choose(tester, 'Unterkategorie', 'Kameras');
+    expect(tester.state<FormFieldState<String>>(subcategory).value, 'Kameras');
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
+  });
 
   for (final width in [390.0, 1000.0]) {
     testWidgets(
@@ -348,6 +469,28 @@ void main() {
           isTrue);
     }
   });
+}
+
+final Uint8List _testPng = base64Decode(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=');
+
+class _SyntheticListingPhotoPicker extends ImagePickerPlatform {
+  final Uint8List bytes;
+  int calls = 0;
+
+  _SyntheticListingPhotoPicker(this.bytes);
+
+  @override
+  Future<List<XFile>?> getMultiImage({
+    double? maxWidth,
+    double? maxHeight,
+    int? imageQuality,
+  }) async {
+    calls++;
+    return <XFile>[
+      XFile.fromData(bytes, name: 'synthetic-camera.png'),
+    ];
+  }
 }
 
 class _CategoryStore extends ListingMutationService {

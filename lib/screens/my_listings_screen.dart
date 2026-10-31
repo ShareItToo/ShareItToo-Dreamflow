@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:lendify/theme.dart';
@@ -495,7 +496,20 @@ class _MyListingsScreenState extends State<MyListingsScreen>
 
   Widget _buildItemsGrid(List<Item> visible, LocalizationController l10n,
       {required _EmptyKind emptyKind}) {
-    final compact = MediaQuery.sizeOf(context).width < 360;
+    final width = MediaQuery.sizeOf(context).width;
+    final tileWidth = math.max(0, (width - 42) / 2);
+    final textScaler = MediaQuery.textScalerOf(context);
+    final titleLineHeight = textScaler.scale(14) * 1.25;
+    final smallLineHeight = textScaler.scale(12) * 1.25;
+    final statusRowHeight = math.max(48, smallLineHeight + 4);
+    final tileHeight = tileWidth * 9 / 16 +
+        12 +
+        titleLineHeight +
+        2 +
+        smallLineHeight +
+        4 +
+        statusRowHeight +
+        12;
     return visible.isEmpty
         ? _MyListingsEmptyState(
             kind: emptyKind,
@@ -507,7 +521,7 @@ class _MyListingsScreenState extends State<MyListingsScreen>
                 crossAxisCount: 2,
                 mainAxisSpacing: 10,
                 crossAxisSpacing: 10,
-                childAspectRatio: compact ? 0.78 : 1.02),
+                mainAxisExtent: tileHeight),
             itemCount: visible.length,
             itemBuilder: (_, i) {
               final it = visible[i];
@@ -590,28 +604,32 @@ class _MyListingsScreenState extends State<MyListingsScreen>
                                 ]),
                                 const SizedBox(height: 4),
                                 Row(children: [
-                                  Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                          color: chipColor,
-                                          borderRadius:
-                                              BorderRadius.circular(8)),
-                                      child: Text(statusLabel,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .labelSmall
-                                              ?.copyWith(
-                                                  color: AppTheme.textPrimary(
-                                                      context)))),
-                                  const Spacer(),
+                                  Expanded(
+                                    child: Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                              color: chipColor,
+                                              borderRadius:
+                                                  BorderRadius.circular(8)),
+                                          child: Text(statusLabel,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .labelSmall
+                                                  ?.copyWith(
+                                                      color:
+                                                          AppTheme.textPrimary(
+                                                              context)))),
+                                    ),
+                                  ),
                                   IconButton(
                                     tooltip: 'Status ändern',
                                     style: IconButton.styleFrom(
-                                      minimumSize: const Size.square(32),
-                                      padding: EdgeInsets.zero,
-                                      tapTargetSize:
-                                          MaterialTapTargetSize.shrinkWrap,
+                                      minimumSize: const Size.square(48),
                                     ),
                                     onPressed: _actionBusy
                                         ? null

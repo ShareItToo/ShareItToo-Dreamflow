@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:lendify/services/data_service.dart';
 import 'package:provider/provider.dart';
 import 'package:lendify/widgets/selection_controls.dart';
@@ -578,80 +579,50 @@ class _FiltersSheetState extends State<_FiltersSheet> {
                                         Theme.of(context).colorScheme.primary,
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600)),
-                            child: GridView.builder(
-                              physics: const NeverScrollableScrollPhysics(),
-                              shrinkWrap: true,
-                              padding: EdgeInsets.zero,
-                              gridDelegate:
-                                  const SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: 4,
-                                      crossAxisSpacing: 12,
-                                      mainAxisSpacing: 12,
-                                      childAspectRatio: 0.68),
-                              itemCount: _allCoarse.length,
-                              itemBuilder: (context, index) {
-                                final raw = _allCoarse[index];
-                                final label = stackCategoryLabel(raw);
-                                final active =
-                                    _selectedCategories.contains(raw);
-                                return InkWell(
-                                  onTap: () => setState(() {
-                                    if (active) {
-                                      _selectedCategories.remove(raw);
-                                    } else {
-                                      _selectedCategories.add(raw);
-                                    }
-                                  }),
-                                  borderRadius: BorderRadius.circular(14),
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: active
-                                          ? Theme.of(context)
-                                              .colorScheme
-                                              .primary
-                                          : AppTheme.surfaceSecondary(context),
-                                      borderRadius: BorderRadius.circular(14),
-                                      border: Border.all(
-                                          color: active
-                                              ? Theme.of(context)
-                                                  .colorScheme
-                                                  .primary
-                                              : AppTheme.glassStroke(context)),
-                                    ),
-                                    padding: const EdgeInsets.all(8),
-                                    child: Column(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          Icon(
-                                              _coarseIconForGroup(
-                                                  _allCoarse[index]),
-                                              color: active
-                                                  ? Colors.white
-                                                  : AppTheme.textBody(context),
-                                              size: 24),
-                                          const SizedBox(height: 6),
-                                          Text(
-                                            label,
-                                            maxLines: 2,
-                                            softWrap: true,
-                                            overflow: TextOverflow.clip,
-                                            textAlign: TextAlign.center,
-                                            style: TextStyle(
-                                              color: active
-                                                  ? Colors.white
-                                                  : AppTheme.textBody(context),
-                                              fontWeight: FontWeight.w700,
-                                              fontSize: 9,
-                                              height: 1.15,
-                                              letterSpacing: -0.1,
-                                            ),
-                                          ),
-                                        ]),
-                                  ),
-                                );
-                              },
-                            )),
+                            child:
+                                LayoutBuilder(builder: (context, constraints) {
+                              final columns = constraints.maxWidth < 400
+                                  ? 2
+                                  : constraints.maxWidth < 640
+                                      ? 3
+                                      : 4;
+                              final scaledTextHeight =
+                                  MediaQuery.textScalerOf(context).scale(14);
+                              final scaledTileHeight =
+                                  48 + scaledTextHeight * 1.15 * 3;
+                              final tileHeight = scaledTileHeight < 112
+                                  ? 112.0
+                                  : scaledTileHeight;
+                              return GridView.builder(
+                                physics: const NeverScrollableScrollPhysics(),
+                                shrinkWrap: true,
+                                padding: EdgeInsets.zero,
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: columns,
+                                  crossAxisSpacing: 12,
+                                  mainAxisSpacing: 12,
+                                  mainAxisExtent: tileHeight,
+                                ),
+                                itemCount: _allCoarse.length,
+                                itemBuilder: (context, index) {
+                                  final raw = _allCoarse[index];
+                                  return _FilterCategoryTile(
+                                    label: raw,
+                                    displayLabel: stackCategoryLabel(raw),
+                                    icon: _coarseIconForGroup(raw),
+                                    selected: _selectedCategories.contains(raw),
+                                    onTap: () => setState(() {
+                                      if (_selectedCategories.contains(raw)) {
+                                        _selectedCategories.remove(raw);
+                                      } else {
+                                        _selectedCategories.add(raw);
+                                      }
+                                    }),
+                                  );
+                                },
+                              );
+                            })),
                         const SizedBox(height: 8),
                       ],
                     ]),
@@ -767,6 +738,88 @@ class _Section extends StatelessWidget {
       ]),
     );
   }
+}
+
+class _FilterCategoryTile extends StatelessWidget {
+  final String label;
+  final String displayLabel;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _FilterCategoryTile({
+    required this.label,
+    required this.displayLabel,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => Focus(
+        onKeyEvent: (_, event) {
+          if (event is KeyDownEvent &&
+              (event.logicalKey == LogicalKeyboardKey.enter ||
+                  event.logicalKey == LogicalKeyboardKey.space)) {
+            onTap();
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: Semantics(
+          key: ValueKey('filter-category-$label'),
+          container: true,
+          button: true,
+          selected: selected,
+          label: label,
+          onTap: onTap,
+          child: ExcludeSemantics(
+            child: InkWell(
+              canRequestFocus: false,
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(14),
+              child: Builder(builder: (context) {
+                final color =
+                    selected ? Colors.white : AppTheme.textBody(context);
+                return Container(
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? Theme.of(context).colorScheme.primary
+                        : AppTheme.surfaceSecondary(context),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: selected
+                          ? Theme.of(context).colorScheme.primary
+                          : AppTheme.glassStroke(context),
+                    ),
+                  ),
+                  padding: const EdgeInsets.all(8),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(icon, color: color, size: 24),
+                      const SizedBox(height: 6),
+                      Text(
+                        displayLabel,
+                        maxLines: 3,
+                        softWrap: true,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: color,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                          height: 1.15,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ),
+          ),
+        ),
+      );
 }
 
 // ---------- Horizontal pager for Zustand in Filters (mirrors Create Listing style) ----------
@@ -927,7 +980,9 @@ class _SortPager extends StatelessWidget {
                   child: Text(
                     l10n.t(opt),
                     style: TextStyle(
-                      color: opt == selected ? primary : AppTheme.textBody(context),
+                      color: opt == selected
+                          ? primary
+                          : AppTheme.textBody(context),
                       fontWeight:
                           opt == selected ? FontWeight.w700 : FontWeight.w600,
                     ),

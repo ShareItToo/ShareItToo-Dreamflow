@@ -4004,8 +4004,12 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                                           url: _blueOceanPhotoUrls.first,
                                           fit: BoxFit.cover,
                                         )
-                                      : const Icon(Icons.photo_outlined,
-                                          size: 48),
+                                      : _pickedImages.isNotEmpty
+                                          ? _SelectedListingPhotoPreview(
+                                              file: _pickedImages.first,
+                                            )
+                                          : const Icon(Icons.photo_outlined,
+                                              size: 48),
                             )
                           else
                             const SizedBox(
@@ -4710,6 +4714,63 @@ class _PickedThumb extends StatelessWidget {
       ),
     ]);
   }
+}
+
+class _SelectedListingPhotoPreview extends StatefulWidget {
+  final XFile file;
+
+  const _SelectedListingPhotoPreview({required this.file});
+
+  @override
+  State<_SelectedListingPhotoPreview> createState() =>
+      _SelectedListingPhotoPreviewState();
+}
+
+class _SelectedListingPhotoPreviewState
+    extends State<_SelectedListingPhotoPreview> {
+  late Future<Uint8List> _bytes;
+
+  @override
+  void initState() {
+    super.initState();
+    _bytes = widget.file.readAsBytes();
+  }
+
+  @override
+  void didUpdateWidget(covariant _SelectedListingPhotoPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.file, widget.file)) {
+      _bytes = widget.file.readAsBytes();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => ClipRRect(
+        key: const ValueKey('selected-listing-photo-preview'),
+        borderRadius: BorderRadius.circular(8),
+        child: FutureBuilder<Uint8List>(
+          future: _bytes,
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return const Icon(Icons.photo_outlined, size: 48);
+            }
+            if (!snapshot.hasData) {
+              return const Center(
+                child: SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              );
+            }
+            return Image.memory(
+              snapshot.data!,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) =>
+                  const Icon(Icons.photo_outlined, size: 48),
+            );
+          },
+        ),
+      );
 }
 
 // ---------- Simple Accordion (Chevron + smooth height animation) ----------
