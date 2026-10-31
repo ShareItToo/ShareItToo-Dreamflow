@@ -5225,74 +5225,19 @@ class DataService {
     return operation(token);
   }
 
-  static Future<PublicCatalogSnapshot> getPublicCatalogSnapshot() async {
-    if (!shouldUseDedicatedPublicRemoteCatalog(
-      backendEnabled: BackendConfig.enabled,
-      qaRuntimeEnabled: QaRuntimeService.isEnabled,
-    )) {
-      final items = await getItems();
-      final blockedUserIds =
-          (await BlockedUsersService.getBlockedUserIds()).toSet();
-      final filtered = items
-          .where(isPublicCatalogItem)
-          .where((item) => !blockedUserIds.contains(item.ownerId))
-          .toList()
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      return PublicCatalogSnapshot(
-        items: filtered,
-        blockedOwnerIds: blockedUserIds,
-      );
-    }
-
+  /// Runs one composite public read under a captured principal. A confirmed
+  /// transition restarts the whole result once; data from owners never mixes.
+  static Future<T> _runWithPublicCatalogOwnerRecovery<T>(
+    Future<T> Function(LocalPrincipalActionOwner owner) operation,
+  ) async {
     var owner = await LocalPrincipalActionOwner.capture();
     Object? lastError;
     StackTrace? lastStackTrace;
     for (var attempt = 0; attempt < 2; attempt += 1) {
       try {
-        final sessionOwner = owner.sessionOwner;
-        // Explore is a public-catalog surface. Keep the request principal
-        // exact while fetching the public listing snapshot; the blocked-owner
-        // overlay below is a separate, account-scoped read.
-        final remote = await withPublicCatalogAccessToken(
-          readAccessToken: () async {
-            final token = sessionOwner == null
-                ? null
-                : await AuthService.accessTokenForOwner(sessionOwner);
-            await owner.assertCurrent();
-            return token;
-          },
-          operation: (accessToken) => BackendRepository.searchListings(
-            sort: 'newest',
-            limit: 100,
-            accessToken: accessToken,
-          ),
-        );
+        final result = await operation(owner);
         await owner.assertCurrent();
-        final items = <Item>[];
-        for (final entry in remote) {
-          try {
-            items.add(Item.fromJson(entry));
-          } catch (error) {
-            debugPrint('[DataService] skipped invalid public listing: $error');
-          }
-        }
-
-        // A stable authenticated block-list failure must fail closed. Only a
-        // confirmed principal transition may restart this combined snapshot
-        // under the successor or guest principal.
-        final blockedUserIds =
-            (await BlockedUsersService.getBlockedUserIdsForOwner(owner))
-                .toSet();
-        await owner.assertCurrent();
-        final filtered = items
-            .where(isPublicCatalogItem)
-            .where((item) => !blockedUserIds.contains(item.ownerId))
-            .toList()
-          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        return PublicCatalogSnapshot(
-          items: filtered,
-          blockedOwnerIds: blockedUserIds,
-        );
+        return result;
       } catch (error, stackTrace) {
         lastError = error;
         lastStackTrace = stackTrace;
@@ -5329,6 +5274,64 @@ class DataService {
     );
   }
 
+  static Future<PublicCatalogSnapshot> getPublicCatalogSnapshot() async {
+    if (!shouldUseDedicatedPublicRemoteCatalog(
+      backendEnabled: BackendConfig.enabled,
+      qaRuntimeEnabled: QaRuntimeService.isEnabled,
+    )) {
+      final items = await getItems();
+      final blockedUserIds =
+          (await BlockedUsersService.getBlockedUserIds()).toSet();
+      final filtered = items
+          .where(isPublicCatalogItem)
+          .where((item) => !blockedUserIds.contains(item.ownerId))
+          .toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return PublicCatalogSnapshot(
+        items: filtered,
+        blockedOwnerIds: blockedUserIds,
+      );
+    }
+    return _runWithPublicCatalogOwnerRecovery((owner) async {
+      final sessionOwner = owner.sessionOwner;
+      final remote = await withPublicCatalogAccessToken(
+        readAccessToken: () async {
+          final token = sessionOwner == null
+              ? null
+              : await AuthService.accessTokenForOwner(sessionOwner);
+          await owner.assertCurrent();
+          return token;
+        },
+        operation: (accessToken) => BackendRepository.searchListings(
+          sort: 'newest',
+          limit: 100,
+          accessToken: accessToken,
+        ),
+      );
+      await owner.assertCurrent();
+      final items = <Item>[];
+      for (final entry in remote) {
+        try {
+          items.add(Item.fromJson(entry));
+        } catch (error) {
+          debugPrint('[DataService] skipped invalid public listing: $error');
+        }
+      }
+      final blockedOwnerIds =
+          (await BlockedUsersService.getBlockedUserIdsForOwner(owner)).toSet();
+      await owner.assertCurrent();
+      final filtered = items
+          .where(isPublicCatalogItem)
+          .where((item) => !blockedOwnerIds.contains(item.ownerId))
+          .toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return PublicCatalogSnapshot(
+        items: filtered,
+        blockedOwnerIds: blockedOwnerIds,
+      );
+    });
+  }
+
   static Future<List<Item>> getPublicItems() async =>
       (await getPublicCatalogSnapshot()).items;
 
@@ -5346,29 +5349,47 @@ class DataService {
   }) async {
     List<Item> items;
     if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
-      final remote = await withPublicCatalogAccessToken(
-        operation: (accessToken) => BackendRepository.searchListings(
-          query: query,
-          categoryIds: categoryIds,
-          conditions: conditions,
-          minPrice: minPrice,
-          maxPrice: maxPrice,
-          latitude: latitude,
-          longitude: longitude,
-          radiusKm: radiusKm,
-          sort: sort,
-          limit: limit,
-          accessToken: accessToken,
-        ),
-      );
-      items = <Item>[];
-      for (final entry in remote) {
-        try {
-          items.add(Item.fromJson(entry));
-        } catch (error) {
-          debugPrint('[DataService] skipped invalid search result: $error');
+      items = await _runWithPublicCatalogOwnerRecovery((owner) async {
+        final sessionOwner = owner.sessionOwner;
+        final remote = await withPublicCatalogAccessToken(
+          readAccessToken: () async {
+            final token = sessionOwner == null
+                ? null
+                : await AuthService.accessTokenForOwner(sessionOwner);
+            await owner.assertCurrent();
+            return token;
+          },
+          operation: (accessToken) => BackendRepository.searchListings(
+            query: query,
+            categoryIds: categoryIds,
+            conditions: conditions,
+            minPrice: minPrice,
+            maxPrice: maxPrice,
+            latitude: latitude,
+            longitude: longitude,
+            radiusKm: radiusKm,
+            sort: sort,
+            limit: limit,
+            accessToken: accessToken,
+          ),
+        );
+        await owner.assertCurrent();
+        final parsed = <Item>[];
+        for (final entry in remote) {
+          try {
+            parsed.add(Item.fromJson(entry));
+          } catch (error) {
+            debugPrint('[DataService] skipped invalid search result: $error');
+          }
         }
-      }
+        final blockedOwnerIds =
+            (await BlockedUsersService.getBlockedUserIdsForOwner(owner))
+                .toSet();
+        await owner.assertCurrent();
+        return parsed
+            .where((item) => !blockedOwnerIds.contains(item.ownerId))
+            .toList(growable: false);
+      });
     } else {
       final normalizedQuery = query?.trim().toLowerCase() ?? '';
       final boundedLimit = limit.clamp(1, 100).toInt();
@@ -5412,6 +5433,7 @@ class DataService {
       }
       items = items.take(boundedLimit).toList();
     }
+    if (BackendConfig.enabled && !QaRuntimeService.isEnabled) return items;
     final blockedUserIds =
         (await BlockedUsersService.getBlockedUserIds()).toSet();
     return items
