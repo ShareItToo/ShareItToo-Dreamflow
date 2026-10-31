@@ -624,6 +624,37 @@ class DataService {
     return current;
   }
 
+  static Future<LocalPrincipalActionOwner?> _captureNotificationMutationOwner({
+    required String userId,
+    AuthSessionOwner? expectedSessionOwner,
+  }) async {
+    if (!BackendConfig.enabled || QaRuntimeService.isEnabled) return null;
+    final captured = await LocalPrincipalActionOwner.capture();
+    final sessionOwner = captured.sessionOwner;
+    if (sessionOwner == null || sessionOwner.userId != userId.trim()) {
+      throw const BackendException(401, 'authentication_required');
+    }
+    if (expectedSessionOwner != null &&
+        (expectedSessionOwner.epoch != sessionOwner.epoch ||
+            expectedSessionOwner.userId != sessionOwner.userId ||
+            expectedSessionOwner.sessionId != sessionOwner.sessionId)) {
+      throw StateError('Die Kontositzung hat sich geändert.');
+    }
+    await _assertSessionOwnerOperationalUser(sessionOwner, userId);
+    return captured;
+  }
+
+  static Future<void> _verifyNotificationMutationOwner({
+    required LocalPrincipalActionOwner? owner,
+    required AuthSessionOwner? sessionOwner,
+    required String userId,
+  }) async {
+    if (owner == null || sessionOwner == null) return;
+    await owner.assertCurrent();
+    await _assertSessionOwnerOperationalUser(sessionOwner, userId);
+    await _assertCurrentOperationalUserId(userId);
+  }
+
   static bool _sessionMatchesOperationalUser(
     AuthSession? session, {
     required String userId,
@@ -12717,17 +12748,18 @@ class DataService {
     required String notificationId,
     AuthSessionOwner? expectedSessionOwner,
   }) async {
-    final owner = expectedSessionOwner ??
-        (QaRuntimeService.isEnabled
-            ? null
-            : (await LocalPrincipalActionOwner.capture()).sessionOwner);
-    if (owner == null && !QaRuntimeService.isEnabled) {
-      throw StateError(
-          'Für Benachrichtigungen ist eine Anmeldung erforderlich.');
-    }
+    final principalOwner = await _captureNotificationMutationOwner(
+      userId: userId,
+      expectedSessionOwner: expectedSessionOwner,
+    );
+    final owner = principalOwner?.sessionOwner;
     final current =
         await _requireCurrentOperationalUser(requestedUserId: userId);
-    if (owner != null) await _assertSessionOwnerOperationalUser(owner, userId);
+    await _verifyNotificationMutationOwner(
+      owner: principalOwner,
+      sessionOwner: owner,
+      userId: userId,
+    );
     try {
       if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
         await BackendRepository.updateNotification(
@@ -12736,12 +12768,23 @@ class DataService {
           expectedOwner: owner,
         );
       }
+      await _verifyNotificationMutationOwner(
+        owner: principalOwner,
+        sessionOwner: owner,
+        userId: userId,
+      );
       await _operationalMutationQueue.run(() async {
-        await _assertCurrentOperationalUserId(current.id);
+        await _verifyNotificationMutationOwner(
+          owner: principalOwner,
+          sessionOwner: owner,
+          userId: current.id,
+        );
         final prefs = await SharedPreferences.getInstance();
-        if (owner != null) {
-          await _assertSessionOwnerOperationalUser(owner, userId);
-        }
+        await _verifyNotificationMutationOwner(
+          owner: principalOwner,
+          sessionOwner: owner,
+          userId: current.id,
+        );
         final raw = prefs.getString(_notificationsKey);
         if (raw == null) return;
         final list = _decodeNotificationsStrict(raw);
@@ -12760,7 +12803,17 @@ class DataService {
           }
         }
         if (mutated) {
-          await _persistNotifications(prefs, list);
+          await _persistNotifications(
+            prefs,
+            list,
+            verifyAuthorization: principalOwner == null
+                ? null
+                : () => _verifyNotificationMutationOwner(
+                      owner: principalOwner,
+                      sessionOwner: owner,
+                      userId: current.id,
+                    ),
+          );
         }
       });
     } catch (e) {
@@ -12771,27 +12824,39 @@ class DataService {
 
   static Future<void> markAllNotificationsRead(String userId,
       {AuthSessionOwner? expectedSessionOwner}) async {
-    final owner = expectedSessionOwner ??
-        (QaRuntimeService.isEnabled
-            ? null
-            : (await LocalPrincipalActionOwner.capture()).sessionOwner);
-    if (owner == null && !QaRuntimeService.isEnabled) {
-      throw StateError(
-          'Für Benachrichtigungen ist eine Anmeldung erforderlich.');
-    }
+    final principalOwner = await _captureNotificationMutationOwner(
+      userId: userId,
+      expectedSessionOwner: expectedSessionOwner,
+    );
+    final owner = principalOwner?.sessionOwner;
     final current =
         await _requireCurrentOperationalUser(requestedUserId: userId);
-    if (owner != null) await _assertSessionOwnerOperationalUser(owner, userId);
+    await _verifyNotificationMutationOwner(
+      owner: principalOwner,
+      sessionOwner: owner,
+      userId: userId,
+    );
     try {
       if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
         await BackendRepository.markAllNotificationsRead(expectedOwner: owner);
       }
+      await _verifyNotificationMutationOwner(
+        owner: principalOwner,
+        sessionOwner: owner,
+        userId: userId,
+      );
       await _operationalMutationQueue.run(() async {
-        await _assertCurrentOperationalUserId(current.id);
+        await _verifyNotificationMutationOwner(
+          owner: principalOwner,
+          sessionOwner: owner,
+          userId: current.id,
+        );
         final prefs = await SharedPreferences.getInstance();
-        if (owner != null) {
-          await _assertSessionOwnerOperationalUser(owner, userId);
-        }
+        await _verifyNotificationMutationOwner(
+          owner: principalOwner,
+          sessionOwner: owner,
+          userId: current.id,
+        );
         final raw = prefs.getString(_notificationsKey);
         if (raw == null) return;
         final list = _decodeNotificationsStrict(raw);
@@ -12807,7 +12872,17 @@ class DataService {
           }
         }
         if (mutated) {
-          await _persistNotifications(prefs, list);
+          await _persistNotifications(
+            prefs,
+            list,
+            verifyAuthorization: principalOwner == null
+                ? null
+                : () => _verifyNotificationMutationOwner(
+                      owner: principalOwner,
+                      sessionOwner: owner,
+                      userId: current.id,
+                    ),
+          );
         }
       });
     } catch (e) {
@@ -12821,19 +12896,45 @@ class DataService {
   static Future<void> archiveNotification({
     required String userId,
     required String notificationId,
+    AuthSessionOwner? expectedSessionOwner,
   }) async {
+    final principalOwner = await _captureNotificationMutationOwner(
+      userId: userId,
+      expectedSessionOwner: expectedSessionOwner,
+    );
+    final owner = principalOwner?.sessionOwner;
     final current =
         await _requireCurrentOperationalUser(requestedUserId: userId);
+    await _verifyNotificationMutationOwner(
+      owner: principalOwner,
+      sessionOwner: owner,
+      userId: userId,
+    );
     try {
       if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
         await BackendRepository.updateNotification(
           id: notificationId,
           archived: true,
+          expectedOwner: owner,
         );
       }
+      await _verifyNotificationMutationOwner(
+        owner: principalOwner,
+        sessionOwner: owner,
+        userId: userId,
+      );
       await _operationalMutationQueue.run(() async {
-        await _assertCurrentOperationalUserId(current.id);
+        await _verifyNotificationMutationOwner(
+          owner: principalOwner,
+          sessionOwner: owner,
+          userId: current.id,
+        );
         final prefs = await SharedPreferences.getInstance();
+        await _verifyNotificationMutationOwner(
+          owner: principalOwner,
+          sessionOwner: owner,
+          userId: current.id,
+        );
         final raw = prefs.getString(_notificationsKey);
         if (raw == null) return;
         final list = _decodeNotificationsStrict(raw);
@@ -12853,7 +12954,17 @@ class DataService {
           }
         }
         if (mutated) {
-          await _persistNotifications(prefs, list);
+          await _persistNotifications(
+            prefs,
+            list,
+            verifyAuthorization: principalOwner == null
+                ? null
+                : () => _verifyNotificationMutationOwner(
+                      owner: principalOwner,
+                      sessionOwner: owner,
+                      userId: current.id,
+                    ),
+          );
         }
       });
     } catch (e) {
