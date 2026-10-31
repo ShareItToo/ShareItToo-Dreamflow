@@ -3,7 +3,7 @@ import { objectDigest } from '../../ops/green_staging_98_106_contract.mjs';
 import { canonicalMounts, containerFingerprint } from '../../ops/green_staging_98_106_promotion.mjs';
 import { executionPreflight, physicalSchemaSql, writersSql, constraintsSql } from '../../ops/green_staging_106_106_preflight.mjs';
 import { snapshotSql } from '../../ops/green_staging_106_106_database.mjs';
-import { auxiliarySql, rehearsalConfirmation } from '../../ops/green_staging_106_106_rehearsal.mjs';
+import { auxiliarySql, credentialCleanupEligibilitySql, rehearsalConfirmation } from '../../ops/green_staging_106_106_rehearsal.mjs';
 import { inputs } from './green_106106_preflight.js';
 import { hex } from './green_106106_readonly.js';
 import { buildReleaseMetadata } from '../../src/release.js';
@@ -116,6 +116,9 @@ export async function rehearsalFixture(directory, { restartPolicy = 'no', databa
         states.set(target, structuredClone(states.get(dbSource.Id))); auxiliary.set(target, structuredClone(auxiliary.get(dbSource.Id))); }
       else if (entry.input === snapshotSql) result = states.get(target).map(r => JSON.stringify(r)).join('\n');
       else if (entry.input === auxiliarySql) result = auxiliary.get(target).map(r => JSON.stringify(r)).join('\n');
+      else if (entry.input === credentialCleanupEligibilitySql) result = JSON.stringify({ authActionTokens: 0,
+        refreshTokens: 0, staffElevations: 0, bookingChallenges: 0, googleRegistrationReplays: 0,
+        passwordEnrollmentRedemptions: 0 });
       else if (entry.input === physicalSchemaSql) result = s.manifest.physicalSchemaSha256;
       else if ([writersSql, constraintsSql].includes(entry.input)) result = '0';
       else if (entry.input === 'SELECT 1') result = '1';
@@ -125,7 +128,12 @@ export async function rehearsalFixture(directory, { restartPolicy = 'no', databa
         const health = { status: 'ok', checks: { technicalSandbox: { available: false, reason: 'disabled', provider: 'stripe', mode: 'disabled', amountMinor: 100,
           currency: 'EUR', maxRunsPerUser24h: 3, professionalReview: false, syntheticOnly: true }, identityVerification: { provider: 'memory' }, listingAi: { provider: 'on_device' } } };
         const env = Object.fromEntries(records[target].Config.Env.map(e => [e.slice(0, e.indexOf('=')), e.slice(e.indexOf('=') + 1)]));
-        result = JSON.stringify({ live: { status: 'ok' }, health, ready: health, version: buildReleaseMetadata(env) });
+        result = JSON.stringify({
+          live: { status: 200, payload: { status: 'ok' } },
+          health: { status: 200, payload: health },
+          ready: { status: 200, payload: health },
+          version: { status: 200, payload: buildReleaseMetadata(env) },
+        });
       } else throw new Error('unmodeled exec');
     } else result = await initialCommand(entry);
     if (losses.delete(entry.phase)) throw new Error('synthetic_response_loss'); return result;

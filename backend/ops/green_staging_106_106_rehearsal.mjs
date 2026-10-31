@@ -21,7 +21,87 @@ SELECT coalesce('SELECT json_object_agg(name,state) FROM (' || string_agg(format
 \\gexec
 COMMIT;
 `;
-export const readinessScript = "const result={};for(const [key,path] of [['live','/health/live'],['health','/health/ready'],['ready','/health/ready'],['version','/version']]){const response=await fetch('http://127.0.0.1:8080'+path,{signal:AbortSignal.timeout(5000)});if(response.status!==200)throw Error('readiness');result[key]=await response.json();}process.stdout.write(JSON.stringify(result));";
+export const credentialCleanupEligibilitySql = `BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY;
+SELECT json_build_object(
+ 'authActionTokens',(SELECT count(*)::int FROM auth_action_tokens WHERE expires_at <= now() OR consumed_at IS NOT NULL),
+ 'refreshTokens',(SELECT count(*)::int FROM refresh_tokens WHERE expires_at <= now()),
+ 'staffElevations',(SELECT count(*)::int FROM staff_elevations WHERE expires_at <= now() OR revoked_at IS NOT NULL),
+ 'bookingChallenges',(SELECT count(*)::int FROM booking_confirmation_challenges
+   WHERE (expires_at <= now() OR consumed_at IS NOT NULL OR revoked_at IS NOT NULL) AND code_digest <> repeat('0',64)),
+ 'googleRegistrationReplays',(SELECT count(*)::int FROM staging_google_registration_replays WHERE expires_at <= now()),
+ 'passwordEnrollmentRedemptions',(SELECT count(*)::int FROM staging_password_enrollment_redemptions WHERE expires_at <= now())
+);
+COMMIT;
+`;
+const credentialCleanupEligibilityKeys = Object.freeze(['authActionTokens', 'refreshTokens', 'staffElevations',
+  'bookingChallenges', 'googleRegistrationReplays', 'passwordEnrollmentRedemptions']);
+export function assertCredentialCleanupEligible(raw) {
+  let counts;
+  try { counts = JSON.parse(String(raw)); } catch { require(false, 'rehearsal_cleanup_eligibility_shape'); }
+  require(counts && Object.getPrototypeOf(counts) === Object.prototype
+    && equal(Object.keys(counts).sort(), [...credentialCleanupEligibilityKeys].sort())
+    && credentialCleanupEligibilityKeys.every(key => Number.isSafeInteger(counts[key]) && counts[key] >= 0),
+  'rehearsal_cleanup_eligibility_shape');
+  require(credentialCleanupEligibilityKeys.every(key => counts[key] === 0), 'rehearsal_cleanup_eligibility_nonzero');
+  return true;
+}
+export const readinessScript = "const result={};for(const [key,path] of [['live','/health/live'],['health','/health'],['ready','/health/ready'],['version','/version']]){try{const response=await fetch('http://127.0.0.1:8080'+path,{signal:AbortSignal.timeout(5000)});let payload=null;try{payload=await response.json()}catch{}result[key]={status:response.status,payload}}catch{result[key]={status:0,payload:null}}}process.stdout.write(JSON.stringify(result));";
+const readinessKeys = Object.freeze(['live', 'health', 'ready', 'version']);
+const emptyStatuses = () => Object.fromEntries(readinessKeys.map(key => [key, null]));
+function readinessStatus(value) {
+  return Number.isInteger(value) && value >= 0 && value <= 599 ? value : null;
+}
+export function evaluateCandidateReadinessProbe(probe, { expectedVersion, runtimeCommit } = {}) {
+  const statuses = emptyStatuses();
+  if (!probe || Object.getPrototypeOf(probe) !== Object.prototype
+      || !equal(Object.keys(probe).sort(), [...readinessKeys].sort())) {
+    return { ok: false, diagnostic: { code: 'probe_shape', statuses } };
+  }
+  for (const key of readinessKeys) statuses[key] = readinessStatus(probe[key]?.status);
+  if (Object.values(statuses).some(status => status === null)) {
+    return { ok: false, diagnostic: { code: 'probe_shape', statuses } };
+  }
+  for (const key of readinessKeys) {
+    if (statuses[key] === 0) return { ok: false, diagnostic: { code: `${key}_unreachable`, statuses } };
+    if (statuses[key] !== 200) return { ok: false, diagnostic: { code: `${key}_http`, statuses } };
+    if (!probe[key].payload || Object.getPrototypeOf(probe[key].payload) !== Object.prototype) {
+      return { ok: false, diagnostic: { code: `${key}_payload`, statuses } };
+    }
+  }
+  const value = Object.fromEntries(readinessKeys.map(key => [key, probe[key].payload]));
+  try { assertGreenRuntimeReadbacks({ ...value, runtimeCommit }); }
+  catch { return { ok: false, diagnostic: { code: 'runtime_contract', statuses } }; }
+  if (!equal(value.version, expectedVersion)) return { ok: false, diagnostic: { code: 'release_metadata', statuses } };
+  if (value.live.status !== 'ok') return { ok: false, diagnostic: { code: 'live_payload', statuses } };
+  if (value.health.status !== 'ok') return { ok: false, diagnostic: { code: 'health_payload', statuses } };
+  if (value.ready.status !== 'ok') return { ok: false, diagnostic: { code: 'ready_payload', statuses } };
+  return { ok: true, value, diagnostic: { code: 'passed', statuses } };
+}
+function runtimeErrorClass(value) {
+  if (typeof value !== 'string' || value.trim() === '') return 'none';
+  const normalized = value.toLowerCase();
+  if (/permission denied|operation not permitted/u.test(normalized)) return 'permission_denied';
+  if (/no such file|not a directory|mount/u.test(normalized)) return 'mount_invalid';
+  if (/exec format|executable file/u.test(normalized)) return 'entrypoint_invalid';
+  return 'other';
+}
+function candidateStateDiagnostic(record, readiness) {
+  if (!record?.State) return Object.freeze({ stateReadable: false, running: null, status: 'unknown', exitCode: null,
+    oomKilled: null, dead: null, runtimeErrorClass: 'unavailable', readiness });
+  const state = record?.State ?? {};
+  const status = ['created', 'running', 'exited', 'dead', 'paused', 'restarting', 'removing'].includes(state.Status)
+    ? state.Status : 'unknown';
+  return Object.freeze({
+    stateReadable: true,
+    running: state.Running === true,
+    status,
+    exitCode: Number.isInteger(state.ExitCode) && state.ExitCode >= 0 && state.ExitCode <= 255 ? state.ExitCode : null,
+    oomKilled: state.OOMKilled === true,
+    dead: state.Dead === true,
+    runtimeErrorClass: runtimeErrorClass(state.Error),
+    readiness,
+  });
+}
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function poll(check, delay) {
   for (let attempt = 0; attempt < 30; attempt++) {
@@ -80,7 +160,9 @@ export async function runSuccessorRehearsal(inputs, options, dependencies = {}) 
       && supportedCanonicalRestartPolicy(record.HostConfig.RestartPolicy) && containerFingerprint(record) === source.configSha256, 'rehearsal_source_cas');
     return record;
   };
-  let backup, materials, error, cleanupError, result, stage = 'namespace_prerequisites';
+  let backup, materials, error, cleanupError, result, candidate, candidateDiagnostic;
+  let stage = 'namespace_prerequisites', candidateSubstage = null;
+  let lastReadiness = { code: 'not_attempted', statuses: emptyStatuses(), attempts: 0 };
   try {
     const initiallySealed = inputs.config.sourceState === 'sealed';
     const sourceRecord = await sourceCas(initiallySealed ? inputs.config.sealedSourceName : source.name, !initiallySealed);
@@ -158,27 +240,54 @@ export async function runSuccessorRehearsal(inputs, options, dependencies = {}) 
     require(equal(await snapshot(db.id), before) && await auxiliary(db.id) === beforeAux
       && await sql(db.id, physicalSchemaSql, 'isolated_schema') === inputs.manifest.physicalSchemaSha256
       && await sql(db.id, constraintsSql, 'isolated_constraints') === '0', 'rehearsal_restore_mismatch');
+    assertCredentialCleanupEligible(await sql(db.id, credentialCleanupEligibilitySql, 'credential_cleanup_eligibility'));
     const databaseRecord = await owned.inspect('container', db.id); owned.assertOwned(databaseRecord, db);
     const address = databaseRecord.NetworkSettings.Networks[network.name].IPAddress;
     require(typeof address === 'string' && /^(?:10\.|172\.(?:1[6-9]|2[0-9]|3[01])\.|192\.168\.)/u.test(address)
       && address.split('.').length === 4 && address.split('.').every(v => /^[0-9]{1,3}$/u.test(v) && Number(v) <= 255), 'rehearsal_database_ip');
     const candidateEnv = { ...neutral, DATABASE_URL: `postgresql://${inputs.binding.scope.databaseUser}:${secret}@${address}:5432/${inputs.binding.scope.databaseName}` };
     const expectedVersion = buildReleaseMetadata({ ...Object.fromEntries(candidateImage.Config.Env.map(e => [e.slice(0, e.indexOf('=')), e.slice(e.indexOf('=') + 1)])), ...candidateEnv });
-    const candidate = await owned.create({ kind: 'container', role: 'candidate', ...isolatedSpec(candidateImage, network, candidateEnv,
+    candidate = await owned.create({ kind: 'container', role: 'candidate', ...isolatedSpec(candidateImage, network, candidateEnv,
       { user, groups: supplementalGroups([mfa]), mounts: [{ type: 'volume', destination: '/data/uploads', readOnly: false },
         { type: 'bind', source: mfa.source, destination: mfa.destination, readOnly: true }] }) });
     const dbCas = await owned.inspect('container', db.id); owned.assertOwned(dbCas, db);
     require(dbCas.State.Running && dbCas.NetworkSettings.Networks[network.name].IPAddress === address, 'rehearsal_database_cas');
     stage = 'candidate_start';
-    require(equal(await snapshot(db.id), before), 'rehearsal_start_baseline'); materials.recheck(); await owned.start(candidate);
+    candidateSubstage = 'snapshot';
+    require(equal(await snapshot(db.id), before), 'rehearsal_start_baseline');
+    candidateSubstage = 'start'; materials.recheck(); await owned.start(candidate);
+    stage = 'candidate_readiness';
+    candidateSubstage = 'readiness';
+    let acceptedReadiness;
     await poll(async () => {
-      const value = JSON.parse(String(await command({ phase: 'candidate_readiness', args: ['exec', candidate.id, 'node', '--input-type=module', '-e', readinessScript] })));
-      assertGreenRuntimeReadbacks({ ...value, runtimeCommit: inputs.binding.runtimeCommit });
-      require(equal(value.version, expectedVersion) && value.live?.status === 'ok' && value.ready?.status === 'ok', 'rehearsal_readiness'); return true;
+      const attempts = lastReadiness.attempts + 1;
+      let raw;
+      try { raw = await command({ phase: 'candidate_readiness', args: ['exec', candidate.id, 'node', '--input-type=module', '-e', readinessScript] }); }
+      catch {
+        lastReadiness = { code: 'exec_unavailable', statuses: emptyStatuses(), attempts };
+        return false;
+      }
+      let probe;
+      try { probe = JSON.parse(String(raw)); }
+      catch {
+        lastReadiness = { code: 'probe_json', statuses: emptyStatuses(), attempts };
+        return false;
+      }
+      const evaluated = evaluateCandidateReadinessProbe(probe, { expectedVersion, runtimeCommit: inputs.binding.runtimeCommit });
+      lastReadiness = { ...evaluated.diagnostic, attempts };
+      if (!evaluated.ok) return false;
+      acceptedReadiness = evaluated.value;
+      return true;
     }, delay);
+    require(acceptedReadiness, 'rehearsal_readiness');
+    candidateSubstage = 'snapshot';
     const started = await snapshot(db.id); assertSuccessorStartup(before, started);
-    require(await auxiliary(db.id) === beforeAux && await sql(db.id, physicalSchemaSql, 'isolated_schema') === inputs.manifest.physicalSchemaSha256,
-      'rehearsal_start_auxiliary');
+    candidateSubstage = 'aux';
+    require(await auxiliary(db.id) === beforeAux, 'rehearsal_start_auxiliary');
+    candidateSubstage = 'schema';
+    require(await sql(db.id, physicalSchemaSql, 'isolated_schema') === inputs.manifest.physicalSchemaSha256,
+      'rehearsal_start_schema');
+    candidateSubstage = null;
     await owned.checkNetworks();
     stage = 'synthetic_probes';
     const probes = await runMfaProbe({ container: candidate.id, commandRunner: async (_program, args, input) =>
@@ -201,15 +310,30 @@ export async function runSuccessorRehearsal(inputs, options, dependencies = {}) 
       probes, namespaceReadabilityVerified: true, fixtureCleanupVerified: true, cleanupVerified: true,
       servicesRemainSealed: true, canonicalPromotionImplemented: false, publicReleaseComplete: false,
       providerTraffic: false, createdAt: new Date(now()).toISOString() };
-  } catch (failure) { error = failure; }
+  } catch (failure) {
+    error = failure;
+    if (candidate && ['candidate_start', 'candidate_readiness'].includes(stage)) {
+      try {
+        const record = await owned.inspect('container', candidate.id); owned.assertOwned(record, candidate);
+        candidateDiagnostic = candidateStateDiagnostic(record, lastReadiness);
+      } catch {
+        candidateDiagnostic = candidateStateDiagnostic(null, lastReadiness);
+      }
+    }
+  }
   finally {
     if (!owned.cleanupComplete) try { await owned.cleanup(); } catch (failure) { cleanupError = failure; }
     try { if (backup) closeArtifact(backup); } catch (failure) { cleanupError ??= failure; }
     try { materials?.close(); } catch (failure) { cleanupError ??= failure; }
   }
   if (error || cleanupError) {
+    const code = cleanupError ? 'cleanup_failed'
+      : stage === 'candidate_start' ? 'candidate_start_failed'
+        : stage === 'candidate_readiness' ? 'candidate_readiness_failed' : 'rehearsal_failed';
     writeArtifact(evidence, names[2], { kind: 'sit-green-staging-106-106-rehearsal-failure', schemaVersion: 1,
-      status: 'failed', stage, code: cleanupError ? 'cleanup_failed' : 'rehearsal_failed', cleanupVerified: !cleanupError,
+      status: 'failed', stage, code, cleanupVerified: !cleanupError,
+      candidateSubstage: ['start', 'readiness', 'snapshot', 'aux', 'schema'].includes(candidateSubstage) ? candidateSubstage : null,
+      ...(candidateDiagnostic ? { candidateDiagnostic } : {}),
       oldImageRestarted: false, canonicalPromotionImplemented: false, publicReleaseComplete: false });
     require(false, cleanupError ? 'rehearsal_cleanup_failed' : 'rehearsal_failed');
   }

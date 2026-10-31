@@ -4,7 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { objectDigest } from '../ops/green_staging_98_106_contract.mjs';
-import { runSuccessorRehearsal, rehearsalConfirmation } from '../ops/green_staging_106_106_rehearsal.mjs';
+import { assertCredentialCleanupEligible, credentialCleanupEligibilitySql, runSuccessorRehearsal,
+  rehearsalConfirmation } from '../ops/green_staging_106_106_rehearsal.mjs';
 import { executionPreflight } from '../ops/green_staging_106_106_preflight.mjs';
 import { rehearsalFixture } from './fixtures/green_106106_rehearsal.js';
 
@@ -102,13 +103,111 @@ test('wrong exact version is read-only-polled, never restarts candidate or reach
   f.dependencies.command = async e => {
     const result = await prior(e);
     if (e.phase !== 'candidate_readiness') return result;
-    const value = JSON.parse(result); value.version.buildTime = null; return JSON.stringify(value);
+    const value = JSON.parse(result); value.version.payload.buildTime = null; return JSON.stringify(value);
   };
   await assert.rejects(runSuccessorRehearsal(f.data, f.options, f.dependencies));
   assert.equal(f.calls.filter(c => c.phase === 'candidate_readiness').length, 30);
   assert.equal(f.calls.filter(c => c.phase === 'start_candidate').length, 1); assert.equal(f.probeRan(), false);
   assert.equal(owned(f).length, 0); assert.ok(!fs.existsSync(path.join(directory, 'synthetic-run.rehearsal.json')));
 }));
+test('credential cleanup eligibility is read-only, passes only six zero counts, and blocks each mutation class before candidate start', async t => {
+  const keys = ['authActionTokens', 'refreshTokens', 'staffElevations', 'bookingChallenges',
+    'googleRegistrationReplays', 'passwordEnrollmentRedemptions'];
+  const zero = Object.fromEntries(keys.map(key => [key, 0]));
+  assert.match(credentialCleanupEligibilitySql, /BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY/u);
+  assert.match(credentialCleanupEligibilitySql, /COMMIT;/u);
+  assert.equal(assertCredentialCleanupEligible(JSON.stringify(zero)), true);
+  assert.throws(() => assertCredentialCleanupEligible('not-json'));
+  for (const key of keys) await t.test(key, async () => scoped(async (f, directory) => {
+    const prior = f.dependencies.command;
+    f.dependencies.command = async entry => {
+      if (entry.input === credentialCleanupEligibilitySql) {
+        f.calls.push(entry);
+        return JSON.stringify({ ...zero, [key]: 1 });
+      }
+      return prior(entry);
+    };
+    await assert.rejects(runSuccessorRehearsal(f.data, f.options, f.dependencies));
+    assert.ok(f.calls.some(call => call.input === credentialCleanupEligibilitySql));
+    assert.ok(!f.calls.some(call => call.phase === 'create_candidate'));
+    assert.ok(!f.calls.some(call => call.phase === 'start_candidate'));
+    assert.equal(owned(f).length, 0); assert.equal(f.probeRan(), false);
+    const failure = JSON.parse(fs.readFileSync(path.join(directory, 'synthetic-run.failure.json')));
+    assert.equal(failure.cleanupVerified, true); assert.equal(failure.candidateSubstage, null);
+    assert.doesNotMatch(JSON.stringify(failure), /private-value|password|token_digest|refresh/u);
+  }));
+});
+test('candidate start exit is classified without log or error content', async () => scoped(async (f, directory) => {
+  const prior = f.dependencies.command;
+  f.dependencies.command = async e => {
+    const result = await prior(e);
+    if (e.phase === 'start_candidate') {
+      const candidate = f.records[e.args[1]];
+      candidate.State = { ...candidate.State, Running: false, Status: 'exited', ExitCode: 1,
+        OOMKilled: false, Dead: false, Error: '' };
+    }
+    return result;
+  };
+  await assert.rejects(runSuccessorRehearsal(f.data, f.options, f.dependencies));
+  const failure = JSON.parse(fs.readFileSync(path.join(directory, 'synthetic-run.failure.json')));
+  assert.equal(failure.stage, 'candidate_start'); assert.equal(failure.code, 'candidate_start_failed');
+  assert.equal(failure.candidateSubstage, 'start');
+  assert.deepEqual(failure.candidateDiagnostic, {
+    stateReadable: true, running: false, status: 'exited', exitCode: 1, oomKilled: false, dead: false,
+    runtimeErrorClass: 'none', readiness: { code: 'not_attempted', statuses: { live: null, health: null, ready: null, version: null }, attempts: 0 },
+  });
+  assert.equal(Object.hasOwn(failure.candidateDiagnostic, 'logs'), false);
+  assert.equal(Object.hasOwn(failure.candidateDiagnostic, 'errorText'), false);
+  assert.equal(owned(f).length, 0);
+}));
+test('candidate readiness HTTP failure is separately classified with statuses only', async () => scoped(async (f, directory) => {
+  const prior = f.dependencies.command;
+  f.dependencies.command = async e => {
+    const result = await prior(e);
+    if (e.phase !== 'candidate_readiness') return result;
+    const value = JSON.parse(result); value.ready.status = 503; value.ready.payload.status = 'degraded'; return JSON.stringify(value);
+  };
+  await assert.rejects(runSuccessorRehearsal(f.data, f.options, f.dependencies));
+  const failure = JSON.parse(fs.readFileSync(path.join(directory, 'synthetic-run.failure.json')));
+  assert.equal(failure.stage, 'candidate_readiness'); assert.equal(failure.code, 'candidate_readiness_failed');
+  assert.equal(failure.candidateSubstage, 'readiness');
+  assert.deepEqual(failure.candidateDiagnostic.readiness, {
+    code: 'ready_http', statuses: { live: 200, health: 200, ready: 503, version: 200 }, attempts: 30,
+  });
+  assert.equal(failure.candidateDiagnostic.running, true);
+  assert.deepEqual(Object.keys(failure.candidateDiagnostic).sort(),
+    ['dead', 'exitCode', 'oomKilled', 'readiness', 'running', 'runtimeErrorClass', 'stateReadable', 'status'].sort());
+  assert.equal(owned(f).length, 0);
+}));
+test('post-start snapshot, auxiliary, and schema failures use fixed candidate substages', async t => {
+  for (const substage of ['snapshot', 'aux', 'schema']) await t.test(substage, async () => scoped(async (f, directory) => {
+    const prior = f.dependencies.command; let readinessSeen = false, changed = false;
+    f.dependencies.command = async entry => {
+      if (entry.phase === 'candidate_readiness') {
+        const result = await prior(entry); readinessSeen = true; return result;
+      }
+      if (readinessSeen && !changed && substage === 'snapshot' && entry.phase === 'snapshot106') {
+        changed = true;
+        const rows = String(await prior(entry)).split('\n').map(line => JSON.parse(line));
+        rows[1].mission_needs.count++;
+        return rows.map(row => JSON.stringify(row)).join('\n');
+      }
+      if (readinessSeen && !changed && substage === 'aux' && entry.phase === 'auxiliary106') {
+        changed = true; return '{"changed":true}\n{}';
+      }
+      if (readinessSeen && !changed && substage === 'schema' && entry.phase === 'isolated_schema') {
+        changed = true; return 'f'.repeat(64);
+      }
+      return prior(entry);
+    };
+    await assert.rejects(runSuccessorRehearsal(f.data, f.options, f.dependencies));
+    const failure = JSON.parse(fs.readFileSync(path.join(directory, 'synthetic-run.failure.json')));
+    assert.equal(failure.candidateSubstage, substage);
+    assert.ok(changed); assert.equal(failure.cleanupVerified, true);
+    assert.equal(owned(f).length, 0); assert.equal(f.probeRan(), false);
+    assert.doesNotMatch(JSON.stringify(failure), /private-value|secret|password|token/u);
+  }));
+});
 test('canonical router drift after isolated cleanup prevents final PASS', async () => scoped(async (f, directory) => {
   const prior = f.dependencies.command;
   f.dependencies.command = async e => {
