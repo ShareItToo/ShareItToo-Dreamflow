@@ -8,7 +8,7 @@ import { assertGreenRuntimeReadbacks } from './green_staging_promotion.mjs';
 import { runMfaProbe } from './staging_controlled_acceptance.mjs';
 import { requireBinding as require } from './green_staging_106_106_binding.mjs';
 import { bindExecutionMaterials, executionPreflight, physicalSchemaSql, constraintsSql, writersSql, preflightRead } from './green_staging_106_106_preflight.mjs';
-import { assertSuccessorStartup, decodeSnapshot, snapshotSql } from './green_staging_106_106_database.mjs';
+import { assertRecoveryBaseline, assertSuccessorStartup, decodeSnapshot, snapshotSql } from './green_staging_106_106_database.mjs';
 import { SuccessorDocker, dockerObject, isolatedSpec, supportedCanonicalRestartPolicy } from './green_staging_106_106_resources.mjs';
 import { buildReleaseMetadata } from '../src/release.js';
 
@@ -216,7 +216,7 @@ export async function runSuccessorRehearsal(inputs, options, dependencies = {}) 
     stage = 'protected_backup';
     require(await sql(sourceDb.id, writersSql, 'source_writers') === '0', 'rehearsal_source_writer');
     const before = await snapshot(sourceDb.id), beforeAux = await auxiliary(sourceDb.id);
-    require(equal(before, inputs.target.database), 'rehearsal_source_changed');
+    assertRecoveryBaseline(inputs.target.database, before, now());
     backup = exclusiveArtifact(evidence, names[0]);
     await command({ phase: 'protected_backup', args: ['exec', sourceDb.id, 'pg_dump', '--format=custom', '--no-owner', '--no-acl',
       '-U', inputs.binding.scope.databaseUser, '-d', inputs.binding.scope.databaseName], outputFd: backup.fd });

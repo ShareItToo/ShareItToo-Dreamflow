@@ -51,6 +51,47 @@ test('candidate receives exactly the supplemental gid required by its mounted ma
   assert.deepEqual(groupAdds(f.calls.find(c => c.phase === 'create_database')), []);
   assert.deepEqual(groupAdds(f.calls.find(c => c.phase === 'create_candidate')), ['65532']);
 }));
+test('backup baseline allows healthy watchdog increments but rejects all other recovery drift before pg_dump', async t => {
+  await t.test('multiple healthy watchdog increments', async () => scoped(async (f, directory) => {
+    const prior = f.dependencies.command, watchdog = f.states.get(f.dbSource.Id)[2][0]; let injected = false;
+    f.dependencies.command = async entry => {
+      if (!injected && entry.phase === 'source_writers') {
+        injected = true;
+        watchdog.attempt_count += 3; watchdog.success_count += 3;
+        watchdog.last_started_at = watchdog.last_succeeded_at = watchdog.updated_at = '2020-01-01T00:00:00.500Z';
+      }
+      return prior(entry);
+    };
+    const result = await runSuccessorRehearsal(f.data, f.options, f.dependencies);
+    assert.equal(result.status, 'rehearsal_passed_services_sealed');
+    assert.ok(f.calls.some(call => call.phase === 'protected_backup'));
+    assert.equal(f.probeRan(), true); assert.equal(owned(f).length, 0);
+  }));
+  const cases = {
+    business: state => { state[1].mission_needs.count++; },
+    readiness: state => { state[3].supportNextUpdateOverdue.push({ id_hash: 'a'.repeat(64),
+      cause: 'next_update_overdue', status: 'open', priority: 'p1', time_class: '<1h' }); },
+    error: state => { state[2][0].last_error_code = 'worker_failed'; state[2][0].last_failed_at = state[2][0].last_started_at; },
+    alert: state => { state[2][0].last_alert_count++; },
+  };
+  for (const [label, change] of Object.entries(cases)) await t.test(label, async () => scoped(async (f, directory) => {
+    const prior = f.dependencies.command; let injected = false;
+    f.dependencies.command = async entry => {
+      if (!injected && entry.phase === 'source_writers') {
+        injected = true; change(f.states.get(f.dbSource.Id));
+      }
+      return prior(entry);
+    };
+    await assert.rejects(runSuccessorRehearsal(f.data, f.options, f.dependencies));
+    assert.equal(injected, true);
+    assert.ok(!f.calls.some(call => call.phase === 'protected_backup'));
+    assert.equal(fs.existsSync(path.join(directory, 'synthetic-run.pgdump')), false);
+    assert.equal(f.probeRan(), false); assert.equal(owned(f).length, 0);
+    const failure = JSON.parse(fs.readFileSync(path.join(directory, 'synthetic-run.failure.json')));
+    assert.equal(failure.cleanupVerified, true);
+    assert.doesNotMatch(JSON.stringify(failure), /private-value|password|token_digest|refresh/u);
+  }));
+});
 test('consent, stale/schema1 receipt and evidence collisions fail before any command or write', async t => {
   for (const [label, change] of Object.entries({ consent: f => { f.options.confirmation = 'no'; },
     stale: f => { f.options.preflight.createdAt = '2020-01-01T00:00:00.000Z'; },
