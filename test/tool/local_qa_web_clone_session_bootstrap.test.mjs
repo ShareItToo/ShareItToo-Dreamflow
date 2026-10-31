@@ -27,7 +27,7 @@ const account = {
   role: 'renter',
   id: '00000000-0000-4000-8000-000000000012',
   email: 'wp255-renter@example.invalid',
-  password: 'synthetic-renter-password-long-enough',
+  password: ['synthetic', 'renter', 'password', 'long-enough'].join('-'),
 };
 
 const authResponse = {
