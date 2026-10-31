@@ -254,6 +254,22 @@ test('receipt rejects wrong commit/hash/snapshot/probes/freshness and payment-mo
   const source = structuredClone(f.source); source.Config.Env = source.Config.Env.map(e => e.startsWith('PAYMENT_TRANSPORT=') ? 'PAYMENT_TRANSPORT=stripe' : e);
   assert.throws(() => canonicalSuccessorSpec(source, f.c.image, f.data), /provider_modes/u);
 }));
+test('receipt accepts only healthy watchdog progress since the collected database baseline', async () => scoped(async f => {
+  const receipt = structuredClone(f.receipt), prior = f.data.target.database.watchdog;
+  receipt.source.watchdog.attempt_count = prior.attempt_count + 2;
+  receipt.source.watchdog.success_count = prior.success_count + 2;
+  receipt.source.watchdog.last_started_at = receipt.source.watchdog.last_succeeded_at = receipt.source.watchdog.updated_at =
+    new Date(Date.parse(prior.updated_at) + 1000).toISOString();
+  receipt.started = structuredClone(receipt.source);
+  receipt.started.watchdog.attempt_count++;
+  receipt.started.watchdog.success_count++;
+  receipt.started.watchdog.last_started_at = receipt.started.watchdog.last_succeeded_at = receipt.started.watchdog.updated_at =
+    new Date(Date.parse(receipt.source.watchdog.updated_at) + 1000).toISOString();
+  const now = Math.max(Date.parse(receipt.createdAt), Date.parse(receipt.started.watchdog.updated_at)) + 1000;
+  assert.doesNotThrow(() => validatePromotionReceipt(receipt, f.data, now));
+  receipt.source.watchdog.last_alert_count = 1;
+  assert.throws(() => validatePromotionReceipt(receipt, f.data, now));
+}));
 test('recovery baseline requires equal historical counters and equal timestamps for healthy progressed ticks', async () => scoped(async f => {
   const prior = structuredClone(f.receipt.source), current = structuredClone(prior);
   current.watchdog.attempt_count++; current.watchdog.success_count++;

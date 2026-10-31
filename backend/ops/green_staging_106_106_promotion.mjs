@@ -65,8 +65,9 @@ export function validatePromotionReceipt(receipt, inputs, now, { allowExpired = 
     && receipt.materialBindingSha256 === objectDigest({ materials: inputs.config.materials, envFile: inputs.config.envFile })
     && ['backupSha256', 'preflightSha256', 'auxiliarySha256'].every(k => hash(receipt[k]))
     && ['namespaceReadabilityVerified', 'fixtureCleanupVerified', 'cleanupVerified', 'servicesRemainSealed'].every(k => receipt[k] === true)
-    && receipt.canonicalPromotionImplemented === false && receipt.publicReleaseComplete === false && receipt.providerTraffic === false
-    && equal(receipt.source, inputs.target.database), 'promotion_receipt');
+    && receipt.canonicalPromotionImplemented === false && receipt.publicReleaseComplete === false
+    && receipt.providerTraffic === false, 'promotion_receipt');
+  assertRecoveryBaseline(inputs.target.database, receipt.source, now);
   require(equal(receipt.probes, { mfa: 'enroll-pending-cancel-passed', identity: 'start-status-resume-revoke-passed' }), 'promotion_probes');
   const created = Date.parse(receipt.createdAt);
   require(Number.isFinite(created) && created <= now && (allowExpired || now - created <= 3600000), 'promotion_freshness');
