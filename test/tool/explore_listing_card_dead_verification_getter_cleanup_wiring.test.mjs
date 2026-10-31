@@ -60,7 +60,7 @@ test('active content keeps verification badge and real rating display', () => {
 test('active content keeps details long press and favorite actions', () => {
   assert.match(
     content,
-    /ItemDetailsOverlay\.showFullPage\(context, item: item, fresh: true, publicCatalogImage: true\)/,
+    /ItemDetailsOverlay\.showFullPage\(context,\s*item: item, fresh: true, publicCatalogImage: true\)/,
   );
   assert.match(
     content,

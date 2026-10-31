@@ -101,6 +101,27 @@ class BackendRentalRequestsSnapshot {
   Future<void> assertCurrent() => owner.assertCurrent();
 }
 
+/// Authenticated owner and copied rows for one private notification feed read.
+class BackendNotificationsSnapshot {
+  final AuthSessionOwner sessionOwner;
+  final LocalPrincipalActionOwner owner;
+  final List<Map<String, dynamic>> _notifications;
+
+  BackendNotificationsSnapshot._({
+    required this.sessionOwner,
+    required this.owner,
+    required List<Map<String, dynamic>> notifications,
+  }) : _notifications = notifications
+            .map((row) => Map<String, dynamic>.from(row))
+            .toList(growable: false);
+
+  List<Map<String, dynamic>> copyNotifications() => _notifications
+      .map((row) => Map<String, dynamic>.from(row))
+      .toList(growable: false);
+
+  Future<void> assertCurrent() => owner.assertCurrent();
+}
+
 bool isValidTechnicalSandboxRunId(String value) =>
     _technicalSandboxRunIdPattern.hasMatch(value);
 
@@ -3484,11 +3505,56 @@ class BackendRepository {
   }
 
   static Future<List<Map<String, dynamic>>> getNotifications() async {
-    final response = await _authorized(
-      method: 'GET',
-      path: '/notifications?limit=100',
+    final snapshot = await getNotificationsSnapshot();
+    return snapshot.copyNotifications();
+  }
+
+  static Future<BackendNotificationsSnapshot> getNotificationsSnapshot() async {
+    final owner = await LocalPrincipalActionOwner.capture();
+    final sessionOwner = owner.sessionOwner;
+    if (sessionOwner == null) {
+      throw const BackendException(401, 'authentication_required');
+    }
+    return getNotificationsSnapshotForOwner(sessionOwner, owner: owner);
+  }
+
+  static Future<BackendNotificationsSnapshot> getNotificationsSnapshotForOwner(
+    AuthSessionOwner sessionOwner, {
+    LocalPrincipalActionOwner? owner,
+  }) async {
+    final capturedOwner = owner ?? await LocalPrincipalActionOwner.capture();
+    if (capturedOwner.sessionOwner == null ||
+        capturedOwner.sessionOwner!.epoch != sessionOwner.epoch ||
+        capturedOwner.sessionOwner!.userId != sessionOwner.userId ||
+        !await AuthService.isSessionOwnerDefinitelyCurrent(sessionOwner)) {
+      throw const BackendException(401, 'authentication_required');
+    }
+    final response = await _singleFlightSnapshot<Map<String, dynamic>>(
+      key: 'notifications:${_snapshotSessionOwnerKey(sessionOwner)}',
+      epoch: sessionOwner.epoch,
+      load: () async {
+        final response = await _authorizedForOwner(
+          owner: sessionOwner,
+          method: 'GET',
+          path: '/notifications?limit=100',
+        );
+        await capturedOwner.assertCurrent();
+        final notifications = response['notifications'];
+        if (notifications is! List ||
+            notifications.any((entry) => entry is! Map)) {
+          throw const BackendException(200, 'invalid_server_response');
+        }
+        return response;
+      },
     );
-    return _maps(response['notifications']);
+    await capturedOwner.assertCurrent();
+    return BackendNotificationsSnapshot._(
+      sessionOwner: sessionOwner,
+      owner: capturedOwner,
+      notifications: (response['notifications'] as List)
+          .map((entry) => Map<String, dynamic>.from(entry as Map))
+          .toList(growable: false),
+    );
   }
 
   static Future<void> updateNotification({

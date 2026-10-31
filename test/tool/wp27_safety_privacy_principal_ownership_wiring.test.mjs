@@ -86,16 +86,31 @@ test('local safety writes remain bound to explicit opaque principal', () => {
 
 test('message actions keep the captured auth owner through remote mutation and refresh', () => {
   for (const marker of [
-    'getMessageThreadsForOwner',
+    'getMessageThreadsSnapshotForOwner',
     'markThreadReadForOwner',
     'setThreadArchivedForOwner',
   ]) {
     const from = backend.indexOf(`static Future<`);
     assert.ok(backend.indexOf(marker, from) >= 0, marker);
   }
-  assert.match(
+  const snapshotRead = section(
     backend,
-    /getMessageThreadsForOwner\([\s\S]*?_authorizedForOwner\(/u,
+    'static Future<BackendMessageThreadsSnapshot>\n      getMessageThreadsSnapshotForOwner(',
+    '\n  static Future<List<Map<String, dynamic>>> getMessageThreadsForOwner(',
+  );
+  assert.match(snapshotRead, /AuthSessionOwner sessionOwner/u);
+  assert.match(snapshotRead, /LocalPrincipalActionOwner\? owner/u);
+  assert.match(
+    snapshotRead,
+    /capturedOwner\.sessionOwner![\s\S]*?sessionOwner\.epoch[\s\S]*?sessionOwner\.userId[\s\S]*?isSessionOwnerDefinitelyCurrent\(sessionOwner\)/u,
+  );
+  assert.match(
+    snapshotRead,
+    /_authorizedForOwner\(\s*owner: sessionOwner,/u,
+  );
+  assert.equal(
+    snapshotRead.match(/await capturedOwner\.assertCurrent\(\)/gu)?.length,
+    2,
   );
   assert.match(
     backend,
@@ -105,9 +120,23 @@ test('message actions keep the captured auth owner through remote mutation and r
     backend,
     /setThreadArchivedForOwner\([\s\S]*?_authorizedForOwner\(/u,
   );
-  assert.match(
+  const deleteMessageThread = section(
     dataService,
-    /deleteMessageThreadForUser\([\s\S]*?AuthSessionOwner\? sessionOwner[\s\S]*?setThreadArchivedForOwner\([\s\S]*?getMessageThreadsForOwner\(owner\)[\s\S]*?isSessionOwnerDefinitelyCurrent\(owner\)/u,
+    'static Future<void> deleteMessageThreadForUser(',
+    '\n  static Future<int> getUnreadThreadCountForUser(',
+  );
+  assert.match(
+    deleteMessageThread,
+    /AuthSessionOwner\? sessionOwner[\s\S]*?setThreadArchivedForOwner\([\s\S]*?owner: owner[\s\S]*?getMessageThreadsSnapshotForOwner\(owner\)[\s\S]*?_assertCurrentOperationalUserId\(current\.id\)[\s\S]*?_persistMessageThreads\([\s\S]*?snapshot\.copyThreads\(\)[\s\S]*?verifyAuthorization: snapshot\.assertCurrent/u,
+  );
+  const messagePersistence = section(
+    dataService,
+    'static Future<void> _persistMessageThreads(',
+    '\n  static Future<String?> _readMessageThreads(',
+  );
+  assert.equal(
+    messagePersistence.match(/await verifyAuthorization\?\.call\(\)/gu)?.length,
+    2,
   );
 });
 

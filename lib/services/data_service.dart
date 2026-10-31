@@ -531,6 +531,8 @@ class DataService {
       false;
   static Future<void> Function(SharedPreferences prefs)?
       _afterNextRentalRequestPersistenceWriteForTesting;
+  static Future<void> Function(SharedPreferences prefs)?
+      _afterNextNotificationPersistenceWriteForTesting;
 
   @visibleForTesting
   static int get maxLocalReviewsForTesting => _maxLocalReviews;
@@ -12472,11 +12474,47 @@ class DataService {
 
   static Future<void> _persistNotifications(
     SharedPreferences prefs,
-    List<Map<String, dynamic>> notifications,
-  ) async {
+    List<Map<String, dynamic>> notifications, {
+    Future<void> Function()? verifyAuthorization,
+  }) async {
     final encoded = jsonEncode(notifications);
     _decodeNotificationsStrict(encoded);
-    await _writePreferenceString(prefs, _notificationsKey, encoded);
+    if (verifyAuthorization == null) {
+      await _writePreferenceString(prefs, _notificationsKey, encoded);
+      return;
+    }
+    final previous = prefs.getString(_notificationsKey);
+    final afterWrite = _afterNextNotificationPersistenceWriteForTesting;
+    _afterNextNotificationPersistenceWriteForTesting = null;
+    var writeAttempted = false;
+    try {
+      await verifyAuthorization.call();
+      writeAttempted = true;
+      await _writePreferenceString(prefs, _notificationsKey, encoded);
+      await afterWrite?.call(prefs);
+      await verifyAuthorization.call();
+    } catch (_) {
+      if (writeAttempted &&
+          prefs.getString(_notificationsKey) == encoded &&
+          encoded != previous) {
+        final restored = previous == null
+            ? await prefs.remove(_notificationsKey)
+            : await prefs.setString(_notificationsKey, previous);
+        if (!restored || prefs.getString(_notificationsKey) != previous) {
+          throw StateError(
+            'Der lokale Benachrichtigungsverlauf konnte nicht wiederhergestellt werden.',
+          );
+        }
+      }
+      rethrow;
+    }
+  }
+
+  @visibleForTesting
+  static void afterNextNotificationPersistenceWriteForTesting(
+    Future<void> Function(SharedPreferences prefs) callback,
+  ) {
+    _afterNextNotificationPersistenceWriteForTesting = callback;
   }
 
   static Map<String, dynamic> _normalizeNotification(
@@ -12602,24 +12640,45 @@ class DataService {
     String userId, {
     bool includeArchived = false,
   }) async {
+    final feedOwner = BackendConfig.enabled && !QaRuntimeService.isEnabled
+        ? await LocalPrincipalActionOwner.capture()
+        : null;
+    final sessionOwner = feedOwner?.sessionOwner;
+    if (feedOwner != null && sessionOwner == null) {
+      throw const BackendException(401, 'authentication_required');
+    }
     final current =
         await _requireCurrentOperationalUser(requestedUserId: userId);
+    await feedOwner?.assertCurrent();
+    if (sessionOwner != null && sessionOwner.userId != current.id) {
+      throw StateError('Die lokale Kontositzung hat sich geändert.');
+    }
     try {
       final prefs = await SharedPreferences.getInstance();
       if (BackendConfig.enabled && !QaRuntimeService.isEnabled) {
-        final remote = await BackendRepository.getNotifications();
-        final scopedRemote = remote
-            .map(
-              (entry) => <String, dynamic>{
-                ...entry,
-                'userId':
-                    (entry['userId']?.toString().trim().isNotEmpty ?? false)
-                        ? entry['userId']
-                        : current.id,
-              },
-            )
-            .toList();
-        await _persistNotifications(prefs, scopedRemote);
+        final snapshot =
+            await BackendRepository.getNotificationsSnapshotForOwner(
+          sessionOwner!,
+          owner: feedOwner,
+        );
+        await snapshot.assertCurrent();
+        final remote = snapshot.copyNotifications();
+        final scopedRemote = remote.map((entry) {
+          final rowOwnerId = (entry['userId'] ?? '').toString().trim();
+          if (rowOwnerId.isNotEmpty && rowOwnerId != current.id) {
+            throw const BackendException(200, 'notification_owner_mismatch');
+          }
+          return <String, dynamic>{
+            ...entry,
+            'userId': rowOwnerId.isEmpty ? current.id : rowOwnerId,
+          };
+        }).toList(growable: false);
+        await _persistNotifications(
+          prefs,
+          scopedRemote,
+          verifyAuthorization: snapshot.assertCurrent,
+        );
+        await snapshot.assertCurrent();
       }
       await _requireCurrentOperationalUser(requestedUserId: current.id);
       final raw = prefs.getString(_notificationsKey);
@@ -12643,6 +12702,7 @@ class DataService {
         return bt.compareTo(at);
       });
       await _requireCurrentOperationalUser(requestedUserId: current.id);
+      await feedOwner?.assertCurrent();
       return out;
     } catch (e) {
       debugPrint(
