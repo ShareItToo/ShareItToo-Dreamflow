@@ -1,4 +1,4 @@
-import 'dart:ui' show SemanticsAction, Tristate;
+import 'dart:ui' show SemanticsAction;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -44,16 +44,13 @@ void main() {
         );
       }
 
-      for (final label in [
-        'Mit Google anmelden',
-        'Mit Apple anmelden',
-        'Mit Facebook anmelden',
-      ]) {
-        final button = find.text(label);
-        expect(button, findsOneWidget);
-        final node = tester.getSemantics(button);
-        expect(node.flagsCollection.isButton, isTrue);
-        expect(node.flagsCollection.isEnabled, Tristate.isFalse);
+      for (final provider in ['Google', 'Apple', 'Facebook']) {
+        final status = find.text(
+          '$provider-Anmeldung ist derzeit nicht verfügbar.',
+        );
+        expect(status, findsOneWidget);
+        final node = tester.getSemantics(status);
+        expect(node.flagsCollection.isButton, isFalse);
         expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isFalse);
       }
 
