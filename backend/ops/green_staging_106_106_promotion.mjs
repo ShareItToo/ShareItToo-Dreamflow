@@ -17,6 +17,10 @@ export function temporaryPromotionName(inputs) {
   require(name !== inputs.binding.scope.api.name && name !== 'shareittoo-staging-api', 'promotion_temporary_name');
   return name;
 }
+const promotionReadinessMatches = (value, env) => value?.live?.status === 200 && value.live.payload?.status === 'ok'
+  && value.health?.status === 200 && value.health.payload?.status === 'ok'
+  && value.ready?.status === 200 && value.ready.payload?.status === 'ok'
+  && value.version?.status === 200 && equal(value.version.payload, buildReleaseMetadata(env));
 export async function promotionGatewayReadback({ timeoutMs = 5000, signal } = {}) {
   require(Number.isSafeInteger(timeoutMs) && timeoutMs > 0 && timeoutMs <= 5000, 'promotion_gateway_timeout');
   const timeout = AbortSignal.timeout(timeoutMs), bounded = signal ? AbortSignal.any([signal, timeout]) : timeout;
@@ -272,7 +276,7 @@ export async function runSuccessorPromotion(inputs, options = {}, dependencies =
     for (let attempt = 0; attempt < 30 && !ready; attempt++) {
       try {
         const value = JSON.parse(String(await command({ phase: 'promotion_readiness', args: ['exec', candidateId, 'node', '--input-type=module', '-e', readinessScript] })));
-        ready = value.live?.status === 'ok' && value.ready?.status === 'ok' && equal(value.version, buildReleaseMetadata(spec.env));
+        ready = promotionReadinessMatches(value, spec.env);
       } catch { /* Bounded read-only polling only. */ }
       if (!ready && attempt < 29) await (dependencies.delay ?? (ms => new Promise(r => setTimeout(r, ms))))(1000);
     }
@@ -283,8 +287,7 @@ export async function runSuccessorPromotion(inputs, options = {}, dependencies =
     await sourceCas(); held.recheck(); await candidate(); await membership(true);
     await candidate(); await membership(true); await sourceCas(); await databaseCas(); held.recheck();
     const finalReadback = JSON.parse(String(await command({ phase: 'promotion_readiness', args: ['exec', candidateId, 'node', '--input-type=module', '-e', readinessScript] })));
-    require(finalReadback.live?.status === 'ok' && finalReadback.ready?.status === 'ok'
-      && equal(finalReadback.version, buildReleaseMetadata(spec.env)), 'promotion_pre_boundary_readiness');
+    require(promotionReadinessMatches(finalReadback, spec.env), 'promotion_pre_boundary_readiness');
     require(equal(await snapshot(), after) && await auxiliary() === receipt.auxiliarySha256
       && await sql(physicalSchemaSql) === receipt.physicalSchemaSha256 && await sql(constraintsSql) === '0', 'promotion_pre_boundary_database');
     require(await lookup(source.name) === '' && await lookup() === candidateId, 'promotion_pre_boundary_name'); await inventory();
