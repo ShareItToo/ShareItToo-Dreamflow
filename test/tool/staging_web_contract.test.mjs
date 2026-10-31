@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { TARGET, profile, cleanSource, sealArtifact, validateArtifact, deploy, sha256, stagingBootstrap, stagingBootstrapFor, retirementWorker } from '../../tool/staging_web_contract.mjs';
 import { GOOGLE_WEB_PROFILE_V2 } from '../../tool/staging_google_web_readiness.mjs';
@@ -14,6 +14,7 @@ import { syntheticListingAiMockWebEvidence } from './staging_listing_ai_mock_web
 import { bindListingAiWebReadiness } from '../../tool/staging_listing_ai_web_readiness.mjs';
 import { syntheticListingAiWebEvidence } from './staging_listing_ai_web_readiness_fixture.mjs';
 import { validateMockForwardCandidate } from '../../tool/staging_web_mock_forward.mjs';
+import { runMockForward } from '../../tool/deploy_staging_web_mock_forward.mjs';
 import { buildArchive, verifyArchive } from '../../tool/staging_web_archive.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -202,6 +203,29 @@ test('mock forward path rejects disabled assistant and external OpenAI profiles'
   const externalArtifact = f.artifact('external-openai-candidate', undefined, null, externalBinding);
   assert.throws(() => validateMockForwardCandidate(externalArtifact.directory,
     externalArtifact.hash, f.source), /mock_forward_profile_required/u);
+});
+test('mock forward CLI fails closed on usage and exposes a no-mutation safe preflight', (t) => {
+  const cli = path.join(repo, 'tool/deploy_staging_web_mock_forward.mjs');
+  const usage = spawnSync(process.execPath, [cli], { encoding: 'utf8' });
+  assert.equal(usage.status, 1);
+  assert.match(usage.stderr, /usage: deploy_staging_web_mock_forward\.mjs/u);
+
+  const f = fixture(t); const now = new Date(); const version = '1.0.0+2026092905';
+  const evidence = syntheticListingAiMockWebEvidence(f.source, version, { now });
+  const readiness = bindListingAiMockWebReadiness(evidence.evidence, evidence.digest,
+    { now, expectedSource: f.source, expectedVersion: version });
+  const candidate = f.artifact('mock-forward-cli-preflight', version, null, readiness);
+  const beforeRoot = fs.readdirSync(f.root);
+  const beforeReleases = fs.readdirSync(path.join(f.root, 'releases'));
+  let readbacks = 0;
+  const result = runMockForward([TARGET, f.sourceRoot, f.source, candidate.directory,
+    candidate.hash, f.old.hash], { root: f.root, verifyStaticReadback: () => { readbacks += 1; } });
+  assert.equal(result.status, 'preflight-passed-no-mutation');
+  assert.equal(readbacks, 0);
+  assert.deepEqual(fs.readdirSync(f.root), beforeRoot);
+  assert.deepEqual(fs.readdirSync(path.join(f.root, 'releases')), beforeReleases);
+  assert.equal(fs.readlinkSync(path.join(f.root, 'current')), `releases/${f.old.hash}/web`);
+  assert.equal(fs.existsSync(path.join(f.root, 'previous')), false);
 });
 for (const target of ['https://shareittoo.com', 'https://www.shareittoo.com', 'http://staging.shareittoo.com', `${TARGET}/`, 'https://staging.shareittoo.com.evil.invalid']) {
   test(`refuse non-exact target ${target}`, (t) => assert.throws(() => deploy({ ...fixture(t).args, target }), /target_forbidden/));
