@@ -35,7 +35,7 @@ void main() {
     );
     expect(find.text('Unverbindliche Pilot-Simulation'), findsOneWidget);
     expect(
-      find.textContaining('keinen Vertrag, keine Reservierung'),
+      find.textContaining('ohne Vertrag, Reservierung, Zahlung'),
       findsWidgets,
     );
     expect(find.text('Zahlungsstatus'), findsNothing);

@@ -301,6 +301,23 @@ export function canTransitionWorkflow({ current, next, actorRole, pilotWithoutPa
   return workflowTransitions[normalizedCurrent]?.[normalizedNext]?.includes(actorRole) === true;
 }
 
+export function nonBindingTestLifecycleEnabled(config) {
+  return config?.deploymentEnvironment === 'test'
+    && config?.nonBindingSimulationEnabled === true;
+}
+
+export function nonBindingPilotLifecycleEnabled(config) {
+  return ['staging', 'test'].includes(config?.deploymentEnvironment)
+    && config?.nonBindingSimulationEnabled === true;
+}
+
+export function nonBindingSimulationTransitionAllowed({ simulationOnly, requested, config }) {
+  if (simulationOnly !== true) return true;
+  if (['accepted', 'declined', 'cancelled'].includes(requested)) return true;
+  return ['active', 'completed'].includes(requested)
+    && nonBindingPilotLifecycleEnabled(config);
+}
+
 export function canTransitionBooking({ current, next, actorId, ownerId, renterId }) {
   if (current === next) return true;
   if (current === 'pending' && (next === 'accepted' || next === 'declined')) return actorId === ownerId;

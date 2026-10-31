@@ -10,13 +10,23 @@ const serviceSource = readFileSync(
   new URL('../../lib/services/safety_action_service.dart', import.meta.url),
   'utf8',
 );
+const bookingDetail = readFileSync(
+  new URL('../../lib/screens/booking_detail_screen.dart', import.meta.url),
+  'utf8',
+);
+const ownerDetail = readFileSync(
+  new URL('../../lib/screens/ongoing_owner_detail_screen.dart', import.meta.url),
+  'utf8',
+);
 const submitReturnCaseSource = serviceSource.slice(
   serviceSource.indexOf('Future<SafetyReturnCaseIssueResult> submitReturnCaseIssue'),
   serviceSource.indexOf('Future<String?> uploadEvidence'),
 );
 
-test('damage remains return-flow-only and no-damage keeps the existing path', () => {
-  assert.match(source, /if \(isReturn\) base\.add\(_StepKind\.damage\)/u);
+test('damage stays return-only and Stage-A simulation callers disable it', () => {
+  assert.match(source, /if \(isReturn && widget\.allowDamageCase\) base\.add\(_StepKind\.damage\)/u);
+  assert.match(bookingDetail, /allowDamageCase: !_simulationOnly/u);
+  assert.match(ownerDetail, /allowDamageCase: !req\.simulationOnly/u);
   assert.match(source, /if \(!_hasDamage \|\| _damageReceipt != null\) return true/u);
   assert.match(source, /if \(!_hasDamage \|\| _damageReceipt != null\) return true/u);
 });

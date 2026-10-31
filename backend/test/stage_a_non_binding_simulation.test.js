@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import {
+  canTransitionWorkflow,
+  nonBindingPilotLifecycleEnabled,
+  nonBindingSimulationTransitionAllowed,
+  nonBindingTestLifecycleEnabled,
+} from '../src/booking_domain.js';
 
 const read = (relative) => readFileSync(new URL(relative, import.meta.url), 'utf8');
 
@@ -30,11 +36,76 @@ test('simulation creation is explicit and skips binding contract declarations', 
   assert.match(workflow, /contractCreated: false/u);
   assert.match(workflow, /reservationCreated: false/u);
   assert.match(workflow, /monetaryEffectMinor: 0/u);
-  assert.match(
-    workflow,
-    /simulationOnly && !\['accepted', 'declined', 'cancelled'\]\.includes\(requested\)/u,
-  );
+  assert.match(workflow, /nonBindingPilotLifecycleEnabled\(config\)/u);
+  assert.match(workflow, /nonBindingSimulationTransitionAllowed\(/u);
+  assert.match(workflow, /\(!simulationOnly \|\| pilotSimulationLifecycle\)/u);
   assert.match(workflow, /pilot_simulation_transition_forbidden/u);
+  assert.match(workflow, /contractCreated: false/u);
+  assert.match(workflow, /paymentCreated: false/u);
+  assert.match(workflow, /reservationCreated: false/u);
+  assert.match(workflow, /monetaryEffectMinor: 0/u);
+});
+
+test('full non-binding lifecycle requires staging or test and the existing pilot gate', () => {
+  assert.equal(nonBindingPilotLifecycleEnabled({
+    deploymentEnvironment: 'test', nonBindingSimulationEnabled: true,
+  }), true);
+  assert.equal(nonBindingPilotLifecycleEnabled({
+    deploymentEnvironment: 'staging', nonBindingSimulationEnabled: true,
+  }), true);
+  assert.equal(nonBindingPilotLifecycleEnabled({
+    deploymentEnvironment: 'production', nonBindingSimulationEnabled: true,
+  }), false);
+  assert.equal(nonBindingPilotLifecycleEnabled({
+    deploymentEnvironment: 'test', nonBindingSimulationEnabled: false,
+  }), false);
+  for (const deploymentEnvironment of ['staging', 'test']) {
+    const gatedConfig = { deploymentEnvironment, nonBindingSimulationEnabled: true };
+    assert.equal(nonBindingSimulationTransitionAllowed({
+      simulationOnly: true, requested: 'accepted', config: gatedConfig,
+    }), true);
+    assert.equal(nonBindingSimulationTransitionAllowed({
+      simulationOnly: true, requested: 'active', config: gatedConfig,
+    }), true);
+    assert.equal(nonBindingSimulationTransitionAllowed({
+      simulationOnly: true, requested: 'completed', config: gatedConfig,
+    }), true);
+    assert.equal(nonBindingSimulationTransitionAllowed({
+      simulationOnly: true, requested: 'confirmed', config: gatedConfig,
+    }), false);
+  }
+  assert.equal(nonBindingSimulationTransitionAllowed({
+    simulationOnly: true, requested: 'active',
+    config: { deploymentEnvironment: 'production', nonBindingSimulationEnabled: true },
+  }), false);
+  assert.equal(nonBindingSimulationTransitionAllowed({
+    simulationOnly: true, requested: 'completed',
+    config: { deploymentEnvironment: 'test', nonBindingSimulationEnabled: false },
+  }), false);
+  assert.equal(nonBindingTestLifecycleEnabled({
+    deploymentEnvironment: 'staging', nonBindingSimulationEnabled: true,
+  }), false);
+  assert.equal(canTransitionWorkflow({
+    current: 'requested', next: 'active', actorRole: 'renter', pilotWithoutPayment: true,
+  }), false);
+  assert.equal(canTransitionWorkflow({
+    current: 'requested', next: 'completed', actorRole: 'owner', pilotWithoutPayment: true,
+  }), false);
+  assert.equal(canTransitionWorkflow({
+    current: 'accepted', next: 'confirmed', actorRole: 'renter', pilotWithoutPayment: true,
+  }), true);
+  assert.equal(canTransitionWorkflow({
+    current: 'confirmed', next: 'active', actorRole: 'renter', pilotWithoutPayment: true,
+  }), true);
+  assert.equal(canTransitionWorkflow({
+    current: 'active', next: 'returned', actorRole: 'owner', pilotWithoutPayment: true,
+  }), true);
+  assert.equal(canTransitionWorkflow({
+    current: 'returned', next: 'completed', actorRole: 'owner', pilotWithoutPayment: true,
+  }), true);
+  assert.match(app, /allowNonBindingSimulation: config\.nonBindingSimulationEnabled/u);
+  assert.match(app, /createBookingReview\(client,[\s\S]*config,[\s\S]*idempotencyKey: req\.get\('Idempotency-Key'\)/u);
+  assert.match(read('../src/moderation_workflow.js'), /pilot_simulation_review_forbidden/u);
 });
 
 test('simulation never blocks availability or creates financial effects', () => {

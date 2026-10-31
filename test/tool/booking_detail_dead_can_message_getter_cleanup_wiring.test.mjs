@@ -174,7 +174,7 @@ test('upcoming cancellation remains renter-bound in its canonical action', () =>
   assert.match(cancellation, /title: 'Buchung storniert'/);
 });
 
-test('completed renter review keeps its eligibility guard and direction', () => {
+test('completed renter review stays direction-bound and disabled for simulations', () => {
   const bottomActions = sectionBetween(
     buildSection,
     '// Bottom actions',
@@ -194,7 +194,7 @@ test('completed renter review keeps its eligibility guard and direction', () => 
   );
   assert.match(
     bottomActions,
-    /if \((?:SyntheticCloneConfig\.reviewActionsEnabled &&\s+)?isTrulyCompleted && isRenterView && !isHeldForReview\)/,
+    /if \(!_simulationOnly &&\s+SyntheticCloneConfig\.reviewActionsEnabled &&\s+isTrulyCompleted &&\s+isRenterView &&\s+!isHeldForReview\)/,
   );
   assert.match(bottomActions, /_reviewAlreadySubmitted\s+\? null/);
   assert.match(bottomActions, /ReviewPromptSheet\.show\(/);

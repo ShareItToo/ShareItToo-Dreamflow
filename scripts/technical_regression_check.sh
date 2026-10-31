@@ -1198,7 +1198,18 @@ flutter test --reporter expanded --test-randomize-ordering-seed=7 \
 # covered by the default Flutter suite.
 flutter test --reporter expanded \
   --dart-define=SIT_STAGE_A_NON_BINDING_PILOT=true \
+  --dart-define=SIT_BLUE_OCEAN_LISTING_ASSISTANT=true \
+  --dart-define=SIT_STAGE_A_PILOT_ID=heilbronn_wave0 \
+  --dart-define=SIT_RELEASE_CHANNEL=internal \
+  --dart-define=SIT_API_BASE_URL=https://staging.shareittoo.com/api/v1 \
   test/private_pilot_stage_a_non_binding_profile.dart
+flutter test --reporter expanded \
+  --dart-define=SIT_STAGE_A_NON_BINDING_PILOT=true \
+  --dart-define=SIT_BLUE_OCEAN_LISTING_ASSISTANT=true \
+  --dart-define=SIT_STAGE_A_PILOT_ID=heilbronn_wave0 \
+  --dart-define=SIT_RELEASE_CHANNEL=internal \
+  --dart-define=SIT_API_BASE_URL=https://staging.shareittoo.com/api/v1 \
+  test/stage_a_booking_lifecycle_actions_test.dart
 
 # Exercise the complete reduced R17 product journey under its exact local-only
 # profile. This test may publish only a synthetic in-memory/local listing and
@@ -1206,6 +1217,9 @@ flutter test --reporter expanded \
 flutter test --reporter expanded \
   --dart-define=SIT_STAGE_A_NON_BINDING_PILOT=true \
   --dart-define=SIT_BLUE_OCEAN_LISTING_ASSISTANT=true \
+  --dart-define=SIT_STAGE_A_PILOT_ID=heilbronn_wave0 \
+  --dart-define=SIT_RELEASE_CHANNEL=internal \
+  --dart-define=SIT_API_BASE_URL=https://staging.shareittoo.com/api/v1 \
   test/reduced_wave0_product_journey_test.dart
 
 # Retain the compact 320dp / 200 percent accessibility and resilience matrix
@@ -1214,6 +1228,9 @@ flutter test --reporter expanded \
 flutter test --reporter expanded \
   --dart-define=SIT_STAGE_A_NON_BINDING_PILOT=true \
   --dart-define=SIT_BLUE_OCEAN_LISTING_ASSISTANT=true \
+  --dart-define=SIT_STAGE_A_PILOT_ID=heilbronn_wave0 \
+  --dart-define=SIT_RELEASE_CHANNEL=internal \
+  --dart-define=SIT_API_BASE_URL=https://staging.shareittoo.com/api/v1 \
   test/reduced_wave0_accessibility_resilience_test.dart
 
 # Compile the exact signed-release pilot envelope and simulate release-mode

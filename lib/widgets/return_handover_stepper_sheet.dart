@@ -49,6 +49,7 @@ class ReturnHandoverStepperSheet {
     ConfirmationChallengeLoader? confirmationChallengeLoader,
     SafetyActionService? safetyActionService,
     bool viewerIsOwner = false,
+    bool allowDamageCase = true,
     ReturnFlowMode mode = ReturnFlowMode.returnFlow,
   }) async {
     return await showModalBottomSheet<ReturnHandoverStepResult>(
@@ -68,6 +69,7 @@ class ReturnHandoverStepperSheet {
         confirmationChallengeLoader: confirmationChallengeLoader,
         safetyActionService: safetyActionService,
         viewerIsOwner: viewerIsOwner,
+        allowDamageCase: allowDamageCase,
         mode: mode,
         fullScreen: false,
       ),
@@ -87,6 +89,7 @@ class ReturnHandoverStepperSheet {
     ConfirmationChallengeLoader? confirmationChallengeLoader,
     SafetyActionService? safetyActionService,
     bool viewerIsOwner = false,
+    bool allowDamageCase = true,
     ReturnFlowMode mode = ReturnFlowMode.returnFlow,
   }) async {
     return Navigator.of(context).push<ReturnHandoverStepResult>(
@@ -102,6 +105,7 @@ class ReturnHandoverStepperSheet {
           confirmationChallengeLoader: confirmationChallengeLoader,
           safetyActionService: safetyActionService,
           viewerIsOwner: viewerIsOwner,
+          allowDamageCase: allowDamageCase,
           mode: mode,
         ),
       ),
@@ -121,6 +125,7 @@ class ReturnHandoverStepperPage extends StatelessWidget {
   final SafetyActionService? safetyActionService;
   final ReturnFlowMode mode;
   final bool viewerIsOwner;
+  final bool allowDamageCase;
   const ReturnHandoverStepperPage(
       {super.key,
       required this.item,
@@ -133,7 +138,8 @@ class ReturnHandoverStepperPage extends StatelessWidget {
       this.confirmationChallengeLoader,
       this.safetyActionService,
       this.mode = ReturnFlowMode.returnFlow,
-      this.viewerIsOwner = false});
+      this.viewerIsOwner = false,
+      this.allowDamageCase = true});
 
   @override
   Widget build(BuildContext context) {
@@ -150,6 +156,7 @@ class ReturnHandoverStepperPage extends StatelessWidget {
         confirmationChallengeLoader: confirmationChallengeLoader,
         safetyActionService: safetyActionService,
         viewerIsOwner: viewerIsOwner,
+        allowDamageCase: allowDamageCase,
         mode: mode,
         fullScreen: true,
       ),
@@ -171,6 +178,7 @@ class _ReturnHandoverStepper extends StatefulWidget {
       fullScreen; // new: when true, fill the whole page instead of sheet height
   final ReturnFlowMode mode;
   final bool viewerIsOwner;
+  final bool allowDamageCase;
   const _ReturnHandoverStepper(
       {required this.item,
       required this.request,
@@ -183,7 +191,8 @@ class _ReturnHandoverStepper extends StatefulWidget {
       this.safetyActionService,
       this.mode = ReturnFlowMode.returnFlow,
       this.fullScreen = false,
-      this.viewerIsOwner = false});
+      this.viewerIsOwner = false,
+      this.allowDamageCase = true});
 
   @override
   State<_ReturnHandoverStepper> createState() => _ReturnHandoverStepperState();
@@ -1072,7 +1081,7 @@ class _ReturnHandoverStepperState extends State<_ReturnHandoverStepper> {
     final isReturn = widget.mode == ReturnFlowMode.returnFlow;
     final List<_StepKind> base = [];
     base.add(_StepKind.photos);
-    if (isReturn) base.add(_StepKind.damage);
+    if (isReturn && widget.allowDamageCase) base.add(_StepKind.damage);
     base.add(_StepKind.codes);
     return base;
   }

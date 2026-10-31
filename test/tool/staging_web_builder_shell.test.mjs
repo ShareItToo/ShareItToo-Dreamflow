@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { profile, validateArtifact } from '../../tool/staging_web_contract.mjs';
+import { TARGET, profile, validateArtifact } from '../../tool/staging_web_contract.mjs';
 import { syntheticListingAiWebEvidence } from './staging_listing_ai_web_readiness_fixture.mjs';
 import { syntheticListingAiMockWebEvidence } from './staging_listing_ai_mock_web_readiness_fixture.mjs';
 
@@ -18,7 +18,7 @@ const stages = ['release_host_capacity_begin', 'flutter pub get --enforce-lockfi
 const marker = 'SIT_SHELL_INJECTION_MARKER';
 const version = '1.0.0+2026092905';
 
-function fixture(t, suffix = 'ordinary', failure = '', listingAi = false, listingAiMock = false) {
+function fixture(t, suffix = 'ordinary', failure = '', listingAi = false, listingAiMock = false, stageA = false) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sit-builder-shell-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const checkout = path.join(root, `source-${suffix}-fixture`);
@@ -77,7 +77,8 @@ else process.exit(99);
     evidenceArgs.push(listingAiMock ? '--listing-ai-mock-web-readiness' : '--listing-ai-web-readiness', file, evidence.digest);
   }
   const events = path.join(root, 'events.jsonl'); const trace = path.join(root, 'trace.tsv');
-  const result = spawnSync(process.execPath, [fileURLToPath(builder), checkout, source, output, ...evidenceArgs], {
+  const stageAArgs = stageA ? ['--stage-a-non-binding-pilot=heilbronn_wave0'] : [];
+  const result = spawnSync(process.execPath, [fileURLToPath(builder), checkout, source, output, ...stageAArgs, ...evidenceArgs], {
     encoding: 'utf8', timeout: 15000,
     env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, TMPDIR: temporary,
       P0A_WEB_SMOKE_PORT: '0',
@@ -137,6 +138,22 @@ test('bounded synthetic mock readiness CLI input builds a staging artifact with 
   assert.equal(manifest.listingAiWebProfileVersion, 'staging-listing-ai-mock-web-v1');
   assert.equal(manifest.listingAiWebDecisionDigest, null);
   assert.equal(manifest.profile.SIT_STAGE_A_NON_BINDING_PILOT, 'false');
+});
+
+test('explicit Stage-A CLI opt-in binds only the exact internal Staging pilot profile', (t) => {
+  const f = fixture(t, 'stage-a-mock-readiness', '', false, true, true);
+  assert.equal(f.result.status, 0, f.result.stderr);
+  const definitions = f.observed.find(({ stage }) => stage === 'definitions').value;
+  assert.equal(definitions.SIT_STAGE_A_NON_BINDING_PILOT, 'true');
+  assert.equal(definitions.SIT_STAGE_A_PILOT_ID, 'heilbronn_wave0');
+  assert.equal(definitions.SIT_RELEASE_CHANNEL, 'internal');
+  assert.equal(definitions.SIT_API_BASE_URL, `${TARGET}/api/v1`);
+  assert.equal(definitions.SIT_BLUE_OCEAN_LISTING_ASSISTANT, 'true');
+  assert.equal(definitions.SIT_LOCAL_QA_SYNTHETIC_PAYMENT_LANE, 'false');
+  const summary = JSON.parse(f.result.stdout.trim().split('\n').at(-1));
+  const manifest = validateArtifact(f.output, summary.manifestHash, f.source);
+  assert.equal(manifest.profile.SIT_STAGE_A_NON_BINDING_PILOT, 'true');
+  assert.equal(manifest.profile.SIT_STAGE_A_PILOT_ID, 'heilbronn_wave0');
 });
 
 for (const [label, suffix] of [

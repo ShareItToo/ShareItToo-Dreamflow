@@ -144,6 +144,10 @@ function stagingApi(accounts) {
     bookingStatus: null,
     bookingFields: undefined,
     threadId: 'thread-n22-fixture',
+    conditionPhotos: { pickup: 0, return: 0 },
+    conditionConfirmed: { pickup: false, return: false },
+    qrVerified: { pickup: false, return: false },
+    uploadCount: 0,
     cart: {
       schemaVersion: 1,
       revision: 4,
@@ -178,10 +182,6 @@ function stagingApi(accounts) {
     if (path === '/auth/me') {
       const account = accounts.find((entry) => entry.role === role);
       return response(200, { user: { id: `${role}-id`, email: account.email } });
-    }
-    if (path === '/uploads' && method === 'POST') {
-      assert.ok(options.body instanceof FormData);
-      return response(201, { url: 'https://staging.shareittoo.com/uploads/n22-full.png' });
     }
     if (path === '/listings' && method === 'POST') {
       state.listing = JSON.parse(options.body);
@@ -218,6 +218,8 @@ function stagingApi(accounts) {
     }
     if (path === '/bookings' && method === 'POST') {
       const body = JSON.parse(options.body);
+      assert.equal(body.simulationOnly, true);
+      assert.equal(body.simulationAcknowledged, true);
       state.bookingId = body.id;
       state.bookingStatus = 'requested';
       return response(201, { booking: safeBooking(state, state.bookingStatus) });
@@ -247,19 +249,84 @@ function stagingApi(accounts) {
     }
     if (/\/availability\/check$/u.test(path)) return response(200, { available: true });
     if (/\/payment$/u.test(path)) return response(409, { error: 'pilot_simulation_payment_forbidden' });
+    if (path === '/uploads' && method === 'POST') {
+      const purpose = options.body.get('purpose');
+      const expectedRole = ['handover_evidence', 'listing_image'].includes(purpose)
+        ? 'owner'
+        : 'renter';
+      assert.equal(role, expectedRole);
+      state.uploadCount += 1;
+      return response(201, {
+        id: `00000000-0000-4000-8000-${String(state.uploadCount).padStart(12, '0')}`,
+        url: `https://staging.shareittoo.com/api/v1/uploads/${state.uploadCount}`,
+      });
+    }
     if (/\/transitions$/u.test(path) && method === 'POST') {
-      state.bookingStatus = JSON.parse(options.body).status;
+      const requested = JSON.parse(options.body).status;
+      const expectedRole = {
+        accepted: 'owner', active: 'renter', completed: 'owner', cancelled: 'renter',
+      }[requested];
+      assert.equal(role, expectedRole);
+      if (requested === 'active') assert.equal(state.qrVerified.pickup, true);
+      if (requested === 'completed') assert.equal(state.qrVerified.return, true);
+      state.bookingStatus = requested;
       return response(200, { booking: safeBooking(state, state.bookingStatus) });
     }
     if (path.startsWith('/message-threads/booking/')) {
       return response(201, { thread: { id: state.threadId } });
     }
     if (path === `/message-threads/${state.threadId}/messages` && method === 'POST') {
+      const body = JSON.parse(options.body);
+      if (body.conditionEvidence) {
+        state.conditionPhotos[body.conditionEvidence.segment] += 1;
+      }
       return response(201, { message: { id: 'message-n22-fixture' } });
     }
     if (path === '/message-threads') return response(200, { threads: [{ id: state.threadId }] });
     if (path === `/message-threads/${state.threadId}/messages`) {
       return response(200, { messages: [{ text: 'SIT Stage-A Testchat: unverbindliche Pilot-Simulation.' }] });
+    }
+    if (/\/condition-evidence\?segment=(pickup|return)$/u.test(path)) {
+      const segment = /segment=(pickup|return)$/u.exec(path)[1];
+      return response(200, { summary: {
+        presenterPhotos: state.conditionPhotos[segment],
+        deviationPhotos: 0,
+        counterpartyConfirmation: state.conditionConfirmed[segment]
+          ? { decision: 'confirmed' }
+          : null,
+      } });
+    }
+    if (path.endsWith('/condition-confirmations') && method === 'POST') {
+      const segment = JSON.parse(options.body).segment;
+      assert.equal(role, segment === 'pickup' ? 'renter' : 'owner');
+      assert.equal(state.conditionPhotos[segment], 4);
+      state.conditionConfirmed[segment] = true;
+      return response(201, { confirmation: { decision: 'confirmed' } });
+    }
+    if (path.endsWith('/confirmation-challenges') && method === 'POST') {
+      const segment = JSON.parse(options.body).segment;
+      const presenterRole = segment === 'pickup' ? 'owner' : 'renter';
+      assert.equal(role, presenterRole);
+      assert.equal(state.conditionConfirmed[segment], true);
+      return response(201, { challenge: {
+        qrPayload: `shareittoo:v3:${segment}:${presenterRole}:00000000-0000-4000-8000-000000000000:123456:${state.bookingId}`,
+      } });
+    }
+    if (path.endsWith('/confirmation-challenges/verify') && method === 'POST') {
+      const { qrPayload } = JSON.parse(options.body);
+      const [, segment, presenterRole] = /^shareittoo:v3:(pickup|return):(owner|renter):/u.exec(qrPayload) ?? [];
+      assert.ok(segment);
+      assert.equal(role, presenterRole === 'owner' ? 'renter' : 'owner');
+      assert.equal(state.conditionConfirmed[segment], true);
+      state.qrVerified[segment] = true;
+      return response(200, { confirmation: {
+        verificationVersion: 3,
+        presenterRole,
+        confirmedByRole: role,
+      } });
+    }
+    if (/\/bookings\/[^/]+\/reviews$/u.test(path) && method === 'POST') {
+      return response(409, { error: 'pilot_simulation_review_forbidden' });
     }
     if (path === '/notifications?limit=100') {
       return response(200, { notifications: [
@@ -326,7 +393,21 @@ test('runs and retires an isolated email-verified two-role Staging journey', asy
     random: () => Buffer.from([5, 6, 7, 8]),
     wait: async () => {},
   });
-  assert.equal(simulation.status, 'email-verified-two-role-simulation-ready-for-pixel-review');
+  assert.equal(simulation.status, 'email-verified-two-role-simulation-completed');
+  assert.equal(api.state.bookingStatus, 'completed');
+  assert.equal(api.state.uploadCount, 9); // Listing photo plus the eight lifecycle evidence photos.
+  assert.deepEqual(api.state.conditionPhotos, { pickup: 4, return: 4 });
+  assert.deepEqual(api.state.qrVerified, { pickup: true, return: true });
+  const completedVault = JSON.parse(readFileSync(prepared.vaultFile, 'utf8'));
+  assert.equal(
+    completedVault.realTwoRoleJourney.acceptedAt,
+    completedVault.nonBindingSimulation.acceptedAt,
+  );
+  assert.equal(
+    completedVault.realTwoRoleJourney.completedAt,
+    completedVault.nonBindingSimulation.completedAt,
+  );
+  assert.equal(simulation.reviewsBlocked, true);
   assert.equal(simulation.monetaryEffectMinor, 0);
   assert.equal(simulation.paymentEndpointCalled, false);
 
@@ -335,7 +416,9 @@ test('runs and retires an isolated email-verified two-role Staging journey', asy
     fetchImpl: api.fetchImpl,
   });
   assert.equal(retired.status, 'email-verified-two-role-product-journey-retired');
-  assert.equal(retired.bookingCancelled, true);
+  assert.equal(retired.bookingCancelled, false);
+  assert.equal(retired.bookingCompleted, true);
+  assert.equal(retired.bookingStatus, 'completed');
   assert.equal(retired.listingEnded, true);
   assert.equal(retired.publicCatalogEntryRemoved, true);
   assert.equal(retired.monetaryEffectMinor, 0);
@@ -343,7 +426,10 @@ test('runs and retires an isolated email-verified two-role Staging journey', asy
   assert.equal(vault.status, 'email-linked-product-journey-retired');
   assert.equal(vault.realTwoRoleJourney.status, 'retired');
   assert.equal(vault.realTwoRoleJourney.listingStatus, 'ended');
-  assert.equal(vault.realTwoRoleJourney.bookingStatus, 'cancelled');
+  assert.equal(vault.realTwoRoleJourney.bookingStatus, 'completed');
+  assert.equal(vault.nonBindingSimulation.status, 'retired');
+  assert.equal(vault.nonBindingSimulation.workflowStatus, 'completed');
+  assert.equal(vault.nonBindingSimulation.listingStatus, 'ended');
 });
 
 test('activates and retires an exact isolated search fixture without money', async () => {
@@ -452,7 +538,7 @@ test('rejects an unsafe existing cancelled booking', async () => {
       vaultFile: prepared.vaultFile,
       fetchImpl: api.fetchImpl,
     }),
-    /not safely cancelled/u,
+    /neither safely cancelled nor fully completed/u,
   );
   assert.equal(api.state.listing.status, 'active');
 });

@@ -17,16 +17,24 @@ import { readListingAiMockWebReadiness } from './staging_listing_ai_mock_web_rea
 const [sourceRoot, source, output, ...extra] = process.argv.slice(2);
 let definesDirectory;
 try {
-  const usage = 'usage: build_staging_web.mjs ABS_SOURCE_ROOT EXACT_HEAD ABS_NEW_ARTIFACT_DIR [--google-web-readiness ABS_ELIGIBLE_READINESS_JSON VERIFIED_EVIDENCE_SHA256 | --google-web-current-readback ABS_CURRENT_READBACK_JSON VERIFIED_EVIDENCE_SHA256] [--apple-web-readiness ABS_ELIGIBLE_READINESS_JSON VERIFIED_EVIDENCE_SHA256] [--facebook-web-readiness ABS_PUBLIC_READINESS_JSON REVIEWED_EVIDENCE_SHA256] [--password-enrollment-readiness ABS_RUNTIME_READINESS_JSON VERIFIED_EVIDENCE_SHA256] [--listing-ai-web-readiness ABS_RUNTIME_READINESS_JSON VERIFIED_EVIDENCE_SHA256 | --listing-ai-mock-web-readiness ABS_SYNTHETIC_MOCK_READINESS_JSON VERIFIED_EVIDENCE_SHA256]';
+  const usage = 'usage: build_staging_web.mjs ABS_SOURCE_ROOT EXACT_HEAD ABS_NEW_ARTIFACT_DIR [--stage-a-non-binding-pilot=heilbronn_wave0] [--google-web-readiness ABS_ELIGIBLE_READINESS_JSON VERIFIED_EVIDENCE_SHA256 | --google-web-current-readback ABS_CURRENT_READBACK_JSON VERIFIED_EVIDENCE_SHA256] [--apple-web-readiness ABS_ELIGIBLE_READINESS_JSON VERIFIED_EVIDENCE_SHA256] [--facebook-web-readiness ABS_PUBLIC_READINESS_JSON REVIEWED_EVIDENCE_SHA256] [--password-enrollment-readiness ABS_RUNTIME_READINESS_JSON VERIFIED_EVIDENCE_SHA256] [--listing-ai-web-readiness ABS_RUNTIME_READINESS_JSON VERIFIED_EVIDENCE_SHA256 | --listing-ai-mock-web-readiness ABS_SYNTHETIC_MOCK_READINESS_JSON VERIFIED_EVIDENCE_SHA256]';
   if (!sourceRoot || !source || !output) throw Error(usage);
   const inputs = new Map();
-  for (let index = 0; index < extra.length; index += 3) {
+  let stageANonBindingPilot = false;
+  for (let index = 0; index < extra.length;) {
     const flag = extra[index];
+    if (flag === '--stage-a-non-binding-pilot=heilbronn_wave0') {
+      if (stageANonBindingPilot) throw Error(usage);
+      stageANonBindingPilot = true;
+      index += 1;
+      continue;
+    }
     if (index + 2 >= extra.length || !['--google-web-readiness', '--google-web-current-readback', '--apple-web-readiness', '--facebook-web-readiness', '--password-enrollment-readiness', '--listing-ai-web-readiness', '--listing-ai-mock-web-readiness'].includes(flag)
       || inputs.has(flag)) {
       throw Error(usage);
     }
     inputs.set(flag, { file: extra[index + 1], digest: extra[index + 2] });
+    index += 3;
   }
   confinedDirectory(sourceRoot);
   cleanSource(sourceRoot, source);
@@ -58,6 +66,7 @@ try {
     : listingAiMockWebInput
       ? readListingAiMockWebReadiness(listingAiMockWebInput.file, listingAiMockWebInput.digest,
         { expectedSource: source, expectedVersion: version }) : null;
+  if (stageANonBindingPilot && listingAiWeb === null) throw Error('stage_a_listing_ai_readiness_required');
   const googleWeb = googleInput
     ? readGoogleWebReadiness(googleInput.file, googleInput.digest,
       { expectedSource: source })
@@ -93,7 +102,7 @@ try {
   const flutterVersion = JSON.parse(execFileSync('flutter', ['--version', '--machine'], { encoding: 'utf8' }));
   definesDirectory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sit-staging-web-defines-')));
   const definesFile = path.join(definesDirectory, 'defines.json');
-  fs.writeFileSync(definesFile, JSON.stringify(profile(source, version, googleWeb, facebookWeb, passwordEnrollment, appleWeb, listingAiWeb)), { mode: 0o600, flag: 'wx' });
+  fs.writeFileSync(definesFile, JSON.stringify(profile(source, version, googleWeb, facebookWeb, passwordEnrollment, appleWeb, listingAiWeb, stageANonBindingPilot)), { mode: 0o600, flag: 'wx' });
   const flags = ['--release', '--pwa-strategy=none', '--no-web-resources-cdn', '--base-href=/',
     `--dart-define-from-file=${definesFile}`];
   execFileSync('bash', ['-c', 'set -euo pipefail; ROOT="$PWD"; source scripts/release_host_capacity_guard.sh; release_host_capacity_begin; flutter pub get --enforce-lockfile; flutter build web "$@"; bash scripts/p0a_web_smoke.sh; release_host_capacity_end', 'staging-web', ...flags], { cwd: sourceRoot, stdio: 'inherit' });
@@ -101,7 +110,7 @@ try {
   fs.mkdirSync(output, { mode: 0o755 });
   fs.cpSync(path.join(sourceRoot, 'build/web'), path.join(output, 'web'), { recursive: true, dereference: false });
   const manifestHash = sealArtifact({ directory: output, source, version,
-    flutterVersion: { frameworkVersion: flutterVersion.frameworkVersion, frameworkRevision: flutterVersion.frameworkRevision, dartSdkVersion: flutterVersion.dartSdkVersion }, builderDigest, googleWeb, facebookWeb, passwordEnrollment, appleWeb, listingAiWeb });
+    flutterVersion: { frameworkVersion: flutterVersion.frameworkVersion, frameworkRevision: flutterVersion.frameworkRevision, dartSdkVersion: flutterVersion.dartSdkVersion }, builderDigest, googleWeb, facebookWeb, passwordEnrollment, appleWeb, listingAiWeb, stageANonBindingPilot });
   execFileSync('python3', [path.join(sourceRoot, 'tool/run_p0a_web_smoke.py'), '--web-root', path.join(output, 'web'), '--port', '0'], { stdio: 'inherit', env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } });
   cleanSource(sourceRoot, source);
   console.log(JSON.stringify({ status: 'staging-web-build-passed', target: TARGET, source, version, manifestHash, output }));

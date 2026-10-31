@@ -36,7 +36,7 @@ test('owner return completion keeps its fail-closed evidence transition', () => 
   assert.match(completion, /confirmationContextVerified: true/);
 });
 
-test('receipt notification refresh and owner review reminder remain active', () => {
+test('normal return keeps receipt and review behavior; simulation branch skips reviews', () => {
   const start = ownerDetail.indexOf(
     'Future<void> _completeOwnerReturnWithSideEffects({',
   );
@@ -49,8 +49,15 @@ test('receipt notification refresh and owner review reminder remain active', () 
 
   assert.match(completion, /DataService\.addNotification\(/);
   assert.match(completion, /title: 'Buchung abgeschlossen'/);
-  assert.match(completion, /AppPopup\.toast\(context, icon: Icons\.receipt_long/);
+  assert.match(
+    completion,
+    /AppPopup\.toast\(\s*context,\s*icon:\s*req\.simulationOnly \? Icons\.check_circle_outline : Icons\.receipt_long,/u,
+  );
   assert.match(completion, /await _load\(\);/);
   assert.match(completion, /DataService\.scheduleReviewReminder\(/);
   assert.match(completion, /direction: 'owner_to_renter'/);
+  assert.match(
+    completion,
+    /if \(req\.simulationOnly \|\| !SyntheticCloneConfig\.reviewActionsEnabled\) \{\s*return;/u,
+  );
 });

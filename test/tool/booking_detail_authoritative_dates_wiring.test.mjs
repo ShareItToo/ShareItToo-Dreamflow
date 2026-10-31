@@ -13,7 +13,7 @@ const section = (start, end) => {
 
 test('instance and completion paths share the sole strict ISO resolver', () => {
   assert.match(source, /_parseDateRange\(\) =>\s*resolveBookingDateRange\(widget.booking\) \?\? \(null, null\)/);
-  assert.match(source, /_parseStaticDateRange\([\s\S]*?=> resolveBookingDateRange\(booking\) \?\? \(null, null\)/);
+  assert.match(source, /_parseStaticDateRange\(\s*Map<String, dynamic> booking,\s*\)\s*=>\s*resolveBookingDateRange\(booking\) \?\? \(null, null\)/);
   assert.doesNotMatch(source, /_parseGermanDateTime|Assume current year|end\.difference\(start\)\.inDays/);
   assert.doesNotMatch(resolver, /booking\['dates'\]|DateTime\.now/);
 });

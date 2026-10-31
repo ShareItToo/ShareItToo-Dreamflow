@@ -8,6 +8,8 @@ import {
   legacyStatusForWorkflow,
   normalizeBookingWorkflowStatus,
   normalizeCurrency,
+  nonBindingPilotLifecycleEnabled,
+  nonBindingSimulationTransitionAllowed,
   parseBookingPeriod,
   parseRentalDates,
   quoteRental,
@@ -1374,13 +1376,20 @@ export async function transitionBooking(client, { actor, bookingId, raw, key, co
   await expireBookingHolds(client);
   const row = await lockedBooking(client, bookingId);
   const simulationOnly = row.simulation_only === true;
+  const pilotSimulationLifecycle = simulationOnly && nonBindingPilotLifecycleEnabled(config);
   if (row.owner_id !== actor.id && row.renter_id !== actor.id && actor.role !== 'admin') {
     throw new BookingWorkflowError(403, 'booking_forbidden');
   }
-  if (simulationOnly && !['accepted', 'declined', 'cancelled'].includes(requested)) {
+  if (!nonBindingSimulationTransitionAllowed({
+    simulationOnly,
+    requested,
+    config,
+  })) {
     throw new BookingWorkflowError(409, 'pilot_simulation_transition_forbidden', {
       requestedStatus: requested,
-      allowedStatuses: ['accepted', 'declined', 'cancelled'],
+      allowedStatuses: pilotSimulationLifecycle
+        ? ['accepted', 'declined', 'cancelled', 'active', 'completed']
+        : ['accepted', 'declined', 'cancelled'],
     });
   }
   const expectedRevision = Number(candidate.expectedRevision);
@@ -1449,13 +1458,13 @@ export async function transitionBooking(client, { actor, bookingId, raw, key, co
     pilotWithoutPayment: config.bookingPilotWithoutPayment,
   });
   if (config.privatePilotV4Enabled
-      && !simulationOnly
+      && (!simulationOnly || pilotSimulationLifecycle)
       && steps.includes('active')
       && !hasVerifiedBookingConfirmation(row.payload, 'pickup')) {
     throw new BookingWorkflowError(409, 'verified_pickup_confirmation_required');
   }
   if (config.privatePilotV4Enabled
-      && !simulationOnly
+      && (!simulationOnly || pilotSimulationLifecycle)
       && steps.includes('completed')
       && !hasVerifiedBookingConfirmation(row.payload, 'return')) {
     throw new BookingWorkflowError(409, 'verified_return_confirmation_required');

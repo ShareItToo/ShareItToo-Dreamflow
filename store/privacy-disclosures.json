@@ -284,7 +284,7 @@
     },
     {
       "path": "backend/src/booking_workflow.js",
-      "sha256": "1570db17d04fe95917f42e22df99ebadd81707d0462bf8864ab1903400a72332"
+      "sha256": "523b4c61f47350ea8dfe3a900084226f3edf66afaab075a5bcfbd059854bb629"
     },
     {
       "path": "backend/src/booking_flow_time.js",
@@ -340,7 +340,7 @@
     },
     {
       "path": "backend/src/moderation_workflow.js",
-      "sha256": "4bd2f6addd75e07f2bdd13798144699b581d28de3ac25a071994cb6855ff3209"
+      "sha256": "4ff465114a01dae009d73c3d4a6cd2933b0ce61f6ea58726e99aedef309afbd4"
     },
     {
       "path": "backend/src/moderation_decision_workflow.js",
@@ -980,7 +980,7 @@
     },
     {
       "path": "lib/config/private_pilot_config.dart",
-      "sha256": "f2ec3c12c3c5ddeffff2471828c0061755243a316f4cd50f209a934ebfe94a00"
+      "sha256": "622a1428733240780ea7cca98f6a9e05c6f5389a0021bed8ba5ce1a17ac3269d"
     },
     {
       "path": "lib/config/supply_enrichment_technical_config.dart",
@@ -1004,7 +1004,7 @@
     },
     {
       "path": "lib/screens/private_pilot_checkout_screen.dart",
-      "sha256": "be9c50e1e85ba7d510fa5b029aa310472ec62e72126b23a2718a72b4ba40e1cf"
+      "sha256": "428f4d99aa31ef6c31404929c5aa65ac89b6a405dbf2ea60391974b52d43ce01"
     },
     {
       "path": "lib/screens/v52_legal_document_screen.dart",
@@ -1048,11 +1048,11 @@
     },
     {
       "path": "lib/screens/booking_detail_screen.dart",
-      "sha256": "def97867eac8b94476412ca73668381df0d527452354cd2ea1bb2186bd114f3a"
+      "sha256": "5701a65d18cb7dba585d9bc95a4d4edab9a977400b8780fa40754591e2d4b48c"
     },
     {
       "path": "lib/screens/ongoing_owner_detail_screen.dart",
-      "sha256": "169a17498073788b2dbedd10f458b14f2d2152308192849b2871bc511f582ef6"
+      "sha256": "83e789e8f625d2365532dc43a9b8de2f3e2b47cddef14c32ad61fb86a574bfa7"
     },
     {
       "path": "lib/screens/platform_withdrawal_screen.dart",
@@ -1128,7 +1128,7 @@
     },
     {
       "path": "backend/src/app.js",
-      "sha256": "42d99772955ca81ccb19e763fc6c60d7f0c93aa067d49f2f08f2098642186514"
+      "sha256": "a3527c9eb81754a2cb45a5cccadd9cc8e6b3c0b63eded797ff9eb7208065c1e0"
     },
     {
       "path": "backend/src/rate_limit_policy.js",
@@ -1136,11 +1136,11 @@
     },
     {
       "path": "tool/run_staging_synthetic_booking.mjs",
-      "sha256": "3ddda69cfa10f6dccf3731771ffa66ce189d31d9c9449deada4e57bd7d42a3ad"
+      "sha256": "9b78f536c11b32a4886ad183c5c7e0861daf321605307b9fb7c784bccace6986"
     },
     {
       "path": "tool/run_staging_non_binding_simulation.mjs",
-      "sha256": "e617145520f69888d57c08ec0cefa18ff610aa8faa5455a9f2fe82725f51e1a9"
+      "sha256": "0906cdfce28a56d20e265886b5192bd30384f9a4b79203e59b5ebc7b3a2f98b1"
     },
     {
       "path": "lib/screens/create_listing_screen.dart",
@@ -1160,7 +1160,7 @@
     },
     {
       "path": "lib/widgets/return_handover_stepper_sheet.dart",
-      "sha256": "4687ff264ddafcd4329056e92efce087b1e8e76d4a6f6c1c0b76cd2aa09e57e1"
+      "sha256": "9501235729ebcef88a835207f31aee92f359a2380616607b351dba503962ef3a"
     },
     {
       "path": "lib/screens/report_issue_screen.dart",

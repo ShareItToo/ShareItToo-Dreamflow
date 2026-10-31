@@ -6,6 +6,14 @@ const source = readFileSync(
   new URL('../../lib/widgets/return_handover_stepper_sheet.dart', import.meta.url),
   'utf8',
 );
+const bookingDetail = readFileSync(
+  new URL('../../lib/screens/booking_detail_screen.dart', import.meta.url),
+  'utf8',
+);
+const ownerDetail = readFileSync(
+  new URL('../../lib/screens/ongoing_owner_detail_screen.dart', import.meta.url),
+  'utf8',
+);
 
 test('handover stepper cannot regain transport compensation', () => {
   assert.doesNotMatch(
@@ -20,7 +28,9 @@ test('pickup and return keep the minimal safe step sequence', () => {
     /List<_StepKind> _buildSteps\(\)[\s\S]*?return base;\s*\}/u,
   )?.[0] ?? '';
   assert.match(steps, /base\.add\(_StepKind\.photos\)/u);
-  assert.match(steps, /if \(isReturn\) base\.add\(_StepKind\.damage\)/u);
+  assert.match(steps, /if \(isReturn && widget\.allowDamageCase\) base\.add\(_StepKind\.damage\)/u);
+  assert.match(bookingDetail, /allowDamageCase: !_simulationOnly/u);
+  assert.match(ownerDetail, /allowDamageCase: !req\.simulationOnly/u);
   assert.match(steps, /base\.add\(_StepKind\.codes\)/u);
   assert.doesNotMatch(steps, /request\./u);
 });
@@ -36,7 +46,7 @@ test('four-photo role binding and counterparty confirmation remain required', ()
   assert.match(source, /_otherPartyConfirmed/u);
 });
 
-test('challenge qr manual code and damage paths remain active', () => {
+test('challenge qr and manual code stay available while simulations omit damage', () => {
   assert.match(source, /confirmationVerifier/u);
   assert.match(source, /qrPayload/u);
   assert.match(source, /_manualCodeCtrl/u);

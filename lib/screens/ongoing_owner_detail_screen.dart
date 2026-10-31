@@ -36,6 +36,7 @@ import 'package:lendify/services/invoices_service.dart';
 import 'package:lendify/services/local_artifact_storage_service.dart';
 import 'package:printing/printing.dart';
 import 'package:lendify/config/synthetic_clone_config.dart';
+import 'package:lendify/config/private_pilot_config.dart';
 
 class OngoingOwnerDetailScreen extends StatefulWidget {
   final String requestId;
@@ -998,6 +999,7 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
   }
 
   bool _returnCaseEntryPointEligible(RentalRequest request) =>
+      !request.simulationOnly &&
       ReturnCaseEntryPointPolicy.isEligible(
         bookingStatus: request.status,
         simulationOnly: request.simulationOnly,
@@ -1377,7 +1379,7 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
                 builder: (context) {
                   String? t;
                   if (req.simulationOnly) {
-                    t = 'Unverbindliche Pilot-Simulation: kein Vertrag, keine Reservierung und keine Zahlung.';
+                    t = 'Unverbindliche Pilot-Simulation: kein Vertrag, keine Reservierung, keine Zahlung, Auszahlung, Erstattung oder Bewertung.';
                   } else if (category == 'upcoming' || category == 'requests') {
                     t = 'Der Mieter holt den Artikel selbst ab.';
                   } else if (category == 'ongoing') {
@@ -1632,10 +1634,12 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
                 const SizedBox(height: 8),
                 _FactRow(
                   icon: Icons.receipt_long_outlined,
-                  label: 'Beleg',
-                  value: isHeldForReview
-                      ? 'Wird nach Prüfung bereitgestellt'
-                      : 'Erstattung gem. Richtlinien',
+                  label: req.simulationOnly ? 'Zahlungsbeleg' : 'Beleg',
+                  value: req.simulationOnly
+                      ? 'Kein Zahlungsbeleg – unverbindliche Simulation.'
+                      : isHeldForReview
+                          ? 'Wird nach Prüfung bereitgestellt'
+                          : 'Erstattung gem. Richtlinien',
                 ),
                 if (isHeldForReview) ...[
                   const SizedBox(height: 8),
@@ -1744,7 +1748,8 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
         // Handover/Return block moved to the very bottom (above page padding)
         // Show only for upcoming or ongoing. Hide for completed (incl. cancelled/declined)
         // and for requests.
-        if (!req.simulationOnly &&
+        if ((!req.simulationOnly ||
+                PrivatePilotConfig.stageANonBindingPilotAvailable) &&
             (category == 'upcoming' || category == 'ongoing'))
           Container(
             decoration: BoxDecoration(
@@ -2069,6 +2074,7 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
         code: code,
       ),
       viewerIsOwner: true,
+      allowDamageCase: !req.simulationOnly,
       mode: ReturnFlowMode.returnFlow,
     );
     final counterpartyConfirmed = ok?.confirmed == true;
@@ -2127,16 +2133,24 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
     }
     await DataService.addNotification(
       title: 'Buchung abgeschlossen',
-      body:
-          'Die Rückgabe für "${item.title}" wurde abgeschlossen. Beleg gesendet.',
+      body: req.simulationOnly
+          ? 'Die unverbindliche Rückgabe für "${item.title}" wurde dokumentiert. Es wurde kein Zahlungsbeleg erstellt.'
+          : 'Die Rückgabe für "${item.title}" wurde abgeschlossen. Beleg gesendet.',
     );
     if (!mounted) return;
-    AppPopup.toast(context, icon: Icons.receipt_long, title: 'Beleg gesendet');
+    AppPopup.toast(
+      context,
+      icon:
+          req.simulationOnly ? Icons.check_circle_outline : Icons.receipt_long,
+      title: req.simulationOnly ? 'Rückgabe dokumentiert' : 'Beleg gesendet',
+    );
     await _load(); // refresh request
     if (!mounted) return;
     // Schedule a review reminder for the owner in 10 minutes instead of immediate prompt
     try {
-      if (!SyntheticCloneConfig.reviewActionsEnabled) return;
+      if (req.simulationOnly || !SyntheticCloneConfig.reviewActionsEnabled) {
+        return;
+      }
       final owner = _owner;
       if (owner != null) {
         await DataService.scheduleReviewReminder(
@@ -2176,7 +2190,10 @@ class _OngoingOwnerDetailScreenState extends State<OngoingOwnerDetailScreen> {
   }
 
   Future<void> _showReviewSheet(BuildContext context, User renter) async {
-    if (!SyntheticCloneConfig.reviewActionsEnabled) return;
+    if (!SyntheticCloneConfig.reviewActionsEnabled ||
+        _req?.simulationOnly == true) {
+      return;
+    }
     final request = _req;
     final item = _item;
     final owner = _owner;

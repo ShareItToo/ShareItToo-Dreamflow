@@ -53,7 +53,7 @@ class _PrivatePilotCheckoutScreenState
   bool get _usesRemoteBackend =>
       BackendConfig.enabled && !QaRuntimeService.isEnabled;
   bool get _stageANonBindingPilot =>
-      PrivatePilotConfig.stageANonBindingPilotEnabled;
+      PrivatePilotConfig.stageANonBindingPilotAvailable;
 
   @override
   void initState() {

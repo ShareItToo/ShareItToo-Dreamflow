@@ -94,16 +94,18 @@ function sameFirebaseWebApp(googleWeb, facebookWeb) {
     googleWeb.config.authDomain === facebookWeb.config.authDomain;
 }
 
-export function profile(source, version, googleWeb = null, facebookWeb = null, passwordEnrollment = null, appleWeb = null, listingAiWeb = null) {
+export function profile(source, version, googleWeb = null, facebookWeb = null, passwordEnrollment = null, appleWeb = null, listingAiWeb = null, stageANonBindingPilot = false) {
   requireThat(TARGET === FACEBOOK_WEB_TARGET, 'facebook_web_target_mismatch');
   requireThat(TARGET === STAGING_ENROLLMENT_WEB_TARGET, 'password_enrollment_web_target_mismatch');
+  requireThat(typeof stageANonBindingPilot === 'boolean', 'stage_a_profile_invalid');
+  requireThat(!stageANonBindingPilot || listingAiWeb !== null, 'stage_a_listing_ai_readiness_required');
   const result = {
     SIT_BACKEND_ENABLED: 'true', SIT_API_BASE_URL: `${TARGET}/api/v1`,
     SIT_APP_COMMIT: source, SIT_BUILD_NUMBER: version.split('+')[1],
     SIT_CLIENT_BUILD: version, SIT_RELEASE_CHANNEL: 'internal', SIT_BUNDLE_ID: 'com.shareittoo.app',
     SIT_BLUE_OCEAN_LISTING_ASSISTANT: listingAiWeb === null ? 'false' : 'true',
-    SIT_STAGE_A_NON_BINDING_PILOT: 'false',
-    SIT_STAGE_A_PILOT_ID: '',
+    SIT_STAGE_A_NON_BINDING_PILOT: stageANonBindingPilot ? 'true' : 'false',
+    SIT_STAGE_A_PILOT_ID: stageANonBindingPilot ? 'heilbronn_wave0' : '',
     SIT_SYNTHETIC_CLONE_BOOKING_LANE: 'false', SIT_LOCAL_QA_SYNTHETIC_PAYMENT_LANE: 'false',
     SIT_BOOKING_GROUPS_TECHNICAL_UI_ENABLED: 'false', SIT_BOOKING_GROUPS_PUBLIC_RELEASE_ALLOWED: 'false',
     SIT_PLANNER_TECHNICAL_UI_ENABLED: 'false', SIT_SUPPLY_ENRICHMENT_TECHNICAL_UI_ENABLED: 'false',
@@ -372,15 +374,15 @@ function monitorStagingRelease(expected) {
   void check();
 }
 
-export function stagingBootstrapFor(source, version, googleWeb = null, facebookWeb = null, passwordEnrollment = null, appleWeb = null, listingAiWeb = null) {
+export function stagingBootstrapFor(source, version, googleWeb = null, facebookWeb = null, passwordEnrollment = null, appleWeb = null, listingAiWeb = null, stageANonBindingPilot = false) {
   requireThat(sourcePattern.test(source), 'source_sha_invalid');
   requireThat(/^\d+\.\d+\.\d+\+\d+$/.test(version), 'build_identity_invalid');
-  const identity = { source, version, profileDigest: sha256(JSON.stringify(profile(source, version, googleWeb, facebookWeb, passwordEnrollment, appleWeb, listingAiWeb))) };
+  const identity = { source, version, profileDigest: sha256(JSON.stringify(profile(source, version, googleWeb, facebookWeb, passwordEnrollment, appleWeb, listingAiWeb, stageANonBindingPilot))) };
   return stagingBootstrap.replace('document.body.appendChild(script);',
     `document.body.appendChild(script);\n(${monitorStagingRelease.toString()})(${JSON.stringify(identity)});`);
 }
 
-export function sealArtifact({ directory, source, version, flutterVersion, builderDigest, googleWeb = null, facebookWeb = null, passwordEnrollment = null, appleWeb = null, listingAiWeb = null }) {
+export function sealArtifact({ directory, source, version, flutterVersion, builderDigest, googleWeb = null, facebookWeb = null, passwordEnrollment = null, appleWeb = null, listingAiWeb = null, stageANonBindingPilot = false }) {
   requireThat(sourcePattern.test(source) && /^\d+\.\d+\.\d+\+\d+$/.test(version), 'build_identity_invalid');
   if (googleWeb !== null) {
     googleWeb = googleWeb.profileContractVersion === GOOGLE_WEB_PROFILE_V3
@@ -413,14 +415,14 @@ export function sealArtifact({ directory, source, version, flutterVersion, build
     ? 5 : passwordEnrollment ? 4 : facebookWeb ? 3 : 1;
   const artifactSchemaVersion = listingAiWeb === null ? providerArtifactSchemaVersion
     : providerArtifactSchemaVersion === 9 ? 10 : 8;
-  const buildProfile = profile(source, version, googleWeb, facebookWeb, passwordEnrollment, appleWeb, listingAiWeb);
+  const buildProfile = profile(source, version, googleWeb, facebookWeb, passwordEnrollment, appleWeb, listingAiWeb, stageANonBindingPilot);
   const web = path.join(directory, 'web');
   const index = path.join(web, 'index.html');
   const html = fs.readFileSync(index, 'utf8');
   const tag = '<script src="flutter_bootstrap.js" async></script>';
   requireThat(html.split(tag).length === 2, 'bootstrap_template_drift');
   fs.writeFileSync(index, html.replace(tag, '<script src="staging_bootstrap.js"></script>'));
-  fs.writeFileSync(path.join(web, 'staging_bootstrap.js'), stagingBootstrapFor(source, version, googleWeb, facebookWeb, passwordEnrollment, appleWeb, listingAiWeb));
+  fs.writeFileSync(path.join(web, 'staging_bootstrap.js'), stagingBootstrapFor(source, version, googleWeb, facebookWeb, passwordEnrollment, appleWeb, listingAiWeb, stageANonBindingPilot));
   fs.writeFileSync(path.join(web, 'flutter_service_worker.js'), retirementWorker);
   fs.writeFileSync(path.join(web, 'staging-release.json'), `${JSON.stringify({ target: TARGET, source, version, profileDigest: sha256(JSON.stringify(buildProfile)) })}\n`);
   const manifest = { schemaVersion: artifactSchemaVersion, bootstrapContractVersion: 2,
@@ -537,6 +539,10 @@ export function validateArtifact(directory, expectedHash, expectedSource, { mode
     'listingAiWebConfigurationDigest', 'listingAiWebCapabilityDigest',
     'listingAiWebDecisionDigest', 'listingAiWebValidatedAtUtc'];
   const listingAiEnabled = m.profile?.SIT_BLUE_OCEAN_LISTING_ASSISTANT === 'true';
+  const stageANonBindingPilot = m.profile?.SIT_STAGE_A_NON_BINDING_PILOT === 'true';
+  requireThat((stageANonBindingPilot && m.profile?.SIT_STAGE_A_PILOT_ID === 'heilbronn_wave0') ||
+    (!stageANonBindingPilot && m.profile?.SIT_STAGE_A_NON_BINDING_PILOT === 'false' && m.profile?.SIT_STAGE_A_PILOT_ID === ''),
+  'artifact_stage_a_profile');
   const listingAiMetadataPresent = listingAiMetadata.some((key) => Object.hasOwn(m, key));
   requireThat(listingAiEnabled === listingAiMetadataPresent
     && listingAiEnabled === [8, 10].includes(m.schemaVersion)
@@ -896,11 +902,11 @@ export function validateArtifact(directory, expectedHash, expectedSource, { mode
     m.mode === 'release' && m.pwaStrategy === 'none' && m.resourcesCdn === false &&
     sourcePattern.test(m.source) && (!expectedSource || m.source === expectedSource) &&
     /^\d+\.\d+\.\d+\+\d+$/.test(m.version) && hashPattern.test(m.builderDigest), 'artifact_identity_mismatch');
-  requireThat(JSON.stringify(m.profile) === JSON.stringify(profile(m.source, m.version, googleWeb, facebookWeb, passwordEnrollment, appleWeb, listingAiWeb)), 'artifact_profile_mismatch');
+  requireThat(JSON.stringify(m.profile) === JSON.stringify(profile(m.source, m.version, googleWeb, facebookWeb, passwordEnrollment, appleWeb, listingAiWeb, stageANonBindingPilot)), 'artifact_profile_mismatch');
   const actual = inventory(path.join(directory, 'web'));
   requireThat(JSON.stringify(actual) === JSON.stringify(m.files), 'artifact_integrity_mismatch');
   for (const required of ['index.html', 'main.dart.js', 'manifest.json', 'flutter_bootstrap.js']) requireThat(actual[required], 'artifact_required_file_missing');
-  requireThat(fs.readFileSync(path.join(directory, 'web/staging_bootstrap.js'), 'utf8') === (legacy ? stagingBootstrap : stagingBootstrapFor(m.source, m.version, googleWeb, facebookWeb, passwordEnrollment, appleWeb, listingAiWeb)) &&
+  requireThat(fs.readFileSync(path.join(directory, 'web/staging_bootstrap.js'), 'utf8') === (legacy ? stagingBootstrap : stagingBootstrapFor(m.source, m.version, googleWeb, facebookWeb, passwordEnrollment, appleWeb, listingAiWeb, stageANonBindingPilot)) &&
     fs.readFileSync(path.join(directory, 'web/flutter_service_worker.js'), 'utf8') === retirementWorker &&
     fs.readFileSync(path.join(directory, 'web/index.html'), 'utf8').includes('<script src="staging_bootstrap.js"></script>'), 'artifact_cache_contract');
   requireThat(fs.readFileSync(path.join(directory, 'web/staging-release.json'), 'utf8') === `${JSON.stringify({ target: TARGET, source: m.source, version: m.version, profileDigest: sha256(JSON.stringify(m.profile)) })}\n`, 'artifact_served_identity');

@@ -45,6 +45,7 @@ import 'package:lendify/widgets/sit_glass_time_picker.dart';
 import 'package:lendify/widgets/sit_overflow_menu.dart';
 import 'package:lendify/services/handover_code.dart';
 import 'package:lendify/config/synthetic_clone_config.dart';
+import 'package:lendify/config/private_pilot_config.dart';
 import 'package:lendify/utils/cancellation_policy_text.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -94,7 +95,7 @@ class _SimulationPaymentNotice extends StatelessWidget {
           ),
           SizedBox(height: 6),
           Text(
-            'Zahlung entfällt. Dieser Test erzeugt keinen Vertrag, keine Reservierung, keine Auszahlung und keine Erstattung.',
+            'Unverbindlicher Test ohne Vertrag, Reservierung, Zahlung, Auszahlung, Erstattung oder Bewertung.',
             style: TextStyle(color: Colors.white70),
           ),
         ],
@@ -119,6 +120,10 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       SharedPersistenceRefreshCoordinator();
 
   bool get _simulationOnly => widget.booking['simulationOnly'] == true;
+  bool get _simulationLifecycleActionsEnabled =>
+      _simulationOnly && PrivatePilotConfig.stageANonBindingPilotAvailable;
+  bool get _lifecycleActionsAllowed =>
+      !_simulationOnly || _simulationLifecycleActionsEnabled;
 
   Map<String, dynamic>? get _platformContract {
     if (widget.viewerIsOwner) return null;
@@ -347,6 +352,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
   }
 
   bool get _returnCaseEntryPointEligible =>
+      !_simulationOnly &&
       ReturnCaseEntryPointPolicy.isEligible(
         bookingStatus: (widget.booking['rawStatus'] ??
                 widget.booking['workflowStatus'] ??
@@ -391,8 +397,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
   void _showUnavailableBookingDates() {
     if (!mounted) return;
     AppPopup.toast(context,
-        icon: Icons.error_outline,
-        title: _bookingDatesUnavailableMessage);
+        icon: Icons.error_outline, title: _bookingDatesUnavailableMessage);
   }
 
   String _formatDurationCompact(DateTime due, DateTime now) {
@@ -458,12 +463,13 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         if (requestId.isNotEmpty) {
           final state = await DataService.getHandoverReturnState(requestId);
           final current = await DataService.getCurrentUser();
-          final alreadyReviewed = SyntheticCloneConfig.reviewActionsEnabled && current != null
-              ? await DataService.hasSubmittedReview(
-                  requestId: requestId,
-                  reviewerId: current.id,
-                )
-              : false;
+          final alreadyReviewed =
+              SyntheticCloneConfig.reviewActionsEnabled && current != null
+                  ? await DataService.hasSubmittedReview(
+                      requestId: requestId,
+                      reviewerId: current.id,
+                    )
+                  : false;
           if (mounted) {
             setState(() {
               _flowState = state;
@@ -492,12 +498,13 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     final counterparty = counterpartyId.isEmpty
         ? null
         : await DataService.getUserById(counterpartyId);
-    final alreadyReviewed = SyntheticCloneConfig.reviewActionsEnabled && current != null
-        ? await DataService.hasSubmittedReview(
-            requestId: requestId,
-            reviewerId: current.id,
-          )
-        : false;
+    final alreadyReviewed =
+        SyntheticCloneConfig.reviewActionsEnabled && current != null
+            ? await DataService.hasSubmittedReview(
+                requestId: requestId,
+                reviewerId: current.id,
+              )
+            : false;
     if (!mounted) return;
 
     setState(() {
@@ -1249,8 +1256,11 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
           final isHeldForReview = widget.booking['needsReview'] == true;
 
           Widget? child;
-          if (SyntheticCloneConfig.reviewActionsEnabled &&
-              isTrulyCompleted && isRenterView && !isHeldForReview) {
+          if (!_simulationOnly &&
+              SyntheticCloneConfig.reviewActionsEnabled &&
+              isTrulyCompleted &&
+              isRenterView &&
+              !isHeldForReview) {
             child = SizedBox(
               height: 46,
               child: FilledButton.icon(
@@ -1527,7 +1537,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            due == null ? 'Rückgabedatum nicht verfügbar'
+                            due == null
+                                ? 'Rückgabedatum nicht verfügbar'
                                 : _formatDurationCompact(due, now),
                             style: TextStyle(
                               color: isOverdue
@@ -1709,17 +1720,18 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
               if (_simulationOnly) {
                 return const _SimulationPaymentNotice();
               }
-              if ((start == null || end == null) && _boundPriceSnapshot == null) {
+              if ((start == null || end == null) &&
+                  _boundPriceSnapshot == null) {
                 return const Text('Preisaufschlüsselung nicht verfügbar.');
               }
               final daysLocal = (start != null && end != null)
-                  ? rentalCalendarDays(start.toLocal(), end.toLocal()).clamp(1, 365)
+                  ? rentalCalendarDays(start.toLocal(), end.toLocal())
+                      .clamp(1, 365)
                   : 1;
               final boundPrice = _boundPriceSnapshot;
-              final providedBasePerDay =
-                  start != null && end != null
-                      ? (widget.booking['basePerDay'] as num?)?.toDouble()
-                      : null;
+              final providedBasePerDay = start != null && end != null
+                  ? (widget.booking['basePerDay'] as num?)?.toDouble()
+                  : null;
               final discountAmountProvided = _discountsFromBooking();
               final baseTotal = boundPrice?.baseRental ??
                   (providedBasePerDay ?? 0.0) * daysLocal;
@@ -1878,7 +1890,9 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         const SizedBox(height: 16),
         // Übergabe-Karte (mit Code + QR) nur zeigen, wenn der Viewer Vermieter ist.
         // Dieser Block befindet sich im laufenden View.
-        if (_isViewerOwnerSync() && !BackendConfig.enabled)
+        if (_isViewerOwnerSync() &&
+            !BackendConfig.enabled &&
+            _lifecycleActionsAllowed)
           Container(
             decoration: BoxDecoration(
               color: Colors.black.withValues(alpha: 0.20),
@@ -1981,7 +1995,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
 
         // Owner – Laufende Anmietung: Rückgabe bestätigen (QR scannen oder Code eingeben)
         // Nur in "Laufend" sichtbar, nicht in "Kommend" oder anderen Zuständen.
-        if (_isViewerOwnerSync() && _isOngoing) ...[
+        if (_isViewerOwnerSync() && _isOngoing && _lifecycleActionsAllowed) ...[
           const SizedBox(height: 12),
           Container(
             decoration: BoxDecoration(
@@ -2102,7 +2116,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         // Removed: messaging tile and status timeline per request
         const SizedBox(height: 12),
 
-        if (isOverdue && widget.viewerIsOwner) ...[
+        if (isOverdue && widget.viewerIsOwner && _lifecycleActionsAllowed) ...[
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(12),
@@ -2139,7 +2153,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         ],
         const SizedBox(height: 16),
         // Bottom actions (moved here per request)
-        if (!widget.viewerIsOwner) ...[
+        if (!widget.viewerIsOwner && _lifecycleActionsAllowed) ...[
           // Place "Was passiert als Nächstes?" directly above the button
           Container(
             decoration: BoxDecoration(
@@ -2194,7 +2208,9 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
           ),
           const SizedBox(height: 12),
         ],
-        if (!widget.viewerIsOwner && widget.booking['needsReview'] != true) ...[
+        if (!widget.viewerIsOwner &&
+            _lifecycleActionsAllowed &&
+            widget.booking['needsReview'] != true) ...[
           _InlineTimeActionButton(
             icon: Icons.undo_rounded,
             label: 'Rückgabezeit',
@@ -2238,10 +2254,9 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     final days = (start != null && end != null)
         ? rentalCalendarDays(start.toLocal(), end.toLocal()).clamp(1, 365)
         : 1;
-    final providedBasePerDay =
-        start != null && end != null
-            ? (widget.booking['basePerDay'] as num?)?.toDouble()
-            : null;
+    final providedBasePerDay = start != null && end != null
+        ? (widget.booking['basePerDay'] as num?)?.toDouble()
+        : null;
     final discountAmountProvided = _discountsFromBooking();
     double baseTotal;
     double discountAmount;
@@ -2384,7 +2399,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                         builder: (context) {
                           final now = DateTime.now();
                           final text = _formatPickupCountdown(
-                            start, now,
+                            start,
+                            now,
                             modeLabel: 'Abholung',
                           );
                           return Container(
@@ -2890,20 +2906,35 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                   bottom: 12,
                 ),
                 children: _simulationOnly
-                    ? const [
-                        _Bullet(
-                          text:
-                              'Warte, bis der Vermieter die unverbindliche Testanfrage annimmt.',
-                        ),
-                        _Bullet(
-                          text:
-                              'Danach könnt ihr Sichtbarkeit, Benachrichtigungen und den Chat testen.',
-                        ),
-                        _Bullet(
-                          text:
-                              'Übergabe, Rückgabe, Vertrag, Reservierung und Zahlung bleiben in dieser Simulation gesperrt.',
-                        ),
-                      ]
+                    ? (_simulationLifecycleActionsEnabled
+                        ? const [
+                            _Bullet(
+                              text:
+                                  'Nach Annahme könnt ihr die unverbindliche Übergabe mit vier Fotos und QR- oder Code-Bestätigung dokumentieren.',
+                            ),
+                            _Bullet(
+                              text:
+                                  'Danach könnt ihr Rückgabe und vier Rückgabefotos ebenfalls unverbindlich dokumentieren.',
+                            ),
+                            _Bullet(
+                              text:
+                                  'Vertrag, Reservierung, Zahlung, Auszahlung, Erstattung und Bewertung bleiben gesperrt.',
+                            ),
+                          ]
+                        : const [
+                            _Bullet(
+                              text:
+                                  'Warte, bis der Vermieter die unverbindliche Testanfrage annimmt.',
+                            ),
+                            _Bullet(
+                              text:
+                                  'Danach könnt ihr Sichtbarkeit, Benachrichtigungen und den Chat testen.',
+                            ),
+                            _Bullet(
+                              text:
+                                  'Übergabe, Rückgabe, Vertrag, Reservierung und Zahlung bleiben in dieser Simulation gesperrt.',
+                            ),
+                          ])
                     : const [
                         _Bullet(
                           text: 'Warte, bis der Vermieter die Anfrage annimmt.',
@@ -2924,7 +2955,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
           // Button wurde an die feste Fußleiste (bottomNavigationBar) verschoben
         ],
 
-        if (isUpcoming && _isViewerOwnerSync() && !_simulationOnly) ...[
+        if (isUpcoming && _isViewerOwnerSync() && _lifecycleActionsAllowed) ...[
           const SizedBox(height: 16),
           // Pickup code & QR
           Container(
@@ -3019,7 +3050,9 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
           ),
         ],
 
-        if (isUpcoming && !_isViewerOwnerSync() && !_simulationOnly) ...[
+        if (isUpcoming &&
+            !_isViewerOwnerSync() &&
+            _lifecycleActionsAllowed) ...[
           const SizedBox(height: 16),
           // Button moved to the page bottom per request
           // Next steps (collapsible) for upcoming (renter)
@@ -3096,7 +3129,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         const SizedBox(height: 16),
         // Bottom primary action for upcoming bookings: move here per request
         if (isUpcoming &&
-            !_simulationOnly &&
+            _lifecycleActionsAllowed &&
             widget.booking['needsReview'] != true) ...[
           _InlineTimeActionButton(
             icon: Icons.inventory_2_rounded,
@@ -3364,7 +3397,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       _showUnavailableBookingDates();
       return;
     }
-    final days = rentalCalendarDays(start.toLocal(), end.toLocal()).clamp(1, 365);
+    final days =
+        rentalCalendarDays(start.toLocal(), end.toLocal()).clamp(1, 365);
     final totalPaid = _parseEuro(
       (widget.booking['pricePaid'] as String?) ?? '0',
     );
@@ -3409,6 +3443,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       start: start,
       end: end,
       status: 'running',
+      simulationOnly: _simulationOnly,
       message: null,
     );
 
@@ -3424,6 +3459,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       renterName: renterName,
       ownerName: ownerName,
       handoverCode: '',
+      allowDamageCase: !_simulationOnly,
       confirmationChallengeLoader: widget.viewerIsOwner
           ? null
           : () => _issueSecureChallenge(HandoverCodeService.segmentReturn),
@@ -3483,9 +3519,11 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         context,
         icon: Icons.check_circle_outline,
         title: 'Rückgabe von "$titleTxt" erfolgreich durchgeführt',
-        message: SyntheticCloneConfig.reviewActionsEnabled
-            ? 'Danke! Eine Erinnerung zum Bewerten erscheint in 10 Minuten.'
-            : 'Die unverbindliche Rückgabe wurde dokumentiert.',
+        message: _simulationOnly
+            ? 'Die unverbindliche Rückgabe wurde dokumentiert. Es folgen keine Bewertung und keine Zahlungsaktion.'
+            : SyntheticCloneConfig.reviewActionsEnabled
+                ? 'Danke! Eine Erinnerung zum Bewerten erscheint in 10 Minuten.'
+                : 'Die unverbindliche Rückgabe wurde dokumentiert.',
         barrierDismissible: true,
         showCloseIcon: false,
         plainCloseIcon: true,
@@ -3501,7 +3539,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       // Schedule a 10-minute review reminder for the current viewer (renter in this page)
       try {
         final current = await DataService.getCurrentUser();
-        if (SyntheticCloneConfig.reviewActionsEnabled &&
+        if (!_simulationOnly &&
+            SyntheticCloneConfig.reviewActionsEnabled &&
             current != null &&
             requestId != null &&
             itemId != null &&
@@ -3528,7 +3567,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       _showUnavailableBookingDates();
       return;
     }
-    final days = rentalCalendarDays(start.toLocal(), end.toLocal()).clamp(1, 365);
+    final days =
+        rentalCalendarDays(start.toLocal(), end.toLocal()).clamp(1, 365);
     final totalPaid = _parseEuro(
       (widget.booking['pricePaid'] as String?) ?? '0',
     );
@@ -3573,6 +3613,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       start: start,
       end: end,
       status: 'accepted',
+      simulationOnly: _simulationOnly,
       message: null,
     );
 
@@ -3588,6 +3629,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       renterName: renterName,
       ownerName: ownerName,
       handoverCode: '',
+      allowDamageCase: !_simulationOnly,
       confirmationChallengeLoader: widget.viewerIsOwner
           ? () => _issueSecureChallenge(HandoverCodeService.segmentPickup)
           : null,
@@ -3830,7 +3872,9 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       final title = (widget.booking['title'] as String?) ?? '';
       await DataService.addNotification(
         title: 'Buchung abgeschlossen',
-        body: 'Die Rückgabe für "$title" wurde abgeschlossen. Beleg gesendet.',
+        body: _simulationOnly
+            ? 'Die unverbindliche Rückgabe für "$title" wurde dokumentiert. Es wurde kein Zahlungsbeleg erstellt.'
+            : 'Die Rückgabe für "$title" wurde abgeschlossen. Beleg gesendet.',
       );
       if (!mounted) return;
       AppPopup.toast(
@@ -3844,7 +3888,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         final requestId = widget.booking['requestId'] as String?;
         final itemId = widget.booking['itemId'] as String?;
         final listerId = widget.booking['listerId'] as String?;
-        if (SyntheticCloneConfig.reviewActionsEnabled &&
+        if (!_simulationOnly &&
+            SyntheticCloneConfig.reviewActionsEnabled &&
             current != null &&
             requestId != null &&
             itemId != null &&
@@ -3940,7 +3985,9 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       final title = (widget.booking['title'] as String?) ?? '';
       await DataService.addNotification(
         title: 'Buchung abgeschlossen',
-        body: 'Die Rückgabe für "$title" wurde abgeschlossen. Beleg gesendet.',
+        body: _simulationOnly
+            ? 'Die unverbindliche Rückgabe für "$title" wurde dokumentiert. Es wurde kein Zahlungsbeleg erstellt.'
+            : 'Die Rückgabe für "$title" wurde abgeschlossen. Beleg gesendet.',
       );
       if (!mounted) return;
       AppPopup.toast(
@@ -3959,7 +4006,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         final requestId = widget.booking['requestId'] as String?;
         final itemId = widget.booking['itemId'] as String?;
         final listerId = widget.booking['listerId'] as String?;
-        if (SyntheticCloneConfig.reviewActionsEnabled &&
+        if (!_simulationOnly &&
+            SyntheticCloneConfig.reviewActionsEnabled &&
             current != null &&
             requestId != null &&
             itemId != null &&
@@ -4956,7 +5004,8 @@ class _CompletionSummaryCard extends StatelessWidget {
         _FactRow(
           icon: Icons.receipt_long_outlined,
           label: 'Erstattungsstatus',
-          value: 'Hier nicht bestätigt. Den aktuellen Stand findest du unter Zahlungsstatus.',
+          value:
+              'Hier nicht bestätigt. Den aktuellen Stand findest du unter Zahlungsstatus.',
         ),
       ]);
     } else {
@@ -4992,7 +5041,8 @@ class _CompletionSummaryCard extends StatelessWidget {
           _FactRow(
             icon: Icons.info_outline,
             label: 'Auszahlungsstatus',
-            value: 'Hier nicht bestätigt. Rückgabe allein bestätigt keine Auszahlung; Prüf- und Haltefristen gelten weiterhin. Den aktuellen Stand findest du unter Zahlungsstatus.',
+            value:
+                'Hier nicht bestätigt. Rückgabe allein bestätigt keine Auszahlung; Prüf- und Haltefristen gelten weiterhin. Den aktuellen Stand findest du unter Zahlungsstatus.',
           ),
         if (needsReview)
           _FactRow(
@@ -5044,7 +5094,8 @@ class _CompletionSummaryCard extends StatelessWidget {
 
   static (DateTime?, DateTime?) _parseStaticDateRange(
     Map<String, dynamic> booking,
-  ) => resolveBookingDateRange(booking) ?? (null, null);
+  ) =>
+      resolveBookingDateRange(booking) ?? (null, null);
 
   static String _fmtDate(DateTime instant) {
     final dt = instant.toLocal();

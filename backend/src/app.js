@@ -7322,6 +7322,7 @@ export function createApp({
       actor: req.actor,
       bookingId: safeText(req.params.id, 120),
       raw: req.body,
+      config,
       idempotencyKey: req.get('Idempotency-Key'),
     }));
     publishToUsers([result.review.reviewedUserId], { type: 'changed', resource: 'reviews' });

@@ -473,18 +473,22 @@ async function collectSyntheticConditionSet({
   bookingId,
   segment,
   imagePaths,
+  startIndex = 0,
 }) {
   const slots = ['overview', 'detail', 'accessories', 'critical'];
-  if (!Array.isArray(imagePaths) || imagePaths.length !== slots.length) {
-    fail(`The synthetic ${segment} condition set must contain exactly four images.`);
+  if (!Number.isInteger(startIndex) || startIndex < 0 || startIndex >= slots.length
+      || !Array.isArray(imagePaths) || imagePaths.length !== slots.length - startIndex) {
+    fail(`The synthetic ${segment} condition set must contain the remaining evidence images.`);
   }
   const uploads = [];
   const messages = [];
-  for (const [index, semanticSlot] of slots.entries()) {
+  for (const [offset, imagePath] of imagePaths.entries()) {
+    const index = startIndex + offset;
+    const semanticSlot = slots[index];
     const upload = await uploadSyntheticPhoto({
       fetchImpl,
       token,
-      imagePath: imagePaths[index],
+      imagePath,
       purpose: segment === 'pickup' ? 'handover_evidence' : 'return_evidence',
       threadId,
       filename: `sit-${segment}-${semanticSlot}.png`,
@@ -501,8 +505,8 @@ async function collectSyntheticConditionSet({
       sequence: index,
     }));
   }
-  if (new Set(uploads.map(({ id }) => id)).size !== 4) {
-    fail(`The synthetic ${segment} condition set did not contain four distinct uploads.`);
+  if (new Set(uploads.map(({ id }) => id)).size !== uploads.length) {
+    fail(`The synthetic ${segment} condition set did not contain distinct uploads.`);
   }
   return Object.freeze({
     segment,
@@ -527,18 +531,24 @@ async function confirmSyntheticConditionSet({
       || before.summary.deviationPhotos !== 0) {
     fail(`The synthetic ${segment} condition evidence is incomplete before confirmation.`);
   }
-  const confirmation = await request(
-    fetchImpl,
-    `/bookings/${encodeURIComponent(bookingId)}/condition-confirmations`,
-    {
-      method: 'POST',
-      token,
-      body: { segment, decision: 'confirmed' },
-      expected: [200, 201],
-    },
-  );
-  if (confirmation?.confirmation?.decision !== 'confirmed') {
-    fail(`The synthetic ${segment} condition confirmation was not persisted.`);
+  const existingDecision = before.summary.counterpartyConfirmation?.decision ?? null;
+  if (existingDecision && existingDecision !== 'confirmed') {
+    fail(`The synthetic ${segment} condition set has a conflicting prior decision.`);
+  }
+  if (!existingDecision) {
+    const confirmation = await request(
+      fetchImpl,
+      `/bookings/${encodeURIComponent(bookingId)}/condition-confirmations`,
+      {
+        method: 'POST',
+        token,
+        body: { segment, decision: 'confirmed' },
+        expected: [200, 201],
+      },
+    );
+    if (confirmation?.confirmation?.decision !== 'confirmed') {
+      fail(`The synthetic ${segment} condition confirmation was not persisted.`);
+    }
   }
   const after = await request(
     fetchImpl,
@@ -1825,6 +1835,14 @@ export const prepareSyntheticBookingThread = (options = {}) =>
   withSyntheticSessionCleanup(options, () => prepareSyntheticBookingThreadImpl(options));
 export const sendSyntheticBookingDiagnosticMessage = (options = {}) =>
   withSyntheticSessionCleanup(options, () => sendSyntheticBookingDiagnosticMessageImpl(options));
+
+export {
+  assertDistinctSyntheticEvidenceImages,
+  collectSyntheticConditionSet,
+  confirmSyntheticConditionSet,
+  syntheticEvidenceImagePaths,
+  verifySyntheticBookingConfirmation,
+};
 
 function cliValue(args, flag) {
   const index = args.indexOf(flag);

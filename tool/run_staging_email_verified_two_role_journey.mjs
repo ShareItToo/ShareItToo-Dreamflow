@@ -45,6 +45,19 @@ function fail(message) {
 function isSafelyCancelledBooking(booking) {
   return booking?.workflowStatus === 'cancelled'
     && booking.simulationOnly === true
+    && booking.platformContract == null
+    && booking.bindingExpiresAt == null
+    && booking.contractCreated === false
+    && booking.reservationCreated === false
+    && booking.paymentCreated === false
+    && booking.monetaryEffectMinor === 0;
+}
+
+function isSafelyCompletedSimulationBooking(booking) {
+  return booking?.workflowStatus === 'completed'
+    && booking.simulationOnly === true
+    && booking.platformContract == null
+    && booking.bindingExpiresAt == null
     && booking.contractCreated === false
     && booking.reservationCreated === false
     && booking.paymentCreated === false
@@ -143,15 +156,39 @@ function validateEmailVerifiedVault(vault, { source = false } = {}) {
   if (vault.status === 'email-linked-product-journey-retired'
       && (vault.realTwoRoleJourney?.status !== 'retired'
         || vault.realTwoRoleJourney?.listingStatus !== 'ended'
-        || !['cancelled', 'not-created'].includes(vault.realTwoRoleJourney?.bookingStatus))) {
+        || !['cancelled', 'completed', 'not-created'].includes(vault.realTwoRoleJourney?.bookingStatus)
+        || (vault.realTwoRoleJourney?.bookingStatus === 'completed'
+          && (vault.nonBindingSimulation?.status !== 'retired'
+            || vault.nonBindingSimulation?.workflowStatus !== 'completed'
+            || vault.nonBindingSimulation?.pickupPhotoCount !== 4
+            || vault.nonBindingSimulation?.returnPhotoCount !== 4
+            || vault.nonBindingSimulation?.pickupQrVerified !== true
+            || vault.nonBindingSimulation?.returnQrVerified !== true
+            || vault.nonBindingSimulation?.contractCreated !== false
+            || vault.nonBindingSimulation?.paymentCreated !== false
+            || vault.nonBindingSimulation?.reservationCreated !== false
+            || vault.nonBindingSimulation?.monetaryEffectMinor !== 0
+            || vault.nonBindingSimulation?.paymentEndpointCalled !== false
+            || vault.nonBindingSimulation?.stripeLivemode !== false)))) {
     fail('The reusable product-journey source is not safely retired.');
   }
   if (vault.status === 'non-binding-simulation-retired'
       && (vault.nonBindingSimulation?.status !== 'retired'
-        || vault.nonBindingSimulation?.workflowStatus !== 'cancelled'
+        || !['cancelled', 'completed'].includes(vault.nonBindingSimulation?.workflowStatus)
         || !['paused', 'ended'].includes(vault.nonBindingSimulation?.listingStatus)
         || vault.nonBindingSimulation?.paymentEndpointCalled !== false
-        || vault.nonBindingSimulation?.stripeLivemode !== false)) {
+        || vault.nonBindingSimulation?.stripeLivemode !== false
+        || (vault.nonBindingSimulation?.workflowStatus === 'completed'
+          && (vault.nonBindingSimulation?.pickupPhotoCount !== 4
+            || vault.nonBindingSimulation?.returnPhotoCount !== 4
+            || vault.nonBindingSimulation?.pickupQrVerified !== true
+            || vault.nonBindingSimulation?.returnQrVerified !== true
+            || vault.nonBindingSimulation?.contractCreated !== false
+            || vault.nonBindingSimulation?.paymentCreated !== false
+            || vault.nonBindingSimulation?.reservationCreated !== false
+            || vault.nonBindingSimulation?.monetaryEffectMinor !== 0
+            || vault.nonBindingSimulation?.paymentEndpointCalled !== false
+            || vault.nonBindingSimulation?.stripeLivemode !== false)))) {
     fail('The reusable simulation source is not safely retired.');
   }
   return vault;
@@ -570,13 +607,18 @@ async function runStagingEmailVerifiedTwoRoleSimulationImpl({
     ...(wait === undefined ? {} : { wait }),
   });
   const { canonical, vault } = readEmailVerifiedJourneyVault(vaultFile);
-  vault.realTwoRoleJourney.status = 'accepted-chat-ready-for-pixel-role-review';
+  if (typeof vault.nonBindingSimulation?.acceptedAt !== 'string'
+      || typeof vault.nonBindingSimulation?.completedAt !== 'string') {
+    fail('The Stage-A lifecycle checkpoint timestamps are missing.');
+  }
+  vault.realTwoRoleJourney.status = 'full-lifecycle-completed';
   vault.realTwoRoleJourney.simulationOnly = true;
-  vault.realTwoRoleJourney.acceptedAt = new Date().toISOString();
+  vault.realTwoRoleJourney.acceptedAt = vault.nonBindingSimulation.acceptedAt;
+  vault.realTwoRoleJourney.completedAt = vault.nonBindingSimulation.completedAt;
   writePrivateJson(canonical, vault);
   return Object.freeze({
     ...result,
-    status: 'email-verified-two-role-simulation-ready-for-pixel-review',
+    status: 'email-verified-two-role-simulation-completed',
     emailLinksVerified: true,
     distinctPrincipalsVerified: true,
     containsSecrets: false,
@@ -812,6 +854,7 @@ async function retireStagingEmailVerifiedTwoRoleJourneyImpl({
   ]);
   const bookingId = vault.nonBindingSimulation?.bookingId;
   let bookingCancelled = bookingId === undefined;
+  let bookingCompleted = false;
   let bookingStatus = bookingId === undefined ? 'not-created' : null;
   if (typeof bookingId === 'string' && bookingId.length > 0) {
     const requests = await apiRequest(fetchImpl, '/rental-requests', { token: renter.token });
@@ -835,12 +878,30 @@ async function retireStagingEmailVerifiedTwoRoleJourneyImpl({
       );
       bookingCancelled = isSafelyCancelledBooking(cancelled.value?.booking);
       if (bookingCancelled) bookingStatus = 'cancelled';
+    } else if (booking.workflowStatus === 'completed'
+        && isSafelyCompletedSimulationBooking(booking)
+        && vault.nonBindingSimulation?.status === 'full-lifecycle-completed'
+        && vault.nonBindingSimulation?.workflowStatus === 'completed'
+        && vault.nonBindingSimulation?.pickupPhotoCount === 4
+        && vault.nonBindingSimulation?.returnPhotoCount === 4
+        && vault.nonBindingSimulation?.pickupQrVerified === true
+        && vault.nonBindingSimulation?.returnQrVerified === true
+        && vault.nonBindingSimulation?.contractCreated === false
+        && vault.nonBindingSimulation?.paymentCreated === false
+        && vault.nonBindingSimulation?.reservationCreated === false
+        && vault.nonBindingSimulation?.monetaryEffectMinor === 0
+        && vault.nonBindingSimulation?.paymentEndpointCalled === false
+        && vault.nonBindingSimulation?.stripeLivemode === false) {
+      bookingCompleted = true;
+      bookingStatus = 'completed';
     } else {
       bookingCancelled = isSafelyCancelledBooking(booking);
       if (bookingCancelled) bookingStatus = 'cancelled';
     }
   }
-  if (!bookingCancelled) fail('The isolated non-binding booking was not safely cancelled.');
+  if (!bookingCancelled && !bookingCompleted) {
+    fail('The isolated non-binding booking is neither safely cancelled nor fully completed.');
+  }
 
   const listingId = vault.realTwoRoleJourney.listingId;
   const mine = await apiRequest(fetchImpl, '/listings/mine', { token: owner.token });
@@ -866,16 +927,39 @@ async function retireStagingEmailVerifiedTwoRoleJourneyImpl({
   if ((catalog.value?.listings ?? []).some((entry) => entry?.id === listingId)) {
     fail('The retired product-journey listing remains visible in the public catalog.');
   }
+  if (bookingId) {
+    const finalRequests = await apiRequest(fetchImpl, '/rental-requests', { token: renter.token });
+    if (!Array.isArray(finalRequests.value?.requests)) {
+      fail('The final Staging rental-request readback is malformed.');
+    }
+    const finalBooking = finalRequests.value.requests.find((entry) => entry?.id === bookingId);
+    const finalBookingIsSafe = bookingStatus === 'completed'
+      ? isSafelyCompletedSimulationBooking(finalBooking)
+      : bookingStatus === 'cancelled'
+        ? isSafelyCancelledBooking(finalBooking)
+        : finalBooking === undefined;
+    if (!finalBookingIsSafe) {
+      fail('The non-binding booking changed after retirement readback.');
+    }
+  }
 
   vault.status = 'email-linked-product-journey-retired';
   vault.realTwoRoleJourney.status = 'retired';
   vault.realTwoRoleJourney.listingStatus = 'ended';
   vault.realTwoRoleJourney.bookingStatus = bookingStatus;
   vault.realTwoRoleJourney.retiredAt = new Date().toISOString();
+  if (vault.nonBindingSimulation && (bookingCompleted || bookingCancelled)) {
+    vault.nonBindingSimulation.status = 'retired';
+    vault.nonBindingSimulation.workflowStatus = bookingStatus;
+    vault.nonBindingSimulation.listingStatus = 'ended';
+    vault.nonBindingSimulation.retiredAt = vault.realTwoRoleJourney.retiredAt;
+  }
   writePrivateJson(canonical, vault);
   return Object.freeze({
     status: 'email-verified-two-role-product-journey-retired',
     bookingCancelled,
+    bookingCompleted,
+    bookingStatus,
     listingEnded: true,
     publicCatalogEntryRemoved: true,
     paymentEndpointCalled: false,

@@ -85,8 +85,34 @@ class PrivatePilotConfig {
         apiBaseUrl == 'https://staging.shareittoo.com/api/v1';
   }
 
+  static bool stageANonBindingPilotAvailableFor({
+    required bool listingAssistantEnabled,
+    required bool nonBindingPilotEnabled,
+    required String pilotId,
+    required String releaseChannel,
+    required String apiBaseUrl,
+  }) =>
+      signedStageAInternalEnvelopeFor(
+        listingAssistantEnabled: listingAssistantEnabled,
+        nonBindingPilotEnabled: nonBindingPilotEnabled,
+        pilotId: pilotId,
+        releaseChannel: releaseChannel,
+        apiBaseUrl: apiBaseUrl,
+      );
+
   static bool get signedStageAInternalEnvelopeEnabled =>
       signedStageAInternalEnvelopeFor(
+        listingAssistantEnabled: blueOceanListingAssistantEnabled,
+        nonBindingPilotEnabled: stageANonBindingPilotEnabled,
+        pilotId: stageAPilotId,
+        releaseChannel: _releaseChannel,
+        apiBaseUrl: _apiBaseUrl,
+      );
+
+  /// The checkout may expose the non-binding Stage-A route only for the full
+  /// internal Staging envelope. A raw feature define alone never activates it.
+  static bool get stageANonBindingPilotAvailable =>
+      stageANonBindingPilotAvailableFor(
         listingAssistantEnabled: blueOceanListingAssistantEnabled,
         nonBindingPilotEnabled: stageANonBindingPilotEnabled,
         pilotId: stageAPilotId,

@@ -92,13 +92,19 @@ test('binding stays closed while Stage-A exposes only the acknowledged simulatio
   const ownerDetail = read('lib/screens/ongoing_owner_detail_screen.dart');
   const bookingStatusCopy = read('lib/utils/booking_status_copy.dart');
   const workflow = read('backend/src/booking_workflow.js');
+  const domain = read('backend/src/booking_domain.js');
   assert.match(checkout, /Test-Mietanfrage senden/u);
   assert.match(checkout, /_simulationAcknowledged/u);
   assert.match(checkout, /simulationOnly: simulationOnly/u);
   assert.match(
     workflow,
-    /simulationOnly && !\['accepted', 'declined', 'cancelled'\]\.includes\(requested\)[\s\S]*pilot_simulation_transition_forbidden/u,
+    /nonBindingSimulationTransitionAllowed\(\{[\s\S]*?simulationOnly,[\s\S]*?requested,[\s\S]*?config,[\s\S]*?\}\)/u,
   );
+  assert.match(
+    domain,
+    /if \(\['accepted', 'declined', 'cancelled'\]\.includes\(requested\)\) return true;[\s\S]*?\['active', 'completed'\]\.includes\(requested\)[\s\S]*?nonBindingPilotLifecycleEnabled\(config\)/u,
+  );
+  assert.match(domain, /\['staging', 'test'\]\.includes\(config\?\.deploymentEnvironment\)/u);
   assert.match(
     bookingDetail,
     /isUpcoming &&[\s\S]*!_simulationOnly &&[\s\S]*widget\.booking\['needsReview'\]/u,

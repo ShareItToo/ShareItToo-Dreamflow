@@ -11,6 +11,7 @@ import {
   shapeReview,
   shapeStaffUser,
 } from './moderation_domain.js';
+import { nonBindingTestLifecycleEnabled } from './booking_domain.js';
 import { blockUser } from './message_workflow.js';
 import { verifyPassword } from './security.js';
 import { persistModerationDecision } from './moderation_decision_workflow.js';
@@ -1258,7 +1259,8 @@ export async function setListingModeration(client, {
 }
 
 export async function createBookingReview(client, {
-  actor, bookingId, raw, idempotencyKey: suppliedIdempotencyKey = null,
+  actor, bookingId, raw, config: applicationConfig = null,
+  idempotencyKey: suppliedIdempotencyKey = null,
 }) {
   const candidate = normalizeReviewInput(raw);
   const commandKey = moderationIdempotencyKey(
@@ -1289,6 +1291,9 @@ export async function createBookingReview(client, {
   if (!booking.rowCount) throw new ModerationWorkflowError(404, 'booking_not_found');
   const row = booking.rows[0];
   if (![row.owner_id, row.renter_id].includes(actor.id)) throw new ModerationWorkflowError(403, 'booking_forbidden');
+  if (row.simulation_only === true && !nonBindingTestLifecycleEnabled(applicationConfig)) {
+    throw new ModerationWorkflowError(409, 'pilot_simulation_review_forbidden');
+  }
   if (row.workflow_status !== 'completed' || row.status !== 'completed') {
     throw new ModerationWorkflowError(409, 'review_requires_completed_booking');
   }

@@ -145,6 +145,23 @@ test('exact staging profile, no real-money/local-QA/provider expansion', () => {
   assert.match(missionConfig, /SIT_MISSION_WEB_PREVIEW_ENABLED/);
   assert.match(missionConfig, /defaultValue: false/);
 });
+test('Stage-A profile requires explicit opt-in plus bound Listing-AI readiness', () => {
+  const source = 'a'.repeat(40);
+  const version = '1.0.0+2026092905';
+  const evidence = syntheticListingAiMockWebEvidence(source, version);
+  const listingAi = bindListingAiMockWebReadiness(evidence.evidence, evidence.digest, {
+    expectedSource: source,
+    expectedVersion: version,
+  });
+  const p = profile(source, version, null, null, null, null, listingAi, true);
+  assert.equal(p.SIT_STAGE_A_NON_BINDING_PILOT, 'true');
+  assert.equal(p.SIT_STAGE_A_PILOT_ID, 'heilbronn_wave0');
+  assert.equal(p.SIT_RELEASE_CHANNEL, 'internal');
+  assert.equal(p.SIT_API_BASE_URL, `${TARGET}/api/v1`);
+  assert.equal(p.SIT_LOCAL_QA_SYNTHETIC_PAYMENT_LANE, 'false');
+  assert.throws(() => profile(source, version, null, null, null, null, null, true),
+    { message: 'stage_a_listing_ai_readiness_required' });
+});
 test('preflight has no filesystem mutation; execution preserves validated rollback and exact bytes', (t) => {
   const f = fixture(t); const before = fs.readdirSync(f.root);
   assert.equal(deploy(f.args).status, 'preflight-passed-no-mutation');
