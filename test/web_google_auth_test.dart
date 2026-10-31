@@ -167,8 +167,10 @@ GoogleEvidenceFixture googleCurrentReadbackEvidence(
   String sourceCommit = googleFixtureSource,
   bool wrongOperator = false,
   bool wrongApiRestriction = false,
+  bool legacySchema1 = false,
   void Function(Map<String, Object?> runtime)? mutateRuntime,
   void Function(Map<String, Object?> service)? mutateService,
+  void Function(Map<String, Object?> usage)? mutateUsage,
   void Function(Map<String, Object?> decision)? mutateDecision,
 }) {
   final now = (at ?? googleFixtureNow).toUtc();
@@ -251,6 +253,20 @@ GoogleEvidenceFixture googleCurrentReadbackEvidence(
   };
   mutateService?.call(service);
   final serviceDigest = googleFixtureDigest(jsonEncode(service));
+  final usage = <String, Object?>{
+    'schemaVersion': 1,
+    'kind': 'sit-google-web-service-usage-binding',
+    'evidenceClass': 'direct-google-cloud-console-service-usage-binding',
+    'syntheticFixture': false,
+    'projectId': candidate.projectId,
+    'projectNumber': candidate.messagingSenderId,
+    'readAtUtc': now.subtract(const Duration(seconds: 70)).toIso8601String(),
+    'validUntilUtc': now.add(const Duration(minutes: 30)).toIso8601String(),
+    'consoleReadbackSha256': googleFixtureDigest('service-usage-console-proof'),
+    'serviceReadbackSha256': serviceDigest,
+  };
+  mutateUsage?.call(usage);
+  final usageDigest = googleFixtureDigest(jsonEncode(usage));
   final console = <String, Object?>{
     'schemaVersion': 1,
     'kind': 'sit-google-web-cloud-console-api-key-readback',
@@ -290,7 +306,7 @@ GoogleEvidenceFixture googleCurrentReadbackEvidence(
   final decisionJson = jsonEncode(decision);
   final decisionDigest = googleFixtureDigest(decisionJson);
   final envelope = <String, Object?>{
-    'schemaVersion': 1,
+    'schemaVersion': legacySchema1 ? 1 : 2,
     'kind': 'sit-google-web-current-readback',
     'evidenceClass':
         'direct-authoritative-provider-runtime-and-console-readback',
@@ -301,6 +317,10 @@ GoogleEvidenceFixture googleCurrentReadbackEvidence(
     'configurationSha256': candidate.publicConfigDigest,
     'serviceAccountReadback': service,
     'serviceAccountReadbackSha256': serviceDigest,
+    if (!legacySchema1) ...{
+      'serviceUsageBinding': usage,
+      'serviceUsageBindingSha256': usageDigest,
+    },
     'cloudConsoleReadback': console,
     'cloudConsoleReadbackSha256': consoleDigest,
     'decision': decision,
@@ -373,6 +393,121 @@ void main() {
             now: runtimeNow ?? proof.now,
           );
       expect(optionsFor(evidence)?.projectId, candidate.projectId);
+      final currentEnvelope =
+          jsonDecode(evidence.readinessJson) as Map<String, dynamic>;
+      expect(currentEnvelope['schemaVersion'], 2);
+      expect(
+          currentEnvelope['serviceUsageBindingSha256'],
+          googleFixtureDigest(
+              jsonEncode(currentEnvelope['serviceUsageBinding'])));
+      expect(
+        optionsFor(googleCurrentReadbackEvidence(
+          candidate,
+          legacySchema1: true,
+        ))?.projectId,
+        candidate.projectId,
+        reason: 'historical schema 1 current-readback remains runtime-readable',
+      );
+      expect(
+        optionsFor(googleCurrentReadbackEvidence(
+          candidate,
+          mutateUsage: (usage) => usage['projectId'] = 'wrong-project',
+        )),
+        isNull,
+        reason: 'service usage must bind to the Firebase project',
+      );
+      expect(
+        optionsFor(googleCurrentReadbackEvidence(
+          candidate,
+          mutateUsage: (usage) => usage['projectNumber'] = '999999999999',
+        )),
+        isNull,
+        reason: 'service usage must bind to the Firebase project number',
+      );
+      expect(
+        optionsFor(googleCurrentReadbackEvidence(
+          candidate,
+          mutateUsage: (usage) => usage['serviceReadbackSha256'] =
+              googleFixtureDigest('different-service-readback'),
+        )),
+        isNull,
+        reason: 'service usage must bind to the exact service readback bytes',
+      );
+      expect(
+        optionsFor(googleCurrentReadbackEvidence(
+          candidate,
+          mutateUsage: (usage) => usage['consoleReadbackSha256'] = 'z' * 64,
+        )),
+        isNull,
+        reason:
+            'service usage console evidence requires a valid SHA-256 digest',
+      );
+      expect(
+        optionsFor(googleCurrentReadbackEvidence(
+          candidate,
+          mutateUsage: (usage) => usage['readAtUtc'] = googleFixtureNow
+              .add(const Duration(seconds: 1))
+              .toIso8601String(),
+        )),
+        isNull,
+        reason: 'future service usage evidence remains rejected',
+      );
+      expect(
+        optionsFor(googleCurrentReadbackEvidence(
+          candidate,
+          mutateUsage: (usage) => usage['validUntilUtc'] =
+              googleFixtureNow.add(const Duration(hours: 3)).toIso8601String(),
+        )),
+        isNull,
+        reason: 'service usage validity remains limited to two hours',
+      );
+      expect(
+        optionsFor(googleCurrentReadbackEvidence(
+          candidate,
+          mutateUsage: (usage) => usage['validUntilUtc'] = googleFixtureNow
+              .subtract(const Duration(seconds: 100))
+              .toIso8601String(),
+        )),
+        isNull,
+        reason: 'service usage expiry must follow its read timestamp',
+      );
+      final mismatchedUsageDigest = googleCurrentReadbackEvidence(candidate);
+      final mismatchedEnvelope = jsonDecode(mismatchedUsageDigest.readinessJson)
+          as Map<String, dynamic>;
+      mismatchedEnvelope['serviceUsageBindingSha256'] = '0' * 64;
+      final mismatchedReadinessJson = jsonEncode(mismatchedEnvelope);
+      final mismatchedReadinessDigest =
+          googleFixtureDigest(mismatchedReadinessJson);
+      final badUsageDigestProof = GoogleEvidenceFixture(
+        readinessJson: mismatchedReadinessJson,
+        readinessDigest: mismatchedReadinessDigest,
+        decisionJson: mismatchedUsageDigest.decisionJson,
+        decisionDigest: mismatchedUsageDigest.decisionDigest,
+        evidenceDigest: googleFixtureDigest(mismatchedReadinessJson),
+        sourceCommit: mismatchedUsageDigest.sourceCommit,
+        now: mismatchedUsageDigest.now,
+      );
+      expect(optionsFor(badUsageDigestProof), isNull,
+          reason: 'the service usage digest is checked independently');
+      final missingUsageBinding = googleCurrentReadbackEvidence(candidate);
+      final missingUsageEnvelope =
+          jsonDecode(missingUsageBinding.readinessJson) as Map<String, dynamic>;
+      missingUsageEnvelope['serviceUsageBinding'] = null;
+      final missingUsageJson = jsonEncode(missingUsageEnvelope);
+      final missingUsageDigest = googleFixtureDigest(missingUsageJson);
+      expect(
+        optionsFor(GoogleEvidenceFixture(
+          readinessJson: missingUsageJson,
+          readinessDigest: missingUsageDigest,
+          decisionJson: missingUsageBinding.decisionJson,
+          decisionDigest: missingUsageBinding.decisionDigest,
+          evidenceDigest: googleFixtureDigest(missingUsageJson),
+          sourceCommit: missingUsageBinding.sourceCommit,
+          now: missingUsageBinding.now,
+        )),
+        isNull,
+        reason: 'schema 2 requires the exact service usage binding',
+      );
       expect(
         optionsFor(
           googleCurrentReadbackEvidence(candidate, wrongOperator: true),

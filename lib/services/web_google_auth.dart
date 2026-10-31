@@ -54,7 +54,7 @@ const _googleDecisionKeys = <String>[
   'decidedAtUtc',
   'validUntilUtc',
 ];
-const _googleCurrentEnvelopeKeys = <String>[
+const _googleCurrentEnvelopeKeysV1 = <String>[
   'schemaVersion',
   'kind',
   'evidenceClass',
@@ -69,6 +69,36 @@ const _googleCurrentEnvelopeKeys = <String>[
   'cloudConsoleReadbackSha256',
   'decision',
   'decisionSha256',
+];
+const _googleCurrentEnvelopeKeysV2 = <String>[
+  'schemaVersion',
+  'kind',
+  'evidenceClass',
+  'syntheticFixture',
+  'sourceCommit',
+  'buildVersion',
+  'configuration',
+  'configurationSha256',
+  'serviceAccountReadback',
+  'serviceAccountReadbackSha256',
+  'serviceUsageBinding',
+  'serviceUsageBindingSha256',
+  'cloudConsoleReadback',
+  'cloudConsoleReadbackSha256',
+  'decision',
+  'decisionSha256',
+];
+const _googleCurrentServiceUsageBindingKeys = <String>[
+  'schemaVersion',
+  'kind',
+  'evidenceClass',
+  'syntheticFixture',
+  'projectId',
+  'projectNumber',
+  'readAtUtc',
+  'validUntilUtc',
+  'consoleReadbackSha256',
+  'serviceReadbackSha256',
 ];
 const _googleCurrentConfigKeys = <String>[
   'projectId',
@@ -435,10 +465,14 @@ class WebGooglePublicConfig {
     final hashPattern = RegExp(r'^[a-f0-9]{64}$');
     final sourcePattern = RegExp(r'^[a-f0-9]{40}$');
     const maxValidityWindow = Duration(hours: 2);
-    if (!exactKeys(readiness, _googleCurrentEnvelopeKeys) ||
+    final schemaVersion = readiness['schemaVersion'];
+    final expectedEnvelopeKeys = schemaVersion == 2
+        ? _googleCurrentEnvelopeKeysV2
+        : _googleCurrentEnvelopeKeysV1;
+    if ((schemaVersion != 1 && schemaVersion != 2) ||
+        !exactKeys(readiness, expectedEnvelopeKeys) ||
         jsonEncode(readiness) != readinessJson ||
         _googleDigest(readinessJson) != approvedReadinessDigest ||
-        readiness['schemaVersion'] != 1 ||
         readiness['kind'] != 'sit-google-web-current-readback' ||
         readiness['evidenceClass'] !=
             'direct-authoritative-provider-runtime-and-console-readback' ||
@@ -498,6 +532,22 @@ class WebGooglePublicConfig {
     final resource = c['apiKeyResourceId'];
     final apis = c['apiRestrictions'];
     final origins = c['websiteRestrictions'];
+    Map<String, dynamic>? usage;
+    DateTime? usageAt;
+    DateTime? usageUntil;
+    if (schemaVersion == 2) {
+      final rawUsage = readiness['serviceUsageBinding'];
+      final usageDigest = readiness['serviceUsageBindingSha256'];
+      if (!exactKeys(rawUsage, _googleCurrentServiceUsageBindingKeys) ||
+          usageDigest is! String ||
+          !hashPattern.hasMatch(usageDigest) ||
+          _googleDigest(jsonEncode(rawUsage)) != usageDigest) {
+        return false;
+      }
+      usage = rawUsage as Map<String, dynamic>;
+      usageAt = utc(usage['readAtUtc']);
+      usageUntil = utc(usage['validUntilUtc']);
+    }
     // Expiry gates build, seal and deployment. An accepted installed client
     // keeps this exact digest-bound decision; runtime still rejects evidence
     // from the future and validity windows longer than the two-hour bound.
@@ -571,6 +621,28 @@ class WebGooglePublicConfig {
         d['projectId'] != projectId ||
         d['webAppId'] != appId ||
         d['apiKeyResourceId'] != resource ||
+        (schemaVersion == 2 &&
+            (usage == null ||
+                usage['schemaVersion'] != 1 ||
+                usage['kind'] != 'sit-google-web-service-usage-binding' ||
+                usage['evidenceClass'] !=
+                    'direct-google-cloud-console-service-usage-binding' ||
+                usage['syntheticFixture'] != false ||
+                usage['projectId'] != projectId ||
+                usage['projectNumber'] != messagingSenderId ||
+                usage['consoleReadbackSha256'] is! String ||
+                !hashPattern.hasMatch(
+                  usage['consoleReadbackSha256'] as String,
+                ) ||
+                usage['serviceReadbackSha256'] !=
+                    readiness['serviceAccountReadbackSha256'] ||
+                usageAt == null ||
+                usageUntil == null ||
+                serviceAt == null ||
+                !usageUntil.isAfter(usageAt) ||
+                usageUntil.difference(usageAt) > maxValidityWindow ||
+                usageAt.isAfter(serviceAt) ||
+                now.isBefore(usageAt))) ||
         serviceAt == null ||
         serviceUntil == null ||
         consoleAt == null ||
