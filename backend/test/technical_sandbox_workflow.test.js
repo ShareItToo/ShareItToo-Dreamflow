@@ -379,6 +379,44 @@ test('lost provider response is recoverable with the same idempotency key', asyn
   assert.match(recovered.checkoutUrl, /run_id=technical_sandbox_/u);
 });
 
+test('unattached stale runs project manual review at the exact cutoff without provider or DB mutation', async () => {
+  for (const status of ['pending', 'unknown']) {
+    const row = { id: runId, user_id: userId, status, amount_minor: 100, currency: 'EUR',
+      synthetic_email: syntheticEmail, provider_session_id: null,
+      checkout_expires_at: new Date('2026-09-19T10:30:00.000Z'), ...rowBinding() };
+    const db = fakeDatabase({ existing: row });
+    const query = async (sql, params) => {
+      if (sql.startsWith('SELECT * FROM technical_sandbox_runs WHERE id =')) {
+        db.state.queries.push(sql);return { rowCount: 1, rows: [db.state.row] };
+      }
+      if (sql.includes("SET status = 'paid'")) return { rowCount: 0, rows: [] };
+      return db.databasePool.query(sql, params);
+    };
+    const provider = { async createTechnicalSandboxCheckout() { assert.fail('must not create'); },
+      async retrieveTechnicalSandboxCheckout() { assert.fail('must not infer a session'); } };
+    const options = { actor: { id: userId }, runId, configuration, provider,
+      databasePool: { query }, transaction: async fn => fn({ query }) };
+    assert.equal((await getTechnicalSandboxRun({ ...options, now: new Date('2026-09-19T10:29:59.999Z') })).status, status);
+    for (const at of ['2026-09-19T10:30:00.000Z', '2026-09-19T11:30:00.000Z']) {
+      const result = await getTechnicalSandboxRun({ ...options, now: new Date(at) });
+      assert.equal(result.status, 'recovery_needs_review');
+      assert.equal(result.receipt, null);assert.equal(result.checkoutUrl, null);
+      const replay = await createTechnicalSandboxCheckout({ ...options,
+        key: 'technical-sandbox:key-manual-0001', now: new Date(at) });
+      assert.equal(replay.status, 'recovery_needs_review');assert.equal(replay.id, runId);
+      assert.equal(replay.replayed, true);
+    }
+    assert.equal(db.state.row.status, status);
+    assert.equal(db.state.queries.some(sql => /^\s*(INSERT|UPDATE|DELETE)\b/u.test(sql)), false);
+    // A concurrent webhook/recovery attachment remains authoritative on the next read.
+    db.state.row = { ...row, status: 'paid', provider_session_id: 'cs_test_technical' };
+    const attachedProvider = { async retrieveTechnicalSandboxCheckout() { return receiptFixture(); } };
+    const settled = await getTechnicalSandboxRun({ ...options, provider: attachedProvider,
+      now: new Date('2026-09-19T10:30:00.001Z') });
+    assert.equal(settled.status, 'paid');assert.equal(settled.receipt.valid, true);
+  }
+});
+
 test('provider-session attachment is compare-and-set when another recovery wins', async () => {
   const db = fakeDatabase();
   const provider = new StripeProvider({ mode: 'memory', livemode: false });

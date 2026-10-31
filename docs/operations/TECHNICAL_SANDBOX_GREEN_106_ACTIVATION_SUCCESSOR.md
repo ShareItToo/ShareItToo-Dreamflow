@@ -100,3 +100,19 @@ The executor's returned status maps to exit 0 on success, 2 for a rejected or
 rolled-back activation with disabled/memory readback proved, and 3 when recovery
 is uncertain (retain the run lock and receipts). No Production target is
 accepted.
+
+Protected key and webhook text files accept either no line ending or exactly
+one terminal LF. CR, extra LF, other whitespace and invalid file permissions
+remain rejected; normalization does not change raw-byte evidence hashes.
+
+A pending/unknown run without an attached provider session at or after its
+recorded checkout expiry is exposed as `recovery_needs_review` by status GET
+and same-key Checkout replay. It has no checkout URL or success receipt and
+does not create/retry a provider session. The Web screen explains that manual
+review is required and offers only status readback. This is a recovery
+projection: the durable schema-106 pending/unknown record is retained, because
+the missing response does not prove provider absence or failure. A later
+authoritative session attachment/readback remains able to confirm the result.
+The recovery worker retries unattached runs only before expiry. Retaining these
+audit records is not a claim of deletion, refund, or provider cleanup; activation
+rollback separately proves disabled memory payments and removed secret mounts.

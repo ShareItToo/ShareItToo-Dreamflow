@@ -249,7 +249,31 @@ void main() {
     expect(find.textContaining('Serverbestätigter Test'), findsOneWidget);
   });
 
-  for (final status in ['paid', 'expired', 'pending', 'unknown']) {
+  test('manual review envelopes cannot carry a checkout URL or success receipt',
+      () {
+    TechnicalSandboxRun review({String? url, Map<String, dynamic>? receipt}) =>
+        TechnicalSandboxRun(
+            id: runId,
+            status: 'recovery_needs_review',
+            amountMinor: 100,
+            currency: 'EUR',
+            checkoutUrl: url,
+            checkoutExpiresAt: null,
+            receipt: receipt);
+    expect(review().isValidEnvelope, isTrue);
+    expect(review().serverConfirmed, isFalse);
+    expect(review(url: 'https://checkout.stripe.com/c/test').isValidEnvelope,
+        isFalse);
+    expect(review(receipt: validReceipt()).isValidEnvelope, isFalse);
+  });
+
+  for (final status in [
+    'paid',
+    'expired',
+    'pending',
+    'unknown',
+    'recovery_needs_review'
+  ]) {
     testWidgets('URL-less $status replay is recovered by one status read',
         (tester) async {
       final keys = <String>[];
@@ -307,8 +331,12 @@ void main() {
           status == 'paid' ? findsOneWidget : findsNothing);
       expect(find.textContaining('ist abgelaufen'),
           status == 'expired' ? findsOneWidget : findsNothing);
+      expect(find.textContaining('braucht eine manuelle Prüfung'),
+          status == 'recovery_needs_review' ? findsOneWidget : findsNothing);
       expect(find.textContaining('Der Checkout wurde geöffnet'), findsNothing);
-      if (status == 'pending' || status == 'unknown') {
+      if (status == 'pending' ||
+          status == 'unknown' ||
+          status == 'recovery_needs_review') {
         await tester.tap(find.text('Sandbox-Status prüfen'));
         await tester.pumpAndSettle();
         expect(keys, hasLength(2));

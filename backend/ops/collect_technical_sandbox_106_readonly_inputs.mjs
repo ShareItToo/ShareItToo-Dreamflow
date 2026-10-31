@@ -81,6 +81,8 @@ export function readRestrictedSecret(filename,kind,{afterRead=()=>{},fsOps={}}={
     if(['dev','ino','mode','uid','gid','nlink','size','mtimeNs','ctimeNs'].some(k=>before[k]!==after[k]||after[k]!==link[k])||BigInt(length)!==before.size)fail('sandbox106_secret_changed');
     const bytes=Buffer.concat(chunks);let value;
     try{value=new TextDecoder('utf-8',{fatal:true}).decode(bytes);}finally{bytes.fill(0);}
+    // A protected text file may have one POSIX line ending, never general whitespace.
+    if(value.endsWith('\n'))value=value.slice(0,-1);
     if(/[\r\n\u0000]/u.test(value)||(kind==='restricted_test_key'?!/^rk_test_[A-Za-z0-9]+$/u.test(value):kind==='webhook_secret'?!/^whsec_[A-Za-z0-9]+$/u.test(value):true))fail('sandbox106_secret_format');
     return value;
   }finally{scratch?.fill(0);for(const chunk of chunks)chunk.fill(0);if(fd!==undefined)closeSync(fd);}

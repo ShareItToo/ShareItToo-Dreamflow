@@ -60,6 +60,23 @@ test('technical sandbox is default-off and unavailable in production', () => {
   }
 });
 
+test('runtime secret files accept one terminal LF but never general whitespace trimming', () => {
+  const files = fixture();
+  try {
+    for (const [file, value] of [[files.keyFile, 'rk_test_synthetickey1234'], [files.webhookFile, 'whsec_syntheticsecret1234']]) {
+      for (const suffix of ['', '\n']) {
+        writeFileSync(file, value + suffix);
+        assert.equal(readTechnicalSandboxConfiguration(files.env, { deploymentEnvironment: 'test', now }).available, true);
+      }
+      for (const invalid of ['', '\n', value + '\n\n', value + '\r\n', value + '\r', ' ' + value, value + ' ', value + '\t', value.slice(0,8) + '\n' + value.slice(8), 'x'.repeat(513)]) {
+        writeFileSync(file, invalid);
+        assert.throws(() => readTechnicalSandboxConfiguration(files.env, { deploymentEnvironment: 'test', now }));
+      }
+      writeFileSync(file, value + '\n');
+    }
+  } finally { rmSync(files.root, { recursive: true, force: true }); }
+});
+
 test('provider-off Green inputs ignore stale authorization and credential paths', () => {
   const configuration = readTechnicalSandboxConfiguration({
     TECHNICAL_SANDBOX_ENABLED: '0',

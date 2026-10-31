@@ -328,12 +328,19 @@ class TechnicalSandboxRun {
   }
 
   bool get isValidEnvelope {
-    final validStatus =
-        const {'pending', 'unknown', 'paid', 'expired'}.contains(status);
+    final validStatus = const {
+      'pending',
+      'unknown',
+      'paid',
+      'expired',
+      'recovery_needs_review'
+    }.contains(status);
     return isValidTechnicalSandboxRunId(id) &&
         validStatus &&
         amountMinor == 100 &&
         currency == 'EUR' &&
+        (status != 'recovery_needs_review' ||
+            (checkoutUrl == null && receipt == null)) &&
         (checkoutUrl == null ||
             isValidTechnicalSandboxHostedCheckoutUrl(checkoutUrl)) &&
         (receipt == null || _isValidTechnicalSandboxReceipt(receipt, id));

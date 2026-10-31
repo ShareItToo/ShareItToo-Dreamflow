@@ -56,6 +56,21 @@ test('Stripe collector uses only fixed bounded GETs and binds exact test account
   assert.equal(JSON.stringify(result).includes(token()),false);
 });
 
+test('protected secrets allow exactly one terminal LF and reject whitespace, size and mode drift',()=>{
+  const directory=fixtureDir();try{const {key}=secrets(directory),ops=adjustedStats(100,101);
+    for(const [kind,value] of [['restricted_test_key',token()],['webhook_secret',webhook()]]){
+      for(const suffix of ['', '\n']){
+        writeFileSync(key,value+suffix);assert.equal(readRestrictedSecret(key,kind,{fsOps:ops}),value);
+      }
+      for(const invalid of ['', '\n', value+'\n\n', value+'\r\n', value+'\r', ' '+value, value+' ', value+'\t', value.slice(0,8)+'\n'+value.slice(8), 'x'.repeat(16385)]){
+        writeFileSync(key,invalid);assert.throws(()=>readRestrictedSecret(key,kind,{fsOps:ops}),/sandbox106_secret_(format|metadata)/u);
+      }
+      writeFileSync(key,value+'\n');chmodSync(key,0o640);
+      assert.throws(()=>readRestrictedSecret(key,kind,{fsOps:ops}),/sandbox106_secret_metadata/u);chmodSync(key,0o600);
+    }
+  }finally{rmSync(directory,{recursive:true,force:true});}
+});
+
 test('Stripe collector rejects redirects, permission failure, live mode and account drift without retry',async()=>{
   for(const scenario of ['redirect','403','live','account']){let calls=0;
     await assert.rejects(()=>readStripeTestAccountReadback({secretKey:token(),expectedAccountId:accountId,fetchImpl:async url=>{

@@ -48,8 +48,11 @@ function readPrivateSecretFile(env, name) {
         || finalMetadata.size !== metadata.size) {
       fail(`${name}_must_be_private_0600_file`);
     }
-    const value = bytes.toString('utf8').trim();
-    bytes.fill(0);
+    let value;
+    try { value = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
+    finally { bytes.fill(0); }
+    if (value.endsWith('\n')) value = value.slice(0, -1);
+    if (/[\s\u0000]/u.test(value)) fail(`${name}_format_invalid`);
     return value;
   } catch (error) {
     if (error?.code?.startsWith?.(`${name}_`)) throw error;

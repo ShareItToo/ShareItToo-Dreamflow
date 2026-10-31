@@ -275,10 +275,19 @@ function replayBindingMatches(row, { userId, configuration }) {
     && metadata.requestFingerprint === technicalSandboxRequestFingerprint({ userId, configuration });
 }
 
-function publicRun(row, { checkoutUrl = null, receipt = null } = {}) {
+function needsRecoveryReview(row, now) {
+  const expires = new Date(row.checkout_expires_at).getTime();
+  return row.checkout_expires_at != null && !row.provider_session_id
+    && ['pending', 'unknown'].includes(row.status)
+    && Number.isFinite(expires) && expires <= now.getTime();
+}
+
+function publicRun(row, { checkoutUrl = null, receipt = null, recoveryNeedsReview = false } = {}) {
   return {
     id: row.id,
-    status: row.status,
+    // This is a recovery projection, not a claim about the unknown provider outcome.
+    // Keep the durable pending/unknown record for an eventual authoritative readback.
+    status: recoveryNeedsReview ? 'recovery_needs_review' : row.status,
     amountMinor: Number(row.amount_minor),
     currency: row.currency,
     checkoutUrl,
@@ -459,6 +468,9 @@ export async function createTechnicalSandboxCheckout({
     );
     return { row: inserted.rows[0], replayed: false };
   });
+  if (needsRecoveryReview(prepared.row, exactNow)) {
+    return { ...publicRun(prepared.row, { recoveryNeedsReview: true }), replayed: true };
+  }
   if (prepared.replayed && prepared.row.provider_session_id) {
     return {
       ...(await reconcileTechnicalSandboxRun({
@@ -589,6 +601,9 @@ export async function getTechnicalSandboxRun({
     [id, userId],
   );
   if (!result.rowCount) fail(404, 'technical_sandbox_run_not_found');
+  if (needsRecoveryReview(result.rows[0], nowDate(now))) {
+    return publicRun(result.rows[0], { recoveryNeedsReview: true });
+  }
   return reconcileTechnicalSandboxRun({
     row: result.rows[0],
     configuration,

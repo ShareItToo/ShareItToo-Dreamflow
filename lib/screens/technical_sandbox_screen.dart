@@ -336,6 +336,10 @@ class _TechnicalSandboxScreenState extends State<TechnicalSandboxScreen>
                             const Text(
                               'Dieser Test-Checkout ist abgelaufen. Der bestehende Lauf bleibt erhalten; es wird kein neuer Schlüssel automatisch erzeugt.',
                             )
+                          else if (run?.status == 'recovery_needs_review')
+                            const Text(
+                              'Dieser Testlauf braucht eine manuelle Prüfung. Der Zahlungsstatus ist nicht bestätigt. Es wird kein neuer Checkout gestartet; du kannst den Status erneut prüfen.',
+                            )
                           else if (run != null)
                             const Text(
                               'Der Testlauf ist angelegt. Sein Zahlungsstatus wird ausschließlich vom Server gelesen.',
