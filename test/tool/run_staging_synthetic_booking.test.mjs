@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, linkSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import test from 'node:test';
 
@@ -46,9 +46,10 @@ function vaultFixture({ baseUrl = 'https://staging.shareittoo.com/api/v1' } = {}
     status: 'fixture-verified-ready-for-login',
     apiBaseUrl: baseUrl,
     stripeLivemode: false,
+    containsProductionCredentials: false,
     accounts: [
-      { role: 'owner', email: 'owner@example.invalid', password: createEphemeralFixturePassword() },
-      { role: 'renter', email: 'renter@example.invalid', password: createEphemeralFixturePassword() },
+      { role: 'owner', email: 'sitqa+sit-20260810t065907z-a6b6f407-owner@example.invalid', password: createEphemeralFixturePassword() },
+      { role: 'renter', email: 'sitqa+sit-20260810t065907z-a6b6f407-renter@example.invalid', password: createEphemeralFixturePassword() },
     ],
   }, null, 2)}\n`, { mode: 0o600 });
   chmodSync(vaultFile, 0o600);
@@ -405,7 +406,12 @@ test('runs the full synthetic acceptance journey with eight distinct evidence up
     assert.match(parsed.pathname, /^\/api\/v1\//u);
     const path = parsed.pathname.replace('/api/v1', '');
     if (path === '/auth/login') {
-      return response(200, { accessToken: `synthetic-token-${'x'.repeat(40)}` });
+      const role = JSON.parse(options.body).email.endsWith('-owner@example.invalid') ? 'owner' : 'renter';
+      return response(200, { accessToken: `synthetic-token-${role}-${'x'.repeat(40)}` });
+    }
+    if (path === '/auth/me') {
+      const role = options.headers.Authorization.includes('synthetic-token-owner-') ? 'owner' : 'renter';
+      return response(200, { user: { id: `synthetic-${role}`, photoURL: currentPhotoURL } });
     }
     const confirmation = bookingConfirmationResponse(path, options);
     if (confirmation !== null) return confirmation;
@@ -456,7 +462,6 @@ test('runs the full synthetic acceptance journey with eight distinct evidence up
       currentPhotoURL = JSON.parse(options.body).photoURL;
       return response(200, { user: { photoURL: currentPhotoURL } });
     }
-    if (path === '/auth/me') return response(200, { user: { id: 'synthetic-owner', photoURL: currentPhotoURL } });
     if (path === '/profiles/synthetic-owner') return response(200, { user: { id: 'synthetic-owner', photoURL: currentPhotoURL } });
     if (path.endsWith('/reviews')) {
       if (options.method === 'POST') {
@@ -579,6 +584,55 @@ test('fails closed on runtime commit or environment mismatch before auth or muta
     /runtime version or environment does not match/u,
   );
   assert.deepEqual(calls, ['https://staging.shareittoo.com/api/version']);
+});
+
+test('rejects symlink, hardlink, and non-owner-only account vaults before any request', async () => {
+  for (const condition of ['symlink', 'hardlink', 'mode']) {
+    const fixture = vaultFixture();
+    const selectedVault = `${fixture.vaultFile}.${condition}`;
+    if (condition === 'symlink') symlinkSync(fixture.vaultFile, selectedVault);
+    if (condition === 'hardlink') linkSync(fixture.vaultFile, selectedVault);
+    if (condition === 'mode') chmodSync(fixture.vaultFile, 0o644);
+    let requestCount = 0;
+    await assert.rejects(runSyntheticFullAcceptanceJourney({
+      ...fixture,
+      vaultFile: condition === 'symlink' ? selectedVault : fixture.vaultFile,
+      expectedRuntimeCommit: 'a'.repeat(40),
+      fetchImpl: async () => { requestCount += 1; return response(200, { commit: 'a'.repeat(40), environment: 'test' }); },
+    }));
+    assert.equal(requestCount, 0);
+  }
+});
+
+test('rejects non-synthetic aliases and same-principal owner/renter before listing or booking mutation', async () => {
+  const badAlias = vaultFixture();
+  const vault = JSON.parse(readFileSync(badAlias.vaultFile, 'utf8'));
+  vault.accounts[0].email = 'real-owner@example.com';
+  writeFileSync(badAlias.vaultFile, `${JSON.stringify(vault, null, 2)}\n`, { mode: 0o600 });
+  chmodSync(badAlias.vaultFile, 0o600);
+  let aliasRequests = 0;
+  await assert.rejects(runSyntheticFullAcceptanceJourney({
+    ...badAlias,
+    expectedRuntimeCommit: 'a'.repeat(40),
+    fetchImpl: async () => { aliasRequests += 1; return response(200, { commit: 'a'.repeat(40), environment: 'test' }); },
+  }), /role-bound synthetic aliases/u);
+  assert.equal(aliasRequests, 0);
+
+  const fixture = vaultFixture();
+  const paths = [];
+  const fetchImpl = async (url, options = {}) => {
+    const parsed = new URL(url);
+    const route = parsed.pathname.replace('/api/v1', '');
+    paths.push(route);
+    if (parsed.pathname === '/api/version') return response(200, { commit: 'a'.repeat(40), environment: 'test' });
+    if (route === '/auth/login') return response(200, { accessToken: `same-principal-${'x'.repeat(40)}` });
+    if (route === '/auth/me') return response(200, { user: { id: 'same-principal' } });
+    throw new Error('Unexpected API route before role gate.');
+  };
+  await assert.rejects(runSyntheticFullAcceptanceJourney({
+    ...fixture, fetchImpl, expectedRuntimeCommit: 'a'.repeat(40),
+  }), /distinct Staging principals/u);
+  assert.deepEqual(paths, ['/api/version', '/auth/login', '/auth/login', '/auth/me', '/auth/me']);
 });
 
 test('keeps the canonical endpoint by default and permits only an exact loopback isolated override', () => {

@@ -2,13 +2,18 @@
 
 import { createHash, randomBytes } from 'node:crypto';
 import {
-  chmodSync,
+  closeSync,
+  constants,
+  fstatSync,
+  fsyncSync,
+  ftruncateSync,
   lstatSync,
   readFileSync,
   realpathSync,
   writeFileSync,
+  openSync,
 } from 'node:fs';
-import { isAbsolute, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
@@ -141,25 +146,68 @@ function privateVaultFile(value) {
   if (typeof value !== 'string' || !isAbsolute(value)) {
     fail('The synthetic account vault must be an absolute path.');
   }
+  let inputStat;
+  try { inputStat = lstatSync(value); } catch { fail('The synthetic account vault is unavailable.'); }
+  if (inputStat.isSymbolicLink()) fail('The synthetic account vault must not be a symbolic link.');
   const canonical = realpathSync(value);
   const rel = relative(repositoryRoot, canonical);
   if (rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))) {
     fail('The synthetic account vault must remain outside the repository.');
   }
+  const parent = lstatSync(dirname(canonical));
   const stat = lstatSync(canonical);
-  if (!stat.isFile() || stat.isSymbolicLink() || (stat.mode & 0o077) !== 0) {
-    fail('The synthetic account vault must be a private, regular file.');
+  if (!parent.isDirectory() || parent.isSymbolicLink()
+      || parent.uid !== process.getuid() || (parent.mode & 0o777) !== 0o700
+      || !stat.isFile() || stat.isSymbolicLink() || stat.uid !== process.getuid()
+      || stat.nlink !== 1 || (stat.mode & 0o777) !== 0o600 || stat.size < 2 || stat.size > 1_048_576) {
+    fail('The synthetic account vault must be a single-link owner-only file in a private directory.');
   }
   return canonical;
+}
+
+function assertSyntheticAccountAliases(accounts) {
+  const aliases = ['owner', 'renter'].map(role => {
+    const account = accounts.get(role);
+    const match = typeof account?.email === 'string'
+      && /^([^+@]+)\+sit-[a-z0-9-]{8,48}-(owner|renter)@([a-z0-9.-]+\.[a-z]{2,})$/iu.exec(account.email);
+    if (!match || match[2].toLowerCase() !== role) {
+      fail('The synthetic account vault does not contain role-bound synthetic aliases.');
+    }
+    return `${match[1].toLowerCase()}@${match[3].toLowerCase()}`;
+  });
+  if (aliases[0] !== aliases[1]
+      || accounts.get('owner').email.toLowerCase() === accounts.get('renter').email.toLowerCase()) {
+    fail('The synthetic owner and renter aliases are not a distinct role pair.');
+  }
 }
 
 function readVault(vaultFile, endpointContext = canonicalEndpointContext) {
   const path = privateVaultFile(vaultFile);
   let vault;
+  let fd;
+  let bytes;
   try {
-    vault = JSON.parse(readFileSync(path, 'utf8'));
+    const before = lstatSync(path, { bigint: true });
+    fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    const opened = fstatSync(fd, { bigint: true });
+    if (!opened.isFile() || opened.nlink !== 1n || opened.uid !== BigInt(process.getuid())
+        || (opened.mode & 0o777n) !== 0o600n || opened.size < 2n || opened.size > 1_048_576n
+        || opened.dev !== BigInt(before.dev) || opened.ino !== BigInt(before.ino)) {
+      fail('The synthetic account vault changed during secure read.');
+    }
+    bytes = readFileSync(fd);
+    const after = fstatSync(fd, { bigint: true });
+    const link = lstatSync(path, { bigint: true });
+    if (!['dev', 'ino', 'mode', 'uid', 'gid', 'nlink', 'size', 'mtimeNs', 'ctimeNs']
+      .every(key => opened[key] === after[key] && after[key] === link[key])) {
+      fail('The synthetic account vault changed during secure read.');
+    }
+    vault = JSON.parse(bytes.toString('utf8'));
   } catch {
     fail('The synthetic account vault is invalid.');
+  } finally {
+    bytes?.fill(0);
+    if (fd !== undefined) closeSync(fd);
   }
   if (vault?.schemaVersion !== 1
       || vault?.kind !== 'sit-staging-synthetic-account-vault'
@@ -191,12 +239,39 @@ function readVault(vaultFile, endpointContext = canonicalEndpointContext) {
     accounts.set(account.role, account);
   }
   if (accounts.size !== 2) fail('The vault does not contain both synthetic roles.');
+  assertSyntheticAccountAliases(accounts);
   return { path, vault, accounts };
 }
 
 function saveVault(path, vault) {
-  writeFileSync(path, `${JSON.stringify(vault, null, 2)}\n`, { mode: 0o600 });
-  chmodSync(path, 0o600);
+  const canonical = privateVaultFile(path);
+  let fd;
+  const bytes = Buffer.from(`${JSON.stringify(vault, null, 2)}\n`, 'utf8');
+  try {
+    fd = openSync(canonical, constants.O_WRONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    const before = fstatSync(fd, { bigint: true });
+    const link = lstatSync(canonical, { bigint: true });
+    if (!before.isFile() || before.nlink !== 1n || before.uid !== BigInt(process.getuid())
+        || (before.mode & 0o777n) !== 0o600n || before.dev !== link.dev || before.ino !== link.ino) {
+      fail('The synthetic account vault changed before secure update.');
+    }
+    ftruncateSync(fd, 0);
+    writeFileSync(fd, bytes);
+    fsyncSync(fd);
+    const after = fstatSync(fd, { bigint: true });
+    const finalPath = lstatSync(canonical, { bigint: true });
+    if (!after.isFile() || after.nlink !== 1n || after.uid !== BigInt(process.getuid())
+        || (after.mode & 0o777n) !== 0o600n || after.dev !== before.dev || after.ino !== before.ino
+        || finalPath.dev !== after.dev || finalPath.ino !== after.ino
+        || after.size !== BigInt(bytes.length)) {
+      fail('The synthetic account vault changed during secure update.');
+    }
+  } catch {
+    fail('The synthetic account vault could not be securely updated.');
+  } finally {
+    bytes.fill(0);
+    if (fd !== undefined) closeSync(fd);
+  }
 }
 
 function dateOnly(now, daysFromNow) {
@@ -305,6 +380,20 @@ async function assertSyntheticRuntime({ fetchImpl, expectedRuntimeCommit }) {
     fail('The synthetic acceptance runtime version or environment does not match the expected test runtime.');
   }
   return Object.freeze({ commit: version.commit, environment: version.environment });
+}
+
+async function assertDistinctSyntheticPrincipals({ fetchImpl, accounts }) {
+  const ownerToken = await login(fetchImpl, accounts.get('owner'));
+  const renterToken = await login(fetchImpl, accounts.get('renter'));
+  const [owner, renter] = await Promise.all([
+    request(fetchImpl, '/auth/me', { token: ownerToken }),
+    request(fetchImpl, '/auth/me', { token: renterToken }),
+  ]);
+  if (typeof owner?.user?.id !== 'string' || owner.user.id.length < 1
+      || typeof renter?.user?.id !== 'string' || renter.user.id.length < 1
+      || owner.user.id === renter.user.id) {
+    fail('The synthetic owner and renter must resolve to distinct Staging principals.');
+  }
 }
 
 function assertSyntheticPhotoUpload(upload, label) {
@@ -1240,7 +1329,9 @@ export async function runSyntheticFullAcceptanceJourney({
   const evidenceDigests = assertDistinctSyntheticEvidenceImages(evidenceImagePaths);
   const endpointContext = resolveSyntheticEndpointContext({ isolatedTest, isolatedApiBaseUrl });
   const journeyFetch = endpointScopedFetch(fetchImpl, endpointContext);
+  const { accounts } = readVault(vaultFile, endpointContext);
   const runtimeReadback = await assertSyntheticRuntime({ fetchImpl: journeyFetch, expectedRuntimeCommit: runtime });
+  await assertDistinctSyntheticPrincipals({ fetchImpl: journeyFetch, accounts });
   await createSyntheticBookingFixture({
     vaultFile, imagePath, fetchImpl: journeyFetch, now, random, endpointContext,
   });
