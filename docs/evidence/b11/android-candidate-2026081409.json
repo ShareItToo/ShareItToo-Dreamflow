@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-release-candidate",
+  "status": "built-scanned-play-internal-installed",
+  "generatedAt": "2026-08-14T19:08:15Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081409",
+    "commit": "4950fd2d5502075336a2f63bc3af91480eeea1a4",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "android": {
+    "delivery": "play-internal",
+    "aabSha256": "70bd52d8c5bff7f36cc367f5e94cfac1170995a3dc0de7c2ea878be0bccc7e5f",
+    "apkSha256": "3ed2e266ba9dc190b81cb0954bc8d50d1bd9fe9fd2f4a64722cd3380d03b99bb",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "packageIdentityVerified": true,
+    "privateArchivePermissionsVerified": true
+  },
+  "googlePlayInternalRelease": {
+    "status": "store-install-verified",
+    "evidenceRef": "docs/evidence/b11/google-play-internal-release-active-2026081409-20260814.json"
+  },
+  "privacyAndNetwork": {
+    "binaryScan": "passed",
+    "binaryScanReportSha256": "5a2f9b29ae1cdc06962c5572cd1c13282d66a4bae1087af80ce0c7a5f82ddd00",
+    "targetSdkVersion": 35,
+    "backupDisabled": true,
+    "cleartextTrafficDisabled": true,
+    "analyticsSdkPresent": false,
+    "advertisingSdkPresent": false,
+    "permissionInventoryStatus": "passed",
+    "permissionInventoryEvidenceRef": "docs/evidence/b11/android-release-permissions-2026081409.json",
+    "disclosedSdks": [
+      "Firebase Cloud Messaging",
+      "Firebase Crashlytics",
+      "Firebase Authentication",
+      "Facebook Login",
+      "Google Maps Platform"
+    ],
+    "findings": []
+  },
+  "exactCandidateDiagnostics": {
+    "playInternalInstallAndLaunch": "passed",
+    "playInstallerVerified": "passed",
+    "centeredSitFeedback": "passed-source-and-widget-regression",
+    "foregroundPushCenteredSitPopup": "pending-exact-build",
+    "backgroundAndTerminatedPush": "pending-exact-build",
+    "foregroundFcm": "pending-exact-build",
+    "backgroundFcm": "pending-exact-build",
+    "terminatedProcessFcm": "pending-exact-build",
+    "notificationIconVisualFit": "inherited-unchanged-assets",
+    "syntheticRoleBooking": "pending-exact-build",
+    "controlledCrashDiagnostic": "pending-exact-build",
+    "authenticatedSession": "pending-exact-build",
+    "authenticatedDeepLinks": "pending-exact-build",
+    "logoutColdStartGuestPersistence": "pending-exact-build",
+    "postLogoutPushSuppression": "pending-exact-build",
+    "offlineRealtimeRecovery": "passed-physical-play-build"
+  },
+  "staging": {
+    "serverCommit": "09c9211e41da75969b9ee59e9954ac7465250e80",
+    "liveHttpStatus": 200,
+    "readyHttpStatus": 200,
+    "fcmEnabled": true,
+    "googleCredentialValidation": "passed-existing-staging-deployment-gate",
+    "productionInvariant": "passed",
+    "productionServerCommit": "09c9211e41da75969b9ee59e9954ac7465250e80",
+    "productionDockerHealth": "healthy",
+    "productionLiveHttpStatus": 200,
+    "productionReadyHttpStatus": 200,
+    "productionReadyRouteAvailable": true
+  },
+  "boundaries": {
+    "uploadedToStore": true,
+    "installedOnPhysicalDevice": true,
+    "controlledFcmSentToSyntheticAccount": false,
+    "controlledCrashDiagnosticSent": false,
+    "productionPushSent": false,
+    "productionCrashGenerated": false,
+    "iosValidated": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-authenticated-session-diagnostic",
+  "status": "passed-bounded-authenticated-session-diagnostic",
+  "capturedAt": "2026-08-23T11:17:24.866Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026082301",
+    "commit": "76e6565cdb20d6a49fb417e87b044b237a1ae6c1",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "installed": {
+    "packageIdentityVerified": true,
+    "versionName": "1.0.0",
+    "buildNumber": "2026082301",
+    "delivery": "direct-apk",
+    "apkSha256": "a235a188893983fdf770f534ee026c8bd50a7cad4b34d804597a0720817f9ff9"
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "16",
+    "apiLevel": 36,
+    "securityPatch": "2026-04-05",
+    "containsRawDeviceIdentifier": false
+  },
+  "tests": {
+    "authenticatedProfileAccess": {
+      "status": "passed",
+      "result": "authenticated-actions-present"
+    },
+    "coldStartSessionRestore": {
+      "status": "passed",
+      "result": "authenticated-profile-restored-after-force-stop"
+    }
+  },
+  "network": {
+    "condition": "offline",
+    "onlinePrecondition": "passed",
+    "wifiDisabled": true,
+    "mobileDataDisabled": true,
+    "connectivityGate": "passed-no-connectivity",
+    "networkRestored": "passed-online"
+  },
+  "boundaries": {
+    "directDiagnosticOnly": true,
+    "storeInstallationGateSatisfied": false,
+    "syntheticRoleMatrixPassed": false,
+    "bookingFlowPassed": false,
+    "authenticatedDeepLinksPassed": false,
+    "realPushPassed": false,
+    "manualTalkBackTraversalPassed": false,
+    "lockCodeUsed": false,
+    "accountIdentityRecorded": false,
+    "containsPersonalAccountData": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false
+  }
+}

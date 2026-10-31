@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS_BOUNDED_SUPPORT_READ_BASELINE",
+  "observedOn": "2026-09-04",
+  "source": "55a1aa5a11a53151ee6740785eb1e25b79f6b06e",
+  "build": "2026090404",
+  "executionBase": "ed93199edcf9e2ab6b44bca1e6583642112bd67d",
+  "runtime": {
+    "commit": "5d88295fa7fe313b83936783a0582a505b2ba486",
+    "environment": "staging",
+    "paymentTransport": "memory",
+    "livemode": false
+  },
+  "pixel": {
+    "installedApkHashReverified": true,
+    "existingContactMatchedKnownSyntheticRolePrivately": true,
+    "role": "owner",
+    "supportList": "UI_CONFIRMED_EMPTY",
+    "explicitEmptyExplanationVisible": true,
+    "errorOrStaleCaseCardsVisible": false,
+    "navigationRestored": "Entdecken",
+    "initialLoadingStateObserved": false,
+    "networkFaultInjected": false,
+    "accountSwitchTested": false
+  },
+  "independentApi": {
+    "distinctPrincipalsVerified": true,
+    "roles": [
+      { "role": "owner", "status": 200, "caseCount": 0, "privateNoStore": true, "probeSessionRevoked": true, "revokedTokenRejected": true },
+      { "role": "renter", "status": 200, "caseCount": 0, "privateNoStore": true, "probeSessionRevoked": true, "revokedTokenRejected": true }
+    ],
+    "ownerResultMatchesPixelBaseline": true,
+    "pixelSessionTokenReadOrUsed": false,
+    "logoutAllCalled": false
+  },
+  "diagnosticTests": {
+    "pass": 12,
+    "fail": 0,
+    "scope": "sanitized observation classification, not physical fault injection",
+    "priorProvenancePreflight": "FAILED_BEFORE_NETWORK_RETAINED",
+    "reviewedRuntimeAppDiffSha256": "4b9f794b83a77961d59122baac1f76837fe9a13bea0ef104a92fb05af1b7c36c"
+  },
+  "proofHashes": {
+    "pixelPreflight": "e2748cbefa6158e2cac67e809007e1b5d49150560be7ce926e173122d847c975",
+    "pixelList": "f4788d23d68d7d128e21bd397396d235e1c77a321a63bb693d1e0a5d08bb70ba",
+    "navigationRestored": "0532f1148b584e67abf7c4c69d3f5c7fa8661569fea9451b4d9b36f4558d0615",
+    "twoRoleApiBaseline": "3a374b0cf3560ce22c6347f157558e60a61929fa2b4e3ca3532d8b4b3f9d2cfe"
+  },
+  "diagnosticSourceHashes": {
+    "pixelReadProbe": "9c42bb6acd7a75b25b8729cb43201f1d4f1d8d25ef7e51a77ba791187838a75f",
+    "classifier": "b2e7de4dd09b18607cb7e39137aaa78b55a1c543f7d4808aa1329cc41dae3a83",
+    "classifierTests": "8ba78269a54cadf88119c06fa52e84468455a400cec3247f56ede194c52c0bc1",
+    "apiBaselineProbe": "f27817ea9e2c077a6b0a93a4c945ee5326347bad2c1401701fd829f2a02cc82a"
+  },
+  "boundaries": {
+    "caseCreated": false,
+    "rawCredentialsOrIdentifiersRecorded": false,
+    "onlyTemporarySyntheticProbeSessionsCreatedAndRevoked": true,
+    "backendOrProviderConfigurationChanged": false,
+    "onePlusTouched": false,
+    "github": "OWNER_DEFERRED",
+    "storeProductionRealMoneyOrSmsAction": false,
+    "fullSupportWorkflowPassed": false,
+    "fullPixelMatrixPassed": false,
+    "fullGoalComplete": false
+  }
+}

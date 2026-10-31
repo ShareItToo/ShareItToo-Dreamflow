@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "kind": "public-store-route-rollout-readiness",
+  "capturedAt": "2026-08-11",
+  "status": "ready-awaiting-explicit-production-route-approval",
+  "localCaddySha256": "6e5bf590292e7a28fc38ac1d43a68b1d4697831db33d6b49c0b9d1f21c0aca5b",
+  "canonical": {
+    "productionRoutes": [
+      "support",
+      "privacy",
+      "account-deletion"
+    ],
+    "stagingRoutes": [
+      "support",
+      "privacy",
+      "account-deletion"
+    ],
+    "appShellFallbackAfterRoutes": true,
+    "apiRoutingPreserved": true,
+    "androidAssetLinksCertificates": 2
+  },
+  "deployedState": "deployed-config-out-of-date",
+  "checks": [
+    {
+      "id": "support",
+      "path": "/support",
+      "httpStatus": 200,
+      "pageMarkerPresent": false,
+      "complianceStatus": null
+    },
+    {
+      "id": "privacy",
+      "path": "/privacy",
+      "httpStatus": 200,
+      "pageMarkerPresent": false,
+      "complianceStatus": null
+    },
+    {
+      "id": "account-deletion",
+      "path": "/account-deletion",
+      "httpStatus": 200,
+      "pageMarkerPresent": false,
+      "complianceStatus": null
+    }
+  ],
+  "validation": {
+    "canonicalRouteContractTests": "7/7 passed",
+    "liveDraftVerifier": "failed closed: support returned HTTP 200 instead of 503",
+    "containerizedCaddyValidation": "not run: Docker and a local Caddy binary are unavailable on this Mac",
+    "productionChangeRequiredForCompletion": true
+  },
+  "requiredRolloutSequence": [
+    "capture deployed Caddyfile hash and create an owner-only backup",
+    "compare the deployed file with the validated canonical Caddyfile",
+    "validate the candidate configuration on the VPS before reload",
+    "obtain explicit production-route approval",
+    "reload Caddy without changing API containers, DNS, mail, cron, Stripe, or app images",
+    "verify all three public routes and the unchanged API health endpoints",
+    "restore the backup immediately on any mismatch"
+  ],
+  "boundaries": {
+    "readOnly": true,
+    "caddyReloaded": false,
+    "productionChanged": false,
+    "stagingChanged": false,
+    "legalContentApproved": false,
+    "containsSecrets": false,
+    "containsPersonalAccountData": false,
+    "containsRawDeviceIdentifiers": false
+  }
+}

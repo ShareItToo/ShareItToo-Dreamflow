@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-stage-a-blue-ocean-n8-synthetic-pilot-harness",
+  "status": "verified-ready-for-n9",
+  "capturedAt": "2026-08-24T00:18:00Z",
+  "implementationBaseHead": "a6248a7cd97711eddcf9211c0c3a8cccdf1858c7",
+  "harness": {
+    "version": "N8-2026-08-24.1",
+    "resultClassification": "SYNTHETIC_PLANNING_OUTPUT_NOT_HUMAN_EVIDENCE",
+    "executionScope": "DETERMINISTIC_DOMAIN_SIMULATION_NOT_APP_OR_HUMAN_E2E",
+    "deterministicSeed": "sit-blue-ocean-n8-fixed-seed-v1",
+    "replaySha256": "1c95d0ace4b101bdf7c09c5ad7116abf749430b1f08d834ec4c6868504f8ecd0",
+    "syntheticParticipantCount": 30,
+    "attemptedFlowCount": 40,
+    "completedFlowCount": 37,
+    "requiredCompletedFlowMinimum": 30,
+    "requiredCompletedFlowMaximum": 50,
+    "individualRecordsReturned": false
+  },
+  "cohorts": [
+    {
+      "id": "CORE",
+      "attemptedFlowCount": 13,
+      "completedFlowCount": 12,
+      "meanDraftTimeSeconds": 505,
+      "meanPublishReadyTimeSeconds": 660,
+      "fieldEditRateBasisPoints": 10000,
+      "manualFallbackCount": 0
+    },
+    {
+      "id": "GROWTH",
+      "attemptedFlowCount": 13,
+      "completedFlowCount": 12,
+      "meanDraftTimeSeconds": 469,
+      "meanPublishReadyTimeSeconds": 604,
+      "fieldEditRateBasisPoints": 10000,
+      "manualFallbackCount": 0
+    },
+    {
+      "id": "BLUE_OCEAN",
+      "attemptedFlowCount": 14,
+      "completedFlowCount": 13,
+      "meanDraftTimeSeconds": 235,
+      "meanPublishReadyTimeSeconds": 340,
+      "fieldEditRateBasisPoints": 6095,
+      "manualFallbackCount": 2
+    }
+  ],
+  "coverage": {
+    "draftAndPublishReadyTime": "aggregate-complete",
+    "editCategoryBrandModelAndClaims": "aggregate-complete",
+    "priceAcceptanceAndEditDelta": "aggregate-complete",
+    "clarificationAbandonmentAndFallback": "aggregate-complete",
+    "projectSearchCartAndRequestFunnel": "aggregate-complete",
+    "simulatedCompletionOwnersHandoversAndSupport": "aggregate-complete",
+    "v52QuoteAuthority": "actual-domain-module",
+    "listingAiGateway": "actual-mock-and-refusal-boundaries",
+    "regionalPriceEngine": "actual-domain-module",
+    "g3G4G5": "deterministic-cohort-simulation",
+    "flutterHumanE2e": "deferred-to-n13-and-later-authorized-pilot"
+  },
+  "targetedVerification": {
+    "harnessSyntax": "passed",
+    "harnessTests": "passed-8",
+    "deterministicReplay": "passed-twice-exact",
+    "aggregateOnly": "passed",
+    "artifactValidatorTests": "passed-7",
+    "artifactValidator": "passed",
+    "fullTechnicalRegression": "passed-candidate-rollover-mode",
+    "githubRegression": "passed",
+    "githubCodeql": "passed"
+  },
+  "exactGitHubVerification": {
+    "headSha": "9ba15e519edf1fdec01e4bdf74a94c9c03bd0ea8",
+    "regressionRunId": 32674496053,
+    "regressionConclusion": "success",
+    "codeqlRunId": 32674496079,
+    "codeqlConclusion": "success"
+  },
+  "boundaries": {
+    "externalProviderCallPerformed": false,
+    "externalScannerCallPerformed": false,
+    "paidCallPerformed": false,
+    "billingActivated": false,
+    "secretStored": false,
+    "realPersonDataUsed": false,
+    "humanPilotActivated": false,
+    "realMoneyEnabled": false,
+    "automaticPublicationEnabled": false,
+    "syntheticLearningApplied": false,
+    "productionChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "cloudChanged": false,
+    "firebaseChanged": false,
+    "storeChanged": false,
+    "appleChanged": false,
+    "publicReleasePerformed": false,
+    "pullRequestMerged": false,
+    "historyRewritten": false
+  },
+  "nextPackage": "N9"
+}

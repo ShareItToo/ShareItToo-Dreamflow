@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-current-rollover-candidate",
+  "status": "built-and-archived-internal-staging-upload-pending",
+  "generatedAt": "2026-09-16T08:26:52Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091604",
+    "artifactSourceHead": "427506132a2d9a85ba28f3fc9f5482c2b219b1e9",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "compileSdkVersion": 36,
+    "minSdkVersion": 24,
+    "targetSdkVersion": 36,
+    "firebaseAndroidConfigured": true,
+    "blueOceanListingAssistantEnabled": true,
+    "listingAiExecutionLocation": "android_on_device",
+    "listingAiModel": "mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1",
+    "listingAiExternalImageProviderEnabled": false,
+    "stageANonBindingPilotEnabled": true,
+    "closedPilotEnvelopeEnabled": true,
+    "stageAPilotId": "heilbronn_wave0",
+    "g3TechnicalUiEnabled": true,
+    "g4TechnicalUiEnabled": true,
+    "g5SupplyEnrichmentTechnicalUiEnabled": true,
+    "g5ListingSetsTechnicalUiEnabled": true,
+    "socialAuth": {
+      "googleEnabled": false,
+      "appleEnabled": false,
+      "facebookEnabled": false
+    }
+  },
+  "artifact": {
+    "archiveDirectoryName": "2026091604-427506132a2d9a85ba28f3fc9f5482c2b219b1e9",
+    "aabFileName": "shareittoo-1.0.0-2026091604-427506132a2d9a85ba28f3fc9f5482c2b219b1e9.aab",
+    "aabBytes": 138844246,
+    "aabSha256": "17790b7c75770df2342ec182c3291ea5c4b5da2d0c2ddfcc3b09f4ac9a1edee3",
+    "apkFileName": "shareittoo-1.0.0-2026091604-427506132a2d9a85ba28f3fc9f5482c2b219b1e9.apk",
+    "apkBytes": 199976443,
+    "apkSha256": "281e460c50f4984bddc126c533935b63d38ce3eaaee79beabd1032af01c1b1e9",
+    "privacyReportSha256": "595d313094f5bc2b45aca2a1d7511bf6d1704e23c766196f696dbaf4b1750bcd",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "zipStructureValidation": "passed",
+    "bundletoolValidation": "not-run-tool-unavailable",
+    "binaryPrivacyScan": "passed",
+    "ownerOnlyPermissionsVerified": true,
+    "nonOverwritingArchive": true
+  },
+  "sourceVerification": {
+    "releasePreflight": "passed",
+    "scopedAndroidSdkProfile": "passed-cli-19",
+    "runtimeDrift": 0,
+    "runtimeDriftBasis": "manifest-and-privacy-identities-match-current-head",
+    "fullTechnicalRegression": "not-run-in-this-package",
+    "githubRegression": "not-run-in-this-package",
+    "githubCodeql": "not-run-in-this-package"
+  },
+  "playStateAtLastReadback": {
+    "candidateUploaded": false,
+    "candidateActivated": false,
+    "testerListChanged": false,
+    "consoleActionPerformed": false
+  },
+  "providerAndLiveHolds": {
+    "externalListingAiEnabled": false,
+    "realPaymentsEnabled": false,
+    "productionChanged": false,
+    "firebaseProjectChanged": false,
+    "cloudVpsDnsChanged": false,
+    "pullRequestMerged": false,
+    "deviceInstalledOrContacted": false
+  },
+  "evidenceRef": "owner-only-private-archive/2026091604-427506132a2d9a85ba28f3fc9f5482c2b219b1e9",
+  "containsSecrets": false,
+  "containsTesterIdentity": false,
+  "containsOptInUrl": false,
+  "containsPrivateFilesystemPath": false
+}

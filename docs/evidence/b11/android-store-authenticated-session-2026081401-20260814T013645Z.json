@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-authenticated-session-diagnostic",
+  "status": "passed-bounded-authenticated-session-diagnostic",
+  "capturedAt": "2026-08-14T01:36:45.406Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081401",
+    "commit": "5518040d63b72c08d8cd2f72d76d802023b7b055",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "installed": {
+    "packageIdentityVerified": true,
+    "versionName": "1.0.0",
+    "buildNumber": "2026081401",
+    "delivery": "google-play-split",
+    "installerPackageName": "com.android.vending",
+    "splitCount": 4
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "16",
+    "apiLevel": 36,
+    "securityPatch": "2026-04-05",
+    "containsRawDeviceIdentifier": false
+  },
+  "tests": {
+    "authenticatedProfileAccess": {
+      "status": "passed",
+      "result": "authenticated-actions-present"
+    },
+    "coldStartSessionRestore": {
+      "status": "passed",
+      "result": "authenticated-profile-restored-after-force-stop"
+    }
+  },
+  "boundaries": {
+    "directDiagnosticOnly": false,
+    "storeInstallationGateSatisfied": true,
+    "syntheticRoleMatrixPassed": false,
+    "bookingFlowPassed": false,
+    "authenticatedDeepLinksPassed": false,
+    "realPushPassed": false,
+    "manualTalkBackTraversalPassed": false,
+    "lockCodeUsed": false,
+    "accountIdentityRecorded": false,
+    "containsPersonalAccountData": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false
+  }
+}

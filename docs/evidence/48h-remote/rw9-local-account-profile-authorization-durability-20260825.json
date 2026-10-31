@@ -1,0 +1,292 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-rw9-local-account-profile-authorization-durability",
+  "status": "verified-regression-and-codeql-passed",
+  "implementationBaseHead": "3d9297a100d387ca1fdc04f4a9ea86efd647bbfb",
+  "implementationHead": "0bfc57fca09dc8586e5eeb64c46a0af1ba6bc606",
+  "architecture": "docs/architecture/rw9-local-account-profile-authorization-durability-recovery-2026-08-25.md",
+  "report": "docs/operations/RW9_LOCAL_ACCOUNT_PROFILE_AUTHORIZATION_DURABILITY_RECOVERY_2026-08-25.md",
+  "predecessor": {
+    "package": "RW8",
+    "evidence": "docs/evidence/48h-remote/rw8-local-review-reputation-authorization-durability-20260825.json",
+    "verifiedImplementationHead": "9d4780f0d7ebd88bc2521ae38d77203e181ecda6",
+    "closureCommit": "3d9297a100d387ca1fdc04f4a9ea86efd647bbfb"
+  },
+  "scope": {
+    "allowed": [
+      "matching-auth-session-exact-current-account-profile-patches",
+      "caller-mutable-field-allowlist-and-explicit-null-clears",
+      "protected-identity-verification-moderation-payout-reputation-and-deactivation",
+      "strict-bounded-whole-current-and-users-document-decoding",
+      "exact-raw-corruption-preservation-without-read-normalization",
+      "serialized-verified-paired-profile-writes-with-exact-rollback",
+      "capacity-and-storage-failure-without-profile-pruning",
+      "snapshot-write-removal-from-user-facing-profile-surfaces",
+      "current-account-only-profile-privacy-export",
+      "exact-current-account-anonymization-and-deletion-order",
+      "input-preserving-ui-retry-and-honest-local-verification",
+      "synthetic-deterministic-local-regression"
+    ],
+    "excluded": [
+      "production-backend-schema-and-remote-auth-provider-contract",
+      "contract-quote-acceptance-cancellation-and-refund",
+      "payment-payout-provider-and-real-money",
+      "handover-return-damage-and-needs-review-policy",
+      "moderation-policy-and-public-reputation-ranking",
+      "provider-ai-candidate-device-store-pilot-and-legal-owner-gates",
+      "gitguardian-finding-content-pr-merge-and-history-rewrite"
+    ],
+    "syntheticOnly": true,
+    "localOnly": true,
+    "timingWorkaroundAllowed": false,
+    "testParallelismReductionAllowed": false,
+    "silentProfilePruningAllowed": false
+  },
+  "findings": [
+    {
+      "id": "RW9-P0-CALLER-PROTECTED-FIELD-OVERWRITE-001",
+      "state": "resolved-and-tested",
+      "resolution": "User-facing writes use an exact mutable-field allowlist and cannot submit protected account fields."
+    },
+    {
+      "id": "RW9-P0-STALE-SNAPSHOT-DATA-LOSS-002",
+      "state": "resolved-and-tested",
+      "resolution": "Profile surfaces patch the latest stored document instead of replacing it with stale or partial User snapshots."
+    },
+    {
+      "id": "RW9-P0-SESSION-IDENTITY-DRIFT-003",
+      "state": "resolved-and-tested",
+      "resolution": "Every profile mutation requires and rechecks the exact current authenticated account."
+    },
+    {
+      "id": "RW9-P0-CORRUPTION-AS-DEFAULT-004",
+      "state": "resolved-and-tested",
+      "resolution": "Malformed or duplicate account documents fail closed and retain exact raw bytes without read-time normalization."
+    },
+    {
+      "id": "RW9-P0-PAIRED-DOCUMENT-LOSS-005",
+      "state": "resolved-and-tested",
+      "resolution": "Serialized verified paired writes restore both exact previous documents after an observed failure."
+    },
+    {
+      "id": "RW9-P0-LOST-UPDATE-CONCURRENCY-006",
+      "state": "resolved-and-tested",
+      "resolution": "Disjoint concurrent patches serialize against the latest pair and retain every accepted field update."
+    },
+    {
+      "id": "RW9-P0-UNBOUNDED-OR-PRUNED-PROFILES-007",
+      "state": "resolved-and-tested",
+      "resolution": "The account cache and fields are bounded and overflow rejects without deleting another profile."
+    },
+    {
+      "id": "RW9-P0-FOREIGN-DEACTIVATION-008",
+      "state": "resolved-and-tested",
+      "resolution": "Local anonymization requires the exact current account and preserves every other cached profile."
+    },
+    {
+      "id": "RW9-P0-PRIVACY-EXPORT-SCOPE-009",
+      "state": "resolved-and-tested",
+      "resolution": "The local profile export includes only the current account and excludes other cache entries and auth-session material."
+    },
+    {
+      "id": "RW9-P1-FAKE-VERIFICATION-OR-FALSE-SUCCESS-010",
+      "state": "resolved-and-tested",
+      "resolution": "Local UI cannot change email or simulate verification and failed profile writes retain a retryable surface."
+    }
+  ],
+  "verification": {
+    "changedFileAnalyze": "passed-zero-issues",
+    "focusedRw9Flutter": "passed-13",
+    "defaultFlutter": "passed-510-with-3-documented-profile-skips",
+    "lifecyclePrivacyRetentionProvider": "passed",
+    "rw9WiringTests": "passed-7",
+    "fullTechnicalRegression": "passed",
+    "githubRegression": "passed",
+    "githubCodeql": "passed-no-new-alerts"
+  },
+  "localRegression": {
+    "head": "0bfc57fca09dc8586e5eeb64c46a0af1ba6bc606",
+    "standardParallelism": true,
+    "timingWorkaroundUsed": false,
+    "parallelismReductionUsed": false,
+    "flutterPassed": 510,
+    "documentedProfileSkips": 3,
+    "analyzerIssues": 0,
+    "webDebugBuild": "passed",
+    "loopbackSmoke": "passed",
+    "androidDebugTasks": 448,
+    "androidMinSdk": 24
+  },
+  "githubVerification": {
+    "head": "0bfc57fca09dc8586e5eeb64c46a0af1ba6bc606",
+    "regressionRunId": 32838824110,
+    "codeqlRunId": 32838824163,
+    "regressionConclusion": "success",
+    "codeqlConclusion": "success",
+    "openCodeScanningAlerts": 0
+  },
+  "ratchetAudit": {
+    "cause": "RW9 added validated local account/profile lifecycle, current-account privacy export and exact-account anonymization coverage. This changed the bound lifecycle, privacy and retention manifests; active provider evidence changed only to bind those reviewed manifest hashes.",
+    "providerDecisionChanged": false,
+    "providerGateChanged": false,
+    "predecessorSourceInventoryRefreshes": [
+      "RW0 through RW8 hashes were mechanically refreshed only where the shared DataService, profile UI, account deletion, regression, lifecycle, privacy, retention, provider or compliance source changed.",
+      "The existing profile async-lifecycle ratchet was updated only to require the field-scoped updateCurrentUserProfile result and the same mounted checks before toast and navigation; no lifecycle guard was relaxed.",
+      "Each predecessor package validator must pass again before the RW9 implementation candidate is frozen."
+    ],
+    "verification": "RW0 through RW9 package validators, lifecycle, privacy, retention, provider hold, standard local full technical regression and exact-candidate GitHub Regression/CodeQL all passed."
+  },
+  "ratchets": {
+    "reason": "validated-local-account-profile-lifecycle-privacy-retention-and-provider-source-change",
+    "privacyManifestSha256": "35c3a08e20e4f55183649af934e9415ea8cfd0c2d3327483a518cf477daee449",
+    "retentionManifestSha256": "955a901bbaec6511d119558b953274c3e5059a97c657fdcf93f2a939523315c8",
+    "activeProviderEvidenceSha256": "364037cefb30cfd55da5f19a8e3394e0308dae7e15b3760e159f9f28e5d17f7d",
+    "activeProviderState": "prepared-hold",
+    "completedOwnerDecisions": 0,
+    "requiredOwnerDecisions": 10,
+    "externalReadiness": false
+  },
+  "gates": {
+    "BUILD_READY": "not-granted",
+    "PLAY_UPLOAD_APPROVED": "not-granted",
+    "HUMAN_PILOT_ACTIVATED": "not-granted",
+    "PR7_MERGE_APPROVED": "not-granted",
+    "R17_GITGUARDIAN_HISTORY_REVIEW_COMPLETE": "not-granted"
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "cloudChanged": false,
+    "firebaseChanged": false,
+    "storeChanged": false,
+    "paymentChanged": false,
+    "realMoneyUsed": false,
+    "realProviderTrafficSent": false,
+    "externalAiRuntimeEnabled": false,
+    "realTesterEnrolled": false,
+    "candidateCreated": false,
+    "deviceGateClaimed": false,
+    "legalApprovalChanged": false,
+    "gitHistoryRewritten": false,
+    "prMerged": false
+  },
+  "sourceInventory": [
+    {
+      "path": "lib/models/user.dart",
+      "sha256": "53a651530cbf6a5caefefc2729b4322fbf833530a2f2e9dd3ca6a4a9ba74c96d"
+    },
+    {
+      "path": "lib/services/account_deletion_service.dart",
+      "sha256": "c4f4da84e907f6007e61a04b54654c4386ad93ed7b16657c517ad99bd8599c3a"
+    },
+    {
+      "path": "lib/services/data_service.dart",
+      "sha256": "f23002e697a484a16e392e8fcf5dd9de527ecc55eb791dde7fab98386e37375f"
+    },
+    {
+      "path": "lib/screens/change_address_screen.dart",
+      "sha256": "14cfb25a442e0a2fed5605ea52e2ffbd66bf08658576ec10df0312c37ce178a6"
+    },
+    {
+      "path": "lib/screens/contact_data_screen.dart",
+      "sha256": "c8fb9ccc3413976b92f07eac264250176f39732eb3feb4f8fab33994eef9b5cc"
+    },
+    {
+      "path": "lib/screens/edit_profile_screen.dart",
+      "sha256": "9b0a7218b1293aa662192d207709c5a7ea70b2402cd6b1ada6d55bbf6085b4ef"
+    },
+    {
+      "path": "lib/screens/edit_social_media_screen.dart",
+      "sha256": "5dd6342ac5176402bbf0c9d3e4a0d9e2341b08014a77c2ce5d91b85d27be6b8e"
+    },
+    {
+      "path": "lib/screens/explore_screen.dart",
+      "sha256": "da3fdd19a41c20d663fb358c5660645f81803f9a5d77c59498def5f35338aef8"
+    },
+    {
+      "path": "lib/screens/own_profile_screen.dart",
+      "sha256": "3c59cc158fd327bb19a82553e24adf7c1c867367a26020c99c3f065ab7720a5e"
+    },
+    {
+      "path": "lib/screens/privacy_info_screen.dart",
+      "sha256": "b8322e4b53f08b8c644bee12d498bc713a0f28ef6f55a263f28f017fe9a24b61"
+    },
+    {
+      "path": "lib/screens/profile_info_screen.dart",
+      "sha256": "d0811a78e9b93baf6eb3cbb92c052bd25b17c2c0e1c6c1e20cdd4a6f761a8722"
+    },
+    {
+      "path": "lib/screens/register_screen.dart",
+      "sha256": "260857bf8105742d4825204e04220c34c7a356370f11eae5692d96f84ac234e9"
+    },
+    {
+      "path": "store/g2-data-lifecycle.json",
+      "sha256": "1753947c8f92f4f6e82a6a7bb5e3a6e990368589b48dc3a1716ca7c9aecd749d"
+    },
+    {
+      "path": "store/privacy-disclosures.json",
+      "sha256": "35c3a08e20e4f55183649af934e9415ea8cfd0c2d3327483a518cf477daee449"
+    },
+    {
+      "path": "store/retention-deletion-readiness.json",
+      "sha256": "955a901bbaec6511d119558b953274c3e5059a97c657fdcf93f2a939523315c8"
+    },
+    {
+      "path": "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
+      "sha256": "364037cefb30cfd55da5f19a8e3394e0308dae7e15b3760e159f9f28e5d17f7d"
+    },
+    {
+      "path": "tool/validate_g2_data_lifecycle.mjs",
+      "sha256": "c0aede510163ab7580a6765d878d706ad6d957e795a8326053aeae84a5bbee97"
+    },
+    {
+      "path": "tool/validate_privacy_disclosures.mjs",
+      "sha256": "b78f41588e8a1a14520df4f5a730ae1190924f3b2f177fe40f6569f76bfb56f9"
+    },
+    {
+      "path": "tool/validate_retention_deletion_readiness.mjs",
+      "sha256": "dc7d749b5fb4100231f1de756b41f1406507f6abfe2c0953d4a5ad49bcb91b96"
+    },
+    {
+      "path": "tool/validate_active_infrastructure_mail_provider_readiness.mjs",
+      "sha256": "6618e79f9148634ddd6ef7ccf2b96d54b5ed4b8fd081ad9e20db1110646e8ec6"
+    },
+    {
+      "path": "scripts/technical_regression_check.sh",
+      "sha256": "61e7a485cf99f041394995b49355e2b283f6e36a04977589e2ba228e22137fb2"
+    },
+    {
+      "path": "test/rw9_local_account_profile_authorization_durability_test.dart",
+      "sha256": "4312a9b9eef3060d2332d9325b9adbe441ba872f5400d0d9b0470ec3a048d1b2"
+    },
+    {
+      "path": "test/tool/rw9_local_account_profile_authorization_durability_wiring.test.mjs",
+      "sha256": "c82904d0d1c7ab8702bdc98aa4ad35654ca7f03a8675804750381222a5281969"
+    },
+    {
+      "path": "test/tool/profile_info_async_lifecycle_wiring.test.mjs",
+      "sha256": "1bbc8d511cefe480a1fe664b526e9811cdb6ba5a0dfc32971705109d93619030"
+    },
+    {
+      "path": "test/tool/validate_rw9_local_account_profile_authorization_durability.test.mjs",
+      "sha256": "e4151b5479db605b01b56cea39456da4e619cb25a5ff416daae11e627fb60a99"
+    },
+    {
+      "path": "tool/validate_rw9_local_account_profile_authorization_durability.mjs",
+      "sha256": "2d007932dc64f76feb5abc6bd476902bcf915847cec78b46f9f91f366f1666a7"
+    },
+    {
+      "path": "docs/compliance/g2l-g2-data-lifecycle-2026-08-20.md",
+      "sha256": "c9336c11f10270bff1127cce568106d48461e1f6ffb00c2dd08119401c8b5a20"
+    },
+    {
+      "path": "docs/architecture/rw9-local-account-profile-authorization-durability-recovery-2026-08-25.md",
+      "sha256": "2daa22f2a6344315c3618c088f8b3d14b26f20ee7b2b5daa724cf526a82d086a"
+    },
+    {
+      "path": "docs/operations/RW9_LOCAL_ACCOUNT_PROFILE_AUTHORIZATION_DURABILITY_RECOVERY_2026-08-25.md",
+      "sha256": "e2b26608979e3c4899b15a7efb54b715d189db156bb9bdb28181de90cbca85e4"
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "kind": "flutter-analysis-unused-locals",
+  "capturedAt": "2026-08-16T07:35:17Z",
+  "status": "passed-partial-reduction-and-category-locked",
+  "baseline": {
+    "totalDiagnostics": 428,
+    "errors": 0,
+    "warnings": 260,
+    "infos": 168,
+    "unusedLocalVariables": 52
+  },
+  "result": {
+    "totalDiagnostics": 376,
+    "errors": 0,
+    "warnings": 208,
+    "infos": 168,
+    "diagnosticsRemovedThisBatch": 52,
+    "diagnosticsRemovedFromOriginal611": 235,
+    "unusedLocalVariables": 0,
+    "runtimeSourceFilesChanged": 20,
+    "ciAnalyzerBaseline": 376
+  },
+  "safeRemovalScope": {
+    "removedUnusedLocalDeclarations": 52,
+    "newAnalyzerDiagnosticsIntroduced": 0,
+    "reachableWidgetBranchesRemoved": 0,
+    "privacySourceBindingsUpdated": [
+      "lib/screens/create_listing_screen.dart",
+      "lib/screens/message_thread_screen.dart",
+      "lib/widgets/return_handover_stepper_sheet.dart"
+    ],
+    "privacyDisclosureContentChanged": false,
+    "preservedSideEffectfulAvailabilityRead": true,
+    "preservedLocalizationDependencyRead": true
+  },
+  "permanentlyForbiddenAnalyzerCodes": [
+    "dead_code",
+    "empty_catches",
+    "equal_keys_in_map",
+    "unreachable_switch_default",
+    "unused_import",
+    "unused_local_variable"
+  ],
+  "remainingDiagnostics": {
+    "unused_element": 126,
+    "use_build_context_synchronously": 107,
+    "deprecated_member_use": 60,
+    "unused_element_parameter": 53,
+    "unused_field": 29,
+    "avoid_web_libraries_in_flutter": 1
+  },
+  "remainingScopeBoundary": {
+    "p1_01Complete": false,
+    "reason": "unused private elements and fields still require product-flow review; async context and deprecated API findings require targeted UI migrations"
+  },
+  "verification": {
+    "flutterAnalyze": "passed-with-zero-errors-and-376-non-error-diagnostics",
+    "flutterTests": "passed-268-one-skipped",
+    "analyzerBaselineWiringTests": "passed-2",
+    "privacyDisclosureValidator": "passed-after-three-exact-source-hash-refreshes",
+    "technicalRegression": "passed-with-bounded-internal-candidate-rollover",
+    "webBuild": "passed",
+    "androidDebugBuild": "passed",
+    "diffCheck": "passed"
+  },
+  "boundaries": {
+    "newAppCandidateBuilt": false,
+    "existingAppCandidateChanged": false,
+    "productionChanged": false,
+    "storeTrackChanged": false,
+    "reviewSubmitted": false,
+    "testAccountsMutated": false,
+    "realMoneyUsed": false
+  }
+}

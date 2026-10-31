@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-p4-green-staging-closure",
+  "package": "P4",
+  "status": "PASS",
+  "documentedOn": "2026-09-25",
+  "sourceCommit": "c2da8585b1f822e123307d7c763530dc0f598893",
+  "opsCommit": "928861bd4cfd080f90463d0445d59810c3280ad2",
+  "runtime": {
+    "commit": "c2da8585b1f822e123307d7c763530dc0f598893",
+    "imageDigest": "sha256:cb7f92814225044a677106d9979b95bc7d019a549ca223228c17bd281a2b97d8"
+  },
+  "target": {
+    "composeProject": "sit-green",
+    "apiContainer": "shareittoo-staging-api",
+    "databaseContainer": "sit-green-postgres-20260918011528-wp254",
+    "databaseVolume": "sit-green-volume-20260918011528-wp254",
+    "network": "sit-green-network-20260918011528-wp254",
+    "providerNetwork": "sit-staging-provider-egress",
+    "uploadsVolume": "sit-green-uploads-20260918011528-wp254",
+    "sourceSchema": 97,
+    "currentSchema": 98,
+    "currentMigration": "098_booking_checkout_declaration_constraints.up.sql",
+    "sourceLedgerDigest": "950377bd739458e22978e0b237d79930dd1822b3a2fc6d9669de47068ba8adf0",
+    "currentLedgerDigest": "796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196",
+    "targetDigest": "585422e5880147459571a1ca8bbae7a586987b9c08f745334fdb7d491f8d6b84"
+  },
+  "promotionEvidence": {
+    "path": "/docker/shareittoo/evidence/green-promotion-56ec5dc1-ops-928861bd-to-c2da8585-attempt-03.json",
+    "sha256": "42ad29e2e379985bb9c028681663bb7dc4a0ed3497ef325b490b457a67eeb135",
+    "mode": "0600"
+  },
+  "successfulPromotionBackup": {
+    "artifact": "pgdump",
+    "sha256": "adde437e5f101da5c432909e76f34916cd6102821b40cb8f5f749931868e34c4",
+    "mode": "0600"
+  },
+  "attempt02RetainedBackup": {
+    "path": "/docker/shareittoo/evidence/green-promotion-56ec5dc1-ops-928861bd-to-c2da8585-attempt-02.json.pgdump",
+    "artifact": "pgdump",
+    "sha256": "e5bbc45b89e0a358d6b3867cc4c8b0274017054762adc2dd0634908ec978cb5f",
+    "mode": "0600"
+  },
+  "attempts": [
+    {
+      "attempt": "01",
+      "status": "failed_before_mutation",
+      "reason": "missing_local_tag",
+      "cleanup": "verified",
+      "artifacts": "none"
+    },
+    {
+      "attempt": "02",
+      "status": "failed_before_mutation",
+      "reason": "private_checkout_mount_permissions",
+      "cleanup": "verified",
+      "retainedBackup": "pgdump_exists"
+    },
+    {
+      "attempt": "03",
+      "status": "success"
+    }
+  ],
+  "cleanup": {
+    "transientResources": "none",
+    "fourSeals": "stopped",
+    "verified": true
+  },
+  "providerSafety": {
+    "paymentTransport": "memory",
+    "externalProviderTraffic": "off",
+    "listingAi": "on_device"
+  },
+  "scope": {
+    "thisDocumentationUpdateRemoteMutation": false,
+    "providerTraffic": false,
+    "production": false,
+    "play": false,
+    "sensitiveValues": "omitted"
+  }
+}

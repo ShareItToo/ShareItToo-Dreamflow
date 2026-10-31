@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-authenticated-deep-link-diagnostic",
+  "status": "passed-bounded-authenticated-deep-link-diagnostic",
+  "capturedAt": "2026-08-11T17:22:30.818Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081113",
+    "commit": "e2671899fb08808a78ed9fbbc48fe39a4370e96b",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "installed": {
+    "packageIdentityVerified": true,
+    "versionName": "1.0.0",
+    "buildNumber": "2026081113",
+    "apkSha256": "2860dc4905c2eaf23943c97ce5034a24a6c57dfeaa82cb868ca622760ff9e34d"
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "16",
+    "apiLevel": 36,
+    "securityPatch": "2026-04-05",
+    "containsRawDeviceIdentifier": false
+  },
+  "tests": {
+    "authenticatedHttpsListing": {"status": "passed", "result": "synthetic-listing-visible"},
+    "authenticatedHttpsBooking": {"status": "passed", "result": "completed-booking-visible"},
+    "authenticatedCustomSchemeChat": {"status": "passed", "result": "booking-chat-visible"}
+  },
+  "boundaries": {
+    "syntheticAccountsOnly": true,
+    "directDiagnosticOnly": true,
+    "storeInstallationGateSatisfied": false,
+    "fullDeviceMatrixPassed": false,
+    "wifiOnlyDiagnostic": true,
+    "hotspotPassed": false,
+    "authenticatedDeepLinksPassed": true,
+    "realPushPassed": false,
+    "manualTalkBackTraversalPassed": false,
+    "iosTestFlightPassed": false,
+    "paymentEndpointCalled": false,
+    "stripeLivemode": false,
+    "messageSent": false,
+    "lockCodeUsed": false,
+    "accountIdentityRecorded": false,
+    "containsPersonalAccountData": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false
+  }
+}

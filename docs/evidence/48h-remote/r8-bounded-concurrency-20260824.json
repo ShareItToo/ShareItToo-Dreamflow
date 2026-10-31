@@ -1,0 +1,165 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-48h-r8-bounded-concurrency",
+  "status": "verified-r8-regression-and-codeql-passed",
+  "observedOn": "2026-08-24",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "r7ClosureHead": "ea900297bcd9791c9c7349f8f1e02a1534b34ec7",
+    "implementationHead": "74daf0a462a240649a647c5b9c00e5568c5af3ed"
+  },
+  "syntheticLoad": {
+    "accountCount": 120,
+    "maximumConcurrentWorkers": 24,
+    "concurrentPrivacyExportAccounts": 12,
+    "productionCapacityClaimed": false
+  },
+  "scenarios": [
+    "synthetic_account_cohort",
+    "concurrent_cart_actions",
+    "concurrent_listing_edits",
+    "duplicate_publication_attempts",
+    "competing_rental_requests",
+    "stale_quote_updates",
+    "g3_quote_counteroffer",
+    "g4_cart_sync",
+    "g5_set_availability_drift",
+    "support_case_creation",
+    "account_recovery",
+    "privacy_export",
+    "deletion_preflight"
+  ],
+  "redFirstFinding": {
+    "standardOwnerListingEditPreviouslyCheckedClientRevision": false,
+    "observedConcurrentStatusesBeforeCorrection": [
+      200,
+      200
+    ],
+    "risk": "silent-owner-listing-lost-update",
+    "permanentCorrection": "server-owned-catalog-revision-and-atomic-compare-and-swap"
+  },
+  "findingsAfterCorrection": {
+    "double_booking": 0,
+    "double_publish": 0,
+    "duplicate_money_state": 0,
+    "lost_update": 0,
+    "cross_account_leakage": 0,
+    "deadlock": 0,
+    "transaction_rollback_defect": 0,
+    "incorrect_idempotency": 0,
+    "stale_state_acceptance": 0
+  },
+  "assertions": {
+    "listingEditConflictContract": "one-success-one-listing_revision_conflict",
+    "publicationConflictContract": "one-created-one-blue_ocean_draft_closed",
+    "competingBookingContract": "one-accepted-one-booking_period_unavailable",
+    "recoveryTokenContract": "one-consumed-one-invalid_or_expired_reset_link",
+    "cartIsolationRows": 120,
+    "supportIsolationRows": 120,
+    "privacyExportsVerified": 12,
+    "listingSetRevalidationRequired": true,
+    "realMoneyOperations": 0,
+    "externalProviderCalls": 0
+  },
+  "execution": {
+    "resultClassification": "LOCAL_BOUNDED_CONCURRENCY_OBSERVATION_NOT_PRODUCTION_CAPACITY_CLAIM",
+    "status": "passed-bounded-concurrency-and-cleaned",
+    "durationMs": 7033.25,
+    "postgresHost": "127.0.0.1",
+    "applicationHost": "127.0.0.1",
+    "listingAiProvider": "mock",
+    "listingAiBudgetCents": 0,
+    "postgresStopped": true,
+    "temporaryClusterRemoved": true,
+    "syntheticCredentialsRetained": false
+  },
+  "workaroundAudit": {
+    "sourceRotationAttemptRejectedByRegressionContract": true,
+    "sourceRotationUsedInRetainedRun": false,
+    "rateLimiterWindowIsolatedByFreshLoopbackServer": true,
+    "supportAndPrivacyDomainTransactionsRemainProductionCodePaths": true,
+    "persistentTestPrerequisiteCreated": false,
+    "permanentWorkaroundIntroduced": false,
+    "timingAccommodationIntroduced": false,
+    "testParallelismReduced": false
+  },
+  "verification": {
+    "boundedPostgresRunner": "passed-and-cleaned",
+    "runnerUnitTests": "passed-2",
+    "rateLimitIsolationTests": "passed-2",
+    "backendSuite": "passed-746-one-postgres-skip",
+    "flutterCatalogTests": "passed-5",
+    "flutterAnalyze": "passed-zero-issues",
+    "r8ArtifactValidatorTests": "passed-6",
+    "r8ArtifactValidator": "passed",
+    "fullTechnicalRegression": "passed-candidate-rollover-ci-metadata-mode",
+    "githubRegression": "passed",
+    "githubCodeql": "passed-no-new-alerts"
+  },
+  "githubVerification": {
+    "implementationHead": "74daf0a462a240649a647c5b9c00e5568c5af3ed",
+    "verifiedHead": "f4b69d6ae56d75acdcccf568aec2ba1de3915c45",
+    "regression": {
+      "runId": 32752535433,
+      "conclusion": "success",
+      "postgresJobId": 97512758822,
+      "postgresConclusion": "success",
+      "backendJobId": 97512759179,
+      "backendConclusion": "success",
+      "flutterJobId": 97512759251,
+      "flutterConclusion": "success",
+      "parallelStabilityExecuted": false,
+      "signedCandidateBuilt": false,
+      "apiImageBuilt": true,
+      "apiImagePublished": false,
+      "publishApiImageJobId": 97515110356,
+      "publishApiImageConclusion": "skipped"
+    },
+    "codeql": {
+      "workflowRunId": 32752535527,
+      "workflowConclusion": "success",
+      "advancedSecurityCheckId": 97513141931,
+      "advancedSecurityConclusion": "success",
+      "newAlerts": 0
+    },
+    "preExistingExternalHistoryCheck": {
+      "provider": "GitGuardian",
+      "documentedBaseCommit": "e64defd0df62fb047c6fbc90733e4caf318ac7c4",
+      "documentedBaseCheckId": 97395091283,
+      "currentCheckId": 97512569543,
+      "currentConclusion": "failure",
+      "reportedPullRequestCommitScope": 250,
+      "credentialDetailsInspected": false,
+      "classifiedAsR8Regression": false
+    }
+  },
+  "limitations": {
+    "boundedLocalObservationOnly": true,
+    "productionCapacityClaimed": false,
+    "performanceCertificationClaimed": false,
+    "releaseCertificationClaimed": false,
+    "supportAndPrivacyRequestStackFullyLoadTested": false,
+    "supportAndPrivacyTransactionalIsolationTested": true,
+    "realUsersEvaluated": false
+  },
+  "boundaries": {
+    "realUserDataUsed": false,
+    "syntheticCredentialsRetained": false,
+    "externalAiProviderCalled": false,
+    "apiBillingCreated": false,
+    "realMoneyUsed": false,
+    "productionChanged": false,
+    "cloudChanged": false,
+    "firebaseChanged": false,
+    "paymentChanged": false,
+    "storeChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "pilotActivated": false,
+    "publicReleasePerformed": false,
+    "pullRequestMerged": false,
+    "historyRewritten": false,
+    "containsSecrets": false
+  },
+  "nextPackage": "R9"
+}

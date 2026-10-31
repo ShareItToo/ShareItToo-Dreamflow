@@ -28,7 +28,7 @@ String stackCategoryLabel(String label) {
     // Fallback: if exactly two words separated by space, stack them
     final parts = raw.split(RegExp(r"\s+")).where((e) => e.isNotEmpty).toList();
     if (parts.length == 2) {
-      return parts[0] + '\n' + parts[1];
+      return '${parts[0]}\n${parts[1]}';
     }
     return label;
   } catch (e) {

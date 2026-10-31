@@ -65,9 +65,16 @@ class NotificationCtaResolver {
       );
     }
 
-    final RentalRequest? req = await DataService.getRentalRequestById(
-      requestId,
-    );
+    RentalRequest? req;
+    try {
+      req = await DataService.getRentalRequestById(requestId);
+    } on StateError {
+      // A stale notification must not become a foreign-account lookup oracle.
+      return NotificationCtaResolution(
+        target: NotificationTargetKind.none,
+        sitCategory: _sitCategoryFor(routeKind),
+      );
+    }
     if (req == null) {
       if (looksLikeOwnerRequest) {
         return const NotificationCtaResolution(
@@ -166,8 +173,8 @@ class NotificationCtaResolver {
     final cta = lower(notification['ctaLabel']);
 
     bool matchesAny(Iterable<String> needles) => needles.any(
-      (needle) => title.contains(needle) || body.contains(needle),
-    );
+          (needle) => title.contains(needle) || body.contains(needle),
+        );
 
     if (entityType == 'thread' || raw == 'messages') return _RouteKind.message;
     if (entityType == 'support' || raw == 'support') return _RouteKind.support;

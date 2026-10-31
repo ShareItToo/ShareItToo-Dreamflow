@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp84-staging-compose-override-persistence",
+  "status": "complete-local-correction-remote-rollout-held",
+  "capturedOn": "2026-09-10",
+  "workPackage": "WP84",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "implementationCommit": "797b1bd068f4ba47beae799c76cf26dcb4ed75cf",
+    "verificationCommit": "ed8c973ad8dd70968a7797d40e2e3b68ec16cfe8",
+    "sourceInventory": [
+      {
+        "path": "backend/ops/deploy_release.sh",
+        "sha256": "6235a518a5055e4d23e6397b9b33cdba0196c79c06ce1a57ab93bb318cee2cbe"
+      },
+      {
+        "path": "backend/compose.staging.yml",
+        "sha256": "a5669d8b01672ec1b2da240607a6dc592d9cb17474d6ec40d648ffb54fc416b4"
+      },
+      {
+        "path": "tool/inspect_staging_runtime_readonly.mjs",
+        "sha256": "8a893f44a4c248361a9af091948c8e6fb7a61140d6347e53421a5819494619b7"
+      }
+    ]
+  },
+  "readOnlyObservation": {
+    "dedicatedConnectionPassed": true,
+    "credentialContentsRead": false,
+    "configurationContentsRead": false,
+    "runtimeImageReleaseIdentityMatched": true,
+    "expectedStagingContainersPresent": true,
+    "expectedNamedDataVolumesPresent": true,
+    "activeComposeConfigFileCount": 5,
+    "activeComposePersistentRegularFileCount": 4,
+    "activeComposeMissingTemporaryOverrideCount": 1,
+    "reproducibleFromPersistentRemoteFiles": false
+  },
+  "correction": {
+    "persistentOwnerRestrictedNonSymlinkDirectory": true,
+    "deploymentOverrideRetainedAfterSuccess": true,
+    "verifiedRollbackOverrideRetainedAfterSuccess": true,
+    "failedOrUnfinishedOverrideRemoved": true,
+    "immutableCommitLabelRequired": true,
+    "noBuildRolloutRequired": true,
+    "healthReadbackRequired": true,
+    "rollbackVerificationRequired": true
+  },
+  "verification": {
+    "targetedDeploymentHarnessTests": "passed-15",
+    "fullTechnicalRegression": "passed",
+    "webWasmLoopback": "passed",
+    "androidDebugBuildAndMinSdk24": "passed",
+    "r11AndroidSecuritySurface": "passed",
+    "githubExactCommit": {
+      "commit": "ed8c973ad8dd70968a7797d40e2e3b68ec16cfe8",
+      "regressionRun": 34438480359,
+      "regression": "passed-all-required-jobs",
+      "codeqlRun": 34438480362,
+      "codeql": "passed",
+      "openPullRequestMergeCodeScanningAlerts": 0,
+      "pullRequest7": "draft-open-clean-unmerged"
+    }
+  },
+  "externalGate": {
+    "name": "STAGING_PERSISTENT_COMPOSE_OVERRIDE_ROLLOUT_AND_READBACK",
+    "state": "held",
+    "completionCondition": "A separately authorized exact-commit Staging rollout and subsequent read-only observation prove every active Compose configuration file persistent, regular, non-symlinked and contained."
+  },
+  "boundaries": {
+    "remoteSourceChanged": false,
+    "containerChanged": false,
+    "deploymentPerformed": false,
+    "databaseChanged": false,
+    "firebaseChanged": false,
+    "providerChanged": false,
+    "paymentChanged": false,
+    "storeChanged": false,
+    "deviceContacted": false,
+    "dnsChanged": false,
+    "productionChanged": false,
+    "pullRequestMerged": false,
+    "credentialsRecorded": false
+  }
+}

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lendify/screens/notifications_screen.dart';
 import 'package:lendify/services/messages_settings_service.dart';
 import 'package:lendify/services/notification_preferences_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,7 +13,9 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  test('messages settings normalize locked product rules when reading persisted values', () async {
+  test(
+      'messages settings normalize locked product rules when reading persisted values',
+      () async {
     SharedPreferences.setMockInitialValues({
       'messages_settings_v1': jsonEncode({
         'muteAll': true,
@@ -54,7 +57,9 @@ void main() {
     expect(settings.preferredLanguageCode, 'en');
   });
 
-  test('notification preferences keep important and security categories locked on', () async {
+  test(
+      'notification preferences keep important and security categories locked on',
+      () async {
     final prefs = NotificationPreferences.defaults().copyWith(
       showBookings: false,
       showMessages: false,
@@ -83,5 +88,73 @@ void main() {
     expect(restored.showSystem, isFalse);
     expect(restored.groupByCategory, isFalse);
     expect(restored.unreadFirst, isFalse);
+  });
+
+  test(
+      'handover filter is independent and missing legacy value migrates enabled',
+      () async {
+    final migrated = NotificationPreferences.fromJson({
+      'showBookings': false,
+      'showMessages': true,
+    });
+    expect(migrated.showBookings, isFalse);
+    expect(migrated.showHandover, isTrue);
+
+    await NotificationPreferencesService.set(
+      migrated.copyWith(showBookings: true, showHandover: false),
+    );
+    final restored = await NotificationPreferencesService.get();
+    expect(restored.showBookings, isTrue);
+    expect(restored.showHandover, isFalse);
+  });
+
+  test('notification feed categories use their dedicated persisted filters',
+      () {
+    final prefs = NotificationPreferences.defaults().copyWith(
+      showBookings: false,
+      showHandover: false,
+      showSystem: false,
+    );
+    expect(
+      notificationAllowedByPreferences(
+        {'category': 'bookings', 'title': 'Statusänderung'},
+        prefs,
+      ),
+      isFalse,
+    );
+    expect(
+      notificationAllowedByPreferences(
+        {'category': 'bookings', 'title': 'Mietanfrage für deine Anzeige'},
+        prefs,
+      ),
+      isFalse,
+    );
+    expect(
+      notificationAllowedByPreferences(
+        {'category': 'bookings', 'title': 'Übergabe bestätigen'},
+        prefs,
+      ),
+      isFalse,
+    );
+    expect(
+      notificationAllowedByPreferences({'category': 'system'}, prefs),
+      isFalse,
+    );
+
+    final split = prefs.copyWith(showBookings: true);
+    expect(
+      notificationAllowedByPreferences(
+        {'category': 'bookings', 'title': 'Statusänderung'},
+        split,
+      ),
+      isTrue,
+    );
+    expect(
+      notificationAllowedByPreferences(
+        {'category': 'bookings', 'title': 'Übergabe bestätigen'},
+        split,
+      ),
+      isFalse,
+    );
   });
 }

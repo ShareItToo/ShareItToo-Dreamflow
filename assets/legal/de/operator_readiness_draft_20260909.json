@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-operator-readiness-draft",
+  "version": "OPERATOR-DRAFT-2026-09-09.1",
+  "status": "confirmed-facts-draft-only",
+  "preparedOn": "2026-09-09",
+  "operator": {
+    "businessDesignation": "ShareItToo – Inhaber Walid Chraibi",
+    "legalForm": "sole-proprietor",
+    "proprietorName": "Walid Chraibi",
+    "serviceAddress": "Bernhaldenweg 47, 71579 Spiegelberg, Deutschland",
+    "businessRegistration": "required-at-actual-start-not-yet-recorded",
+    "taxNumber": "applied-for-not-issued-not-recorded",
+    "registerEntry": "not-applicable-not-recorded",
+    "vatId": "not-issued-not-recorded",
+    "economicId": "not-issued-not-recorded"
+  },
+  "currentDraftPrecedence": {
+    "supersedesOnly": [
+      "hypothetical-ug-gmbh-form",
+      "managing-director-representation",
+      "commercial-register-court-and-number",
+      "former-service-address"
+    ],
+    "baselineDocumentsRemainHistoricalAndHashBound": true,
+    "authoritativeForCurrentDraft": [
+      "imprint-operator-identity",
+      "platform-terms-operator-definition",
+      "privacy-controller-identity"
+    ]
+  },
+  "operationBoundary": {
+    "businessRegistrationRequiredAtActualStartAtLatest": true,
+    "publicCommercialOperationAllowed": false,
+    "realInvitationsAllowed": false,
+    "realMoneyAllowed": false,
+    "bindingContractAcceptanceAllowed": false,
+    "allowedPreparation": "internal-synthetic-nonbinding-only"
+  },
+  "legalReview": {
+    "professionallyReviewed": false,
+    "publicLegalApprovalClaimAllowed": false,
+    "openGates": [
+      "professional-legal-review",
+      "retention-and-deletion",
+      "dpa-and-transfer",
+      "consumer-and-marketplace",
+      "dsa-contact-and-transparency"
+    ]
+  },
+  "officialSources": [
+    "https://www.gesetze-im-internet.de/ddg/__5.html",
+    "https://verwaltung.bund.de/leistungsverzeichnis/de/leistung/99050012104000",
+    "https://eur-lex.europa.eu/eli/reg/2022/2065/oj/eng"
+  ],
+  "baselineLegalManifests": [
+    {
+      "path": "assets/legal/de/legal_manifest_v5.json",
+      "sha256": "6cffec53a27f84b24a44aebad50afd6e7ce17a4c196c7946155fba743fdc161f"
+    },
+    {
+      "path": "assets/legal/de/legal_manifest_v52.json",
+      "sha256": "757289c45dfe50c9f3f3ec9c96953f06b62f15b282bb1d6cdedc6e8e07d2e69b"
+    }
+  ],
+  "boundaries": {
+    "productionChanged": false,
+    "storeChanged": false,
+    "paymentChanged": false,
+    "providerChanged": false,
+    "vpsChanged": false,
+    "publicRouteChanged": false,
+    "containsCredentials": false
+  }
+}

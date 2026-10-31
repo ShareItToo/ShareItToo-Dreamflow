@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "kind": "firebase-phone-real-sms-verification",
+  "capturedAt": "2026-08-14T12:00:00Z",
+  "status": "passed-with-ui-defect-fixed-in-next-source-candidate",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081403",
+    "delivery": "google-play-internal"
+  },
+  "realDeviceResults": {
+    "realSmsDelivered": true,
+    "validLatestCodeAccepted": true,
+    "verifiedStatePersistedAfterFreshLogin": true,
+    "invalidCodeRejected": true,
+    "invalidCodeBackendClassification": "invalidCode",
+    "accountRemainedUnverifiedAfterInvalidCode": true,
+    "rateLimitObservedAfterControlledRetests": true
+  },
+  "installedCandidateFinding": {
+    "severity": "usability",
+    "description": "The invalid code was rejected, but the installed candidate did not show a sufficiently visible reason to the user."
+  },
+  "nextSourceCandidateFix": {
+    "centeredSitPopup": true,
+    "invalidPhoneReasonSpecific": true,
+    "invalidCodeReasonSpecific": true,
+    "networkFailureSeparatedFromUserInputFailure": true,
+    "foregroundPushUsesCenteredSitPopup": true,
+    "foregroundPushQueuePreventsMessageLoss": true,
+    "sourceTestsPassed": true,
+    "storeCandidateUpdated": false
+  },
+  "testStateCleanup": {
+    "syntheticAccountOnly": true,
+    "priorVerifiedStateRestored": true,
+    "temporaryCloudBillingLinkRemoved": true,
+    "billingAccountClosed": false
+  },
+  "boundaries": {
+    "containsPhoneNumbers": false,
+    "containsSmsCodes": false,
+    "containsEmails": false,
+    "containsFirebaseTokens": false,
+    "containsApiKeys": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsBillingAccountIdentifiers": false,
+    "containsSecrets": false,
+    "productionChanged": false
+  }
+}

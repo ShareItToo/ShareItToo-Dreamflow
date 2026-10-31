@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "package": "WP155-PROCESSING-TRANSPARENCY-PURPOSE-BASIS-RECIPIENT-PARITY-20260915",
+  "status": "technical-closure-full-regression-passed-external-gates-hold",
+  "capturedAt": "2026-09-15T10:04:13Z",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "baselineHead": "f98f5295008241c976f9843c4aa5799864b9fda0",
+    "remoteAhead": 0,
+    "remoteBehind": 0
+  },
+  "decision": {
+    "processingActivityCount": 14,
+    "dataTypeCount": 18,
+    "recipientClassCount": 13,
+    "purposeBasisRecipientMapping": "fail-closed-technical-draft",
+    "professionalLegalApproval": false,
+    "privacyApprovalAllowed": false,
+    "approvedProcessingDecisions": 0,
+    "openProcessingDecisions": [
+      "exactPurposeBasisMapping",
+      "legitimateInterestAssessments",
+      "statutoryObligationMapping",
+      "specialCategoryArticle9Basis",
+      "controllerAndRecipientIdentity",
+      "processorContractsRegionsTransfers",
+      "retentionSchedule",
+      "exactCandidateParity"
+    ],
+    "article9ProfessionalReviewRequired": true,
+    "exactCandidateRequired": true
+  },
+  "invariants": {
+    "everyActivityHasPurposeBasis": true,
+    "everyActivityHasRecipientClasses": true,
+    "everyCollectedDataTypeCovered": true,
+    "everyOpenDecisionBoundToActivity": true,
+    "consentControlsExplicitAndRevocable": true,
+    "legitimateInterestAssessmentOpen": true,
+    "statutoryMappingOpen": true,
+    "article9GateOpen": true,
+    "disabledProvidersRemainDisabled": true,
+    "externalAiRecipientAbsent": true,
+    "approvalCannotBeInferredFromTechnicalPreparation": true
+  },
+  "verification": {
+    "privacyManifest": "valid-draft-18-data-types-11-services-14-activities",
+    "privacyToolTests": "passed-28-of-28",
+    "legalReadiness": "valid-draft-approval-closed",
+    "retentionReadiness": "valid-draft-execution-blocked",
+    "focusedFlutter": "passed-2-of-2",
+    "changedFileAnalyzer": "passed-zero-findings",
+    "diffCheck": "passed",
+    "fullTechnicalRegression": "passed-ci-equivalent-exit-0",
+    "githubRegression": "pending",
+    "githubCodeql": "pending"
+  },
+  "gates": {
+    "professionalLegalApproval": false,
+    "processingApprovalAllowed": false,
+    "providerActivationAllowed": false,
+    "paymentAllowed": false,
+    "realMoneyAllowed": false,
+    "storeAllowed": false,
+    "productionAllowed": false,
+    "publicActivationAllowed": false
+  },
+  "boundaries": {
+    "providerRequestPerformed": false,
+    "paymentPerformed": false,
+    "moneyMoved": false,
+    "deploymentChanged": false,
+    "productionChanged": false,
+    "publicActivationChanged": false,
+    "storeChanged": false,
+    "firebaseChanged": false,
+    "cloudOrVpsChanged": false,
+    "credentialReadOrRecorded": false,
+    "deviceChanged": false,
+    "pullRequestMerged": false
+  },
+  "sourceInventory": {
+    "assets/legal/de/privacy_v5.html": "5e4a5f241ce8049a23b7e8688d09a8a39ed543f095c3c267cba4228f54713041",
+  "docs/current_state.md": "ed3ce0d12a793adbbeede01f6f8f13657d46abe76cce6b550e88230b0ac62e32",
+  "docs/current_work_package.md": "7b76edc7a5291a160930bb15fa91cd4eeaa7709b75ce40632e0d74ef20d29b52",
+    "docs/operations/WP155_PROCESSING_TRANSPARENCY_PURPOSE_BASIS_RECIPIENT_PARITY_2026-09-15.md": "4387226fa1fb2ff6ea0b2560a8dfd2ae0fc3e4989428e8b2a2bc10e7efe91808",
+    "lib/screens/legal_privacy_screen.dart": "05183e2623c3012e3c5dca7e73e40173ca3c70e006138fe735f364cdd706620d",
+    "store/legal-readiness.json": "4465be600f1d029d6d52239761a26e0e868e06ade7bdab19043cc3dff25808ce",
+    "store/privacy-disclosures.json": "56ae74525d5d9a0833972e075f9a2b5c766668eda7f76f37d96cba164e450b3f",
+    "store/retention-deletion-readiness.json": "ac1594ddc9aff13835ea6024b772e003d273886f87712bb77a862f54e47202eb",
+    "scripts/technical_regression_check.sh": "80b37877f2e1ac3f062afdeaafedecb9075ee96183527d2816413ca88045ccde",
+    "test/legal_privacy_screen_test.dart": "bf9739b9f3f17b4c2732d9679716e533794dfddbc2f8342aa8d2cfcb0237309c",
+    "test/tool/validate_privacy_disclosures.test.mjs": "450256854f3488151b394d0943608388b0a7c5153aa49ced24637b52a6ec7e55",
+    "test/tool/validate_wp155_processing_transparency_purpose_basis_recipient_parity.test.mjs": "68a357a775842c50ac2cbaa7fab5079a8302d1c6821495788a6b41f176738d11",
+    "tool/validate_privacy_disclosures.mjs": "3f0742a16233c6cef8bba890ad7b98d48245b33b7eb109511b11e4b3ade92384",
+    "tool/validate_wp155_processing_transparency_purpose_basis_recipient_parity.mjs": "54eee7ec1ae1bed88f0a55f2f49602b1282eb4a5ca98ae5108ccc6bde120b143",
+    "AGENTS.md": "ba6e0a0cfcde9ed5dbbe23a7a94b820169acfdf7d4545bdf499efa379e75c983",
+    "docs/operations/SIT_CODEX_CONTEXT_CREDIT_EFFICIENCY_RULES_V1.md": "97b710ebe4f37336a1af21e8c3d208e53d4e35b71c4de3ffe7f8869372a29efd"
+  },
+  "captureAttestation": {
+    "semantics": "declared-after-final-source-inventory-assembly-not-external-time-proof",
+    "inventoryDigestAlgorithm": "sha256-path-nul-digest-newline-v1",
+  "sourceInventoryDigest": "f15af77b907430793d09f04b9c422394c16a0c4a3caba3f5ae7dc48e700a818d"
+  }
+}

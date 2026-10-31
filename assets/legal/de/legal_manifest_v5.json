@@ -1,0 +1,194 @@
+{
+  "schemaVersion": 1,
+  "version": "V5.1-2026-08-16",
+  "status": "draft-blocked",
+  "activationAllowed": false,
+  "productionProvisioningAllowed": false,
+  "effectiveDate": null,
+  "source": {
+    "title": "ShareItToo Rechtsmappe Privat-Launch V5.1",
+    "date": "2026-08-16",
+    "pages": 54,
+    "sha256": "587bfd9e53539e5895c3d9dcb6fc437e0bf7c6e91db144841d0fe986b274b3fc"
+  },
+  "documents": [
+    {
+      "type": "platform_terms",
+      "path": "assets/legal/de/platform_terms_v5.html",
+      "title": "SIT-Plattformbedingungen V5.1",
+      "version": "V5.1-2026-08-16",
+      "sourcePages": [
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34
+      ],
+      "sha256": "82f2c3bff8c7739fc9ed27d8b5595b1b56a5a73209c0559798e99b178b47025c",
+      "publicUrl": null,
+      "downloadUrl": null,
+      "status": "draft-blocked"
+    },
+    {
+      "type": "private_rental_terms",
+      "path": "assets/legal/de/private_rental_terms_v5.html",
+      "title": "Privat-Mietbedingungen V5.1",
+      "version": "V5.1-2026-08-16",
+      "sourcePages": [
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28
+      ],
+      "sha256": "da8c29d7d1a93b60d6f277f197ce9b35168303be7e1b2c6ae999a020f952a05f",
+      "publicUrl": null,
+      "downloadUrl": null,
+      "status": "draft-blocked"
+    },
+    {
+      "type": "cancellation",
+      "path": "assets/legal/de/cancellation_v5.html",
+      "title": "Storno-, No-Show- und Refund-Regelwerk V5.1",
+      "version": "V5.1-2026-08-16",
+      "sourcePages": [
+        24,
+        25
+      ],
+      "sha256": "8553a7a57b4b37746f5477362304c87024c755826b4ac3ae6dc423576e17a487",
+      "publicUrl": null,
+      "downloadUrl": null,
+      "status": "draft-blocked"
+    },
+    {
+      "type": "community_moderation",
+      "path": "assets/legal/de/community_moderation_v5.html",
+      "title": "Community-, Sicherheits-, Melde- und Moderationsregeln V5.1",
+      "version": "V5.1-2026-08-16",
+      "sourcePages": [
+        32,
+        33,
+        34
+      ],
+      "sha256": "b67e5f0729d569aa7b50211116fa50ac4208fb69ff3400593bcce6471da85fe9",
+      "publicUrl": null,
+      "downloadUrl": null,
+      "status": "draft-blocked"
+    },
+    {
+      "type": "privacy",
+      "path": "assets/legal/de/privacy_v5.html",
+      "title": "Datenschutzerklärung V5.1",
+      "version": "V5.1-2026-08-16",
+      "sourcePages": [
+        35,
+        36,
+        37,
+        38,
+        39,
+        40
+      ],
+      "sha256": "5e4a5f241ce8049a23b7e8688d09a8a39ed543f095c3c267cba4228f54713041",
+      "publicUrl": null,
+      "downloadUrl": null,
+      "status": "draft-blocked"
+    },
+    {
+      "type": "imprint",
+      "path": "assets/legal/de/imprint_v5.html",
+      "title": "Impressum V5.1",
+      "version": "V5.1-2026-08-16",
+      "sourcePages": [
+        41
+      ],
+      "sha256": "35481661a818bc6a88b49aaac2fd2e3dc9c9c9545ee91af60dc26c64d81ce985",
+      "publicUrl": null,
+      "downloadUrl": null,
+      "status": "draft-blocked"
+    },
+    {
+      "type": "withdrawal",
+      "path": "assets/legal/de/withdrawal_v5.html",
+      "title": "Widerrufsbelehrung und Musterformular V5.1",
+      "version": "V5.1-2026-08-16",
+      "sourcePages": [
+        41,
+        42,
+        43
+      ],
+      "sha256": "6f96220b084d831c05f717b28f0cc5c320b38c558dc47687b8c27c94aaabb88b",
+      "publicUrl": null,
+      "downloadUrl": null,
+      "status": "draft-blocked"
+    }
+  ],
+  "openFacts": [
+    "exactRegisteredCompany",
+    "registryCourt",
+    "registryNumber",
+    "vatIdIfIssued",
+    "economicIdentificationNumberIfIssued",
+    "editorialResponsiblePersonIfApplicable",
+    "withdrawalPublicUrl",
+    "hostingProviderAndRegion",
+    "smtpProviderAndRegion",
+    "mapsProviderAndRegion",
+    "licensedMarketplacePspContractAndRegion",
+    "firebasePushAndCrashProviderTransferEvidence"
+  ],
+  "productDecisions": {
+    "firebaseCloudMessaging": {
+      "decision": "retained",
+      "defaultEnabled": false,
+      "requiresSeparateVoluntaryOptIn": true,
+      "independentFromCrashlytics": true
+    },
+    "firebaseCrashlytics": {
+      "decision": "retained",
+      "defaultEnabled": false,
+      "requiresSeparateVoluntaryOptIn": true,
+      "independentFromPush": true
+    },
+    "adsMarketingAnalyticsAndExternalGenAi": {
+      "decision": "disabled-unless-separately-approved"
+    }
+  },
+  "knownConflicts": [
+    {
+      "id": "firebase-push-crash-retained-after-v51-source",
+      "sourcePages": [
+        38
+      ],
+      "sourcePosition": "Teil H Nummer 15-16",
+      "status": "source-superseded-activation-blocked",
+      "successorDecisionDate": "2026-08-17",
+      "successorDecisionPath": "assets/legal/de/privacy_v5.html",
+      "supersededScope": "Only the source statements that external Push and Crash analysis are generally disabled for the initial launch.",
+      "resolutionRequired": "Complete provider, contract, region, transfer, consent, retention, deletion, and Store disclosure evidence separately for FCM and Crashlytics before activation."
+    }
+  ],
+  "boundaries": {
+    "containsLivePlaceholders": true,
+    "databaseProvisioned": false,
+    "publiclyPublished": false,
+    "storeActivated": false,
+    "realPaymentsEnabled": false
+  }
+}

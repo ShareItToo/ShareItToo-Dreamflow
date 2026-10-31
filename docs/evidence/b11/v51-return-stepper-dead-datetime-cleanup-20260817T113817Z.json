@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "kind": "v51-return-stepper-dead-datetime-cleanup",
+  "status": "implemented-full-regression-passed",
+  "capturedAt": "2026-08-17T11:38:17Z",
+  "sourceBaseCommit": "e0e0924937cee05b5016be6313b5341b12dd61af",
+  "runtimeChange": {
+    "path": "lib/widgets/return_handover_stepper_sheet.dart",
+    "sha256": "dda249ca1521943790c13a39f2cabb6b14cb785c2d501fa1291cd9ceb7e3021e",
+    "removedSymbol": "_fmtDateTime",
+    "runtimeLinesAdded": 0,
+    "runtimeLinesDeleted": 5,
+    "reachableBehaviorChanged": false
+  },
+  "preservedFailClosedPaths": [
+    "evidence-step-before-code-step",
+    "four-presenter-photos",
+    "counterparty-confirmation-or-counterphoto",
+    "booking-segment-role-bound-qr-verifier",
+    "booking-segment-role-bound-manual-code-verifier",
+    "confirmed-stepper-result"
+  ],
+  "verification": {
+    "newWiringTests": "passed-5",
+    "combinedTargetedNodeTests": "passed-15",
+    "privacyDisclosureTests": "passed-16",
+    "privacyValidator": "passed-draft-open",
+    "targetedFlutterTests": "passed-59",
+    "fullTechnicalRegression": "passed-candidate-rollover-mode",
+    "flutterTests": "passed-282-with-1-intentional-skip",
+    "flutterAnalyzer": "227-findings-0-errors-baseline-accepted",
+    "googleOnlySocialProfile": "passed",
+    "webDebugBuild": "passed-existing-wasm-dry-run-warnings-only",
+    "androidDebugBuild": "passed",
+    "diffCheck": "passed"
+  },
+  "privacyBoundary": {
+    "sourceInventoryHashUpdated": true,
+    "dataTypesChanged": false,
+    "purposesChanged": false,
+    "processorsChanged": false,
+    "transportChanged": false,
+    "permissionsChanged": false,
+    "publicDisclosureChanged": false
+  },
+  "boundaries": {
+    "pushRemovedOrDisabled": false,
+    "crashlyticsRemovedOrDisabled": false,
+    "pushEnablesCrashlytics": false,
+    "stagingChanged": false,
+    "productionChanged": false,
+    "storeSubmissionChanged": false,
+    "candidateBuiltOrRelabeled": false,
+    "crashEventGenerated": false,
+    "containsSecrets": false,
+    "containsAccountData": false
+  }
+}

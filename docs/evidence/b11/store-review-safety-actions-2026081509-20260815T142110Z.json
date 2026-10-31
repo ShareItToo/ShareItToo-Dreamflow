@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "kind": "store-review-safety-actions-diagnostic",
+  "status": "report-block-export-passed-deletion-pending",
+  "capturedAt": "2026-08-15T14:21:10.656Z",
+  "scenarios": {
+    "reportAndBlock": "passed",
+    "accountExport": "passed",
+    "accountDeletion": "pending"
+  },
+  "checks": {
+    "privateNoStoreAccountExport": true,
+    "completeStructuredAccountExport": true,
+    "syntheticListingReportCreated": true,
+    "reportVisibleToReporter": true,
+    "temporaryUserBlockCreated": true,
+    "temporaryUserBlockRemoved": true,
+    "sharedChatRestored": true
+  },
+  "environment": {
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "paymentMode": "memory",
+    "stripeLivemode": false,
+    "paymentEndpointCalled": false
+  },
+  "boundaries": {
+    "authenticationSessionsCreated": true,
+    "auditEventCreatedByExport": true,
+    "syntheticModerationRecordCreated": true,
+    "lastingUserBlockCreated": false,
+    "reviewerAccountDeleted": false,
+    "containsSecrets": false,
+    "containsEmailAddresses": false,
+    "containsTokens": false,
+    "containsAccountIdentifiers": false,
+    "containsFixtureIdentifiers": false,
+    "syntheticAccountsOnly": true,
+    "publicStoreChanged": false,
+    "productionChanged": false
+  }
+}

@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-48h-r12-codex-hook-autonomy-guardrails",
+  "status": "verified-regression-and-codeql-passed-ready-for-r14",
+  "implementationBaseHead": "86a7be546b33b3b9b1a9b40ba2d4b765c8bdee4f",
+  "officialSupport": {
+    "documentation": "https://learn.chatgpt.com/docs/hooks",
+    "repoLocalHooksJson": "supported-for-trusted-repositories",
+    "preToolUseBlocking": "supported-local-tool-paths",
+    "stopLifecycleHook": "supported",
+    "trustReviewRequiredAfterChange": true,
+    "completeEnforcementBoundary": false
+  },
+  "observedLocalConfiguration": {
+    "cliVersion": "codex-cli 0.149.0-alpha.4.1",
+    "hookFeature": "stable-enabled",
+    "repositoryHooksPresent": true,
+    "userLevelHookDefinitionPresent": false,
+    "credentialValuesRead": false,
+    "browserCookiesRead": false,
+    "userConfigurationChanged": false
+  },
+  "implementation": {
+    "config": ".codex/hooks.json",
+    "script": ".codex/hooks/sit_guardrail.py",
+    "operations": "docs/operations/48H_R12_CODEX_HOOK_GUARDRAILS_2026-08-24.md",
+    "test": "test/tool/r12_codex_hook_guardrails.test.mjs",
+    "productRuntimeDependency": false,
+    "thirdPartyHookFrameworkInstalled": false,
+    "hookTrustedOrActivatedByR12": false,
+    "trustState": "pending-official-review-after-definition-change"
+  },
+  "guardrails": {
+    "hookASecretGuard": "implemented-command-staged-and-signing-container",
+    "hookBDestructiveGitGuard": "implemented-history-delete-pr-merge-and-protected-branch",
+    "hookCLiveBoundaryGuard": "implemented-known-production-remote-cloud-store-payment-kyc-billing-paths",
+    "hookDPackageCompletion": "implemented-exact-r12-policy-clean-tree-and-focused-validation",
+    "hookEPendingGate": "implemented-sanitized-doc-and-git-metadata"
+  },
+  "focusedVerification": {
+    "pythonSyntax": "passed",
+    "n11CompatibilityTests": "passed-10",
+    "r12BehaviorTests": "passed-12",
+    "artifactValidatorTests": "passed-6",
+    "artifactValidator": "passed",
+    "fullTechnicalRegression": "passed-candidate-rollover-ci-metadata-mode",
+    "githubRegression": "passed",
+    "githubCodeql": "passed-no-new-alerts"
+  },
+  "githubVerification": {
+    "implementationCommit": "a8dbb0c508ca9e20e6836e3ce7eb667c3d163c46",
+    "regressionRunId": 32773678462,
+    "regressionConclusion": "success",
+    "flutterJobId": 97579674656,
+    "backendJobId": 97579674980,
+    "postgresJobId": 97579674963,
+    "cleanCheckoutJobId": 97579674982,
+    "signedCandidateBuilt": false,
+    "parallelStressExecuted": false,
+    "apiImagePublished": false,
+    "codeqlRunId": 32773678533,
+    "codeqlConclusion": "success",
+    "advancedSecurityCheckId": 97580266868,
+    "advancedSecurityConclusion": "success",
+    "newAlerts": 0,
+    "preExistingExternalHistoryCheck": {
+      "provider": "GitGuardian",
+      "checkId": 97579664956,
+      "conclusion": "failure",
+      "historicalFindingReinspected": false,
+      "credentialDetailsInspected": false,
+      "classifiedAsR12Regression": false
+    }
+  },
+  "limitations": [
+    "hooks-are-defense-in-depth-not-a-complete-enforcement-boundary",
+    "specialized-or-hosted-tool-paths-may-not-be-observed",
+    "pattern-matching-cannot-identify-every-secret-or-live-mutation",
+    "repository-trust-review-is-required-after-hook-definition-change",
+    "focused-package-completion-does-not-replace-full-regression-or-ci"
+  ],
+  "boundaries": {
+    "credentialExtracted": false,
+    "providerBillingEnabled": false,
+    "productionChanged": false,
+    "paymentChanged": false,
+    "kycChanged": false,
+    "storeChanged": false,
+    "firebaseChanged": false,
+    "cloudChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "publicReleasePerformed": false,
+    "pullRequestMerged": false,
+    "protectedBranchMutated": false
+  },
+  "next48hPackage": "R14"
+}

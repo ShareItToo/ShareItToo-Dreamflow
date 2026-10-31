@@ -1,0 +1,51 @@
+{
+  "package": "WP259-B",
+  "status": "SOURCE_FIX_PENDING_SUCCESSOR_BUILD_PROVIDER_HOLD",
+  "candidate": {
+    "packageId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": 2026091704,
+    "sourceCommit": "9cbac5be2e4702c6b11954bfcc935ca38fdb6aac",
+    "environment": "Staging only"
+  },
+  "staging": {
+    "ownerRenterBooking": "PASS_ACCEPTED",
+    "samePeriodConflict": "PASS_409_booking_period_unavailable",
+    "foreignOwnerTransition": "PASS_409_invalid_status_transition",
+    "ownerDecline": "PASS_TERMINAL_DECLINED",
+    "threadCreate": "PASS",
+    "sendReceiveOrder": "PASS",
+    "unreadReadTruth": "PASS",
+    "participantIsolation": "PASS",
+    "cleanup": "PASS_EXACT_SYNTHETIC_BOOKING_RETIRED_AND_AUDITED"
+  },
+  "pixel": {
+    "threadList": "PASS_PARTICIPANT_NAME_VISIBLE",
+    "threadHeader": "PASS_PARTICIPANT_NAME_VISIBLE",
+    "messageBubbles": "PASS_SEND_RECEIVE_VISIBLE",
+    "avatarOn1704": "SOURCE_GAP_GENERIC_FALLBACK",
+    "successorAvatarFixPrepared": true
+  },
+  "fcm": {
+    "pixelConsentAndRegistration": "PASS",
+    "inAppOutbox": "PASS",
+    "pushOutbox": "PASS_MEMORY_TRANSPORT_ONLY",
+    "providerTransport": "memory",
+    "realProviderDelivery": "NOT_RUN_PROVIDER_HOLD",
+    "notificationShadeAndTap": "NOT_CLAIMED"
+  },
+  "onePlus": "OPTIONAL_POST_DELIVERY_OWNER_TEST",
+  "verification": {
+    "sourceContract": "3/3 PASS",
+    "focusedFlutterSuites": "30/30 PASS",
+    "flutterAnalyzeChangedPaths": "PASS",
+    "diffCheck": "PASS"
+  },
+  "next": "Build a strictly higher successor with the profile/message source fix, then run the WP260 provider gate.",
+  "boundaries": [
+    "No secrets or credentials stored",
+    "No Play upload or release mutation",
+    "No production, payment, provider or cloud activation",
+    "Immutable 1704 does not contain the source fix"
+  ]
+}

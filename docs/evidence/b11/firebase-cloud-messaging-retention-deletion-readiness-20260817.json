@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "kind": "firebase-service-retention-deletion-readiness",
+  "serviceId": "firebaseCloudMessaging",
+  "provider": "Google Firebase",
+  "reviewedAt": "2026-08-17T00:00:00Z",
+  "status": "official-controls-structured-owner-contract-and-deletion-approval-open",
+  "productDecision": {
+    "retainedForLaunch": true,
+    "voluntaryOptIn": true,
+    "nextCandidateDefaultOff": true,
+    "independentFromOtherFirebaseDeviceServices": true,
+    "boundCandidateCollectionMode": "automatic-in-bound-candidate",
+    "replacementCandidateRequired": true
+  },
+  "officialSources": [
+    {
+      "purpose": "retention",
+      "url": "https://firebase.google.com/support/privacy/",
+      "finding": "Firebase Cloud Messaging uses Firebase installation IDs for delivery. Firebase retains an installation ID until the customer requests deletion; after the request, related data is removed from live and backup systems within 180 days."
+    },
+    {
+      "purpose": "deletion-control",
+      "url": "https://firebase.google.com/docs/projects/manage-installations",
+      "finding": "The Firebase Installations client API can delete the current installation ID and data tied to it. Unless every ID-generating Firebase service remains disabled, a later use can create a new unrelated installation ID."
+    },
+    {
+      "purpose": "processor-role-and-transfer-framework",
+      "url": "https://firebase.google.com/terms/data-processing-terms/",
+      "finding": "The Firebase Data Processing and Security Terms describe Google as processor for Customer Personal Data under European data protection law and identify the applicable subprocessor and transfer framework. Account acceptance and SIT approval are not proven by reviewing this public page."
+    }
+  ],
+  "currentTechnicalControls": {
+    "nativeAutoInitDefaultOffInCurrentSource": true,
+    "runtimeEnablementRequiresPushChoice": true,
+    "runtimeEnablementCanEnableCrashlytics": false,
+    "backendSessionRegistrationDeletionImplemented": true,
+    "messagingTokenDeletionImplemented": true,
+    "firebaseInstallationDeletionImplemented": true,
+    "pendingDeletionRetryImplemented": true
+  },
+  "retentionAndDeletionReality": {
+    "providerCompletionWindow": "within-180-days-after-installation-deletion-request",
+    "sitCanPromiseImmediateProviderErasure": false,
+    "localAndBackendDisableProcedureImplemented": true,
+    "providerDeletionRequestImplemented": true,
+    "currentAccountContractAcceptanceVerified": false,
+    "currentProcessingLocationsVerified": false,
+    "internationalTransferMechanismApprovedForSIT": false,
+    "retentionAcceptedByOwner": false,
+    "deletionProcedureVerifiedByOwner": false,
+    "ownerEvidenceRef": null
+  },
+  "activationBoundary": {
+    "storeDisclosureApproved": false,
+    "replacementCandidateBuilt": false,
+    "replacementCandidateDeviceVerified": false,
+    "productionChanged": false,
+    "storeFormChanged": false,
+    "providerConsoleChanged": false,
+    "containsSecrets": false,
+    "containsAccountData": false
+  }
+}

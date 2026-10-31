@@ -4,26 +4,26 @@ import 'package:flutter/foundation.dart';
 /// and compose user-facing approximate strings.
 class AddressPrivacy {
   /// Single-sentence privacy notice for address visibility across the app.
-  /// Updated copy (DE): exact address shown only after confirmed request for self-pickup.
+  /// Exact address requires counterparty-confirmed appointment and server gate.
   static String privacyNotice() =>
-      'Die genaue Adresse wird erst nach Bestätigung der Anfrage gezeigt.';
+      'Die genaue Adresse wird frühestens sechs Stunden vor dem beidseitig bestätigten Termin angezeigt.';
 
   /// Contextual notice for Abholung (pickup) only.
   /// Copy spec (DE): same as general notice.
   static String privacyNoticePickup() =>
-      'Die genaue Adresse wird erst nach Bestätigung der Anfrage gezeigt.';
+      'Die genaue Adresse wird frühestens sechs Stunden vor dem beidseitig bestätigten Termin angezeigt.';
 
-  static bool shouldRevealExactAddress({
-    required bool isAccepted,
+  /// Deterministic clock helper for the explicitly local demo/QA branch.
+  /// Backend-enabled product flows must use the server reveal decision.
+  static bool shouldRevealExactAddressForLocalDemoOrQa({
     required DateTime? handoverAt,
     DateTime? now,
   }) {
-    if (!isAccepted || handoverAt == null) return false;
-
+    if (handoverAt == null) return false;
     final currentTime = now ?? DateTime.now();
-    final revealFrom = handoverAt.subtract(const Duration(hours: 6));
-
-    return !currentTime.isBefore(revealFrom);
+    return !currentTime.isBefore(
+      handoverAt.subtract(const Duration(hours: 6)),
+    );
   }
 
   /// Returns an approximate address where the house number is rounded
@@ -52,7 +52,8 @@ class AddressPrivacy {
         if (m2 == null) return raw; // give up, keep input
         final houseRaw = m2.group(1)!.trim();
         final street = m2.group(2)!.trim();
-        final number = int.tryParse(RegExp(r'\d+').firstMatch(houseRaw)?.group(0) ?? '');
+        final number =
+            int.tryParse(RegExp(r'\d+').firstMatch(houseRaw)?.group(0) ?? '');
         if (number == null) return raw;
         final low = (number ~/ 10) * 10;
         final high = low + 10;
@@ -62,7 +63,8 @@ class AddressPrivacy {
 
       final street = m.group(1)!.trim();
       final houseRaw = m.group(3)!.trim();
-      final number = int.tryParse(RegExp(r'\d+').firstMatch(houseRaw)?.group(0) ?? '');
+      final number =
+          int.tryParse(RegExp(r'\d+').firstMatch(houseRaw)?.group(0) ?? '');
       if (number == null) return raw;
       final low = (number ~/ 10) * 10;
       final high = low + 10;
@@ -75,7 +77,8 @@ class AddressPrivacy {
   }
 
   /// Compose a sentence like "Abholung in der Nähe von Musterstraße 20–30, 12345 Berlin".
-  static String nearbySentence({required String kindLabel, required String address}) {
+  static String nearbySentence(
+      {required String kindLabel, required String address}) {
     final approx = approximate(address);
     return '$kindLabel in der Nähe von $approx';
   }

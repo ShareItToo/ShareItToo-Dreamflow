@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "observedOn": "2026-09-04",
+  "status": "HISTORICAL_INTERMEDIATE_FOCUSED_PROOF_NOT_CURRENT_SOURCE",
+  "baseCommit": "af20cb4df174370982862909c41dd144450b851b",
+  "workingTreeImplementation": true,
+  "sourceCommitted": false,
+  "results": {
+    "defaultFocused": 61,
+    "enabledInterceptedHttp": 55,
+    "wiring": 18,
+    "analyzerIssues": 0,
+    "secretScan": "PASS",
+    "fullNormal": "NOT_RUN_FOR_THIS_SOURCE",
+    "exactClean": "NOT_RUN_FOR_THIS_SOURCE",
+    "github": "OWNER_DEFERRED",
+    "device": "NOT_TOUCHED"
+  },
+  "intermediateTruthRed": {
+    "failedInvariants": 13,
+    "sourceBinding": "Uncommitted intermediate source, not historical b28",
+    "hashes": {
+      "lib/services/data_service.dart": "85f8d2f2b658d308e6ebec61f6eec39551daaa9c8f3c18269ed6f30862c49bbf",
+      "lib/services/backend_repository.dart": "07d0d99b361211104af647518a1204e1e8871732170d0fce9bf7b628e0794d83",
+      "test/rental_cart_surface_principal_http_test.dart": "38e4ba33869e6e8bbfea9d41b4d31ca870c62317ce27fd6d1ee65ba9d9f8199b"
+    },
+    "intermediateSourceBytesSeparatelyArchived": false
+  },
+  "interruptedRun": {
+    "log": "cart-scope-second.log",
+    "completedRows": 3,
+    "stoppedAt": "idle page disposal",
+    "operatorInterrupted": true,
+    "wrapperReportedExitCode": 0,
+    "passed": false,
+    "correction": "Production cleanup schedules its own visual update; deterministic scheduled-frame and foreign-route tests pass."
+  },
+  "retainedFailureClassification": {
+    "focusedFirst": "46 pass, 2 parent snapshot silent-switch failures; refresh invalidation corrected",
+    "focusedThird": "48 pass, scope test file compilation error; explicit generic corrected",
+    "httpFirst": "50 pass, 5 overlay fixture failures; actual settled button interaction now passes5",
+    "wiringFirstAndSecond": "17 pass, 1 comment/format matching failure in each; exact assertions preserved",
+    "analyzer": "one initial and three later brace lint findings fixed without suppression"
+  },
+  "remaining": [
+    "nested shared ItemCard heart/context-menu/selection/details-route caller coverage",
+    "actual three gated technical destination-origin tests and cart checkout stale-read navigation matrix",
+    "complete exact source inventory hash propagation",
+    "full normal and exact clean regression on consolidated source",
+    "distinct signed successor and current-candidate Pixel acceptance",
+    "owner-deferred GitHub and encompassing Goal acceptance"
+  ],
+  "boundary": {
+    "newSignedBuild": false,
+    "realAccountsOrProviders": false,
+    "pixelOrOnePlus": false,
+    "github": false,
+    "wholeGoalComplete": false
+  },
+  "sourceHashes": {
+    "lib/screens/wishlists_screen.dart": "cb64ca5670af401b7259e3d226cdde54047891c842abcf5287522528590f4bba",
+    "lib/services/data_service.dart": "85f8d2f2b658d308e6ebec61f6eec39551daaa9c8f3c18269ed6f30862c49bbf",
+    "lib/services/backend_repository.dart": "07d0d99b361211104af647518a1204e1e8871732170d0fce9bf7b628e0794d83",
+    "lib/widgets/item_details_overlay.dart": "3541d27c2964795b925e30a2d990b81da759f3ef521b79e4fe4902be965c2141",
+    "lib/widgets/saved_cart_action_scope.dart": "0d23bcbcf6c263cb60ae34c90d182c4847acd1dcd7a0a20f8f35051ed5d94cfe",
+    "lib/widgets/saved_cart_intent.dart": "3a45f2c1582d3f800e2a3157ba209fac2a86f445a1f1d0402b76a96489b5990f",
+    "scripts/technical_regression_check.sh": "34270a229093d27eaf9b70ea4c9a0937897a6cdf335730c7f1b390b406dbfd6d",
+    "test/rental_cart_surface_wishlist_test.dart": "def44f9a32db0c3a3d5b0a79027b739d8df35622cb7e5890facb689db267774a",
+    "test/rental_cart_surface_principal_http_test.dart": "38e4ba33869e6e8bbfea9d41b4d31ca870c62317ce27fd6d1ee65ba9d9f8199b",
+    "test/saved_cart_action_scope_test.dart": "b98aceaf880437f5a0128aed6b450f8a54461e0ffae2cb05fcc765980685d022",
+    "test/tool/rental_cart_surface_principal_wiring.test.mjs": "399e38c53a9135f244f14920716a05d69e8125388c7a8d0ca1b08204fddf1ca9"
+  },
+  "logHashes": {
+    "cart-actions-first-green.log": "fab8302d8922499a87bd68731c16003d262c0196cf1e94814d6203ba7a96436b",
+    "cart-wishlist-first-green.log": "259b0ee0b10538d40201fce94e09b0ba34ecf1e8ced66f28d1edfa162309da19",
+    "cart-surface-focused-first.log": "9fbcc3f015744fcc52b41dc5842fa83fdb29a40502bd0a4be890916199789803",
+    "cart-surface-focused-second.log": "482441ebf66e7cba865911552019fca4542a5b307b6da4dee71008598f7987f1",
+    "cart-surface-focused-third.log": "294a5df08e6ec61355310155acf70844bb2f04ad8cedcb0f64e5ceb4308b293b",
+    "cart-surface-focused-verified.log": "79b43c8587b1ed801adfaa68a7062b9aba0accca369a76869867d37ef1689176",
+    "cart-surface-truth-red.log": "5166d6872616dd31b1dab279013ac40b466f87fd8666815d629167abf2e3f959",
+    "cart-surface-http-first.log": "3ac9131b06f8f2b9c08c16a17585bf82a1effbdf575ec6e9a39d16f663054f61",
+    "cart-surface-http-final.log": "3bf82c51750212aa46a07ee0e40437cf10f5b97110e7247b3637fe942f44b73e",
+    "cart-overlay-isolated-diagnostic.log": "a8d4b9e3370de2168e26fd981739a83f22dba45176790c69885205bfbceac0ff",
+    "cart-overlay-ui-interaction.log": "c72ea9197c029216543fc845bee3b776485303986ed7a08a9d90ed2298550953",
+    "cart-scope-second.log": "d936766c43fa66cdc0b8b3bdd5ccef19542daf4993bc9815a10f2cb33a75da69",
+    "cart-scope-third.log": "64bc390b4ca5d84e7da08a1e600c3a5d0173f022d2ecf778997586d7caefaae6",
+    "cart-surface-wiring-first.log": "fb6b9ca376d2942bbe82c17b362a6f19d24df073c925026c422e9551e3e842a2",
+    "cart-surface-wiring-final.log": "62890615156aa9da31c5cafe9b27e17b2148e12df48fab597e41c2e2ebfe8053",
+    "cart-surface-wiring-final-verified.log": "101804db915ae40c0b8e7a8403328f2f2ccd412695eb5a86045d594779ce6f11",
+    "cart-surface-analyzer-first.log": "e77eef1597150671a310137724c177788a04c57c33299abf9a0b1313cc6d0041",
+    "cart-surface-analyzer-second.log": "e490fc9b8c4ebcd3926eb212d2b92def8f0f814903ca4415740626d88277fc43",
+    "cart-surface-analyzer-final.log": "eda8c557b59838a7918dbb7012df407efe5bf3730f14283d21e7d4415acdfb8d",
+    "cart-surface-secret-final.log": "cda1386c67777788667e7087b58983d034d2f4b8b373c22ec91352197064bc09"
+  },
+  "independentFinalCountsVerified": true
+}

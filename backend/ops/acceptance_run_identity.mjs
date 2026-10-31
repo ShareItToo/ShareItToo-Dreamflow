@@ -1,0 +1,124 @@
+import crypto from 'node:crypto';
+
+const runIdPattern = /^b(?:8|9)-[a-z0-9]{8,16}-[a-f0-9]{6}$/u;
+const principalKeyPattern = /^[a-z][a-z0-9_]{0,31}$/u;
+const enabledFlags = new Set(['1', 'true', 'yes']);
+const disabledFlags = new Set(['0', 'false', 'no', '']);
+
+function fail(code) {
+  throw new Error(code);
+}
+
+export function resolveAcceptanceBaseUrl(environment = process.env) {
+  const raw = environment?.ACCEPTANCE_BASE_URL;
+  if (typeof raw !== 'string' || raw.length === 0) {
+    fail('acceptance_base_url_missing');
+  }
+  if (raw.trim() !== raw || raw.trim() === '') {
+    fail('acceptance_base_url_invalid');
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    fail('acceptance_base_url_invalid');
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol)
+      || !parsed.hostname
+      || !parsed.host
+      || parsed.username
+      || parsed.password
+      || parsed.search
+      || parsed.hash
+      || !['/v1', '/v1/'].includes(parsed.pathname)) {
+    fail('acceptance_base_url_invalid');
+  }
+
+  return `${parsed.origin}/v1`;
+}
+
+export function resolveAcceptanceRunId(block, environment = process.env) {
+  if (!['b8', 'b9'].includes(block)) fail('acceptance_block_invalid');
+  const supplied = environment.ACCEPTANCE_RUN_ID;
+  if (supplied !== undefined) {
+    if (typeof supplied !== 'string' || supplied.trim() !== supplied
+        || !runIdPattern.test(supplied) || !supplied.startsWith(`${block}-`)) {
+      fail(`${block}_acceptance_run_id_invalid`);
+    }
+    return supplied;
+  }
+  return `${block}-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
+}
+
+export function deriveAcceptancePrincipalIds(runId, principalKeys) {
+  if (typeof runId !== 'string' || !runIdPattern.test(runId)
+      || !Array.isArray(principalKeys) || principalKeys.length === 0
+      || principalKeys.some((key) => typeof key !== 'string' || !principalKeyPattern.test(key))
+      || new Set(principalKeys).size !== principalKeys.length) {
+    fail('acceptance_principal_ids_invalid');
+  }
+  return Object.freeze(Object.fromEntries(
+    principalKeys.map((key) => [key, `${runId}-${key}`]),
+  ));
+}
+
+export function assertAcceptancePrincipalGateCompatibility(runId, principalIds, environment = process.env) {
+  const flag = String(environment.SIT_STAGING_ACCESS_GATE_ENABLED ?? '').trim().toLowerCase();
+  if (!enabledFlags.has(flag) && !disabledFlags.has(flag)) {
+    fail('acceptance_access_gate_flag_invalid');
+  }
+  if (!enabledFlags.has(flag)) return Object.freeze({ enabled: false, missing: Object.freeze([]) });
+  const allowed = exactPrincipalAllowlist(
+    runId,
+    principalIds,
+    environment.SIT_STAGING_ALLOWED_USER_IDS,
+    'acceptance_principal_gate_input_invalid',
+    'acceptance_principal_allowlist_missing',
+    'acceptance_principal_allowlist_invalid',
+  );
+  const missing = principalIds.filter((id) => !allowed.includes(id));
+  if (missing.length > 0) fail(`acceptance_principal_not_allowlisted:${missing.join(',')}`);
+  return Object.freeze({ enabled: true, missing: Object.freeze([]) });
+}
+
+export function assertAcceptancePaymentPilotCompatibility(runId, principalIds, environment = process.env) {
+  const transport = String(environment.PAYMENT_TRANSPORT ?? '').trim().toLowerCase();
+  if (transport !== 'memory') return Object.freeze({ enabled: false, missing: Object.freeze([]) });
+  const allowed = exactPrincipalAllowlist(
+    runId,
+    principalIds,
+    environment.PAYMENT_PILOT_USER_IDS,
+    'acceptance_payment_pilot_input_invalid',
+    'acceptance_payment_pilot_allowlist_missing',
+    'acceptance_payment_pilot_allowlist_invalid',
+  );
+  const missing = principalIds.filter((id) => !allowed.includes(id));
+  if (missing.length > 0) fail(`acceptance_payment_pilot_not_allowlisted:${missing.join(',')}`);
+  return Object.freeze({ enabled: true, missing: Object.freeze([]) });
+}
+
+function exactPrincipalAllowlist(
+  runId,
+  principalIds,
+  rawValue,
+  inputError,
+  missingError,
+  invalidError,
+) {
+  if (typeof runId !== 'string' || !runIdPattern.test(runId)
+      || !Array.isArray(principalIds) || principalIds.length === 0
+      || principalIds.some((id) => typeof id !== 'string'
+        || !id.startsWith(`${runId}-`)
+        || !principalKeyPattern.test(id.slice(runId.length + 1)))) {
+    fail(inputError);
+  }
+  const raw = String(rawValue ?? '').trim();
+  if (!raw) fail(missingError);
+  const allowed = raw.split(',').map((value) => value.trim());
+  if (allowed.some((value) => !value || value.includes('*') || value.includes('?'))
+      || new Set(allowed).size !== allowed.length) {
+    fail(invalidError);
+  }
+  return allowed;
+}

@@ -1,0 +1,189 @@
+{
+  "schemaVersion": 1,
+  "workPackage": "WP104_CURRENT_CANDIDATE_STAGING_PIXEL_CLOSURE",
+  "status": "passed-exact-staging-runtime-pixel-two-role-push-cleanup",
+  "recordedAt": "2026-09-10T19:36:45Z",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "evidenceBaseHead": "8916aa17fcb2f98d78a49314902a6fd0fcd0e75b",
+    "candidateArtifactSourceHead": "fdcfd1dc782c9f9dd3cb766d566abf7363a76cc5",
+    "candidateSourceIsAncestor": true,
+    "mobileRuntimeDriftAfterCandidate": false
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091002",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "apkSha256": "d0ac7a80232536a4c2f5e1d659b8b9ba4f973581f816142dc6419931742c3637",
+    "installedDelivery": "direct-apk",
+    "exactInstalledApkVerified": true,
+    "dataPreservingUpdate": true
+  },
+  "localVerification": {
+    "focusedEvidenceGuard": "passed-3-tests",
+    "fullTechnicalRegression": "passed-candidate-rollover-profile",
+    "flutterAnalyzer": "passed-zero-diagnostics",
+    "webWasmLoopbackAndroid": "passed",
+    "temporaryWorkaroundIntroduced": false
+  },
+  "github": {
+    "regression": {
+      "runId": 34517352749,
+      "head": "8916aa17fcb2f98d78a49314902a6fd0fcd0e75b",
+      "conclusion": "success",
+      "flutterRegression": "success",
+      "backendRegression": "success",
+      "postgresRunnerProof": "success",
+      "cleanCheckoutReproducibility": "success",
+      "publishApiImage": "success"
+    },
+    "codeql": {
+      "runId": 34508316570,
+      "head": "8916aa17fcb2f98d78a49314902a6fd0fcd0e75b",
+      "conclusion": "success"
+    },
+    "codeScanning": {
+      "prHeadOpenAlerts": 0,
+      "prMergeOpenAlerts": 0
+    },
+    "pullRequest": {
+      "number": 7,
+      "state": "OPEN",
+      "draft": true,
+      "mergeable": true,
+      "merged": false
+    }
+  },
+  "staging": {
+    "deploymentStatus": "passed-exact-immutable-image",
+    "runtimeHead": "8916aa17fcb2f98d78a49314902a6fd0fcd0e75b",
+    "previousRuntimeHead": "926a00c5fa7f6595069aed12119d2dde90935bc3",
+    "version": "0.1.0-8916aa17fcb2",
+    "imageDigest": "sha256:c04799225c6af5e8de006b2ceefdb01b765ac9379e21c68fc3ff56ad6ae2900d",
+    "apiHealthy": true,
+    "databaseHealthy": true,
+    "apiRestartCount": 0,
+    "databaseRestartCount": 0,
+    "foreignKeyIntegrity": "passed-361-constraints",
+    "rollbackImageAvailable": true,
+    "activePersistentComposeFileCount": 5,
+    "persistentSourceInspection": "passed-read-only",
+    "checkoutPermissions": {
+      "archiveDirectoryModeDeviationObserved": "backend-directory-0775",
+      "remediation": "removed-group-and-other-write-bits-within-new-checkout-only",
+      "groupOrOtherWritableEntriesAfterRemediation": 0,
+      "finalBackendDirectoryMode": "0755",
+      "contentChanged": false
+    },
+    "transports": {
+      "push": "fcm",
+      "mail": "smtp",
+      "payment": "memory",
+      "stripeLivemode": false,
+      "listingAiProvider": "mock",
+      "listingAiBudgetCents": 0,
+      "listingAiExternalExecutionApproved": false
+    },
+    "pilot": {
+      "mode": "pilot",
+      "privatePilotEnabled": true,
+      "region": "heilbronn_wave0"
+    },
+    "readiness": {
+      "criticalBlockerCount": 0,
+      "noncriticalSupportDeadlineOverdueCount": 2
+    }
+  },
+  "pixel": {
+    "model": "Pixel 7 Pro",
+    "physical": true,
+    "osVersion": "17",
+    "apiLevel": 37,
+    "securityPatch": "2026-07-05",
+    "coldStarts": { "attempts": 3, "passed": 3 },
+    "mainNavigation": { "surfaceCount": 5, "status": "passed" },
+    "accountPrivacySupport": { "surfaceCount": 9, "status": "passed-read-only" },
+    "legalRoutes": {
+      "routeCount": 7,
+      "status": "passed-read-only",
+      "professionalApprovalGranted": false
+    },
+    "largeText": {
+      "scalePercent": 200,
+      "surfaceCount": 5,
+      "status": "passed",
+      "originalSettingRestored": true
+    },
+    "appearance": {
+      "systemThemeCount": 2,
+      "backgroundChoiceCount": 5,
+      "status": "passed-private-capture",
+      "originalSettingsRestored": true,
+      "normalExploreSurfaceRestored": true
+    },
+    "twoRoleJourney": {
+      "status": "passed-pixel-email-verified-two-role-product-journey",
+      "distinctEmailVerifiedPrincipals": true,
+      "ownerDraftPublishedThroughPixelUi": true,
+      "serverAndPublicCatalogConfirmed": true,
+      "renterDiscovery": true,
+      "requestAcceptance": "passed-non-binding-simulation",
+      "chatVisibleToRenter": true,
+      "principalSwitchIsolation": true,
+      "ownerSessionRestored": true
+    },
+    "fcm": {
+      "foreground": "passed",
+      "background": "passed",
+      "terminatedProcess": "passed",
+      "notificationIconVisualReview": "pending-private-capture",
+      "privateCaptureSha256": "b3237e4f896da42534590cf735da2a2a7b53018f17c21c671b0a9d0b705be919",
+      "privateCaptureCommitted": false
+    },
+    "cleanup": {
+      "testBookingCancelled": true,
+      "testListingEnded": true,
+      "publicCatalogListingCount": 0,
+      "publicTechnicalListingCount": 0,
+      "contractCreated": false,
+      "reservationCreated": false,
+      "paymentEndpointCalled": false,
+      "monetaryEffectMinor": 0
+    }
+  },
+  "legalHold": {
+    "bindingProbeStatus": 409,
+    "bindingProbeError": "v52_contract_documents_unavailable",
+    "classification": "expected-fail-closed-draft-blocked",
+    "unbookedListingCleanupPassed": true,
+    "professionalDocumentApprovalStillRequired": true
+  },
+  "remaining": {
+    "onePlusExactCandidateTest": "not-verified",
+    "googlePlaySplitDeliveryForThisCandidate": "not-run",
+    "bindingV52ContractJourney": "blocked-professional-legal-snapshots",
+    "listingAiExternalProvider": "disabled",
+    "stripeLivePayment": "disabled",
+    "notificationIconVisualReview": "pending-private-capture",
+    "freshTwoRoleProvisioning": "held-existing-source-and-private-vault-hygiene"
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "testerListChanged": false,
+    "onePlusContactedByVerifiedRun": false,
+    "publicRegistrationChanged": false,
+    "firebaseConsoleChanged": false,
+    "paymentProviderChanged": false,
+    "realMoneyUsed": false,
+    "listingAiExternalCallMade": false,
+    "pullRequestMerged": false,
+    "containsSecrets": false,
+    "containsAccountIdentity": false,
+    "containsTokens": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsPrivateFilesystemPaths": false
+  }
+}

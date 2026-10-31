@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 /// Controls the bottom navigation tab index.
 ///
 /// This allows screens deeper in the Navigator stack (e.g. settings pages)
-/// to switch the main tab (e.g. jump to "Erkunden") without pushing a new
+/// to switch the main tab (e.g. jump to "Entdecken") without pushing a new
 /// ExploreScreen route.
 class MainNavController extends ChangeNotifier {
   int _index;

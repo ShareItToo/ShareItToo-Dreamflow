@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp52-drive-source-reconciliation",
+  "status": "verified-no-source-drift-external-holds-retained",
+  "observedOn": "2026-09-07",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "baseHead": "b392964fe118c06d596d446ad10eb93561d19282",
+    "candidateBuild": "2026090610",
+    "candidateSourceHead": "2fd793bac970866aa94a2940f28d6bbc3e04e377"
+  },
+  "driveInventory": {
+    "currentFolder": {
+      "title": "00_CODEX_AKTUELL_AB_2026-08-20",
+      "directItemCount": 17,
+      "latestRelevantProductHandover": "09_SIT_FULL_PILOT_READY_HANDOVER_2026-09-02.md"
+    },
+    "supportFolder": {
+      "title": "10_SIT_SUPPORT_PACKET_V1_2026-08-20",
+      "directItemCount": 17,
+      "packetVersion": "SIT_SUPPORT_PACKET_V1_2026-08-20",
+      "newerPacketFound": false
+    }
+  },
+  "authoritativeSources": [
+    {
+      "role": "v52-core-specification",
+      "driveFileId": "1HQR2EWJg6FUcU41l5uwditfFzNoCe6Zx",
+      "title": "01_V5.2_CORE_SPECIFICATION.md",
+      "modifiedTime": "2026-08-18T17:51:27.257Z",
+      "bytes": 31826,
+      "sha256": "4c51ac1001389ebcac57d4502f6d2185eed77a389e63aa27aca4c6594eabceb9"
+    },
+    {
+      "role": "v52-legal-folder",
+      "driveFileId": "1kKuZl9OJ4nb9F02E8fepTxY8O-GZBkn2",
+      "title": "02_V5.2_RECHTSMAPPE_PRIVATLAUNCH.pdf",
+      "modifiedTime": "2026-08-18T17:51:36.056Z",
+      "bytes": 285180,
+      "sha256": "aa6f631457c9b73fdae3c5d4415ba6681b86f63b51df3fd5937c50f80a27b8a8"
+    },
+    {
+      "role": "support-source-of-truth",
+      "driveFileId": "1j8cpz2uwZBZiu6RLXjPQfo6bAWotUNLN",
+      "title": "09_SIT_SUPPORT_SOURCE_OF_TRUTH_V1.md",
+      "modifiedTime": "2026-08-20T22:27:16.931Z",
+      "bytes": 2538,
+      "sha256": "ae1ce047453b2efd6e0da80718da57de43a9efb8b93ef4ed6a0850c55abcc80b"
+    },
+    {
+      "role": "support-status-machine",
+      "driveFileId": "1qj0md6DoHt7lDAfIvFtmMiT0vQ48KbYG",
+      "title": "10_SIT_SUPPORT_STATUS_MACHINE_V1.json",
+      "modifiedTime": "2026-08-20T22:28:17.857Z",
+      "bytes": 7532,
+      "sha256": "3cc58111a6079f9f82ce90d9fed18d4a8b10bd27191777ed30130d03fbbf2f55"
+    },
+    {
+      "role": "support-test-matrix",
+      "driveFileId": "1CcCqdsEVveiqoKJqZlA_iHKfZhttU5Le",
+      "title": "13_SIT_SUPPORT_TEST_MATRIX_V1.md",
+      "modifiedTime": "2026-08-20T22:29:02.738Z",
+      "bytes": 21598,
+      "sha256": "83cc25371f24b3486230f3ac4e2b7e9c26c49a48bd5aca22a5449636c9ffc6d3"
+    },
+    {
+      "role": "support-packet-manifest",
+      "driveFileId": "1mBarnBNtUV_1wKwEj5KezyNVkdTV4wjJ",
+      "title": "15_SIT_SUPPORT_MANIFEST_SHA256_V1.json",
+      "modifiedTime": "2026-08-20T22:29:38.186Z",
+      "bytes": 5028,
+      "sha256": "c9fbc7e98374fd366c2a97e59c07547f0b27a67225f5d5954259943ff2f9f9c2"
+    }
+  ],
+  "contextDocuments": [
+    {
+      "title": "09_SIT_FULL_PILOT_READY_HANDOVER_2026-09-02.md",
+      "modifiedTime": "2026-09-02T05:26:59.845Z",
+      "bytes": 7444,
+      "sha256": "e08adcf7d72b096157ac807530c0d1b981308935ffc2d4e4e2e122a84d79ab83",
+      "classification": "historical-handover-superseded-by-current-repository-evidence",
+      "productSourceOfTruth": false
+    },
+    {
+      "title": "MAXIMUS_KONTEXT_UND_BETRIEBSSTAND_2026-09-06.md",
+      "modifiedTime": "2026-09-07T15:34:02.095Z",
+      "bytes": 45095,
+      "sha256": "2ab44e3434e60d45362c88f242a8680415cd241a2385ecd05a28ce6cd790215a",
+      "classification": "current-operations-context-non-product-authority",
+      "productSourceOfTruth": false
+    }
+  ],
+  "reconciliation": {
+    "v52SourceDrift": false,
+    "supportSourceDrift": false,
+    "newerProfessionalLegalApprovalFound": false,
+    "newerSupportPacketFound": false,
+    "maximusMayReplaceProductLogic": false,
+    "maximusMayCloseExternalGates": false,
+    "supportDeadlineScenario": {
+      "id": "SUP-159",
+      "gate": "PILOT_BLOCKER",
+      "condition": "next-update-overdue",
+      "currentRepositoryClassification": "open-owner-action-required"
+    },
+    "portfolio": {
+      "done": 16,
+      "partial": 2,
+      "open": 6,
+      "decision": "hold-no-go",
+      "nextLane": "staging-backend-parity"
+    }
+  },
+  "boundaries": {
+    "driveChanged": false,
+    "applicationRuntimeChanged": false,
+    "backendRuntimeChanged": false,
+    "backendDeploymentChanged": false,
+    "supportCaseChanged": false,
+    "legalApprovalChanged": false,
+    "paymentChanged": false,
+    "providerChanged": false,
+    "firebaseConsoleChanged": false,
+    "storeChanged": false,
+    "deviceChanged": false,
+    "productionChanged": false,
+    "pullRequestMerged": false
+  }
+}

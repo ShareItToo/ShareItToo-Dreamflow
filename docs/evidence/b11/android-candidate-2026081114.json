@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-release-candidate",
+  "status": "installed-guest-links-authenticated-offline-role-booking-links-logout-push-suppression-full-fcm-crash-mapping-centered-icon-offline-realtime-and-staging-passed",
+  "generatedAt": "2026-08-11T20:07:12.941Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081114",
+    "commit": "f2961cfe97a85c5698d4967ae08808eaa6b25ce8",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "android": {
+    "delivery": "pending",
+    "aabSha256": "65f5afb982353a4ce1c1dbb66dc7e8e9b23dd83abeee6008c3d80a821d0b6163",
+    "apkSha256": "f707d8abdee51d8b71ecc58a90083322a50d366cb6fe06f5714d53b96e17c32f",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "packageIdentityVerified": true,
+    "privateArchivePermissionsVerified": true
+  },
+  "privacyAndNetwork": {
+    "binaryScan": "passed",
+    "binaryScanReportSha256": "2095e62d5aaf67a42d114102ac064aa43867d25883b40f6a8d97256b343d9e69",
+    "targetSdkVersion": 35,
+    "backupDisabled": true,
+    "cleartextTrafficDisabled": true,
+    "analyticsSdkPresent": false,
+    "advertisingSdkPresent": false,
+    "disclosedSdks": [
+      "Firebase Cloud Messaging",
+      "Firebase Crashlytics",
+      "Google Maps Platform"
+    ],
+    "findings": []
+  },
+  "exactCandidateDiagnostics": {
+    "directInstallAndLaunch": "passed",
+    "crashlyticsMappingAndNativeSymbols": "passed",
+    "crashlyticsReleaseAssignment": "pending",
+    "guestAppLinks": "passed",
+    "authenticatedSessionRestore": "passed",
+    "offlineAuthenticatedProfile": "passed",
+    "syntheticRoleBooking": "passed",
+    "authenticatedDeepLinks": "passed",
+    "foregroundFcm": "passed",
+    "backgroundFcm": "passed",
+    "terminatedProcessFcm": "passed",
+    "notificationIconVisualFit": "passed",
+    "logoutColdStartGuestPersistence": "passed",
+    "postLogoutPushSuppression": "passed",
+    "offlineRealtimeRecovery": "passed"
+  },
+  "controlledFcm": {
+    "status": "passed",
+    "evidenceRef": "docs/evidence/b11/android-controlled-fcm-2026081114-20260811T193947Z.json"
+  },
+  "offlineRealtime": {
+    "status": "passed",
+    "evidenceRef": "docs/evidence/b11/android-offline-realtime-2026081114-20260811T192346Z.json",
+    "sameProcessRecovery": true
+  },
+  "crashlyticsMapping": {
+    "status": "passed",
+    "evidenceRef": "docs/evidence/b11/android-crash-release-mapping-2026081114.json",
+    "controlledSanitizedEvent": "pending",
+    "consoleReleaseAssignment": "pending"
+  },
+  "logoutLifecycle": {
+    "status": "passed",
+    "evidenceRef": "docs/evidence/b11/android-logout-lifecycle-2026081114-20260811T194321Z.json",
+    "syntheticSessionRestoredAfterProbe": true
+  },
+  "guestAppLinks": {
+    "status": "passed",
+    "evidenceRef": "docs/evidence/b11/android-app-link-diagnostic-2026081114-20260811T193121Z.json",
+    "syntheticSessionRestoredAfterProbe": true
+  },
+  "storeReadiness": {
+    "status": "testing",
+    "evidenceRef": "docs/evidence/b11/store-links-signing-readiness-2026081114.json",
+    "publicRoutes": "pending-explicit-production-approval",
+    "storeConsole": "pending"
+  },
+  "staging": {
+    "serverCommit": "f2961cfe97a85c5698d4967ae08808eaa6b25ce8",
+    "liveHttpStatus": 200,
+    "readyHttpStatus": 200,
+    "fcmEnabled": true,
+    "googleCredentialValidation": "passed",
+    "productionInvariant": "passed",
+    "deploymentEvidence": "/docker/shareittoo/releases/staging-20260811T192242Z-f2961cfe97a8.json"
+  },
+  "boundaries": {
+    "uploadedToStore": false,
+    "installedOnPhysicalDevice": true,
+    "controlledFcmSentToSyntheticAccount": true,
+    "controlledCrashDiagnosticSent": false,
+    "productionPushSent": false,
+    "productionCrashGenerated": false,
+    "iosValidated": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

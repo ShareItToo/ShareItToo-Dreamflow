@@ -1,0 +1,353 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp79-current-candidate-acceptance-matrix",
+  "status": "complete-current-source-github",
+  "capturedOn": "2026-09-09",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "matrixBaseHead": "96015c57f22ed4575f0730142d1d5fe935ad5228",
+    "candidateSourceHead": "e1c182ea496f013989863155c13bfda649255a7e",
+    "stagingRuntimeHead": "baf9267c8bff7533230f3234c1f543649df6e4aa",
+    "githubRegressionRun": 34404447706,
+    "githubCodeqlRun": 34404447740,
+    "openCodeScanningAlerts": 0,
+    "pullRequest7": "draft-open-mergeable-unmerged"
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026090905",
+    "releaseChannel": "internal",
+    "environment": "staging",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "apkSha256": "1864b9c17e7813df887fb1e9961a1746665b4b57b6dbd831526e1c3a2f58eaa6",
+    "aabSha256": "ed3d5e5af99a6577e09afc96a880ac4ca7c9c0bd86c54bcaa3f5a07fd6255295",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "pixelInstalledAndMatched": true,
+    "onePlusInstalledAndMatched": false
+  },
+  "staging": {
+    "runtimeHealthy": true,
+    "database": "ok",
+    "mail": "ok",
+    "fcm": "enabled-staging-only",
+    "paymentTransport": "memory",
+    "stripeLivemode": false,
+    "listingAiProvider": "mock",
+    "externalListingAiExecution": false,
+    "readiness": "degraded-only-by-two-noncritical-support-deadlines"
+  },
+  "candidateDelta": {
+    "predecessorSourceHead": "12b88cf97f91973d6dfd59fe3f4dcb9c915dc7d0",
+    "changedRuntimePaths": [
+      "backend/sql/migrations/072_dispute_transfer_recovery.down.sql",
+      "backend/sql/migrations/072_dispute_transfer_recovery.up.sql",
+      "backend/src/app.js",
+      "backend/src/payment_domain.js",
+      "backend/src/payment_workflow.js",
+      "backend/src/privacy_export.js",
+      "backend/src/retention_inventory.js",
+      "backend/src/stripe_provider.js",
+      "lib/config/private_pilot_config.dart",
+      "pubspec.yaml"
+    ],
+    "mobileDelta": "version-metadata-only",
+    "appRouteDelta": "payment-recovery-health-only",
+    "inheritanceRule": "predecessor-proof-is-promoted-only-when-the-requirement-route-is-outside-the-verified-delta-and-no-current-observation-contradicts-it"
+  },
+  "currentSourceCandidateParity": {
+    "strictLocalCandidateRegression": "refused-current-source-runtime-drift",
+    "currentSourceRuntimePathsAfterCandidate": [
+      "assets/legal/de/legal_manifest_v53.json",
+      "assets/legal/de/operator_readiness_draft_20260909.json",
+      "assets/legal/de/v53/part_a_platform_terms.html",
+      "assets/legal/de/v53/part_b_private_rental_terms.html",
+      "assets/legal/de/v53/part_c_cancellation_refund.html",
+      "assets/legal/de/v53/part_d_handover_return_damage.html",
+      "assets/legal/de/v53/part_e_payment_payout.html",
+      "assets/legal/de/v53/part_f_community_safety.html",
+      "assets/legal/de/v53/part_g_reporting_moderation_review.html",
+      "assets/legal/de/v53/part_h_privacy.html",
+      "assets/legal/de/v53/part_i_imprint_withdrawal_shorttexts.html",
+      "backend/src/operational_readiness_gate.js",
+      "lib/config/draft_operator_config.dart",
+      "lib/screens/legal_imprint_screen.dart",
+      "lib/screens/legal_privacy_screen.dart",
+      "lib/screens/legal_terms_screen.dart"
+    ],
+    "currentSourceMayNotBeClaimedAsInstalledCandidate": true,
+    "resolution": "build-and-verify-a-new-signed-candidate-before-promoting-current-source-runtime-behavior"
+  },
+  "localCurrentSourceCiMetadataRegression": {
+    "status": "passed",
+    "mode": "candidate-rollover-ci-metadata-only",
+    "meaning": "The current source passes the full local quality gate without claiming that it is the installed signed candidate.",
+    "coverage": [
+      "backend-and-deterministic-tests",
+      "flutter-analyzer-and-tests",
+      "web-wasm-and-loopback-smoke",
+      "android-debug-build-minsdk-and-capacity"
+    ]
+  },
+  "sourceInventory": [
+    {
+      "path": "docs/evidence/release-readiness/wp70-current-candidate-auth-safety-hold-20260909.json",
+      "sha256": "22e26a33912c768d28617b64003b0778aad9ec22e49cdbe6eff65401752ef086"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp71-current-candidate-account-deletion-20260909.json",
+      "sha256": "1062b963f99dec7d901f25636528b22c1d28715a4cc6e330071c576f31435b68"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp72-current-candidate-report-block-20260909.json",
+      "sha256": "ea088947d14df99ab7ca156cb565c20455decbc238827c9c306e080daaf91cfa"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp73-stripe-sandbox-compatibility-inventory-20260909.json",
+      "sha256": "7435fcb7ca662778950d5d29e907f54fe9a4da3b6520736a2ef65e023b0493d4"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp74-dispute-transfer-recovery-20260909.json",
+      "sha256": "d510a73f737b0ba6afd9133434067cd3ac4faf90eb739389dd5e6c2745c52fd3"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp75-current-candidate-pixel-staging-20260909.json",
+      "sha256": "ef57fb3d7d0a050adbd8c88037404af54c1b0d9e3895673353433e6758a89571"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp77-public-legal-staging-source-mismatch-20260909.json",
+      "sha256": "3edefcc2d77b621d3fd99ac4aa465da58feab490054099df9e14ec8cb932a3cd"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp78-v53-operator-aligned-legal-draft-20260909.json",
+      "sha256": "ab091b800f6c8ceb18ca8043cabaa6f90f37e070083cfc2e37f925b6bd3be98b"
+    }
+  ],
+  "requirements": [
+    {
+      "id": "candidate-provenance-signature-pixel-install",
+      "state": "PASS",
+      "evidence": "WP75 binds the exact signed APK and AAB, upload certificate, source, Staging runtime and data-preserving Pixel installation.",
+      "remaining": null
+    },
+    {
+      "id": "exact-staging-backend-health-and-fcm",
+      "state": "PASS",
+      "evidence": "WP75 records healthy Staging database and mail plus Staging-only FCM and successful foreground, background and terminated-process delivery.",
+      "remaining": null
+    },
+    {
+      "id": "exact-source-local-github-security-baseline",
+      "state": "PASS",
+      "evidence": "The current source baseline is bound to successful GitHub Regression and CodeQL with zero open code-scanning alerts.",
+      "remaining": null
+    },
+    {
+      "id": "two-role-publish-discover-request-accept-chat",
+      "state": "PASS",
+      "evidence": "WP75 physically proves distinct verified synthetic roles, publish, discovery, non-binding request and acceptance, chat, cleanup and A-to-B isolation.",
+      "remaining": null
+    },
+    {
+      "id": "transactional-push-foreground-background-terminated",
+      "state": "PASS",
+      "evidence": "WP75 proves controlled transactional FCM in all three Android process states after the explicit device-level Push opt-in.",
+      "remaining": null
+    },
+    {
+      "id": "listing-create-edit-publish-pause-activate-end",
+      "state": "PASS",
+      "evidence": "The complete lifecycle has physical proof and its listing paths are outside the verified successor delta; WP75 also re-proves current-candidate publication and retirement.",
+      "remaining": null
+    },
+    {
+      "id": "themes-backgrounds-large-text-and-restart",
+      "state": "PASS",
+      "evidence": "The physical theme, background, large-text and restart matrix has no affected Flutter or Android path in the successor delta.",
+      "remaining": null
+    },
+    {
+      "id": "offline-online-process-recovery",
+      "state": "PASS",
+      "evidence": "Existing offline recovery proof remains route-safe and WP75 adds current-candidate terminated-process persistence after the successor metadata-only mobile delta.",
+      "remaining": null
+    },
+    {
+      "id": "listing-ai-safe-mock-review-contract",
+      "state": "PASS",
+      "evidence": "WP75 confirms the Staging listing AI remains mock-only, external execution is disabled, budget is zero and publication still requires explicit owner action.",
+      "remaining": null
+    },
+    {
+      "id": "staging-support-simulation-lifecycle",
+      "state": "PASS",
+      "evidence": "WP68 support lifecycle proof is retained and the successor delta contains no support route or schema change; WP75 confirms only two noncritical follow-up deadlines remain overdue.",
+      "remaining": null
+    },
+    {
+      "id": "payment-idempotency-and-uncertain-reconciliation",
+      "state": "PASS",
+      "evidence": "WP74 closes durable, provider-bound paid-transfer dispute recovery with idempotency and uncertain-outcome handling without provider traffic.",
+      "remaining": null
+    },
+    {
+      "id": "support-report-block",
+      "state": "PASS",
+      "evidence": "WP72 physically proves report submission, audit readback, block and unblock, listing and chat isolation, cleanup and owner restoration; no report route is in the successor delta.",
+      "remaining": null
+    },
+    {
+      "id": "email-registration-verification-login-recovery",
+      "state": "PARTIAL",
+      "evidence": "WP70 proves the complete lifecycle on the immediate predecessor candidate and WP75 proves current verified-role authentication.",
+      "remaining": "Repeat fresh registration, one-time mail verification and recovery through the exact 2026090905 Pixel candidate before promoting the combined end-to-end requirement."
+    },
+    {
+      "id": "logout-password-session-account-switch-isolation",
+      "state": "PARTIAL",
+      "evidence": "WP70 proves password, logout-all and epoch-safe A-to-B isolation on the immediate predecessor candidate; WP75 re-proves current role isolation.",
+      "remaining": "Replay password change, logout-all, delayed-result isolation and recovery on the exact 2026090905 Pixel candidate."
+    },
+    {
+      "id": "google-signin",
+      "state": "PARTIAL",
+      "evidence": "Google first, repeat and cold-start sign-in are physically proven on an older signed candidate, but no exact 2026090905 provider replay exists.",
+      "remaining": "Perform Google first, repeat, cancellation and cold-start acceptance on the exact 2026090905 candidate without retaining account identity."
+    },
+    {
+      "id": "search-filter-favorites-wishlists",
+      "state": "PARTIAL",
+      "evidence": "Search, category filtering and saved-item isolation have physical predecessor evidence, but the exact successor replay is incomplete.",
+      "remaining": "Replay search, filter, favorite and all available wishlist variants on the exact 2026090905 Pixel candidate."
+    },
+    {
+      "id": "offer-request-accept-decline",
+      "state": "PARTIAL",
+      "evidence": "WP75 proves current non-binding request and acceptance, but neither decline nor competing-request resolution was replayed on this candidate.",
+      "remaining": "Prove decline and competing-request outcomes on the exact current candidate with cleanup and role isolation."
+    },
+    {
+      "id": "messages-attachments-location-appointments",
+      "state": "PARTIAL",
+      "evidence": "Physical predecessor evidence covers attachment and confirmed times, while current proof covers chat; positive authorized location reveal is not current-candidate proven.",
+      "remaining": "Prove authorized location reveal and denied reveal after the allowed window on the exact current candidate."
+    },
+    {
+      "id": "handover-return-cancel-withdrawal-damage",
+      "state": "PARTIAL",
+      "evidence": "Non-binding coordination and cancellation are proven, while binding creation correctly fails closed at the V5.2 document gate.",
+      "remaining": "Approved immutable legal snapshots and a lawful sandbox booking are required for binding handover, return, withdrawal and damage proof."
+    },
+    {
+      "id": "reviews-and-invoices",
+      "state": "PARTIAL",
+      "evidence": "Technical surfaces and deterministic contracts exist, but no completed lawful binding sandbox transaction produces role-correct review and invoice evidence.",
+      "remaining": "A lawful sandbox booking lifecycle must produce role-correct review and invoice evidence without real money."
+    },
+    {
+      "id": "privacy-export-and-account-deletion",
+      "state": "PARTIAL",
+      "evidence": "WP70 and WP71 provide physical predecessor proof, but privacy-export and retention code changed in the successor candidate source.",
+      "remaining": "Replay export minimization, isolation and reversible synthetic account deletion on the exact 2026090905 candidate."
+    },
+    {
+      "id": "cart-projects-and-booking-groups",
+      "state": "PARTIAL",
+      "evidence": "Cart and project persistence/isolation have predecessor proof; multi-item booking groups remain unproven because binding booking is held.",
+      "remaining": "Prove multi-item booking groups after the binding legal and payment prerequisites are lawfully available."
+    },
+    {
+      "id": "android-permission-lifecycle",
+      "state": "PARTIAL",
+      "evidence": "The physical camera, location and notification lifecycle passed on a predecessor candidate, but no consolidated 2026090905 replay exists.",
+      "remaining": "Run the consolidated permission lifecycle once on the exact current candidate and restore original grants in the same transaction."
+    },
+    {
+      "id": "facebook-signin",
+      "state": "OPEN",
+      "evidence": "The Android control and Firebase provider are disabled.",
+      "remaining": "Official Meta application, redirect, consent and exact-candidate acceptance are required."
+    },
+    {
+      "id": "apple-signin",
+      "state": "OPEN",
+      "evidence": "The Android control and Firebase provider are disabled.",
+      "remaining": "Official Apple Services ID, membership, redirect, consent and exact-candidate acceptance are required."
+    },
+    {
+      "id": "real-image-analysis-listing-proposal",
+      "state": "OPEN",
+      "evidence": "Staging has no approved runtime provider entitlement; codex_local_dev remains a developer-only synthetic evaluator.",
+      "remaining": "Approve a runtime provider, privacy and retention setting and bounded budget, then test an owner-reviewed proposal without automatic publication."
+    },
+    {
+      "id": "stripe-sandbox-payment-refund-simulated-payout",
+      "state": "OPEN",
+      "evidence": "Staging payment is memory-only, Stripe live mode is false and official connector read-only verification requires reauthentication.",
+      "remaining": "Complete the isolated official Stripe sandbox profile and read-only reauthentication gate before test-money payment, refund and simulated payout."
+    },
+    {
+      "id": "binding-v52-contract-return-damage",
+      "state": "OPEN",
+      "evidence": "Current Staging fails closed before binding contract, reservation or payment creation when V5.2 documents are unavailable.",
+      "remaining": "Professionally approved immutable contract snapshots and operator/provider facts are required."
+    },
+    {
+      "id": "manual-talkback-traversal",
+      "state": "OPEN",
+      "evidence": "Automated semantics and large-text checks do not substitute for a human auditory TalkBack traversal.",
+      "remaining": "A human must traverse critical flows with TalkBack touch exploration on a physical device."
+    },
+    {
+      "id": "oneplus-cross-device-two-role",
+      "state": "OPEN",
+      "evidence": "OnePlus has no exact current-candidate physical proof and remains intentionally untouched until Pixel closure is complete.",
+      "remaining": "Reconnect and authorize the unlocked OnePlus, install only the verified exact APK data-preservingly, then run the two-device matrix."
+    },
+    {
+      "id": "durable-private-registry-pull",
+      "state": "OPEN",
+      "evidence": "Staging still depends on a hash-verified local-checkout build because private registry pull access is not durably proven.",
+      "remaining": "Establish least-privilege package read access and prove a reproducible pull without retaining a local-build release prerequisite."
+    },
+    {
+      "id": "historical-support-deadline-recovery",
+      "state": "OPEN",
+      "evidence": "Two retained noncritical Support cases have overdue next-update deadlines and are intentionally not modified by technical packages.",
+      "remaining": "An authorized staff action must update the retained cases and restore compliant deadlines without deleting audit history."
+    }
+  ],
+  "aggregate": {
+    "passCount": 12,
+    "partialCount": 11,
+    "openCount": 9,
+    "totalCount": 32,
+    "pixelStagingAssessment": "current-core-closed-provider-legal-and-cross-device-gates-open",
+    "releaseDecision": "hold-not-production-ready"
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "testerListChanged": false,
+    "publicRegistrationChanged": false,
+    "firebaseConfigurationChanged": false,
+    "providerConfigurationChanged": false,
+    "paymentProviderCalled": false,
+    "realMoneyUsed": false,
+    "externalListingAiEnabled": false,
+    "onePlusContacted": false,
+    "cloudVpsDnsChanged": false,
+    "pullRequestMerged": false,
+    "containsCredential": false,
+    "containsToken": false,
+    "containsAccountIdentity": false,
+    "containsRawDeviceIdentifier": false,
+    "containsPrivateFilesystemPath": false
+  },
+  "nextSafePackage": {
+    "id": "WP80",
+    "name": "successor-candidate-parity-preflight",
+    "scope": "Establish whether the current source can become a new signed Internal Staging candidate with an exact Staging-runtime binding; do not deploy, upload or mutate any external service until that proof is complete.",
+    "externalMutationAllowed": false
+  }
+}

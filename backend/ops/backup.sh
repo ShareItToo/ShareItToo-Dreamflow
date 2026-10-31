@@ -31,7 +31,10 @@ tar -tzf "$task_uploads_tmp" >/dev/null
 chmod 600 "$task_db_tmp" "$task_uploads_tmp"
 mv "$task_db_tmp" "$task_db_final"
 mv "$task_uploads_tmp" "$task_uploads_final"
-sha256sum "$task_db_final" "$task_uploads_final" > "$task_manifest_tmp"
+(
+  cd "$backup_dir"
+  sha256sum "$(basename "$task_db_final")" "$(basename "$task_uploads_final")"
+) > "$task_manifest_tmp"
 chmod 600 "$task_manifest_tmp"
 mv "$task_manifest_tmp" "$task_manifest_final"
 
@@ -41,3 +44,5 @@ find /docker/shareittoo/backups/daily -type f \
 
 trap - EXIT
 echo "ShareItToo backup completed: $task_timestamp"
+# Notification failure cannot retroactively fail the verified backup.
+bash "$(dirname -- "${BASH_SOURCE[0]}")/alert.sh" shareittoo-backup.service recovery || true

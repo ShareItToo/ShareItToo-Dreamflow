@@ -1,0 +1,143 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp129-current-candidate-email-registration-recovery",
+  "status": "complete-exact-current-email-registration-recovery",
+  "capturedOn": "2026-09-12",
+  "workPackage": "WP129",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "wp128BaseHead": "41362146a2aa7bcbc39040608d1c7043a2ea9a94",
+    "candidateSourceHead": "1546812f625b4e8f1e700bf976410097cd45ac2f",
+    "applicationRuntimePathsChangedAfterCandidateSource": []
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091201",
+    "releaseChannel": "internal",
+    "environment": "staging",
+    "delivery": "direct-apk",
+    "apkSha256": "a8bfda4c1a0e7302b2528db8edfbe1318e88322023f65588da032220a24badd4",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "physicalPixelPackageMatched": true
+  },
+  "stagingBackend": {
+    "releaseCommit": "df39a14b7a19afe467842461a28f1e77fec8445e",
+    "environment": "staging",
+    "liveHttpStatus": 200,
+    "databaseReady": true,
+    "mailReady": true,
+    "overallReadiness": "degraded-support-deadlines-only",
+    "nextUpdateOverdue": 3,
+    "criticalNextUpdateOverdue": 0,
+    "privacyDeadlineOverdue": 0,
+    "p0WithoutOwner": 0,
+    "supportMutationPerformed": false
+  },
+  "registration": {
+    "freshDisposableAccount": true,
+    "pixelUiSubmissionAccepted": true,
+    "requiredConsentCount": 4,
+    "verificationMessagesMatched": 1,
+    "verificationInitialHttpStatus": 200,
+    "verificationReplayHttpStatus": 400,
+    "verificationSingleUseConfirmed": true,
+    "pixelLoginSucceeded": true,
+    "exactPrincipalVisible": true,
+    "coldStartSessionPersisted": true
+  },
+  "passwordRecovery": {
+    "pixelUiRequestAccepted": true,
+    "accountExistenceDisclosure": false,
+    "recoveryMessagesMatched": 1,
+    "formHttpStatus": 200,
+    "submissionHttpStatus": 200,
+    "replayHttpStatus": 429,
+    "replayOutcome": "rate-limit-reconciliation-required",
+    "replayRetryAfterBounded": true,
+    "resetLinkSingleUseClaimed": false,
+    "oldPasswordStructuredRejection": "invalid_credentials",
+    "replacementPasswordPixelLoginSucceeded": true,
+    "exactRecoveredPrincipalVisible": true,
+    "recoveredColdStartSessionPersisted": true
+  },
+  "privateState": {
+    "registrationVaultMode": "0600",
+    "recoveryVaultMode": "0600",
+    "addressOrCredentialCommitted": false,
+    "actionLinkOrTokenCommitted": false,
+    "disposableAccountRetainedForDeletionPackage": true,
+    "disposableAccountHasBusinessFixture": false,
+    "protectedOwnerSessionRestored": true
+  },
+  "portfolioEffect": {
+    "promotedRequirement": "email-registration-verification-login-recovery",
+    "retainedPartialRequirement": "privacy-export-and-account-deletion",
+    "passCount": 14,
+    "partialCount": 10,
+    "openCount": 8,
+    "totalCount": 32,
+    "releaseDecision": "hold-not-production-ready"
+  },
+  "verification": {
+    "focusedTestsPassed": 23,
+    "fullLocalRegression": "success",
+    "webWasmLoopbackAndroidBuildPassed": true,
+    "exactHeadGithubRegressionRequired": true,
+    "exactHeadCodeqlRequired": true
+  },
+  "sourceInventory": [
+    {
+      "path": "tool/diagnose_android_email_registration.mjs",
+      "sha256": "8f75ad52eb5ef4b123fe4abb0fee0a30b8b8a07e31bec7c60ca7e32e27bc96e1"
+    },
+    {
+      "path": "tool/consume_staging_email_action.mjs",
+      "sha256": "8e93a57686956f0b2671203580330c8b52e03f51997723d4671602bb5f594d73"
+    },
+    {
+      "path": "tool/diagnose_android_password_reset.mjs",
+      "sha256": "f1d33937f5dfca8b1c061e8f8c7b6a2d685fb016a43b3bfa757d051b68f1f947"
+    },
+    {
+      "path": "tool/restore_android_synthetic_session.mjs",
+      "sha256": "4434504847179f8e262ca1b84b70bd3ff6347b083b87ab3ba49c59bcf949c23f"
+    },
+    {
+      "path": "test/tool/diagnose_android_email_registration.test.mjs",
+      "sha256": "2521154205338cb3795af1dda773fead02ead9bd696a8ad0d1fc8f76a79217b7"
+    },
+    {
+      "path": "test/tool/consume_staging_email_action.test.mjs",
+      "sha256": "fa258b61445c4d9933294f87897ceb7dc201d107b8c2f96071ee19a464fbf9df"
+    },
+    {
+      "path": "test/tool/diagnose_android_password_reset.test.mjs",
+      "sha256": "d3595cfed193a7e7981fac15f71bd13e5a06601e1a2291d292b785576f080715"
+    },
+    {
+      "path": "test/tool/restore_android_synthetic_session.test.mjs",
+      "sha256": "82b7625525f59b87c0e95f671e26e7533723a6def563666be822e76a2a53a25e"
+    }
+  ],
+  "boundaries": {
+    "applicationRuntimeChanged": false,
+    "backendChanged": false,
+    "disposableAccountCreated": true,
+    "disposablePasswordChanged": true,
+    "disposableAccountDeleted": false,
+    "listingMutated": false,
+    "bookingMutated": false,
+    "messageSentByOperator": false,
+    "paymentEndpointCalled": false,
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "firebaseProjectChanged": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false,
+    "credentialRecorded": false,
+    "accountIdentityRecorded": false,
+    "actionLinkRecorded": false,
+    "rawDeviceIdentifierRecorded": false
+  }
+}

@@ -1,0 +1,81 @@
+name: mission-quorum-web-v2-proof
+
+# Test-only synthetic rendering, not product/AppRoot/auth/PG/deployment proof.
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/mission-quorum-web-v2-proof.yml'
+      - 'test/support/mission_quorum_web_browser_v2.mjs'
+      - 'test/tool/mission_quorum_web_browser_v2.test.mjs'
+      - 'test/tool/mission_quorum_web_preview_v2_contract.test.mjs'
+      - 'backend/test/mission_quorum_projection_v2.test.js'
+      - 'backend/src/mission_quorum_projection_v2.js'
+      - 'backend/src/mission_need_workflow.js'
+      - 'backend/src/booking_group_handover_domain.js'
+      - 'backend/test/support/mission_quorum_web_fixture_v2.js'
+      - 'backend/test/mission_quorum_web_envelope_v2.test.js'
+      - 'test/support/mission_quorum_web_preview_v2.dart'
+      - 'test/support/mission_quorum_web_golden_v2.dart'
+      - 'test/mission_quorum_web_view_v2_test.dart'
+      - 'assets/fonts/Roboto-Regular.ttf'
+      - 'assets/fonts/Roboto-Bold.ttf'
+      - 'pubspec.lock'
+      - 'pubspec.yaml'
+  workflow_dispatch:
+    inputs:
+      source_head:
+        description: Exact reviewed source commit (40 lowercase hexadecimal characters)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mission-quorum-web-v2-proof-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  isolated-synthetic-v2-browser-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Validate exact source
+        id: source
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_SOURCE: ${{ inputs.source_head }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          case "$EVENT_NAME" in
+            workflow_dispatch) source_head="$DISPATCH_SOURCE" ;;
+            pull_request) source_head="$PR_HEAD" ;;
+            *) echo 'p7_source' >&2; exit 1 ;;
+          esac
+          if [[ ! "$source_head" =~ ^[a-f0-9]{40}$ ]]; then
+            echo 'p7_source' >&2
+            exit 1
+          fi
+          printf 'head=%s\n' "$source_head" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.source.outputs.head }}
+          persist-credentials: false
+      - name: Fake-only proof contracts
+        run: node --test test/tool/mission_quorum_web_browser_v2.test.mjs test/tool/mission_quorum_web_preview_v2_contract.test.mjs backend/test/mission_quorum_projection_v2.test.js backend/test/mission_quorum_web_envelope_v2.test.js
+      # Exact locked cache prewarm is outside isolation. The runner's minimal
+      # project resolves offline only; browser execution has no outbound route.
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.41.7
+          channel: stable
+          cache: true
+      - name: Prewarm exact locked dependencies before isolation
+        run: |
+          flutter pub get --enforce-lockfile
+          test -z "$(git status --porcelain --untracked-files=all)"
+      - name: Build then one isolated synthetic V2 proof
+        env:
+          EXPECTED_SOURCE_HEAD: ${{ steps.source.outputs.head }}
+        run: node test/support/mission_quorum_web_browser_v2.mjs --synthetic-v2-browser --source-head "$EXPECTED_SOURCE_HEAD"

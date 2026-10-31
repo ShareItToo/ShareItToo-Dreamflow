@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "kind": "flutter-analysis-search-overlay-dead-branch",
+  "capturedAt": "2026-08-16T11:46:56Z",
+  "status": "passed-dead-search-branch-cleanup",
+  "baseline": {
+    "totalDiagnostics": 297,
+    "errors": 0,
+    "unusedElement": 101
+  },
+  "result": {
+    "totalDiagnostics": 290,
+    "errors": 0,
+    "diagnosticsRemovedThisBatch": 7,
+    "diagnosticsRemovedFromOriginal611": 321,
+    "unusedElement": 94,
+    "runtimeSourceFilesChanged": 1,
+    "sourceLinesRemoved": 328,
+    "sourceLinesAdded": 0,
+    "ciAnalyzerBaseline": 290
+  },
+  "cleanupScope": {
+    "unusedSearchDeclarationsRemoved": 7,
+    "dependentDecorativeHelpersRemoved": 3,
+    "obsoleteStateCachesRemoved": 2,
+    "activeSearchEntryPreserved": true,
+    "activeAiSearchPreserved": true,
+    "activeCategoryPickerPreserved": true,
+    "activeFloatingSuggestionsPreserved": true,
+    "activePublicSearchSourcePreserved": true,
+    "activeResultsNavigationPreserved": true,
+    "newAnalyzerDiagnosticsIntroduced": 0,
+    "privacyBoundSourceFilesChanged": 0,
+    "visibleBehaviorChanged": false,
+    "collectedDataChanged": false
+  },
+  "removedLegacySymbols": [
+    "_BlurLayer",
+    "_filteredResults",
+    "_InnerFieldShell",
+    "_PickerButton",
+    "_NearbyCard",
+    "_MapResultsOverlay",
+    "_GridPainter",
+    "_PriceMarker",
+    "_SuggestionsPanel",
+    "_coarseForItem"
+  ],
+  "remainingDiagnostics": {
+    "unused_element": 94,
+    "use_build_context_synchronously": 107,
+    "deprecated_member_use": 36,
+    "unused_element_parameter": 37,
+    "unused_field": 16,
+    "avoid_web_libraries_in_flutter": 0
+  },
+  "verification": {
+    "flutterAnalyze": "passed-with-zero-errors-and-290-non-error-diagnostics",
+    "searchOverlayWiringTests": "passed-3",
+    "fixedDefaultWiringTests": "passed-4",
+    "analyzerBaselineWiringTests": "passed-2",
+    "targetedSearchTests": "passed-30",
+    "flutterTests": "passed-268-one-skipped",
+    "technicalRegression": "passed-with-bounded-internal-candidate-rollover",
+    "webBuild": "passed",
+    "androidDebugBuild": "passed",
+    "diffCheck": "passed"
+  },
+  "boundaries": {
+    "newAppCandidateBuilt": false,
+    "existingAppCandidateChanged": false,
+    "productionChanged": false,
+    "storeTrackChanged": false,
+    "reviewSubmitted": false,
+    "testAccountsMutated": false,
+    "realMoneyUsed": false
+  }
+}

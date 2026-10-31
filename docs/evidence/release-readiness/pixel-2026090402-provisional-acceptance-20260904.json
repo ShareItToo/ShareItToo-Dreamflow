@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "executionOnly": true,
+  "date": "2026-09-04",
+  "status": "PROVISIONAL_PIXEL_ONLY_GITHUB_DEFERRED_NOT_RELEASE_CLOSURE",
+  "ownerDirection": "Continue independent work; postpone GitHub until later",
+  "candidate": {
+    "sourceCommit": "bfd3e9e4422a6a6e6bf3c09bd825c6a089909d04",
+    "orchestratingCommitBeforeEvidence": "d2d86dd928cd823dbadfb781e4ccd94341e27e69",
+    "packageId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": 2026090402,
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "apkSha256": "77fa3f881ff5a1f91c9995373ded4e3bd270f9ae6c787446c36e5f07b487211b",
+    "signerCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "mobileSourceUnchanged": true,
+    "immutableArchiveChanged": false
+  },
+  "device": { "model": "Pixel 7 Pro", "androidApi": 37, "onePlusAccessed": false },
+  "update": {
+    "status": "passed",
+    "fromVersionCode": 2026090307,
+    "installedApkHashVerified": true,
+    "signerUnchanged": true,
+    "firstInstallTimePreserved": true,
+    "ceDataInodePreserved": true,
+    "uninstallOrDataReset": false,
+    "privateProofSha256": "89a6b86c792af5f7db39913fe38171fc804a52878c49483475be5422789c4164"
+  },
+  "deviceChecks": [
+    { "name": "existing-authenticated-profile-cold-start", "status": "passed", "freshRegistrationOrIdentityProof": false, "privateProofSha256": "68cd4c1c7404e3acf8551b29ff4daf29010d7882864bedc998a3f158cdfd2a30" },
+    { "name": "five-main-destinations", "status": "passed", "functionalTransactionsProved": false, "privateProofSha256": "4db4187e0a61dab58b64d4db9751615ed40ece909d67f9e0fdf49d549a64f15e" },
+    { "name": "process-termination-and-restart", "status": "passed", "pushDeliveryProved": false, "privateProofSha256": "5dcb51857b2efe3aed2a685ec2505048c76a6960f6fad4ad803a00dd5d01b41c" }
+  ],
+  "backgroundChecks": {
+    "method": "Select in UI; force-stop; launcher restart; revisit; visually review selected border and check",
+    "choices": [
+      { "label": "Dark 2", "persistence": "passed", "privateProofSha256": "452dda3a2dee98324c546dd8d3f8ed182d653460aea641d7dac3cd5cede1183f", "afterRestartPngSha256": "8496bc45e83c8f780523c9b0edd7c3d74a0224604ace28f0d64330ae07c18e7b" },
+      { "label": "Light 1", "persistence": "passed", "privateProofSha256": "460c277a1701e22e0b278a52ece07960db15d292d598f4e6954a032317373db6", "afterRestartPngSha256": "ed1d26f89b27f9a63b3bd723cb1aa491f622972b69a7f425c1960dc73e27ab70" },
+      { "label": "Light 2", "persistence": "passed", "privateProofSha256": "5ff683c2e86aee461bcefe3684a7b1d3bbeeac8a9818d4dac68925ec60ebc5c4", "afterRestartPngSha256": "e0a3ab4d7a784db4ceaf89af13cd5e2d7717f3c1d3f9f3a0fe42e4aeba181872" },
+      { "label": "Dark 1", "persistence": "passed", "privateProofSha256": "cba9437412918e2acdea4341a17f1be08c0ac5a32c5ad373b6c9f9c944fd3056", "afterRestartPngSha256": "edc84fb12f14c78c941b14fc3604c6016f27a17fdfe2ecfefcc834fc5c755efb" }
+    ],
+    "initialExplicitSelectionVisible": false,
+    "finalExplicitChoice": "Dark 1",
+    "originalUnsetPreferenceRestored": false,
+    "systemThemeChanged": false,
+    "contrastAcceptance": "open-visual-defect-not-measured",
+    "talkBackSelectionAcceptance": "not-tested",
+    "technicalDebt": "Replace private orchestration with tested deterministic current-candidate selection and restoration diagnostic before final closure"
+  },
+  "focusedDiagnosticTests": { "archiveAndUpdate": 15, "sessionNavigationRestart": 20, "failed": 0 },
+  "stagingHealth": {
+    "capturedAt": "2026-09-04T08:38:48.765Z",
+    "httpStatus": 200,
+    "status": "ok",
+    "environment": "staging",
+    "deployedCommit": "5d88295fa7fe313b83936783a0582a505b2ba486",
+    "database": "ok",
+    "mail": "ok",
+    "paymentTransport": "memory",
+    "stripeLivemode": false,
+    "notificationsPending": 0,
+    "notificationsDead": 0
+  },
+  "boundaries": {
+    "githubDeferredNotWaived": true,
+    "githubActionThisExecution": false,
+    "externalAiOrStripeRequestInitiated": false,
+    "productionOrStoreChanged": false,
+    "fullPixelAcceptance": false,
+    "fullGoalComplete": false
+  }
+}

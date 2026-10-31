@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "kind": "google-play-privacy-policy-saved",
+  "capturedAt": "2026-08-15T09:37:00+02:00",
+  "status": "saved-awaiting-review-with-other-changes",
+  "publicPage": {
+    "url": "https://shareittoo.com/privacy",
+    "httpStatus": 200,
+    "title": "Datenschutz · ShareItToo",
+    "pageMarker": "privacy",
+    "complianceStatus": "approved",
+    "sha256": "627b395562ea5e4711d697e19d0d65616304367dbc7b04424b1ca15349654ed1"
+  },
+  "googlePlayConsole": {
+    "field": "Privacy policy URL",
+    "savedValueMatchesPublicPage": true,
+    "changeSavedConfirmationObserved": true,
+    "publishingOverviewChangeObserved": true,
+    "sentForReview": false
+  },
+  "boundaries": {
+    "dataSafetyDeclarationChanged": false,
+    "openLegalDecisionsChanged": false,
+    "reviewSubmitted": false,
+    "productionChanged": false,
+    "containsPersonalData": false,
+    "containsSecrets": false,
+    "containsReviewCredentials": false
+  }
+}

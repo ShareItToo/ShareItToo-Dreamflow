@@ -11,6 +11,31 @@ import 'package:lendify/services/review_metrics_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  User seededReviewUser(String id) => User(
+        id: id,
+        displayName: 'Seed $id',
+        email: '$id@example.invalid',
+        preferredLanguage: 'de-DE',
+        isVerified: true,
+        isBanned: false,
+        role: 'user',
+        avgRating: 5,
+        reviewCount: 0,
+        createdAt: DateTime(2025, 1, 1),
+      );
+
+  Map<String, Object> reviewSession(String userId) {
+    final user = seededReviewUser(userId);
+    return <String, Object>{
+      'currentUser': jsonEncode(user.toJson()),
+      'auth_session_v1': jsonEncode(<String, Object>{
+        'userId': user.id,
+        'email': user.email,
+        'createdAt': '2026-08-25T12:00:00.000Z',
+      }),
+    };
+  }
+
   MultiCriteriaReview buildReview({
     required String id,
     required String reviewedUserId,
@@ -211,6 +236,29 @@ void main() {
     );
     SharedPreferences.setMockInitialValues({
       'current_user': jsonEncode(viewer.toJson()),
+      'users': jsonEncode([
+        seededReviewUser('u1').toJson(),
+        viewer.toJson(),
+        seededReviewUser('u7').toJson(),
+      ]),
+      'reviews': jsonEncode(<Object>[
+        Review(
+          id: 'r1',
+          reviewerId: 'u1',
+          reviewedUserId: 'u2',
+          rating: 5,
+          comment: 'Explizites QA-Fixture 1',
+          createdAt: DateTime.utc(2026, 7, 23),
+        ).toJson(),
+        Review(
+          id: 'r2',
+          reviewerId: 'u7',
+          reviewedUserId: 'u2',
+          rating: 5,
+          comment: 'Explizites QA-Fixture 2',
+          createdAt: DateTime.utc(2026, 7, 24),
+        ).toJson(),
+      ]),
     });
 
     final reviews = await DataService.getReviewSummariesForUser('u2');
@@ -250,6 +298,7 @@ void main() {
     SharedPreferences.setMockInitialValues({
       'rental_requests': jsonEncode([request.toJson()]),
       'multi_reviews_v1': jsonEncode([]),
+      ...reviewSession('renter_live'),
     });
 
     final created = await DataService.addMultiReview(
@@ -305,6 +354,7 @@ void main() {
     SharedPreferences.setMockInitialValues({
       'rental_requests': jsonEncode([request.toJson()]),
       'multi_reviews_v1': jsonEncode([]),
+      ...reviewSession('renter_live'),
     });
 
     await expectLater(
@@ -341,6 +391,7 @@ void main() {
     SharedPreferences.setMockInitialValues({
       'rental_requests': jsonEncode([request.toJson()]),
       'multi_reviews_v1': jsonEncode([]),
+      ...reviewSession('renter_review_hold'),
     });
 
     await expectLater(
@@ -391,6 +442,7 @@ void main() {
     SharedPreferences.setMockInitialValues({
       'rental_requests': jsonEncode([request.toJson()]),
       'multi_reviews_v1': jsonEncode([]),
+      ...reviewSession('renter_save'),
     });
 
     await expectLater(

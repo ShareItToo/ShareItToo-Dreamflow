@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "kind": "v51-local-quote-snapshot-persistence",
+  "status": "passed-source-and-regression",
+  "capturedAt": "2026-08-17T08:32:00Z",
+  "sourceCommit": "4c2e13df06ec8a52ab65cf3091739ecdd08a42a7",
+  "checks": {
+    "localCopyPreservesDays": true,
+    "localCopyPreservesDailyAndBase": true,
+    "localCopyPreservesDiscount": true,
+    "localCopyPreservesRentFeeAndTotal": true,
+    "localCopyPreservesOwnerPayout": true,
+    "localCopyPreservesCurrency": true,
+    "remoteCreateStillUsesAuthenticatedServerBooking": true,
+    "qaBranchRemainsIsolated": true
+  },
+  "verification": {
+    "sourceWiringTestsPassed": 3,
+    "targetedFlutterTestsPassed": 51,
+    "privacyTestsPassed": 19,
+    "targetedAnalyzerExistingFindings": 4,
+    "targetedAnalyzerNewFindings": 0,
+    "fullFlutterTestsPassed": 270,
+    "intentionalFlutterTestsSkipped": 1,
+    "fullAnalyzerFindings": 229,
+    "fullAnalyzerErrors": 0,
+    "webDebugBuild": "passed",
+    "androidDebugBuild": "passed",
+    "technicalRegression": "passed"
+  },
+  "privacy": {
+    "dataCollectionChanged": false,
+    "dataStoragePurposeChanged": false,
+    "dataTransportChanged": false,
+    "providerChanged": false,
+    "permissionChanged": false,
+    "sourceInventoryHashUpdated": true
+  },
+  "boundaries": {
+    "backendDeployed": false,
+    "stagingChanged": false,
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "storeSubmissionPerformed": false,
+    "realPaymentPerformed": false,
+    "candidateBuiltOrRelabeled": false,
+    "pushRetainedDefaultOff": true,
+    "crashRetainedDefaultOff": true,
+    "pushEnablesCrash": false,
+    "crashDataTransferred": false
+  },
+  "conclusion": {
+    "localQaPriceSnapshot": "complete-and-immutable-through-persistence-copy",
+    "remotePriceSnapshot": "authenticated-server-booking-remains-authoritative",
+    "officialPlayInternalCandidate": "1.0.0+2026081509",
+    "localSignedCandidate": "1.0.0+2026081510-built-local-not-uploaded"
+  }
+}

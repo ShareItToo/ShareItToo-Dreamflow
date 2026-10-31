@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-logout-lifecycle-diagnostic",
+  "status": "passed-bounded-logout-lifecycle-diagnostic",
+  "capturedAt": "2026-08-10T17:50:31Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081029",
+    "commit": "fc57adbfdf676e6abf9b7df63ec7e657e6a92a89",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "installed": {
+    "packageIdentityVerified": true,
+    "versionName": "1.0.0",
+    "buildNumber": "2026081029",
+    "apkSha256": "99f69b05943bb8d4a18ec63e6a6c9425e81d1cf72b1815265067d5774cbbfc4e"
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "16",
+    "apiLevel": 36,
+    "securityPatch": "2026-04-05",
+    "containsRawDeviceIdentifier": false
+  },
+  "tests": {
+    "uiLogout": {
+      "status": "passed",
+      "result": "logout-confirmed-and-session-cleared"
+    },
+    "coldStartGuestPersistence": {
+      "status": "passed",
+      "result": "guest-profile-restored-after-process-restart"
+    },
+    "protectedChatAfterLogout": {
+      "status": "passed",
+      "result": "authentication-required-private-content-hidden"
+    },
+    "postLogoutProcessAbsentPush": {
+      "status": "passed",
+      "result": "controlled-message-created-no-device-notification"
+    }
+  },
+  "notificationProbe": {
+    "processAbsent": true,
+    "messageAccepted": true,
+    "observedNotificationCountBefore": 0,
+    "observedNotificationCountAfter": 0,
+    "notificationCountUnchanged": true,
+    "observationSeconds": 35
+  },
+  "boundaries": {
+    "syntheticAccountsOnly": true,
+    "directDiagnosticOnly": true,
+    "storeInstallationGateSatisfied": false,
+    "fullDeviceMatrixPassed": false,
+    "wifiOnlyDiagnostic": true,
+    "hotspotPassed": false,
+    "authenticatedDeepLinksPassed": false,
+    "realPushPassed": false,
+    "controlledPushSuppressionPassed": true,
+    "manualTalkBackTraversalPassed": false,
+    "iosTestFlightPassed": false,
+    "paymentEndpointCalled": false,
+    "stripeLivemode": false,
+    "messageSent": true,
+    "lockCodeUsed": false,
+    "accountIdentityRecorded": false,
+    "containsPersonalAccountData": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false
+  }
+}

@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-48h-r15-stage-a-internal-candidate-feature-matrix",
+  "status": "prepared-not-built-not-activated",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "currentRepositoryBuildNumber": "2026082302",
+    "reservedNextBuildNumber": "2026082401",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "exactSourceCommit": "pending-r16-pilot-freeze",
+    "exactAabSha256": "pending-approved-local-build",
+    "sourceCommitBound": false,
+    "aabHashBound": false
+  },
+  "surfaces": [
+    {
+      "id": "v52_single_item_core",
+      "control": "release-tested-core-no-r15-override",
+      "targetState": "on"
+    },
+    {
+      "id": "g2_discover_saved_cart",
+      "control": "release-tested-core-no-r15-override",
+      "targetState": "on-non-reserving"
+    },
+    {
+      "id": "blue_ocean_listing_assistant",
+      "control": "SIT_BLUE_OCEAN_LISTING_ASSISTANT",
+      "targetState": "on-internal-staging-candidate-only"
+    },
+    {
+      "id": "g3_booking_groups",
+      "control": "BookingGroupTechnicalConfig.availableForMode",
+      "targetState": "off-release-mode-lock"
+    },
+    {
+      "id": "g4_planner_technical_ui",
+      "control": "PlannerTechnicalConfig.availableForMode",
+      "targetState": "off-release-mode-lock"
+    },
+    {
+      "id": "g5_supply_enrichment_technical_ui",
+      "control": "SupplyEnrichmentTechnicalConfig.availableForMode",
+      "targetState": "off-release-mode-lock"
+    },
+    {
+      "id": "g5_listing_sets_technical_ui",
+      "control": "ListingSetsTechnicalConfig.availableForMode",
+      "targetState": "off-release-mode-lock"
+    },
+    {
+      "id": "external_listing_ai",
+      "control": "SIT_LISTING_AI_PROVIDER",
+      "targetState": "disabled-manual-fallback"
+    },
+    {
+      "id": "real_payments",
+      "control": "PrivatePilotConfig.realPaymentsEnabled",
+      "targetState": "off"
+    },
+    {
+      "id": "delivery",
+      "control": "PrivatePilotConfig.deliveryEnabled",
+      "targetState": "off"
+    },
+    {
+      "id": "firebase_analytics",
+      "control": "AndroidManifest-FirebaseInitProvider-metadata",
+      "targetState": "off"
+    },
+    {
+      "id": "crashlytics_collection",
+      "control": "AndroidManifest-FirebaseInitProvider-metadata",
+      "targetState": "off"
+    },
+    {
+      "id": "fcm_push",
+      "control": "candidate-service-envelope",
+      "targetState": "off"
+    },
+    {
+      "id": "support_evidence_upload",
+      "control": "candidate-service-envelope",
+      "targetState": "off"
+    },
+    {
+      "id": "public_registration",
+      "control": "pilot-envelope",
+      "targetState": "off"
+    },
+    {
+      "id": "public_store_release",
+      "control": "pilot-envelope",
+      "targetState": "off"
+    }
+  ],
+  "wave0Impact": {
+    "blueOceanCoreBuildable": true,
+    "fullN9G3G4G5EnvelopeBuildableAsSignedRelease": false,
+    "g3G4G5TasksMustRemainNotRun": true,
+    "blocksBuildReadyForReducedBlueOceanCandidate": false,
+    "blocksHumanPilotActivationForFullN9Envelope": true,
+    "requiresSeparateLegalAndInternalReleaseDecision": true
+  },
+  "boundaries": {
+    "aabBuilt": false,
+    "playConsoleChanged": false,
+    "firebaseChanged": false,
+    "externalProviderCalled": false,
+    "billingActivated": false,
+    "realMoneyEnabled": false,
+    "testerContacted": false,
+    "humanPilotActivated": false,
+    "productionChanged": false,
+    "publicReleasePerformed": false
+  }
+}

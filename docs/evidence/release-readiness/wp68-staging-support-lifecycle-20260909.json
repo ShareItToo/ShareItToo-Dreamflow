@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp68-staging-support-lifecycle",
+  "status": "passed-simulation-only-temporary-roles-decommissioned",
+  "capturedAt": "2026-09-09T08:22:14.199Z",
+  "sourceCommit": "f34571371c55d0cf88e9b33f180f69eebc635e7e",
+  "sourceInventory": {
+    "tool/run_wp68_staging_support_lifecycle.mjs": "2394e4ed7b187d2beb613150c6e6c34292ff56b02f63d1d9213ae33d221c2ba1",
+    "test/tool/run_wp68_staging_support_lifecycle.test.mjs": "b5bdd44c20a5d4104969cd8f75560280ccd1827c28d4a085cab451d2214f3de9"
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionCode": "2026090904",
+    "apkSha256": "8c5e02d309f39d808d900c5d8d59a862efbf9d1928a6baacf7fc2d7e2b62b8e4",
+    "stagingRuntimeImage": "shareittoo-api:78c663248aec089b08d19fd0fb40a9a63f19408b",
+    "releaseChannel": "internal",
+    "environment": "staging"
+  },
+  "bootstrap": {
+    "environment": "staging",
+    "simulationOnly": true,
+    "temporaryAccountCount": 3,
+    "temporaryRoleSequence": ["user", "admin", "admin"],
+    "directProductionAccess": false
+  },
+  "support": {
+    "intake": "passed",
+    "operatingMode": "simulation",
+    "independentReview": "approved-by-separate-admin",
+    "progressPublication": "passed",
+    "recipientReadback": "passed",
+    "externalMessageSent": false,
+    "futureDeadlineConfirmed": true,
+    "existingSupportCasesChanged": false
+  },
+  "cleanup": {
+    "temporaryAccountsDecommissioned": 3,
+    "credentialsRevoked": true,
+    "privateVaultDeleted": true,
+    "auditHistoryRetained": true
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "realUserChanged": false,
+    "existingSupportCasesChanged": false,
+    "externalEmailSent": false,
+    "externalMessageSent": false,
+    "paymentChanged": false,
+    "realMoneyUsed": false,
+    "googlePlayChanged": false,
+    "firebaseChanged": false,
+    "prMerged": false,
+    "containsAccountIdentity": false,
+    "containsCaseIdentity": false,
+    "containsCredential": false,
+    "containsToken": false,
+    "containsPrivateFilesystemPath": false
+  }
+}

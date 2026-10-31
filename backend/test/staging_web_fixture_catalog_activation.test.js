@@ -1,0 +1,815 @@
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import { chmod, lstat, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import test from 'node:test';
+
+import { dedicatedFixture } from '../ops/staging_web_fixture_bootstrap.mjs';
+import {
+  assertCatalogActivationState,
+  assertCatalogActivationManifest,
+  catalogActivationStateSql,
+  catalogActivationKey,
+  prepareCatalogActivationManifest,
+  requiredBootstrapLedgerDigest,
+  requiredDatabasePreparationEvidenceSha256,
+  requiredLoginProofEvidenceSha256,
+  requiredLoginProofLedgerDigest,
+  requiredLoginProofOpsCommit,
+  requiredLoginProofRuntimeCommit,
+  requiredLoginProofImageDigest,
+  requiredLoginProofMarkerSha256,
+  requiredLoginProofHistoryDigest,
+  requiredLoginProofIdentityDigest,
+  requiredLoginProofCatalogDigest,
+  requiredLoginProofEffectDigest,
+  runCatalogActivation,
+  sanitizeCatalogActivationError,
+  validateCatalogActivationBootstrap,
+  validateLoginProofEvidence,
+} from '../ops/staging_web_fixture_catalog_activation.mjs';
+import { fixtureNotice } from '../ops/staging_web_fixture_preflight.mjs';
+import { readStablePrivateFile } from '../ops/stable_private_file.mjs';
+import { corsContainerFingerprint } from '../ops/staging_web_cors_transition.mjs';
+import { assertCatalogActivationHost,
+  assertCatalogActivationPreparePaths } from '../ops/activate_staging_web_fixture_catalog.mjs';
+
+const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
+const canonical = (value) => Array.isArray(value) ? value.map(canonical)
+  : value && typeof value === 'object'
+    ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])])) : value;
+const digest = (value) => hash(JSON.stringify(canonical(value)));
+const opsCommit = 'f'.repeat(40);
+const bootstrapCommit = 'e'.repeat(40);
+const runtimeCommit = requiredLoginProofRuntimeCommit;
+const imageDigest = requiredLoginProofImageDigest;
+const migrationLedger = '796f0e19572f4883435d5825baae9004b1f5ec2e706a4114d7731cf2a21cf196';
+const primaryNetworkId = '7'.repeat(64);
+const providerNetworkId = '8'.repeat(64);
+const activationRunId = 'web-fixture-catalog-activation-run';
+const seedScopeDigest = '4'.repeat(64);
+const seedSnapshotDigest = '5'.repeat(64);
+const forbiddenRunHashInterpolation = `:${String.fromCharCode(39)}run_hash${String.fromCharCode(39)}`;
+
+function environment() {
+  return {
+    NODE_ENV: 'production', DEPLOYMENT_ENVIRONMENT: 'test', APP_COMMIT: runtimeCommit,
+    FIREBASE_AUTH_ENABLED: 'true', FIREBASE_PHONE_VERIFICATION_ENABLED: 'false',
+    DATABASE_URL: 'postgres://sit-green-postgres-20260918011528-wp254/shareittoo_green',
+    SIT_STAGING_ACCESS_GATE_ENABLED: 'true',
+    SIT_STAGING_ALLOWED_USER_IDS: `${dedicatedFixture.owner},${dedicatedFixture.renter},existing-pilot-user`,
+    SIT_STAGING_PUBLIC_LISTING_IDS: dedicatedFixture.listing,
+    SIT_STAGING_PUBLIC_UPLOAD_NAMES: dedicatedFixture.upload,
+    SIT_STAGING_SYNTHETIC_CATALOG_ENABLED: 'false',
+    SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: 'false', SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST: '',
+    PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false', MAIL_TRANSPORT: 'memory',
+    PUSH_TRANSPORT: 'memory', IDENTITY_VERIFICATION_TRANSPORT: 'memory',
+    SIT_LISTING_AI_PROVIDER: 'on_device', SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '0',
+    SIT_LISTING_AI_BUDGET_CENTS: '0', TECHNICAL_SANDBOX_ENABLED: '0',
+    TECHNICAL_SANDBOX_KILL_SWITCH: '1', TECHNICAL_SANDBOX_ACCOUNT_ID: '',
+    TECHNICAL_SANDBOX_USER_IDS: '', TECHNICAL_SANDBOX_AUTHORIZATION_ID: '',
+    TECHNICAL_SANDBOX_AUTHORIZATION_ISSUED_AT: '', TECHNICAL_SANDBOX_AUTHORIZATION_EXPIRES_AT: '',
+    TECHNICAL_SANDBOX_SECRET_KEY_FILE: '', TECHNICAL_SANDBOX_WEBHOOK_SECRET_FILE: '',
+    PRIVATE_PILOT_V4_ENABLED: 'true', PRIVATE_PILOT_ALLOWED_REGIONS: 'heilbronn',
+  };
+}
+const envText = (values) => `${Object.entries(values).map(([key, value]) => `${key}=${value}`).join('\n')}\n`;
+
+function activationState() {
+  return { users: 2, listing: 1, upload: 1, seedAudits: 1, activationAudits: 1,
+    activationRunDigest: hash(activationRunId),
+    activeSessions: 0, activeRefresh: 0, mfaFactors: 0,
+    retainedSessions: 6, retainedRefresh: 6, loginAudits: 6,
+    markerSessions: 2, markerPrincipals: 2, markerRefresh: 2, markerLoginAudits: 2,
+    markerRefreshPrincipals: 2, markerAuditPrincipals: 2,
+    historyDigest: requiredLoginProofHistoryDigest,
+    bookings: 0, requests: 0, identities: 0, pushDevices: 0, paymentCommands: 0,
+    identityProviderSessions: 0, technicalProviderRuns: 0, notifications: 0, notificationOutbox: 0,
+    identityDigest: requiredLoginProofIdentityDigest, catalogDigest: requiredLoginProofCatalogDigest };
+}
+
+function publicState(visible) {
+  const expectedPhoto = hash(`https://staging.example.invalid/api/v1/uploads/${dedicatedFixture.upload}`);
+  return { status: 200, count: visible ? 1 : 0, pageCount: visible ? 1 : 0,
+    idDigest: visible ? hash(dedicatedFixture.listing) : null,
+    titleDigest: visible ? hash('Synthetische Katalogfixture') : null,
+    noticeDigest: visible ? hash(fixtureNotice) : null,
+    photoCount: visible ? 1 : 0, photoDigest: visible ? expectedPhoto : null,
+    catalogClass: visible ? 'synthetic_noncontractual_catalog_only' : null,
+    realOffer: visible ? false : null, ownerDeclaration: visible ? false : null,
+    bookingAllowed: visible ? false : null, paymentAllowed: visible ? false : null,
+    expectedVisible: visible, expectedId: hash(dedicatedFixture.listing),
+    expectedTitle: hash('Synthetische Katalogfixture'), expectedNotice: hash(fixtureNotice), expectedPhoto };
+}
+
+function loginEvidence(bootstrapSha, runSha, overrides = {}) {
+  return { kind: 'sit-green-web-fixture-login-proof', schemaVersion: 2,
+    createdAt: '2026-10-01T06:20:59.472Z', credentialsSha256: '6'.repeat(64), roleDigest: '7'.repeat(64),
+    markerSha256: requiredLoginProofMarkerSha256, quiescenceReadbacks: 3,
+    authHistory: { before: { sessions: 4, refreshTokens: 4, loginAudits: 4 },
+      after: { sessions: 6, refreshTokens: 6, loginAudits: 6 },
+      beforeDigest: requiredLoginProofHistoryDigest, afterDigest: requiredLoginProofHistoryDigest },
+    status: 'fixture-login-proof-verified-sessions-revoked', opsCommit: requiredLoginProofOpsCommit,
+    runtimeCommit, imageDigest, bootstrapManifestSha256: bootstrapSha, bootstrapRunIdSha256: runSha,
+    rolesVerified: 2, loginsVerified: 2, meVerified: 2, logoutsVerified: 2,
+    accessTokensRejected: 2, credentialsAttested: 2, activeSessions: 0, activeRefreshTokens: 0,
+    retainedSessionRecords: 2, loginAudits: 2, schemaCount: 98, ledgerDigest: requiredLoginProofLedgerDigest,
+    identityDigest: activationState().identityDigest, identityUnchanged: true,
+    catalogStateDigest: activationState().catalogDigest, visibilityUnchanged: true,
+    effectDigest: requiredLoginProofEffectDigest, apiReadback: true, paymentMemory: true, stripeLivemode: false,
+    registrationClosed: true, catalogEnabled: false, externalProvidersEnabled: false,
+    cleanupVerified: true, runtimeActivated: false, ...overrides };
+}
+
+async function fixture() {
+  const root = await mkdtemp(join(tmpdir(), 'sit-catalog-activation-')); await chmod(root, 0o700);
+  const envFile = join(root, 'green.env'); const backupFile = join(root, 'old.env');
+  const evidenceFile = join(root, 'evidence.json'); const outputFile = join(root, 'runtime.json');
+  const firebase = join(root, 'firebase.json'); const mfa = join(root, 'mfa.key'); const uploadsPath = join(root, 'uploads');
+  await mkdir(uploadsPath, { mode: 0o700 }); await writeFile(firebase, '{}', { mode: 0o600 });
+  await writeFile(mfa, 'm'.repeat(32), { mode: 0o600 });
+  const values = environment();
+  const envFileValues = Object.fromEntries(Object.entries(values)
+    .filter(([key]) => !['APP_COMMIT', 'APP_VERSION', 'APP_BUILD_TIME'].includes(key)));
+  const originalEnv = envText(envFileValues); await writeFile(envFile, originalEnv, { mode: 0o600 });
+  const runId = 'web-fixture-catalog-activation-test';
+  const bootstrap = { kind: 'sit-dedicated-web-fixture-bootstrap', schemaVersion: 1, operation: 'seed',
+    sourceCommit: bootstrapCommit, schemaCount: 98, ledgerDigest: requiredBootstrapLedgerDigest,
+    passwordDigests: ['4'.repeat(64), '5'.repeat(64)],
+    preflight: { runId, listingId: dedicatedFixture.listing, uploadName: dedicatedFixture.upload,
+      roles: [{ role: 'owner', userId: dedicatedFixture.owner }, { role: 'renter', userId: dedicatedFixture.renter }] } };
+  const bootstrapBytes = Buffer.from(`${JSON.stringify(bootstrap)}\n`); const bootstrapSha = hash(bootstrapBytes);
+  const image = `registry.example/shareittoo-api:${runtimeCommit}`;
+  const mounts = [
+    { type: 'bind', name: 'mfa', source: mfa, destination: '/run/secrets/mfa-encryption-key', readOnly: true },
+    { type: 'bind', name: 'firebase', source: firebase, destination: '/run/secrets/firebase-service-account.json', readOnly: true },
+    { type: 'volume', name: 'sit-green-uploads-20260918011528-wp254', source: uploadsPath, destination: '/data/uploads', readOnly: false },
+  ];
+  const api = { Id: 'a'.repeat(64), Image: `sha256:${'9'.repeat(64)}`, Name: '/shareittoo-staging-api', State: { Running: true },
+    Config: { Image: image, Env: Object.entries(values).map(([key, value]) => `${key}=${value}`),
+      Cmd: ['node', 'src/server.js'], Entrypoint: null, WorkingDir: '/app', User: 'shareittoo',
+      Hostname: 'a'.repeat(12), Tty: false, OpenStdin: false, Labels: { 'com.shareittoo.sit.green': 'true' } },
+    HostConfig: { GroupAdd: ['65532'], RestartPolicy: { Name: 'unless-stopped', MaximumRetryCount: 0 },
+      PortBindings: {}, NetworkMode: 'sit-green-network-20260918011528-wp254', SecurityOpt: ['no-new-privileges'],
+      NoNewPrivileges: true, Memory: 64, CapAdd: [], CapDrop: [], Devices: [], DeviceRequests: [], Ulimits: [],
+      Tmpfs: {}, MaskedPaths: [], ReadonlyPaths: [], Dns: [], DnsSearch: [], ExtraHosts: [], Binds: [], Links: [] },
+    Mounts: mounts.map((mount) => ({ Type: mount.type, Name: mount.type === 'volume' ? mount.name : null,
+      Source: mount.source, Destination: mount.destination, RW: !mount.readOnly })),
+    NetworkSettings: { Ports: {}, Networks: {
+      'sit-green-network-20260918011528-wp254': { NetworkID: primaryNetworkId },
+      'sit-staging-provider-egress': { NetworkID: providerNetworkId },
+    } } };
+  const state = activationState(); const before = publicState(false);
+  const fixtureBinding = { opsCommit, loginProofOpsCommit: requiredLoginProofOpsCommit,
+    bootstrapManifestSha256: bootstrapSha, bootstrapRunIdSha256: hash(runId),
+    seedScopeDigest, seedSnapshotDigest, activationRunDigest: state.activationRunDigest,
+    databasePreparationEvidenceSha256: requiredDatabasePreparationEvidenceSha256,
+    loginProofEvidenceSha256: requiredLoginProofEvidenceSha256,
+    loginIdentityDigest: state.identityDigest, loginCatalogDigest: state.catalogDigest,
+    loginHistoryDigest: requiredLoginProofHistoryDigest, loginMarkerSha256: requiredLoginProofMarkerSha256,
+    loginRetainedSessions: 6, loginRetainedRefresh: 6, loginTotalAudits: 6,
+    databaseStateDigest: digest(state), publicBeforeDigest: digest(before), envSha256: hash(originalEnv),
+    environmentDigest: digest(values), apiFingerprint: corsContainerFingerprint(api), backupFile, evidenceFile };
+  const manifest = { kind: 'sit-staging-web-fixture-catalog-activation-runtime-manifest', schemaVersion: 1,
+    apiContainerId: api.Id, environment: 'staging', composeProject: 'sit-green', apiContainer: 'shareittoo-staging-api',
+    databaseContainer: 'sit-green-postgres-20260918011528-wp254', databaseVolume: 'sit-green-volume-20260918011528-wp254',
+    databaseName: 'shareittoo_green', databaseUser: 'shareittoo_green', network: 'sit-green-network-20260918011528-wp254',
+    providerNetwork: 'sit-staging-provider-egress', uploadsVolume: 'sit-green-uploads-20260918011528-wp254', image,
+    runtimeRevision: runtimeCommit, imageDigest, envFile, envUid: process.getuid(), envGid: process.getgid(), mounts,
+    safetyEnv: { DEPLOYMENT_ENVIRONMENT: 'test', FIREBASE_AUTH_ENABLED: 'true', FIREBASE_PHONE_VERIFICATION_ENABLED: 'false',
+      PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false', SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '0' },
+    label: { key: 'com.shareittoo.sit.green', value: 'true' }, fixtureBinding };
+  const dbBytes = Buffer.from('{"status":"database-prepared"}\n');
+  const loginBytes = Buffer.from(`${JSON.stringify(loginEvidence(bootstrapSha, hash(runId)))}\n`);
+  return { root, envFile, backupFile, evidenceFile, outputFile, values, envFileValues, originalEnv, runId, bootstrapBytes,
+    bootstrapSha, api, manifest, state, before, dbBytes, loginBytes };
+}
+
+function startupPayload() {
+  return JSON.stringify({ ok: true, attempts: { live: 1, ready: 1 },
+    last: { live: { status: 200 }, ready: { status: 200 } },
+    version: { status: 200, commit: runtimeCommit, environment: 'test' },
+    flags: { DEPLOYMENT_ENVIRONMENT: 'test', FIREBASE_AUTH_ENABLED: 'true',
+      FIREBASE_PHONE_VERIFICATION_ENABLED: 'false', PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false',
+      SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '0' } });
+}
+
+function fakeExecutor(fx, { failPhase, lateEvidenceCollision = false, publicPhotoFault = null,
+  sealReadbackFault = null, publicReadbackFaults = {} } = {}) {
+  const containers = new Map([[fx.manifest.apiContainer, structuredClone(fx.api)]]); const calls = [];
+  let sealReadbacks = 0;
+  const publicReadbacks = new Map(); const evidenceDuringFinalPublic = [];
+  const fixed = new Map([
+    [fx.manifest.databaseContainer, { Name: `/${fx.manifest.databaseContainer}`, State: { Running: true } }],
+    [fx.manifest.databaseVolume, { Name: fx.manifest.databaseVolume }],
+    [fx.manifest.network, { Name: fx.manifest.network, Id: primaryNetworkId, Internal: true }],
+    [fx.manifest.providerNetwork, { Name: fx.manifest.providerNetwork, Id: providerNetworkId }],
+    [fx.manifest.uploadsVolume, { Name: fx.manifest.uploadsVolume }],
+  ]);
+  const imageRecord = { Id: fx.api.Image, RepoTags: [fx.manifest.image], Config: { User: 'shareittoo',
+    Labels: { 'org.opencontainers.image.revision': runtimeCommit } }, RepoDigests: [`${fx.manifest.image}@${imageDigest}`] };
+  const byRef = (value) => containers.get(value) ?? [...containers.values()].find((r) => r.Id === value) ?? fixed.get(value);
+  const mutateNetwork = (record) => {
+    for (const network of Object.values(record.NetworkSettings?.Networks ?? {})) {
+      network.Aliases = ['changed']; network.IPAddress = '172.31.8.9'; network.EndpointID = '6'.repeat(64);
+    }
+  };
+  const command = async (program, args, options = {}) => {
+    assert.equal(program, 'docker'); calls.push({ phase: options.phase, args: [...args] });
+    if (options.phase === failPhase) throw Object.assign(Error('injected'), { code: 'catalog_activation_injected' });
+    if (args[0] === 'inspect') {
+      const record = byRef(args.at(-1));
+      if (!record && options.allowFailure) return { stdout: '', code: 1 };
+      if (!record) throw Error('missing_inspect');
+      if (lateEvidenceCollision && options.phase === 'fixture_env_rollback_seal_readback') {
+        await writeFile(fx.evidenceFile, 'foreign-evidence\n', { mode: 0o600 });
+      }
+      let observed = record;
+      if (options.phase === 'fixture_env_rollback_seal_readback') {
+        sealReadbacks += 1;
+        if (sealReadbackFault === 'permanent' || sealReadbackFault === 'transient' && sealReadbacks === 1) {
+          observed = structuredClone(record);
+          delete observed.NetworkSettings.Networks[fx.manifest.providerNetwork];
+        }
+      }
+      return { stdout: JSON.stringify(observed), code: 0 };
+    }
+    if (args[0] === 'image') return { stdout: JSON.stringify(imageRecord), code: 0 };
+    if (args[0] === 'ps') {
+      const name = /^name=\^\/(.+)\$$/u.exec(args[args.indexOf('--filter') + 1])?.[1];
+      return { stdout: name && containers.has(name) ? `${name}\n` : '', code: 0 };
+    }
+    if (args[0] === 'exec') {
+      if (args[1] === fx.manifest.databaseContainer) {
+        const sql = String(args.at(-1));
+        assert.ok(!sql.includes(forbiddenRunHashInterpolation));
+        assert.ok(!args.some((arg) => String(arg).startsWith('run_hash=')));
+        if (sql.includes('FROM seeded CROSS JOIN later CROSS JOIN fixture')) {
+          return { stdout: `1|${seedScopeDigest}|${seedSnapshotDigest}|${hash(fx.runId)}|0|2|1|1\n`, code: 0 };
+        }
+        if (sql.includes("count(*) || '|'")) return { stdout: `98|098_booking_checkout_declaration_constraints.up.sql\n`, code: 0 };
+        if (sql.includes('string_agg')) return { stdout: `${migrationLedger}\n`, code: 0 };
+        return { stdout: `${JSON.stringify(fx.state)}\n`, code: 0 };
+      }
+      if (String(args.at(-1)).includes('runtimeNames')) return { stdout: startupPayload(), code: 0 };
+      if (String(args.at(-1)).includes("config.syntheticCatalog.enabled")) {
+        const enabled = !String(options.phase).includes('rollback');
+        return { stdout: JSON.stringify({ enabled, listingCount: 1, uploadCount: 1,
+          registration: false, payment: 'memory', stripe: 'false', expected: enabled }), code: 0 };
+      }
+      if (String(args.at(-1)).includes('expectedVisible')) {
+        const visible = !String(options.phase).includes('before') && !String(options.phase).includes('pre_mutation')
+          && !String(options.phase).includes('rollback');
+        const value = publicState(visible);
+        const attempt = (publicReadbacks.get(options.phase) ?? 0) + 1;
+        publicReadbacks.set(options.phase, attempt);
+        if (options.phase === 'catalog_activation_final_public_readback') {
+          evidenceDuringFinalPublic.push(await lstat(fx.evidenceFile).then(() => true,
+            (error) => error?.code === 'ENOENT' ? false : Promise.reject(error)));
+        }
+        const fault = publicReadbackFaults[options.phase];
+        const faultApplies = visible && fault && attempt <= fault.attempts;
+        const kind = faultApplies ? fault.kind : publicPhotoFault;
+        if (visible && kind === 'status') value.status = 503;
+        if (visible && kind === 'count') Object.assign(value, { count: 0, pageCount: 0 });
+        if (visible && kind === 'missing') Object.assign(value, { photoCount: 0, photoDigest: null });
+        if (visible && kind === 'wrong-digest') value.photoDigest = hash('wrong-canonical-public-photo');
+        if (visible && kind === 'truth') value.bookingAllowed = true;
+        return { stdout: JSON.stringify(value), code: 0 };
+      }
+      throw Error(`unexpected_exec:${options.phase}`);
+    }
+    if (args[0] === 'stop') { const r = byRef(args[1]); r.State.Running = false; mutateNetwork(r); return { stdout: '', code: 0 }; }
+    if (args[0] === 'rename') { const r = byRef(args[1]); containers.delete(r.Name.slice(1)); r.Name = `/${args[2]}`;
+      containers.set(args[2], r); mutateNetwork(r); return { stdout: '', code: 0 }; }
+    if (args[0] === 'create') {
+      const option = (name) => args[args.indexOf(name) + 1]; const name = option('--name');
+      const networkIndex = args.indexOf('--network'); const record = structuredClone(fx.api);
+      record.Id = 'b'.repeat(64); record.Name = `/${name}`; record.State.Running = false;
+      record.Config.Image = args[networkIndex + 2]; record.Config.Hostname = 'b'.repeat(12);
+      record.Config.Env = [`APP_COMMIT=${runtimeCommit}`,
+        ...(await readFile(option('--env-file'), 'utf8')).split(/\r?\n/u).filter(Boolean)].reverse();
+      record.HostConfig.NetworkMode = args[networkIndex + 1];
+      record.NetworkSettings = { Ports: {}, Networks: { [fx.manifest.network]: { NetworkID: primaryNetworkId } } };
+      containers.set(name, record); return { stdout: `${record.Id}\n`, code: 0 };
+    }
+    if (args[0] === 'network') { byRef(args[3]).NetworkSettings.Networks[fx.manifest.providerNetwork] = { NetworkID: providerNetworkId }; return { stdout: '', code: 0 }; }
+    if (args[0] === 'start') { const r = byRef(args[1]); r.State.Running = true; mutateNetwork(r); return { stdout: '', code: 0 }; }
+    if (args[0] === 'rm') { const r = byRef(args.at(-1)); containers.delete(r.Name.slice(1)); return { stdout: '', code: 0 }; }
+    throw Error(`unexpected:${args.join(' ')}`);
+  };
+  return { command, calls, containers, publicReadbacks, evidenceDuringFinalPublic };
+}
+
+const evidenceHash = (bytes) => bytes.toString().includes('database-prepared')
+  ? requiredDatabasePreparationEvidenceSha256 : requiredLoginProofEvidenceSha256;
+
+const activationMutationPhases = ['fixture_env_stop_current_api', 'fixture_env_seal_current_api',
+  'fixture_env_create_replacement_api', 'fixture_env_attach_provider_network',
+  'fixture_env_start_replacement_api'];
+
+function assertSingleActivationMutations(fake) {
+  for (const phase of activationMutationPhases) {
+    assert.equal(fake.calls.filter((call) => call.phase === phase).length, 1, phase);
+  }
+}
+
+test('schema-2 login proof binds exact verified Ops/runtime/image and canonical-row ledger', async () => {
+  const fx = await fixture();
+  try {
+    const evidence = JSON.parse(fx.loginBytes);
+    for (const drift of [{ runtimeCommit: 'e'.repeat(40) }, { imageDigest: `sha256:${'e'.repeat(64)}` }]) {
+      assert.throws(() => validateLoginProofEvidence({ ...evidence, ...drift }, {
+        runtimeRevision: runtimeCommit, imageDigest,
+        bootstrapManifestSha256: fx.bootstrapSha, bootstrapRunIdSha256: hash(fx.runId),
+      }), /catalog_activation_login_evidence_invalid/u);
+    }
+    assert.doesNotThrow(() => validateLoginProofEvidence(evidence, { runtimeRevision: runtimeCommit, imageDigest,
+      bootstrapManifestSha256: fx.bootstrapSha, bootstrapRunIdSha256: hash(fx.runId) }));
+    assert.throws(() => validateLoginProofEvidence({ ...evidence, schemaVersion: 1 }, {
+      runtimeRevision: runtimeCommit, imageDigest,
+      bootstrapManifestSha256: fx.bootstrapSha, bootstrapRunIdSha256: hash(fx.runId),
+    }), /catalog_activation_login_evidence_invalid/u,
+    'consumer must never reuse historical schema-1 evidence');
+    assert.throws(() => validateLoginProofEvidence({ ...evidence, opsCommit }, { runtimeRevision: runtimeCommit, imageDigest,
+      bootstrapManifestSha256: fx.bootstrapSha, bootstrapRunIdSha256: hash(fx.runId) }),
+    /catalog_activation_login_evidence_invalid/u);
+    for (const ledgerDigest of [migrationLedger, '6'.repeat(64)]) {
+      assert.throws(() => validateLoginProofEvidence({ ...evidence, ledgerDigest }, {
+        runtimeRevision: runtimeCommit, imageDigest,
+        bootstrapManifestSha256: fx.bootstrapSha, bootstrapRunIdSha256: hash(fx.runId),
+      }), /catalog_activation_login_evidence_invalid/u);
+    }
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('bootstrap binds the real canonical-row ledger, not the current DB text ledger', async () => {
+  const fx = await fixture();
+  try {
+    assert.doesNotThrow(() => validateCatalogActivationBootstrap(fx.bootstrapBytes, fx.bootstrapSha));
+    for (const ledgerDigest of [migrationLedger, '6'.repeat(64)]) {
+      const manifest = { ...JSON.parse(fx.bootstrapBytes), ledgerDigest };
+      const bytes = Buffer.from(`${JSON.stringify(manifest)}\n`);
+      assert.throws(() => validateCatalogActivationBootstrap(bytes, hash(bytes)),
+        /catalog_activation_bootstrap_invalid/u);
+    }
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('historical schema-1 bootstrap accepts exact SHA contract and rejects mixed password formats', async () => {
+  const fx = await fixture();
+  try {
+    assert.doesNotThrow(() => validateCatalogActivationBootstrap(fx.bootstrapBytes, fx.bootstrapSha));
+    const manifest = JSON.parse(fx.bootstrapBytes);
+    manifest.passwordDigests[1] = `scrypt$${'6'.repeat(32)}$${'7'.repeat(128)}`;
+    const mixed = Buffer.from(`${JSON.stringify(manifest)}\n`);
+    assert.throws(() => validateCatalogActivationBootstrap(mixed, hash(mixed)),
+      /catalog_activation_bootstrap_invalid/u);
+    manifest.schemaVersion = 2;
+    manifest.passwordDigests[1] = '5'.repeat(64);
+    const successor = Buffer.from(`${JSON.stringify(manifest)}\n`);
+    assert.throws(() => validateCatalogActivationBootstrap(successor, hash(successor)),
+      /catalog_activation_bootstrap_invalid/u);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('schema-2 proof rejects every missing field, unknown fields and cumulative/history drift', async () => {
+  const fx = await fixture();
+  try {
+    const evidence = JSON.parse(fx.loginBytes);
+    const validate = (value) => validateLoginProofEvidence(value, { runtimeRevision: runtimeCommit, imageDigest,
+      bootstrapManifestSha256: fx.bootstrapSha, bootstrapRunIdSha256: hash(fx.runId) });
+    for (const key of Object.keys(evidence)) {
+      const missing = { ...evidence }; delete missing[key];
+      assert.throws(() => validate(missing), /catalog_activation_login_evidence_invalid/u, key);
+    }
+    for (const drift of [{ unknown: true }, { markerSha256: '0'.repeat(64) },
+      { quiescenceReadbacks: 0 }, { createdAt: 'invalid' }, { credentialsSha256: '' }, { roleDigest: '' },
+      { retainedSessionRecords: 4 }, { loginAudits: 4 }, { activeSessions: 1 }, { activeRefreshTokens: 1 },
+      { identityDigest: '0'.repeat(64) }, { catalogStateDigest: '0'.repeat(64) },
+      { effectDigest: '0'.repeat(64) }, { bootstrapManifestSha256: '0'.repeat(64) },
+      { bootstrapRunIdSha256: '0'.repeat(64) }]) {
+      assert.throws(() => validate({ ...evidence, ...drift }), /catalog_activation_login_evidence_invalid/u);
+    }
+    for (const side of ['before', 'after']) {
+      for (const key of ['sessions', 'refreshTokens', 'loginAudits']) {
+        for (const value of [0, side === 'before' ? 6 : 4, String(side === 'before' ? 4 : 6), null]) {
+          const changed = structuredClone(evidence); changed.authHistory[side][key] = value;
+          assert.throws(() => validate(changed), /catalog_activation_login_evidence_invalid/u);
+        }
+        const missing = structuredClone(evidence); delete missing.authHistory[side][key];
+        assert.throws(() => validate(missing), /catalog_activation_login_evidence_invalid/u);
+      }
+      const extra = structuredClone(evidence); extra.authHistory[side].extra = true;
+      assert.throws(() => validate(extra), /catalog_activation_login_evidence_invalid/u);
+    }
+    for (const key of ['beforeDigest', 'afterDigest']) {
+      const changed = structuredClone(evidence); changed.authHistory[key] = '0'.repeat(64);
+      assert.throws(() => validate(changed), /catalog_activation_login_evidence_invalid/u);
+    }
+    const extra = structuredClone(evidence); extra.authHistory.extra = true;
+    assert.throws(() => validate(extra), /catalog_activation_login_evidence_invalid/u);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('consumer pins actual evidence/runtime/digests and forbids rebinding identity or retained history before commands', async () => {
+  assert.equal(requiredLoginProofEvidenceSha256, '0d320a50b458e5cf296ee5a1662cba7401db4a6c337e8591cc78ae914bb7eee5');
+  assert.equal(requiredLoginProofOpsCommit, '84408c04c0387a4412b8542ca1381d1be110ed1b');
+  assert.equal(requiredLoginProofRuntimeCommit, 'd3c2f5d7d7516d3bfaac4b61689c2c433924cc6e');
+  assert.equal(requiredLoginProofImageDigest, 'sha256:31b8b015eb0635b9fbb7d6c5e54ef43fe089d5b953dba8fa446aae2122a5888a');
+  assert.equal(requiredLoginProofMarkerSha256, 'bb5fe651bd42e33488a5834efedd4935f4db3556367807bab231ce001df025f7');
+  assert.equal(requiredLoginProofHistoryDigest, '79f84f73ab9a2353b9fa0250031b8c1cb9b8acef3fe47b6f30db588d95044816');
+  assert.equal(requiredLoginProofIdentityDigest, '6d11fe55adf0e90bce7bb0db45c99951c20f5c8aa01c5918fccbf6896964331e');
+  assert.equal(requiredLoginProofCatalogDigest, '806c52aff0f5d10400adbf7ba09296376d666b92a79c8385a6f9cb1bbad66797');
+  assert.equal(requiredLoginProofEffectDigest, 'd74fdca3fa2914d36bd24ac24bef69c38d05622f780a3418da6208b93c12aa51');
+  assert.equal(requiredLoginProofLedgerDigest, '4fff35fbe15c64a38f0ca423222b32298b5595da8dab81e306a7ad5a48e80f08');
+  const fx = await fixture();
+  try {
+    for (const drift of [{ loginProofEvidenceSha256: '0'.repeat(64) },
+      { loginProofOpsCommit: opsCommit }, { loginHistoryDigest: '0'.repeat(64) },
+      { loginMarkerSha256: '0'.repeat(64) }, { loginRetainedSessions: 4 },
+      { loginRetainedRefresh: 4 }, { loginTotalAudits: 4 }]) {
+      assert.throws(() => assertCatalogActivationManifest({ ...fx.manifest,
+        fixtureBinding: { ...fx.manifest.fixtureBinding, ...drift } }), /catalog_activation_binding_invalid/u);
+    }
+    for (const drift of [{ runtimeRevision: '0'.repeat(40) }, { imageDigest: `sha256:${'0'.repeat(64)}` }]) {
+      assert.throws(() => assertCatalogActivationManifest({ ...fx.manifest, ...drift }), /catalog_activation_manifest_invalid/u);
+    }
+    for (const key of ['loginIdentityDigest', 'loginCatalogDigest']) {
+      assert.throws(() => assertCatalogActivationManifest({ ...fx.manifest,
+        fixtureBinding: { ...fx.manifest.fixtureBinding, [key]: '0'.repeat(64) } }),
+      /catalog_activation_binding_invalid/u);
+    }
+    const fake = fakeExecutor(fx);
+    await assert.rejects(runCatalogActivation({ manifest: fx.manifest,
+      bootstrapManifestBytes: fx.bootstrapBytes, databaseEvidenceBytes: fx.dbBytes,
+      loginEvidenceBytes: fx.loginBytes, sourceCommit: opsCommit, evidenceFile: fx.evidenceFile,
+      command: fake.command, commandEnv: {}, testOnlyEvidenceHash: (bytes) => bytes === fx.dbBytes
+        ? requiredDatabasePreparationEvidenceSha256 : hash(bytes) }), /catalog_activation_login_evidence_digest_invalid/u);
+    assert.equal(fake.calls.length, 0);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('prepare is read-only and binds exact prerequisite evidence plus one-key transition', async () => {
+  const fx = await fixture();
+  try {
+    const fake = fakeExecutor(fx);
+    const result = await prepareCatalogActivationManifest({ sourceCommit: opsCommit,
+      bootstrapManifestBytes: fx.bootstrapBytes, bootstrapManifestSha256: fx.bootstrapSha,
+      databaseEvidenceBytes: fx.dbBytes, databaseEvidenceSha256: requiredDatabasePreparationEvidenceSha256,
+      loginEvidenceBytes: fx.loginBytes, loginEvidenceSha256: requiredLoginProofEvidenceSha256,
+      backupFile: fx.backupFile, evidenceFile: fx.evidenceFile, outputFile: fx.outputFile,
+      envFile: fx.envFile, command: fake.command, commandEnv: {}, testOnlyEvidenceHash: evidenceHash });
+    assert.equal(result.status, 'catalog-activation-manifest-prepared-read-only');
+    assert.deepEqual(result.changedEnvironmentKeys, [catalogActivationKey]);
+    const prepared = JSON.parse(await readFile(fx.outputFile)); assertCatalogActivationManifest(prepared);
+    assert.equal(prepared.fixtureBinding.loginProofOpsCommit, requiredLoginProofOpsCommit);
+    assert.equal(prepared.fixtureBinding.seedScopeDigest, seedScopeDigest);
+    assert.equal(prepared.fixtureBinding.seedSnapshotDigest, seedSnapshotDigest);
+    assert.equal(prepared.fixtureBinding.activationRunDigest, hash(activationRunId));
+    assert.equal((await lstat(fx.outputFile)).mode & 0o777, 0o600);
+    assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+    await assert.rejects(readFile(fx.backupFile), { code: 'ENOENT' });
+    await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('prepare rejects aliased inputs/outputs before Docker and production entry never forwards the hash seam', async () => {
+  const fx = await fixture();
+  try {
+    const fake = fakeExecutor(fx);
+    await assert.rejects(prepareCatalogActivationManifest({ sourceCommit: opsCommit,
+      bootstrapManifestBytes: fx.bootstrapBytes, bootstrapManifestSha256: fx.bootstrapSha,
+      databaseEvidenceBytes: fx.dbBytes, databaseEvidenceSha256: requiredDatabasePreparationEvidenceSha256,
+      loginEvidenceBytes: fx.loginBytes, loginEvidenceSha256: requiredLoginProofEvidenceSha256,
+      backupFile: fx.backupFile, evidenceFile: fx.backupFile, outputFile: fx.outputFile,
+      envFile: fx.envFile, command: fake.command, commandEnv: {}, testOnlyEvidenceHash: evidenceHash }),
+    /catalog_activation_prepare_output_paths_alias/u);
+    assert.equal(fake.calls.length, 0);
+    assert.throws(() => assertCatalogActivationPreparePaths([
+      '/protected/bootstrap.json', '/protected/db.json', '/protected/login.json',
+      '/protected/backup.env', '/protected/backup.env', '/protected/runtime.json',
+    ]), /catalog_activation_prepare_paths_alias/u);
+    const entry = await readFile(new URL('../ops/activate_staging_web_fixture_catalog.mjs', import.meta.url), 'utf8');
+    assert.doesNotMatch(entry, /evidenceHash/u);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('runtime manifest self-validation rejects backup, evidence, and env path aliases', async () => {
+  const fx = await fixture();
+  try {
+    for (const [backupFile, evidenceFile] of [
+      [fx.evidenceFile, fx.evidenceFile],
+      [fx.envFile, fx.evidenceFile],
+      [fx.backupFile, fx.envFile],
+    ]) {
+      assert.throws(() => assertCatalogActivationManifest({ ...fx.manifest,
+        fixtureBinding: { ...fx.manifest.fixtureBinding, backupFile, evidenceFile } }),
+      /catalog_activation_(binding_invalid|manifest_paths_alias)/u);
+    }
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('prepare rejects env-file runtime identity overrides before every Docker command', async () => {
+  const fx = await fixture();
+  try {
+    await writeFile(fx.envFile, `${fx.originalEnv}APP_COMMIT=${runtimeCommit}\n`, { mode: 0o600 });
+    const fake = fakeExecutor(fx);
+    await assert.rejects(prepareCatalogActivationManifest({ sourceCommit: opsCommit,
+      bootstrapManifestBytes: fx.bootstrapBytes, bootstrapManifestSha256: fx.bootstrapSha,
+      databaseEvidenceBytes: fx.dbBytes, databaseEvidenceSha256: requiredDatabasePreparationEvidenceSha256,
+      loginEvidenceBytes: fx.loginBytes, loginEvidenceSha256: requiredLoginProofEvidenceSha256,
+      backupFile: fx.backupFile, evidenceFile: fx.evidenceFile, outputFile: fx.outputFile,
+      envFile: fx.envFile, command: fake.command, commandEnv: {}, testOnlyEvidenceHash: evidenceHash }),
+    /catalog_activation_env_identity_override_forbidden/u);
+    assert.equal(fake.calls.length, 0);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('entry requires root and Node 22 before source or protected input reads', async () => {
+  assert.doesNotThrow(() => assertCatalogActivationHost({ uid: 0, nodeMajor: 22 }));
+  assert.throws(() => assertCatalogActivationHost({ uid: 501, nodeMajor: 22 }),
+    /catalog_activation_root_node22_required/u);
+  assert.throws(() => assertCatalogActivationHost({ uid: 0, nodeMajor: 21 }),
+    /catalog_activation_root_node22_required/u);
+  const entry = await readFile(new URL('../ops/activate_staging_web_fixture_catalog.mjs', import.meta.url), 'utf8');
+  const main = entry.slice(entry.indexOf('async function main'));
+  assert.ok(main.indexOf('assertCatalogActivationHost();') < main.indexOf('readCleanCatalogActivationSource()'));
+  assert.ok(main.indexOf('assertCatalogActivationHost();') < main.indexOf('readFixtureEnvBootstrapManifest'));
+});
+
+test('activation source contains no login, booking, payment, Play or external-provider action path', async () => {
+  const source = await readFile(new URL('../ops/staging_web_fixture_catalog_activation.mjs', import.meta.url), 'utf8');
+  assert.doesNotMatch(source,
+    /\/v1\/auth|\/v1\/bookings|\/v1\/rental-requests|stripe\.com|googleapis\.com|play\.google/u);
+  assert.ok(!source.includes(forbiddenRunHashInterpolation));
+  assert.ok(!catalogActivationStateSql.includes(forbiddenRunHashInterpolation));
+});
+
+test('database state binds only the protected activation run digest', async () => {
+  const fx = await fixture();
+  try {
+    assert.doesNotThrow(() => assertCatalogActivationState(JSON.stringify(fx.state), fx.manifest.fixtureBinding));
+    assert.throws(() => assertCatalogActivationState(JSON.stringify(fx.state), {
+      ...fx.manifest.fixtureBinding, activationRunDigest: '6'.repeat(64),
+    }), /catalog_activation_database_state_invalid/u);
+    for (const drift of [{ retainedSessions: 4 }, { retainedRefresh: 4 }, { loginAudits: 4 },
+      { markerSessions: 1 }, { markerPrincipals: 1 }, { markerRefresh: 3 }, { markerLoginAudits: 4 },
+      { markerRefreshPrincipals: 1 }, { markerAuditPrincipals: 1 },
+      { activeSessions: 1 }, { activeRefresh: 1 }, { historyDigest: '0'.repeat(64) }]) {
+      assert.throws(() => assertCatalogActivationState(JSON.stringify({ ...fx.state, ...drift }),
+        fx.manifest.fixtureBinding), /catalog_activation_database_state_invalid/u);
+    }
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('default preflight is read-only and execute changes only catalog flag with exact public projection', async () => {
+  const fx = await fixture();
+  try {
+    const fake = fakeExecutor(fx); assertCatalogActivationManifest(fx.manifest);
+    const preflight = await runCatalogActivation({ manifest: fx.manifest,
+      bootstrapManifestBytes: fx.bootstrapBytes, databaseEvidenceBytes: fx.dbBytes,
+      loginEvidenceBytes: fx.loginBytes, sourceCommit: opsCommit, evidenceFile: fx.evidenceFile,
+      command: fake.command, commandEnv: {}, testOnlyEvidenceHash: evidenceHash });
+    assert.equal(preflight.status, 'catalog-activation-preflight-passed-no-mutation');
+    assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+    assert.ok(fake.calls.every((call) => !['stop', 'rename', 'create', 'start', 'rm'].includes(call.args[0])));
+    const result = await runCatalogActivation({ manifest: fx.manifest,
+      bootstrapManifestBytes: fx.bootstrapBytes, databaseEvidenceBytes: fx.dbBytes,
+      loginEvidenceBytes: fx.loginBytes, sourceCommit: opsCommit, evidenceFile: fx.evidenceFile,
+      execute: true, confirmSource: opsCommit, confirmRun: fx.runId, command: fake.command,
+      commandEnv: { STAGING_WEB_FIXTURE_CATALOG_EXECUTE: '1',
+        STAGING_WEB_FIXTURE_CATALOG_CONFIRM_SOURCE: opsCommit,
+        STAGING_WEB_FIXTURE_CATALOG_CONFIRM_RUN: fx.runId }, testOnlyEvidenceHash: evidenceHash });
+    assert.equal(result.status, 'staging-web-synthetic-catalog-activated-noncontractual');
+    const after = Object.fromEntries((await readFile(fx.envFile, 'utf8')).trim().split('\n')
+      .map((line) => line.split(/=(.*)/su).slice(0, 2)));
+    assert.equal(after[catalogActivationKey], 'true');
+    assert.deepEqual(Object.fromEntries(Object.entries(after).filter(([key]) => key !== catalogActivationKey)),
+      Object.fromEntries(Object.entries(fx.envFileValues).filter(([key]) => key !== catalogActivationKey)));
+    assert.equal(await readFile(fx.backupFile, 'utf8'), fx.originalEnv);
+    assert.doesNotMatch(readStablePrivateFile(fx.evidenceFile, {
+      expectedMode: 0o600, expectedUid: process.getuid(), expectedGid: process.getgid(),
+    }),
+      /synthetic_web_catalog_owner_v1|synthetic_web_catalog_renter_v1|example\.invalid|DATABASE_URL/u);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('catalog final gates wait for converged sealed-original proof without replaying mutations', async () => {
+  const fx = await fixture();
+  try {
+    const fake = fakeExecutor(fx, { sealReadbackFault: 'transient' });
+    const result = await runCatalogActivation({ manifest: fx.manifest,
+      bootstrapManifestBytes: fx.bootstrapBytes, databaseEvidenceBytes: fx.dbBytes,
+      loginEvidenceBytes: fx.loginBytes, sourceCommit: opsCommit, evidenceFile: fx.evidenceFile,
+      execute: true, confirmSource: opsCommit, confirmRun: fx.runId, command: fake.command,
+      commandEnv: { STAGING_WEB_FIXTURE_CATALOG_EXECUTE: '1',
+        STAGING_WEB_FIXTURE_CATALOG_CONFIRM_SOURCE: opsCommit,
+        STAGING_WEB_FIXTURE_CATALOG_CONFIRM_RUN: fx.runId }, testOnlyEvidenceHash: evidenceHash });
+    assert.equal(result.status, 'staging-web-synthetic-catalog-activated-noncontractual');
+    const phaseCount = (phase) => fake.calls.filter((call) => call.phase === phase).length;
+    for (const phase of ['fixture_env_stop_current_api', 'fixture_env_seal_current_api',
+      'fixture_env_create_replacement_api', 'fixture_env_attach_provider_network',
+      'fixture_env_start_replacement_api']) assert.equal(phaseCount(phase), 1, phase);
+    assert.equal(phaseCount('fixture_env_rollback_seal_readback'), 2);
+    const phases = fake.calls.map((call) => call.phase);
+    assert.ok(phases.lastIndexOf('fixture_env_rollback_seal_readback')
+      < phases.indexOf('catalog_activation_final_database_integrity_schema'));
+    assert.ok(phases.indexOf('catalog_activation_final_database_integrity_schema')
+      < phases.indexOf('catalog_activation_final_database_readback'));
+    assert.ok(phases.indexOf('catalog_activation_final_database_readback')
+      < phases.indexOf('catalog_activation_final_public_readback'));
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('public gates converge read-only and evidence waits for the stable final public gate', async () => {
+  const fx = await fixture();
+  try {
+    const fake = fakeExecutor(fx, { publicReadbackFaults: {
+      catalog_activation_replacement_public_readback: { kind: 'count', attempts: 1 },
+      catalog_activation_final_public_readback: { kind: 'status', attempts: 1 },
+    } });
+    const result = await runCatalogActivation({ manifest: fx.manifest,
+      bootstrapManifestBytes: fx.bootstrapBytes, databaseEvidenceBytes: fx.dbBytes,
+      loginEvidenceBytes: fx.loginBytes, sourceCommit: opsCommit, evidenceFile: fx.evidenceFile,
+      execute: true, confirmSource: opsCommit, confirmRun: fx.runId, command: fake.command,
+      commandEnv: { STAGING_WEB_FIXTURE_CATALOG_EXECUTE: '1',
+        STAGING_WEB_FIXTURE_CATALOG_CONFIRM_SOURCE: opsCommit,
+        STAGING_WEB_FIXTURE_CATALOG_CONFIRM_RUN: fx.runId }, testOnlyEvidenceHash: evidenceHash });
+    assert.equal(result.status, 'staging-web-synthetic-catalog-activated-noncontractual');
+    assertSingleActivationMutations(fake);
+    assert.equal(fake.publicReadbacks.get('catalog_activation_replacement_public_readback'), 2);
+    assert.equal(fake.publicReadbacks.get('catalog_activation_final_public_readback'), 2);
+    assert.deepEqual(fake.evidenceDuringFinalPublic, [false, false]);
+    assert.equal((await lstat(fx.evidenceFile)).isFile(), true);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('persistent public status, count and truth drift rolls back without mutation replay', async (t) => {
+  for (const kind of ['status', 'count', 'truth']) await t.test(kind, async () => {
+    const fx = await fixture();
+    try {
+      const fake = fakeExecutor(fx, { publicReadbackFaults: {
+        catalog_activation_replacement_public_readback: { kind, attempts: 8 },
+      } });
+      await assert.rejects(runCatalogActivation({ manifest: fx.manifest,
+        bootstrapManifestBytes: fx.bootstrapBytes, databaseEvidenceBytes: fx.dbBytes,
+        loginEvidenceBytes: fx.loginBytes, sourceCommit: opsCommit, evidenceFile: fx.evidenceFile,
+        execute: true, confirmSource: opsCommit, confirmRun: fx.runId, command: fake.command,
+        commandEnv: { STAGING_WEB_FIXTURE_CATALOG_EXECUTE: '1',
+          STAGING_WEB_FIXTURE_CATALOG_CONFIRM_SOURCE: opsCommit,
+          STAGING_WEB_FIXTURE_CATALOG_CONFIRM_RUN: fx.runId }, testOnlyEvidenceHash: evidenceHash }), (error) => {
+        const sanitized = sanitizeCatalogActivationError(error);
+        assert.equal(error.rollback?.restored, true);
+        assert.deepEqual(Object.keys(sanitized).sort(), ['code', 'failurePhase', 'rollback', 'status']);
+        assert.equal(sanitized.code, 'catalog_activation_public_readback_not_converged');
+        assert.equal(sanitized.failurePhase, 'catalog_activation_replacement_public_readback');
+        assert.equal(sanitized.rollback.restored, true);
+        assert.doesNotMatch(JSON.stringify(sanitized), /response|DATABASE_URL|synthetic_web_catalog_owner/u);
+        return true;
+      });
+      assertSingleActivationMutations(fake);
+      assert.equal(fake.publicReadbacks.get('catalog_activation_replacement_public_readback'), 8);
+      assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+      assert.equal(fake.containers.get(fx.manifest.apiContainer).Id, fx.api.Id);
+      await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  });
+});
+
+test('persistent final public drift has a distinct whitelisted phase and no premature evidence', async () => {
+  const fx = await fixture();
+  try {
+    const fake = fakeExecutor(fx, { publicReadbackFaults: {
+      catalog_activation_final_public_readback: { kind: 'count', attempts: 8 },
+    } });
+    await assert.rejects(runCatalogActivation({ manifest: fx.manifest,
+      bootstrapManifestBytes: fx.bootstrapBytes, databaseEvidenceBytes: fx.dbBytes,
+      loginEvidenceBytes: fx.loginBytes, sourceCommit: opsCommit, evidenceFile: fx.evidenceFile,
+      execute: true, confirmSource: opsCommit, confirmRun: fx.runId, command: fake.command,
+      commandEnv: { STAGING_WEB_FIXTURE_CATALOG_EXECUTE: '1',
+        STAGING_WEB_FIXTURE_CATALOG_CONFIRM_SOURCE: opsCommit,
+        STAGING_WEB_FIXTURE_CATALOG_CONFIRM_RUN: fx.runId }, testOnlyEvidenceHash: evidenceHash }), (error) => {
+      const sanitized = sanitizeCatalogActivationError(error);
+      assert.equal(error.rollback?.restored, true);
+      assert.equal(sanitized.code, 'catalog_activation_public_readback_not_converged');
+      assert.equal(sanitized.failurePhase, 'catalog_activation_final_public_readback');
+      assert.equal(sanitized.rollback.restored, true);
+      return true;
+    });
+    assertSingleActivationMutations(fake);
+    assert.equal(fake.publicReadbacks.get('catalog_activation_replacement_public_readback'), 1);
+    assert.equal(fake.publicReadbacks.get('catalog_activation_final_public_readback'), 8);
+    assert.deepEqual(fake.evidenceDuringFinalPublic, Array(8).fill(false));
+    await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+    assert.deepEqual(sanitizeCatalogActivationError({
+      code: 'catalog_activation_public_readback_not_converged',
+      failurePhase: 'untrusted_dynamic_phase', response: { secret: 'must-not-leak' },
+    }), { status: 'failed', code: 'catalog_activation_public_readback_not_converged' });
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('permanent catalog seal drift returns fixed sanitized diagnosis and exact rollback', async () => {
+  const fx = await fixture();
+  try {
+    const fake = fakeExecutor(fx, { sealReadbackFault: 'permanent' });
+    await assert.rejects(runCatalogActivation({ manifest: fx.manifest,
+      bootstrapManifestBytes: fx.bootstrapBytes, databaseEvidenceBytes: fx.dbBytes,
+      loginEvidenceBytes: fx.loginBytes, sourceCommit: opsCommit, evidenceFile: fx.evidenceFile,
+      execute: true, confirmSource: opsCommit, confirmRun: fx.runId, command: fake.command,
+      commandEnv: { STAGING_WEB_FIXTURE_CATALOG_EXECUTE: '1',
+        STAGING_WEB_FIXTURE_CATALOG_CONFIRM_SOURCE: opsCommit,
+        STAGING_WEB_FIXTURE_CATALOG_CONFIRM_RUN: fx.runId }, testOnlyEvidenceHash: evidenceHash }), (error) => {
+      const sanitized = sanitizeCatalogActivationError(error);
+      assert.equal(error.rollback?.restored, true);
+      assert.deepEqual(Object.keys(sanitized).sort(), ['code', 'failurePhase', 'rollback', 'status']);
+      assert.equal(sanitized.status, 'failed');
+      assert.equal(sanitized.code, 'fixture_env_sealed_readback_not_converged');
+      assert.equal(sanitized.failurePhase, 'fixture_env_sealed_readback');
+      assert.equal(sanitized.rollback.restored, true);
+      assert.doesNotMatch(JSON.stringify(sanitized), /DATABASE_URL|synthetic_web_catalog_owner|private-run/u);
+      return true;
+    });
+    const phaseCount = (phase) => fake.calls.filter((call) => call.phase === phase).length;
+    for (const phase of ['fixture_env_stop_current_api', 'fixture_env_seal_current_api',
+      'fixture_env_create_replacement_api', 'fixture_env_attach_provider_network',
+      'fixture_env_start_replacement_api']) assert.equal(phaseCount(phase), 1, phase);
+    assert.equal(phaseCount('fixture_env_rollback_seal_readback'), 8);
+    assert.equal(phaseCount('catalog_activation_final_database_integrity_schema'), 0);
+    assert.equal(fake.containers.get(fx.manifest.apiContainer).Id, fx.api.Id);
+    assert.equal(fake.containers.get(fx.manifest.apiContainer).State.Running, true);
+    assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+    await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('all activation replacement and public/evidence faults restore exact old env and original identity', async (t) => {
+  const phases = ['fixture_env_stop_current_api', 'fixture_env_seal_current_api',
+    'fixture_env_create_replacement_api', 'fixture_env_attach_provider_network',
+    'fixture_env_start_replacement_api', 'fixture_env_replacement_readback',
+    'fixture_env_replacement_runtime_probe', 'catalog_activation_replacement_config_readback',
+    'catalog_activation_replacement_public_readback', 'catalog_activation_final_database_readback',
+    'catalog_activation_final_database_integrity_schema', 'catalog_activation_final_database_integrity_ledger',
+    'catalog_activation_final_seed_readback',
+    'catalog_activation_final_public_readback'];
+  for (const phase of phases) await t.test(phase, async () => {
+    const fx = await fixture();
+    try {
+      const fake = fakeExecutor(fx, { failPhase: phase });
+      await assert.rejects(runCatalogActivation({ manifest: fx.manifest,
+        bootstrapManifestBytes: fx.bootstrapBytes, databaseEvidenceBytes: fx.dbBytes,
+        loginEvidenceBytes: fx.loginBytes, sourceCommit: opsCommit, evidenceFile: fx.evidenceFile,
+        execute: true, confirmSource: opsCommit, confirmRun: fx.runId, command: fake.command,
+        commandEnv: { STAGING_WEB_FIXTURE_CATALOG_EXECUTE: '1',
+          STAGING_WEB_FIXTURE_CATALOG_CONFIRM_SOURCE: opsCommit,
+          STAGING_WEB_FIXTURE_CATALOG_CONFIRM_RUN: fx.runId }, testOnlyEvidenceHash: evidenceHash }),
+      (error) => error.rollback?.restored === true);
+      assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+      assert.equal(fake.containers.get(fx.manifest.apiContainer).Id, fx.api.Id);
+      await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  });
+});
+
+test('missing or wrong canonical synthetic photo fails public readback and restores the original', async (t) => {
+  for (const publicPhotoFault of ['missing', 'wrong-digest']) await t.test(publicPhotoFault, async () => {
+    const fx = await fixture();
+    try {
+      const fake = fakeExecutor(fx, { publicPhotoFault });
+      await assert.rejects(runCatalogActivation({ manifest: fx.manifest,
+        bootstrapManifestBytes: fx.bootstrapBytes, databaseEvidenceBytes: fx.dbBytes,
+        loginEvidenceBytes: fx.loginBytes, sourceCommit: opsCommit, evidenceFile: fx.evidenceFile,
+        execute: true, confirmSource: opsCommit, confirmRun: fx.runId, command: fake.command,
+        commandEnv: { STAGING_WEB_FIXTURE_CATALOG_EXECUTE: '1',
+          STAGING_WEB_FIXTURE_CATALOG_CONFIRM_SOURCE: opsCommit,
+          STAGING_WEB_FIXTURE_CATALOG_CONFIRM_RUN: fx.runId }, testOnlyEvidenceHash: evidenceHash }),
+      (error) => error.code === 'catalog_activation_public_readback_not_converged'
+        && error.failurePhase === 'catalog_activation_replacement_public_readback'
+        && error.rollback?.restored === true);
+      assertSingleActivationMutations(fake);
+      assert.equal(fake.publicReadbacks.get('catalog_activation_replacement_public_readback'), 8);
+      assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+      assert.equal(fake.containers.get(fx.manifest.apiContainer).Id, fx.api.Id);
+      await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  });
+});
+
+test('late foreign evidence is preserved and still triggers identity-checked rollback', async () => {
+  const fx = await fixture();
+  try {
+    const fake = fakeExecutor(fx, { lateEvidenceCollision: true });
+    await assert.rejects(runCatalogActivation({ manifest: fx.manifest,
+      bootstrapManifestBytes: fx.bootstrapBytes, databaseEvidenceBytes: fx.dbBytes,
+      loginEvidenceBytes: fx.loginBytes, sourceCommit: opsCommit, evidenceFile: fx.evidenceFile,
+      execute: true, confirmSource: opsCommit, confirmRun: fx.runId, command: fake.command,
+      commandEnv: { STAGING_WEB_FIXTURE_CATALOG_EXECUTE: '1',
+        STAGING_WEB_FIXTURE_CATALOG_CONFIRM_SOURCE: opsCommit,
+        STAGING_WEB_FIXTURE_CATALOG_CONFIRM_RUN: fx.runId }, testOnlyEvidenceHash: evidenceHash }),
+    (error) => error.code === 'fixture_env_evidence_write_exists' && error.rollback?.restored === true);
+    assert.equal(await readFile(fx.evidenceFile, 'utf8'), 'foreign-evidence\n');
+    assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+    assert.equal(fake.containers.get(fx.manifest.apiContainer).Id, fx.api.Id);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});

@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-stage-a-blue-ocean-n12-owner-action-pack",
+  "status": "verified-ready-for-n13",
+  "capturedAt": "2026-08-24T00:32:00Z",
+  "implementationBaseHead": "31bdfb9fff0b423c85508d1b9944f3588a56d70c",
+  "packRef": "docs/operations/BLUE_OCEAN_OWNER_ACTION_PACK.md",
+  "sections": [
+    "FREE / NO ACCOUNT ACTION",
+    "OWNER LOGIN REQUIRED",
+    "PHYSICAL DEVICE REQUIRED",
+    "EXTERNAL CONTRACT REQUIRED",
+    "PAID / COST APPROVAL REQUIRED",
+    "LATER ONLY"
+  ],
+  "minimumCoverage": {
+    "operatorConfigValues": "prepared-private-owner-action-not-collected",
+    "openAiApiProjectKeyBilling": "later-owner-login-and-budget-gated",
+    "eur5PilotBudgetToken": "AI_LISTING_PILOT_BUDGET_5_EUR_GO",
+    "googlePlayInternalTesting": "later-owner-login-exact-aab-only",
+    "testerGoogleEmails": "later-owner-entry-outside-repository",
+    "firebaseOwnerChecks": "later-owner-login-initial-services-off",
+    "realRolesAndDelegates": "later-private-mapping-no-invented-people",
+    "appleIos": "DEFERRED_NOT_REQUIRED_FOR_STAGE_A",
+    "supportScanner": "deferred-off",
+    "marketplacePsp": "deferred-off-no-real-money",
+    "authenticEconomics": "later-real-aggregate-inputs-profitability-undetermined",
+    "heilbronnWave0Activation": "later-explicit-owner-token-only"
+  },
+  "preparedReplyTokens": [
+    "AI_LISTING_PILOT_BUDGET_5_EUR_GO",
+    "AI_LISTING_PROVIDER_HOLD",
+    "GOOGLE_PLAY_INTERNAL_UPLOAD_GO",
+    "GOOGLE_PLAY_INTERNAL_HOLD",
+    "HEILBRONN_WAVE0_ACTIVATION_GO",
+    "HEILBRONN_WAVE0_HOLD"
+  ],
+  "acceptedAndDeferredRisk": {
+    "professionalReview": "PROFESSIONAL_REVIEW_DEFERRED_BY_OWNER",
+    "unreviewedRisk": "UNREVIEWED_RISK_ACCEPTED",
+    "professionalLegalApprovalClaimed": false,
+    "riskResolvedClaimed": false
+  },
+  "costState": {
+    "freePacketAndPrivateFactPreparationExpectedNewExternalEur": 0,
+    "optionalAiPilotHardCapEur": 5,
+    "aiBudgetApproved": false,
+    "allOtherNewExternalCosts": "unknown-unapproved-require-concrete-offer-and-max-eur-token"
+  },
+  "targetedVerification": {
+    "actionPackWiringTests": "passed-8",
+    "artifactValidatorTests": "passed-7",
+    "artifactValidator": "passed",
+    "fullTechnicalRegression": "passed-candidate-rollover-mode",
+    "githubRegression": "passed",
+    "githubCodeql": "passed"
+  },
+  "exactGitHubVerification": {
+    "headSha": "8ded33b8ed7c84d307014263b678c3fd9177038c",
+    "regressionRunId": 32677182050,
+    "regressionConclusion": "success",
+    "codeqlRunId": 32677182040,
+    "codeqlConclusion": "success"
+  },
+  "boundaries": {
+    "thirdPartyContacted": false,
+    "ownerLoginPerformed": false,
+    "operatorValuesCollectedOrStored": false,
+    "openAiProjectKeyOrBillingChanged": false,
+    "paidCallPerformed": false,
+    "playConsoleChanged": false,
+    "testerEmailCollectedOrAdded": false,
+    "firebaseChanged": false,
+    "physicalDeviceChanged": false,
+    "contractAccepted": false,
+    "scannerActivated": false,
+    "pspOrRealMoneyActivated": false,
+    "appleActionPerformed": false,
+    "humanPilotActivated": false,
+    "productionChanged": false,
+    "cloudChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "publicReleasePerformed": false,
+    "pullRequestMerged": false
+  },
+  "nextPackage": "N13"
+}

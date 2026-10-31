@@ -1,0 +1,363 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-48h-r10-clean-reproducibility",
+  "status": "verified-clean-checkout-regression-and-codeql-passed",
+  "observedOn": "2026-08-24",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "implementationHead": "322e97ecc0c20c7f765054523dbcf1ddf45d0e9a",
+    "checkoutHead": "322e97ecc0c20c7f765054523dbcf1ddf45d0e9a",
+    "sourceTrackedTreeClean": true,
+    "isolatedCheckoutInitiallyClean": true,
+    "isolatedCheckoutFinallyClean": true
+  },
+  "boundaries": {
+    "localIsolatedCheckoutOnly": true,
+    "productionChanged": false,
+    "vpsChanged": false,
+    "cloudChanged": false,
+    "firebaseProjectChanged": false,
+    "storeChanged": false,
+    "paymentChanged": false,
+    "accountChanged": false,
+    "credentialsReadOrExtracted": false,
+    "privateInputsCopied": false,
+    "apiBillingUsed": false,
+    "pullRequestMerged": false
+  },
+  "cleanCheckout": {
+    "mechanism": "local-git-clone-no-hardlinks-detached-head",
+    "dependencyCaches": "fresh-bounded-temp-directories",
+    "undocumentedMachineCacheRequired": false,
+    "privateInputs": {
+      "checked": 6,
+      "present": 0
+    }
+  },
+  "toolchain": {
+    "flutter": "3.41.7",
+    "dart": "3.11.5",
+    "node": "v22.23.2",
+    "pnpm": "11.16.0",
+    "javaMajor": 17,
+    "gradle": "8.12"
+  },
+  "sourceComparison": {
+    "dependencies": {
+      "before": {
+        "count": 7,
+        "sha256": "1dd062cf4c609396138d0706388c4c305ff0d5ed418a6d106cad26c05a2a5288"
+      },
+      "after": {
+        "count": 7,
+        "sha256": "1dd062cf4c609396138d0706388c4c305ff0d5ed418a6d106cad26c05a2a5288"
+      },
+      "exactMatch": true
+    },
+    "migrations": {
+      "before": {
+        "count": 112,
+        "sha256": "129ddfb8ac3b9d1b55c4a6f24a0c7f647ec6cdffebf3118f293a27653bed9c00"
+      },
+      "after": {
+        "count": 112,
+        "sha256": "129ddfb8ac3b9d1b55c4a6f24a0c7f647ec6cdffebf3118f293a27653bed9c00"
+      },
+      "exactMatch": true
+    },
+    "assets": {
+      "before": {
+        "count": 84,
+        "sha256": "f191cecc5902ee87d209a48a194273a3cd88ffa63aedfc6eaa40cb20ac3fd466"
+      },
+      "after": {
+        "count": 84,
+        "sha256": "f191cecc5902ee87d209a48a194273a3cd88ffa63aedfc6eaa40cb20ac3fd466"
+      },
+      "exactMatch": true
+    },
+    "fonts": {
+      "before": {
+        "count": 3,
+        "sha256": "9446f0ff1abb65447f3b432feabfe67806bea222fe08aec22d8cbb50aa81b786"
+      },
+      "after": {
+        "count": 3,
+        "sha256": "9446f0ff1abb65447f3b432feabfe67806bea222fe08aec22d8cbb50aa81b786"
+      },
+      "exactMatch": true
+    }
+  },
+  "commands": {
+    "backendLockedRestore": {
+      "status": "passed",
+      "durationSeconds": 3
+    },
+    "flutterLockedRestore": {
+      "status": "passed",
+      "durationSeconds": 14
+    },
+    "backendSuite": {
+      "status": "passed",
+      "durationSeconds": 5
+    },
+    "backendSyntax": {
+      "status": "passed",
+      "durationSeconds": 5
+    },
+    "dependencyAudit": {
+      "status": "passed",
+      "durationSeconds": 1
+    },
+    "secretScan": {
+      "status": "passed",
+      "durationSeconds": 3
+    },
+    "postgresRunner": {
+      "status": "passed",
+      "durationSeconds": 7
+    },
+    "fullTechnicalRegression": {
+      "status": "passed",
+      "durationSeconds": 506
+    },
+    "secondAndroidBuild": {
+      "status": "passed",
+      "durationSeconds": 38
+    }
+  },
+  "generatedFootprint": {
+    "before": {
+      "pathsKiB": {
+        ".dart_tool": 0,
+        "build": 0,
+        "android/.gradle": 0,
+        "backend/node_modules": 0
+      },
+      "projectGeneratedKiB": 0,
+      "isolatedPackageCachesKiB": 0,
+      "totalKiB": 0
+    },
+    "after": {
+      "pathsKiB": {
+        ".dart_tool": 155768,
+        "build": 2989950,
+        "android/.gradle": 8391,
+        "backend/node_modules": 54354
+      },
+      "projectGeneratedKiB": 3208463,
+      "isolatedPackageCachesKiB": 6119769,
+      "totalKiB": 9328232
+    },
+    "maximumProjectGeneratedKiB": 5242880,
+    "maximumIsolatedPackageCachesKiB": 8388608,
+    "withinBounds": true
+  },
+  "android": {
+    "buildType": "debug",
+    "buildAttempts": 2,
+    "first": {
+      "bytes": 230820487,
+      "sha256": "87eebd56283c0e255b31e30eaea87b2b4e9ebb73df42d180bd3236570c3121f2",
+      "payloadInventorySha256": "7f437d83562162b7011ecae9e88341e24b019aedb5a3aa3fb2b99f61ca76510a",
+      "entries": 795
+    },
+    "second": {
+      "bytes": 230820487,
+      "sha256": "97f28fc3d4ef8dafd9381e523b89775109d299c4041169c5cb29349873ec0338",
+      "payloadInventorySha256": "83003cd7a7f0f8b20ae4ef4882dcfe3feef3ac782d8472f35b9aba86070abd7a",
+      "entries": 795
+    },
+    "reproduction": {
+      "classification": "d8-synthetic-checksum-metadata-only",
+      "byteIdentical": false,
+      "extractedEntriesIdentical": false,
+      "knownEquivalent": true,
+      "differingEntries": [
+        "classes18.dex"
+      ],
+      "knownD8MetadataOnlyEntries": [
+        "classes18.dex"
+      ],
+      "unexplainedDifferingEntries": []
+    },
+    "knownNondeterminism": {
+      "mechanism": "D8 synthetic-class checksum metadata",
+      "normalizedBytes": [
+        "DEX header checksum and SHA-1 signature bytes 8-31",
+        "nine-hex-digit values in the embedded D8 synthetic-class checksum map"
+      ],
+      "affectedEntries": [
+        "classes18.dex"
+      ],
+      "rawBinaryIdentityClaimed": false
+    },
+    "identity": {
+      "applicationId": "com.shareittoo.app",
+      "versionCode": "2026082302",
+      "versionName": "1.0.0",
+      "compileSdk": 35,
+      "minSdk": 24,
+      "targetSdk": 35,
+      "debuggable": true
+    },
+    "permissions": [
+      {
+        "name": "android.permission.ACCESS_COARSE_LOCATION",
+        "maxSdkVersion": null
+      },
+      {
+        "name": "android.permission.ACCESS_FINE_LOCATION",
+        "maxSdkVersion": null
+      },
+      {
+        "name": "android.permission.ACCESS_NETWORK_STATE",
+        "maxSdkVersion": null
+      },
+      {
+        "name": "android.permission.CAMERA",
+        "maxSdkVersion": null
+      },
+      {
+        "name": "android.permission.INTERNET",
+        "maxSdkVersion": null
+      },
+      {
+        "name": "android.permission.POST_NOTIFICATIONS",
+        "maxSdkVersion": null
+      },
+      {
+        "name": "android.permission.READ_EXTERNAL_STORAGE",
+        "maxSdkVersion": 32
+      },
+      {
+        "name": "android.permission.USE_BIOMETRIC",
+        "maxSdkVersion": null
+      },
+      {
+        "name": "android.permission.USE_FINGERPRINT",
+        "maxSdkVersion": null
+      },
+      {
+        "name": "android.permission.WAKE_LOCK",
+        "maxSdkVersion": null
+      },
+      {
+        "name": "android.permission.WRITE_EXTERNAL_STORAGE",
+        "maxSdkVersion": 28
+      },
+      {
+        "name": "com.google.android.c2dm.permission.RECEIVE",
+        "maxSdkVersion": null
+      },
+      {
+        "name": "com.google.android.providers.gsf.permission.READ_GSERVICES",
+        "maxSdkVersion": null
+      },
+      {
+        "name": "com.shareittoo.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
+        "maxSdkVersion": null
+      }
+    ],
+    "policies": {
+      "debugArtifact": true,
+      "backupDisabled": true,
+      "cleartextTrafficDisabled": true,
+      "legacyExternalStorageDisabled": true
+    },
+    "runtimePayload": {
+      "format": "debug-kernel-blob",
+      "entries": [
+        "assets/flutter_assets/kernel_blob.bin"
+      ]
+    },
+    "runtimeConfiguration": {
+      "backendEnabledInDebugByDefault": false,
+      "compiledDefaultBackendOriginPresent": true,
+      "externalAiNetworkAllowed": false,
+      "compiledOpenAiApiOriginPresent": false,
+      "realPaymentsEnabled": false,
+      "socialProvidersEnabledByDefault": {
+        "google": false,
+        "apple": false,
+        "facebook": false
+      },
+      "firebaseSdkPresent": true,
+      "firebaseMessagingAutoInitDisabled": true,
+      "firebaseAnalyticsCollectionDisabled": true,
+      "firebaseCrashlyticsCollectionDisabled": true
+    }
+  },
+  "ciAndCodeql": {
+    "localCodeqlClaimed": false,
+    "exactGithubVerification": "passed"
+  },
+  "githubVerification": {
+    "headSha": "7d215e41e2c0f20f088152a19b4915b8bc2bdb45",
+    "pullRequest": {
+      "number": 7,
+      "draft": true,
+      "state": "OPEN",
+      "merged": false
+    },
+    "regression": {
+      "runId": 32767155545,
+      "conclusion": "success",
+      "jobs": {
+        "postgresRunnerProof": {
+          "jobId": 97559116901,
+          "conclusion": "success"
+        },
+        "backendRegression": {
+          "jobId": 97559117129,
+          "conclusion": "success"
+        },
+        "flutterRegression": {
+          "jobId": 97559117121,
+          "conclusion": "success",
+          "parallelStressStep": "skipped",
+          "signedCandidateStep": "skipped"
+        },
+        "r10CleanReproducibility": {
+          "jobId": 97559117227,
+          "conclusion": "success"
+        },
+        "publishApiImage": {
+          "jobId": 97561229688,
+          "conclusion": "skipped"
+        }
+      }
+    },
+    "codeqlWorkflow": {
+      "runId": 32767155548,
+      "jobId": 97559117104,
+      "conclusion": "success"
+    },
+    "advancedSecurity": {
+      "checkRunId": 97559603226,
+      "conclusion": "success",
+      "title": "No new alerts in code changed by this pull request",
+      "annotations": 0,
+      "openAlerts": 0,
+      "findingsDismissed": false
+    },
+    "gitGuardian": {
+      "state": "failure",
+      "scope": "documented-pre-existing-250-commit-pr-history",
+      "credentialDetailInspected": false
+    }
+  },
+  "limitations": {
+    "debugArtifactOnly": true,
+    "signedInternalArtifactBuilt": false,
+    "binaryIdentityClaimedOnlyWhenRawShaMatches": false,
+    "knownMetadataClassificationRequiresExactNormalizedEntryMatch": true,
+    "retainedBuildArtifact": false
+  },
+  "cleanup": {
+    "tempCheckoutRemoved": true,
+    "isolatedDependencyCachesRemoved": true,
+    "apkCopiesRemoved": true
+  },
+  "nextPackage": "R11"
+}

@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-accessibility-physical-preflight",
+  "status": "prerequisites-passed-manual-traversal-pending",
+  "capturedAt": "2026-08-17T03:28:36Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081509",
+    "commit": "3fa045b98897f9551f91da932136c2b100b2d700",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "preflight": {
+    "physicalAndroidDevice": true,
+    "exactCandidateInstalled": true,
+    "playInternalInstaller": true,
+    "activeTransport": "WIFI",
+    "talkBackEnabledDuringCheck": true,
+    "fontScaleDuringCheck": 2.0,
+    "readyForManualMatrix": true
+  },
+  "observations": {
+    "exploreSurfaceRendered": true,
+    "mainNavigationVisible": true,
+    "categoryControlsVisible": true,
+    "listingCardsVisible": true,
+    "semanticLabelsObserved": [
+      "Hallo SIT",
+      "Ort hinzufügen",
+      "Neue Anzeige erstellen",
+      "Jetzt suchen",
+      "Mietanfragen",
+      "Erkunden",
+      "Wunschlisten",
+      "Buchungen",
+      "Nachrichten",
+      "Profil"
+    ],
+    "systemTalkBackHintObscuredUpperContent": true,
+    "manualTalkBackTraversalCompleted": false,
+    "physicalLargeTextVisualPassCompleted": false
+  },
+  "restoration": {
+    "originalFontScale": 0.85,
+    "fontScaleRestored": true,
+    "originalAccessibilityServiceState": "none",
+    "accessibilityServiceStateRestored": true
+  },
+  "boundaries": {
+    "fullCellPassed": false,
+    "manualTalkBackTraversalPassed": false,
+    "physicalLargeTextVisualPass": false,
+    "evidenceContainsScreenshot": false,
+    "productionChanged": false,
+    "storeChanged": false,
+    "paymentEndpointCalled": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsRawNetworkNames": false,
+    "containsRawNetworkRoutes": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

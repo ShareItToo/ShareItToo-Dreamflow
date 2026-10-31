@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-android-social-auth-provider-readiness",
+  "state": "email-google-pilot-ready-facebook-apple-hold",
+  "observedOn": "2026-09-14",
+  "applicationId": "com.shareittoo.app",
+  "pilotDecision": {
+    "platform": "android",
+    "emailEnabled": true,
+    "googleEnabled": true,
+    "facebookEnabled": false,
+    "appleEnabled": false,
+    "appleRequiredForAndroidPilot": false
+  },
+  "facebook": {
+    "androidOfficiallySupported": true,
+    "localImplementationPrepared": true,
+    "sdkAutomaticEventsDisabled": true,
+    "sdkAdvertiserIdCollectionDisabled": true,
+    "advertisingPermissionsRemoved": true,
+    "externalConfigurationEvidencePresent": false,
+    "metaDeveloperAppVerified": false,
+    "firebaseProviderEnabledVerified": false,
+    "appIdAndClientTokenProvisionedOutsideGit": false,
+    "androidPackageNameVerified": false,
+    "uploadCertificateKeyHashVerified": false,
+    "playAppSigningKeyHashVerified": false,
+    "firebaseOauthRedirectVerified": false,
+    "testerOrAppReviewAccessVerified": false,
+    "accountDeletionUrlVerified": true,
+    "exactCandidateAcceptancePassed": false,
+    "activationReady": false,
+    "evidenceRef": null
+  },
+  "apple": {
+    "androidOfficiallySupported": true,
+    "localImplementationPrepared": true,
+    "externalConfigurationEvidencePresent": false,
+    "appleDeveloperProgramMembershipVerified": false,
+    "servicesIdVerified": false,
+    "teamAndKeyConfigurationVerified": false,
+    "privateKeyStoredOutsideGit": false,
+    "firebaseProviderEnabledVerified": false,
+    "firebaseReturnUrlVerified": false,
+    "androidSha1Verified": false,
+    "privateEmailRelayRequirementResolved": false,
+    "anonymizedIdentityConsentFlowApproved": false,
+    "inAppAccountDeletionAvailable": true,
+    "appleTokenRevocationImplemented": false,
+    "exactCandidateAcceptancePassed": false,
+    "activationReady": false,
+    "evidenceRef": null
+  },
+  "officialSources": [
+    {
+      "provider": "firebase-facebook-flutter",
+      "url": "https://firebase.google.com/docs/auth/flutter/federated-auth",
+      "checkedOn": "2026-09-14"
+    },
+    {
+      "provider": "firebase-apple-android",
+      "url": "https://firebase.google.com/docs/auth/android/apple",
+      "checkedOn": "2026-09-14"
+    },
+    {
+      "provider": "meta-facebook-android",
+      "url": "https://developers.facebook.com/documentation/facebook-login/android",
+      "checkedOn": "2026-09-14"
+    }
+  ],
+  "boundaries": {
+    "providerConsoleChanged": false,
+    "firebaseConsoleChanged": false,
+    "developerAccountCreated": false,
+    "membershipPurchased": false,
+    "agreementAccepted": false,
+    "credentialReadOrRecorded": false,
+    "providerEnabledInCandidate": false
+  }
+}

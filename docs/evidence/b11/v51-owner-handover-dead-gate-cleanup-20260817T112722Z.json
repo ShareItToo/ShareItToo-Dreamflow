@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "kind": "v51-owner-handover-dead-gate-cleanup",
+  "status": "implemented-full-regression-passed",
+  "capturedAt": "2026-08-17T11:27:22Z",
+  "sourceBaseCommit": "13c169f9a257edee6bebe127d5a60292d10b356e",
+  "runtimeChange": {
+    "path": "lib/screens/ongoing_owner_detail_screen.dart",
+    "sha256": "b05dc82e4ad57a94f5c99305a21ff84c0da16ec07109eca139d278d7c914d93d",
+    "removedSymbol": "_canStartOwnerHandover",
+    "runtimeLinesAdded": 0,
+    "runtimeLinesDeleted": 5,
+    "reachableBehaviorChanged": false
+  },
+  "preservedFailClosedPaths": [
+    "confirmed-owner-pickup-time",
+    "booking-segment-role-bound-pickup-challenge",
+    "pickup-qr-or-six-digit-code-stepper",
+    "active-owner-return-status-gate",
+    "renter-presented-return-challenge",
+    "return-photo-and-counterevidence-gates",
+    "verified-return-transition",
+    "owner-bound-cancellation",
+    "owner-to-renter-review"
+  ],
+  "verification": {
+    "newWiringTests": "passed-6",
+    "combinedTargetedNodeTests": "passed-16",
+    "targetedFlutterTests": "passed-59",
+    "privacyDisclosureTests": "passed-16",
+    "privacyValidator": "passed-draft-open",
+    "fullTechnicalRegression": "passed-candidate-rollover-mode",
+    "flutterTests": "passed-282-with-1-intentional-skip",
+    "flutterAnalyzer": "228-findings-0-errors-baseline-accepted",
+    "googleOnlySocialProfile": "passed",
+    "webDebugBuild": "passed-existing-wasm-dry-run-warnings-only",
+    "androidDebugBuild": "passed",
+    "diffCheck": "passed"
+  },
+  "privacyBoundary": {
+    "sourceInventoryHashUpdated": true,
+    "dataTypesChanged": false,
+    "purposesChanged": false,
+    "processorsChanged": false,
+    "transportChanged": false,
+    "permissionsChanged": false,
+    "publicDisclosureChanged": false
+  },
+  "boundaries": {
+    "pushRemovedOrDisabled": false,
+    "crashlyticsRemovedOrDisabled": false,
+    "pushEnablesCrashlytics": false,
+    "stagingChanged": false,
+    "productionChanged": false,
+    "storeSubmissionChanged": false,
+    "candidateBuiltOrRelabeled": false,
+    "crashEventGenerated": false,
+    "containsSecrets": false,
+    "containsAccountData": false
+  }
+}

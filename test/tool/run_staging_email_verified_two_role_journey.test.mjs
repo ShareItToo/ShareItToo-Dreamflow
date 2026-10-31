@@ -1,0 +1,669 @@
+import assert from 'node:assert/strict';
+import {
+  chmodSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import test from 'node:test';
+
+import {
+  activateStagingEmailVerifiedJourneyFixture,
+  cleanupStagingEmailVerifiedRentalCartLifecycle,
+  inspectStagingEmailVerifiedRentalCartLifecycle,
+  prepareStagingEmailVerifiedTwoRoleJourney,
+  prepareStagingEmailVerifiedRentalCartLifecycle,
+  retireStagingEmailVerifiedTwoRoleJourney,
+  runStagingEmailVerifiedTwoRoleSimulation,
+  verifyStagingEmailVerifiedJourneyPublished,
+} from '../../tool/run_staging_email_verified_two_role_journey.mjs';
+import {
+  assertListingPhotoTruthPolicy,
+  listingPhotoTruthClassifications,
+  listingPhotoTruthPolicyText,
+  listingPhotoTruthPolicyVersion,
+} from '../../backend/src/listing_photo_truth_policy.js';
+
+function response(status, value) {
+  if (status === 200 && typeof value?.accessToken === 'string' && !value.refreshToken) {
+    value = { ...value, refreshToken: `email-journey-refresh-${'r'.repeat(40)}` };
+  }
+  return { status, text: async () => JSON.stringify(value) };
+}
+
+function privateFixture({ sourceStatus = 'email-link-verified-ready-for-login' } = {}) {
+  const root = mkdtempSync(join(tmpdir(), 'sit-n22-two-role-'));
+  chmodSync(root, 0o700);
+  const sourceDirectory = join(root, 'source');
+  const journeyDirectory = join(root, 'journeys');
+  mkdirSync(sourceDirectory, { mode: 0o700 });
+  mkdirSync(journeyDirectory, { mode: 0o700 });
+  const sourceVaultFile = join(sourceDirectory, 'accounts.json');
+  const imagePath = join(root, 'fixture.png');
+  const accounts = [
+    {
+      role: 'owner',
+      displayName: 'N22Owner',
+      email: 'owner@example.invalid',
+      password: ['owner', 'private', 'fixture', 'credential'].join('-'),
+      registrationStatus: 'accepted',
+      verificationStatus: 'email-link-verified',
+      registrationAcceptedAt: '2026-09-03T00:00:00.000Z',
+      verifiedAt: '2026-09-03T00:01:00.000Z',
+    },
+    {
+      role: 'renter',
+      displayName: 'N22Renter',
+      email: 'renter@example.invalid',
+      password: ['renter', 'private', 'fixture', 'credential'].join('-'),
+      registrationStatus: 'accepted',
+      verificationStatus: 'email-link-verified',
+      registrationAcceptedAt: '2026-09-03T00:00:00.000Z',
+      verifiedAt: '2026-09-03T00:01:00.000Z',
+    },
+  ];
+  writeFileSync(sourceVaultFile, `${JSON.stringify({
+    schemaVersion: 1,
+    kind: 'sit-staging-synthetic-account-vault',
+    runId: 'email-linked-source',
+    status: sourceStatus,
+    apiBaseUrl: 'https://staging.shareittoo.com/api/v1',
+    stripeLivemode: false,
+    verificationMethod: 'email-link',
+    accounts,
+    ...(sourceStatus === 'non-binding-simulation-retired'
+      ? {
+          nonBindingSimulation: {
+            status: 'retired',
+            workflowStatus: 'cancelled',
+            listingStatus: 'paused',
+            paymentEndpointCalled: false,
+            stripeLivemode: false,
+          },
+        }
+      : {}),
+  })}\n`, { mode: 0o600 });
+  writeFileSync(imagePath, Buffer.alloc(512, 7), { mode: 0o600 });
+  return { root, sourceVaultFile, journeyDirectory, imagePath, accounts };
+}
+
+test('accepts only a terminal retired simulation as a reusable verified source', async () => {
+  const fixture = privateFixture({ sourceStatus: 'non-binding-simulation-retired' });
+  const api = stagingApi(fixture.accounts);
+  const prepared = await prepareStagingEmailVerifiedTwoRoleJourney({
+    sourceVaultFile: fixture.sourceVaultFile,
+    vaultRoot: fixture.journeyDirectory,
+    imagePath: fixture.imagePath,
+    fetchImpl: api.fetchImpl,
+    now: new Date('2026-09-12T21:30:00.000Z'),
+    random: () => Buffer.from('12345678', 'hex'),
+  });
+  assert.equal(prepared.status, 'owner-draft-ready-for-pixel-publish');
+
+  const unsafe = JSON.parse(readFileSync(fixture.sourceVaultFile, 'utf8'));
+  unsafe.nonBindingSimulation.workflowStatus = 'accepted';
+  writeFileSync(fixture.sourceVaultFile, `${JSON.stringify(unsafe)}\n`, { mode: 0o600 });
+  await assert.rejects(
+    () => prepareStagingEmailVerifiedTwoRoleJourney({
+      sourceVaultFile: fixture.sourceVaultFile,
+      vaultRoot: fixture.journeyDirectory,
+      imagePath: fixture.imagePath,
+      fetchImpl: api.fetchImpl,
+      now: new Date('2026-09-12T21:31:00.000Z'),
+      random: () => Buffer.from('abcdef12', 'hex'),
+    }),
+    /not safely retired/u,
+  );
+});
+
+function safeBooking(state, workflowStatus) {
+  return {
+    id: state.bookingId,
+    itemId: state.listing.id,
+    workflowStatus,
+    simulationOnly: true,
+    platformContract: null,
+    bindingExpiresAt: null,
+    contractCreated: false,
+    paymentCreated: false,
+    reservationCreated: false,
+    monetaryEffectMinor: 0,
+    ...state.bookingFields,
+  };
+}
+
+function stagingApi(accounts) {
+  const state = {
+    listing: null,
+    listingStatusPatches: [],
+    bookingId: null,
+    bookingStatus: null,
+    bookingFields: undefined,
+    threadId: 'thread-n22-fixture',
+    conditionPhotos: { pickup: 0, return: 0 },
+    conditionConfirmed: { pickup: false, return: false },
+    qrVerified: { pickup: false, return: false },
+    uploadCount: 0,
+    cart: {
+      schemaVersion: 1,
+      revision: 4,
+      reservationCreated: false,
+      projects: [{ id: 'unrelated-project', title: 'Unrelated project' }],
+      items: [{
+        id: 'unrelated-item',
+        listingId: 'unrelated-listing',
+        projectId: 'unrelated-project',
+        startDate: '2026-09-20',
+        endDate: '2026-09-21',
+      }],
+    },
+  };
+  const byEmail = new Map(accounts.map((account) => [account.email, account]));
+  const fetchImpl = async (url, options = {}) => {
+    const sessionCleanupPath = new URL(url).pathname.replace('/api/v1', '');
+    if (sessionCleanupPath === '/auth/logout') return response(204, null);
+    const parsed = new URL(url);
+    const path = parsed.pathname.replace('/api/v1', '') + parsed.search;
+    const method = options.method ?? 'GET';
+    const authorization = options.headers?.Authorization ?? '';
+    const role = authorization.includes('owner') ? 'owner' : 'renter';
+    if (path === '/auth/login') {
+      const body = JSON.parse(options.body);
+      const account = byEmail.get(body.email);
+      if (!account || account.password !== body.password) return response(401, { error: 'invalid_credentials' });
+      return response(200, { accessToken: `${account.role}-${'x'.repeat(24)}`,
+        refreshToken: `${account.role}-refresh-${'x'.repeat(24)}` });
+    }
+    if (path === '/auth/logout' && method === 'POST') return response(204, null);
+    if (path === '/auth/me') {
+      const account = accounts.find((entry) => entry.role === role);
+      return response(200, { user: { id: `${role}-id`, email: account.email } });
+    }
+    if (path === '/listings' && method === 'POST') {
+      state.listing = JSON.parse(options.body);
+      assertListingPhotoTruthPolicy({
+        policyVersion: state.listing.photoTruthPolicyVersion,
+        policyText: state.listing.photoTruthAttestation,
+        classifications: state.listing.photoTruthClassifications,
+        expectedCount: state.listing.photos?.length,
+        requireAttestation: true,
+      });
+      return response(201, { listing: { ...state.listing, isActive: false } });
+    }
+    if (path === '/listings/mine') {
+      return response(200, { listings: state.listing ? [{ ...state.listing }] : [] });
+    }
+    if (/^\/listings\/[^/]+\/availability$/u.test(path) && method === 'PUT') {
+      return response(200, { availability: { saved: true } });
+    }
+    if (/^\/listings\/[^/]+\/status$/u.test(path) && method === 'PATCH') {
+      const body = JSON.parse(options.body);
+      state.listingStatusPatches.push(body);
+      if (body.status === 'active' && body.privateStatusConfirmed !== true) {
+        return response(400, { error: 'private_status_confirmation_required' });
+      }
+      state.listing.status = body.status;
+      state.listing.isActive = body.status === 'active';
+      return response(200, { listing: { ...state.listing } });
+    }
+    if (path === '/listings?sort=newest&limit=100') {
+      assert.match(authorization, /^Bearer owner-/u);
+      return response(200, {
+        listings: state.listing?.status === 'active' ? [{ ...state.listing }] : [],
+      });
+    }
+    if (path === '/bookings' && method === 'POST') {
+      const body = JSON.parse(options.body);
+      assert.equal(body.simulationOnly, true);
+      assert.equal(body.simulationAcknowledged, true);
+      state.bookingId = body.id;
+      state.bookingStatus = 'requested';
+      return response(201, { booking: safeBooking(state, state.bookingStatus) });
+    }
+    if (path === '/rental-requests') {
+      return response(200, {
+        requests: state.bookingId ? [safeBooking(state, state.bookingStatus)] : [],
+      });
+    }
+    if (path === '/rental-cart' && method === 'GET') {
+      return response(200, { cart: structuredClone(state.cart) });
+    }
+    if (/^\/rental-cart\/items\/[^/]+$/u.test(path) && method === 'DELETE') {
+      const id = decodeURIComponent(path.split('/').at(-1));
+      state.cart.items = state.cart.items.filter((entry) => entry.id !== id);
+      state.cart.revision += 1;
+      return response(200, { cart: structuredClone(state.cart) });
+    }
+    if (/^\/rental-cart\/projects\/[^/]+$/u.test(path) && method === 'DELETE') {
+      const id = decodeURIComponent(path.split('/').at(-1));
+      state.cart.projects = state.cart.projects.filter((entry) => entry.id !== id);
+      state.cart.items = state.cart.items.map((entry) => (
+        entry.projectId === id ? { ...entry, projectId: null } : entry
+      ));
+      state.cart.revision += 1;
+      return response(200, { cart: structuredClone(state.cart) });
+    }
+    if (/\/availability\/check$/u.test(path)) return response(200, { available: true });
+    if (/\/payment$/u.test(path)) return response(409, { error: 'pilot_simulation_payment_forbidden' });
+    if (path === '/uploads' && method === 'POST') {
+      const purpose = options.body.get('purpose');
+      const expectedRole = ['handover_evidence', 'listing_image'].includes(purpose)
+        ? 'owner'
+        : 'renter';
+      assert.equal(role, expectedRole);
+      state.uploadCount += 1;
+      return response(201, {
+        id: `00000000-0000-4000-8000-${String(state.uploadCount).padStart(12, '0')}`,
+        url: `https://staging.shareittoo.com/api/v1/uploads/${state.uploadCount}`,
+      });
+    }
+    if (/\/transitions$/u.test(path) && method === 'POST') {
+      const requested = JSON.parse(options.body).status;
+      const expectedRole = {
+        accepted: 'owner', active: 'renter', completed: 'owner', cancelled: 'renter',
+      }[requested];
+      assert.equal(role, expectedRole);
+      if (requested === 'active') assert.equal(state.qrVerified.pickup, true);
+      if (requested === 'completed') assert.equal(state.qrVerified.return, true);
+      state.bookingStatus = requested;
+      return response(200, { booking: safeBooking(state, state.bookingStatus) });
+    }
+    if (path.startsWith('/message-threads/booking/')) {
+      return response(201, { thread: { id: state.threadId } });
+    }
+    if (path === `/message-threads/${state.threadId}/messages` && method === 'POST') {
+      const body = JSON.parse(options.body);
+      if (body.conditionEvidence) {
+        state.conditionPhotos[body.conditionEvidence.segment] += 1;
+      }
+      return response(201, { message: { id: 'message-n22-fixture' } });
+    }
+    if (path === '/message-threads') return response(200, { threads: [{ id: state.threadId }] });
+    if (path === `/message-threads/${state.threadId}/messages`) {
+      return response(200, { messages: [{ text: 'SIT Stage-A Testchat: unverbindliche Pilot-Simulation.' }] });
+    }
+    if (/\/condition-evidence\?segment=(pickup|return)$/u.test(path)) {
+      const segment = /segment=(pickup|return)$/u.exec(path)[1];
+      return response(200, { summary: {
+        presenterPhotos: state.conditionPhotos[segment],
+        deviationPhotos: 0,
+        counterpartyConfirmation: state.conditionConfirmed[segment]
+          ? { decision: 'confirmed' }
+          : null,
+      } });
+    }
+    if (path.endsWith('/condition-confirmations') && method === 'POST') {
+      const segment = JSON.parse(options.body).segment;
+      assert.equal(role, segment === 'pickup' ? 'renter' : 'owner');
+      assert.equal(state.conditionPhotos[segment], 4);
+      state.conditionConfirmed[segment] = true;
+      return response(201, { confirmation: { decision: 'confirmed' } });
+    }
+    if (path.endsWith('/confirmation-challenges') && method === 'POST') {
+      const segment = JSON.parse(options.body).segment;
+      const presenterRole = segment === 'pickup' ? 'owner' : 'renter';
+      assert.equal(role, presenterRole);
+      assert.equal(state.conditionConfirmed[segment], true);
+      return response(201, { challenge: {
+        qrPayload: `shareittoo:v3:${segment}:${presenterRole}:00000000-0000-4000-8000-000000000000:123456:${state.bookingId}`,
+      } });
+    }
+    if (path.endsWith('/confirmation-challenges/verify') && method === 'POST') {
+      const { qrPayload } = JSON.parse(options.body);
+      const [, segment, presenterRole] = /^shareittoo:v3:(pickup|return):(owner|renter):/u.exec(qrPayload) ?? [];
+      assert.ok(segment);
+      assert.equal(role, presenterRole === 'owner' ? 'renter' : 'owner');
+      assert.equal(state.conditionConfirmed[segment], true);
+      state.qrVerified[segment] = true;
+      return response(200, { confirmation: {
+        verificationVersion: 3,
+        presenterRole,
+        confirmedByRole: role,
+      } });
+    }
+    if (/\/bookings\/[^/]+\/reviews$/u.test(path) && method === 'POST') {
+      return response(409, { error: 'pilot_simulation_review_forbidden' });
+    }
+    if (path === '/notifications?limit=100') {
+      return response(200, { notifications: [
+        {
+          entityId: state.bookingId,
+          kind: 'booking_requested',
+          title: 'Pilot-Simulation · Neue Buchungsanfrage',
+          payload: { simulationOnly: true },
+        },
+        {
+          entityId: state.bookingId,
+          kind: 'booking_accepted',
+          title: 'Pilot-Simulation · Anfrage angenommen',
+          payload: { simulationOnly: true },
+        },
+      ] });
+    }
+    throw new Error(`Unexpected request: ${method} ${path}`);
+  };
+  return { state, fetchImpl };
+}
+
+test('runs and retires an isolated email-verified two-role Staging journey', async () => {
+  const fixture = privateFixture();
+  const api = stagingApi(fixture.accounts);
+  const prepared = await prepareStagingEmailVerifiedTwoRoleJourney({
+    sourceVaultFile: fixture.sourceVaultFile,
+    vaultRoot: fixture.journeyDirectory,
+    imagePath: fixture.imagePath,
+    fetchImpl: api.fetchImpl,
+    now: new Date('2026-09-03T08:00:00.000Z'),
+    random: () => Buffer.from([1, 2, 3, 4]),
+  });
+  assert.equal(prepared.status, 'owner-draft-ready-for-pixel-publish');
+  assert.equal(prepared.emailLinksVerified, true);
+  assert.equal(prepared.distinctPrincipalsVerified, true);
+  assert.equal(prepared.containsSecrets, false);
+  assert.equal(prepared.containsEmailAddresses, false);
+  assert.equal(prepared.containsTokens, false);
+  assert.equal(api.state.listing.status, 'draft');
+  assert.deepEqual({
+    photoTruthPolicyVersion: api.state.listing.photoTruthPolicyVersion,
+    photoTruthAttestation: api.state.listing.photoTruthAttestation,
+    photoTruthClassifications: api.state.listing.photoTruthClassifications,
+  }, {
+    photoTruthPolicyVersion: listingPhotoTruthPolicyVersion,
+    photoTruthAttestation: listingPhotoTruthPolicyText,
+    photoTruthClassifications: [listingPhotoTruthClassifications[0]],
+  });
+
+  api.state.listing.status = 'active';
+  api.state.listing.isActive = true;
+  const published = await verifyStagingEmailVerifiedJourneyPublished({
+    vaultFile: prepared.vaultFile,
+    fetchImpl: api.fetchImpl,
+  });
+  assert.equal(published.status, 'pixel-owner-publish-server-confirmed');
+  assert.equal(published.publicCatalogVisible, true);
+
+  const simulation = await runStagingEmailVerifiedTwoRoleSimulation({
+    vaultFile: prepared.vaultFile,
+    fetchImpl: api.fetchImpl,
+    now: new Date('2026-09-03T08:10:00.000Z'),
+    random: () => Buffer.from([5, 6, 7, 8]),
+    wait: async () => {},
+  });
+  assert.equal(simulation.status, 'email-verified-two-role-simulation-completed');
+  assert.equal(api.state.bookingStatus, 'completed');
+  assert.equal(api.state.uploadCount, 9); // Listing photo plus the eight lifecycle evidence photos.
+  assert.deepEqual(api.state.conditionPhotos, { pickup: 4, return: 4 });
+  assert.deepEqual(api.state.qrVerified, { pickup: true, return: true });
+  const completedVault = JSON.parse(readFileSync(prepared.vaultFile, 'utf8'));
+  assert.equal(
+    completedVault.realTwoRoleJourney.acceptedAt,
+    completedVault.nonBindingSimulation.acceptedAt,
+  );
+  assert.equal(
+    completedVault.realTwoRoleJourney.completedAt,
+    completedVault.nonBindingSimulation.completedAt,
+  );
+  assert.equal(simulation.reviewsBlocked, true);
+  assert.equal(simulation.monetaryEffectMinor, 0);
+  assert.equal(simulation.paymentEndpointCalled, false);
+
+  const retired = await retireStagingEmailVerifiedTwoRoleJourney({
+    vaultFile: prepared.vaultFile,
+    fetchImpl: api.fetchImpl,
+  });
+  assert.equal(retired.status, 'email-verified-two-role-product-journey-retired');
+  assert.equal(retired.bookingCancelled, false);
+  assert.equal(retired.bookingCompleted, true);
+  assert.equal(retired.bookingStatus, 'completed');
+  assert.equal(retired.listingEnded, true);
+  assert.equal(retired.publicCatalogEntryRemoved, true);
+  assert.equal(retired.monetaryEffectMinor, 0);
+  const vault = JSON.parse(readFileSync(prepared.vaultFile, 'utf8'));
+  assert.equal(vault.status, 'email-linked-product-journey-retired');
+  assert.equal(vault.realTwoRoleJourney.status, 'retired');
+  assert.equal(vault.realTwoRoleJourney.listingStatus, 'ended');
+  assert.equal(vault.realTwoRoleJourney.bookingStatus, 'completed');
+  assert.equal(vault.nonBindingSimulation.status, 'retired');
+  assert.equal(vault.nonBindingSimulation.workflowStatus, 'completed');
+  assert.equal(vault.nonBindingSimulation.listingStatus, 'ended');
+});
+
+test('activates and retires an exact isolated search fixture without money', async () => {
+  const fixture = privateFixture();
+  const api = stagingApi(fixture.accounts);
+  const prepared = await prepareStagingEmailVerifiedTwoRoleJourney({
+    sourceVaultFile: fixture.sourceVaultFile,
+    vaultRoot: fixture.journeyDirectory,
+    imagePath: fixture.imagePath,
+    fetchImpl: api.fetchImpl,
+    now: new Date('2026-09-03T08:00:00.000Z'),
+    random: () => Buffer.from([1, 2, 3, 4]),
+  });
+  const activated = await activateStagingEmailVerifiedJourneyFixture({
+    vaultFile: prepared.vaultFile,
+    fetchImpl: api.fetchImpl,
+  });
+  assert.equal(activated.status, 'isolated-product-journey-fixture-active');
+  assert.equal(activated.publicCatalogVisible, true);
+  assert.equal(activated.monetaryEffectMinor, 0);
+  assert.deepEqual(api.state.listingStatusPatches, [
+    { status: 'active', privateStatusConfirmed: true },
+  ]);
+  const vault = JSON.parse(readFileSync(prepared.vaultFile, 'utf8'));
+  assert.equal(vault.realTwoRoleJourney.status, 'synthetic-fixture-active');
+  assert.equal(vault.realTwoRoleJourney.listingStatus, 'active');
+
+  const retired = await retireStagingEmailVerifiedTwoRoleJourney({
+    vaultFile: prepared.vaultFile,
+    fetchImpl: api.fetchImpl,
+  });
+  assert.equal(retired.status, 'email-verified-two-role-product-journey-retired');
+  assert.equal(retired.listingEnded, true);
+  assert.equal(retired.monetaryEffectMinor, 0);
+  assert.deepEqual(api.state.listingStatusPatches, [
+    { status: 'active', privateStatusConfirmed: true },
+    { status: 'ended' },
+  ]);
+});
+
+async function activeJourneyFixture() {
+  const fixture = privateFixture();
+  const api = stagingApi(fixture.accounts);
+  const prepared = await prepareStagingEmailVerifiedTwoRoleJourney({
+    sourceVaultFile: fixture.sourceVaultFile,
+    vaultRoot: fixture.journeyDirectory,
+    imagePath: fixture.imagePath,
+    fetchImpl: api.fetchImpl,
+    now: new Date('2026-09-03T08:00:00.000Z'),
+    random: () => Buffer.from([1, 2, 3, 4]),
+  });
+  await activateStagingEmailVerifiedJourneyFixture({
+    vaultFile: prepared.vaultFile,
+    fetchImpl: api.fetchImpl,
+  });
+  return { fixture, api, prepared };
+}
+
+test('treats a missing booking record as not-created and still retires the listing', async () => {
+  const { api, prepared } = await activeJourneyFixture();
+  const vault = JSON.parse(readFileSync(prepared.vaultFile, 'utf8'));
+  vault.nonBindingSimulation = { bookingId: 'booking-create-failed-before-side-effect' };
+  writeFileSync(prepared.vaultFile, `${JSON.stringify(vault)}\n`, { mode: 0o600 });
+
+  const retired = await retireStagingEmailVerifiedTwoRoleJourney({
+    vaultFile: prepared.vaultFile,
+    fetchImpl: api.fetchImpl,
+  });
+  assert.equal(retired.bookingCancelled, true);
+  assert.equal(api.state.listing.status, 'ended');
+  const after = JSON.parse(readFileSync(prepared.vaultFile, 'utf8'));
+  assert.equal(after.realTwoRoleJourney.bookingStatus, 'not-created');
+});
+
+test('strictly cancels requested and accepted existing bookings', async () => {
+  for (const workflowStatus of ['requested', 'accepted']) {
+    const { api, prepared } = await activeJourneyFixture();
+    api.state.bookingId = `booking-${workflowStatus}`;
+    api.state.bookingStatus = workflowStatus;
+    const vault = JSON.parse(readFileSync(prepared.vaultFile, 'utf8'));
+    vault.nonBindingSimulation = { bookingId: api.state.bookingId };
+    writeFileSync(prepared.vaultFile, `${JSON.stringify(vault)}\n`, { mode: 0o600 });
+
+    const retired = await retireStagingEmailVerifiedTwoRoleJourney({
+      vaultFile: prepared.vaultFile,
+      fetchImpl: api.fetchImpl,
+    });
+    assert.equal(retired.bookingCancelled, true);
+    assert.equal(api.state.bookingStatus, 'cancelled');
+    const after = JSON.parse(readFileSync(prepared.vaultFile, 'utf8'));
+    assert.equal(after.realTwoRoleJourney.bookingStatus, 'cancelled');
+  }
+});
+
+test('rejects an unsafe existing cancelled booking', async () => {
+  const { api, prepared } = await activeJourneyFixture();
+  api.state.bookingId = 'booking-unsafe';
+  api.state.bookingStatus = 'cancelled';
+  api.state.bookingFields = { simulationOnly: false };
+  const vault = JSON.parse(readFileSync(prepared.vaultFile, 'utf8'));
+  vault.nonBindingSimulation = { bookingId: api.state.bookingId };
+  writeFileSync(prepared.vaultFile, `${JSON.stringify(vault)}\n`, { mode: 0o600 });
+
+  await assert.rejects(
+    () => retireStagingEmailVerifiedTwoRoleJourney({
+      vaultFile: prepared.vaultFile,
+      fetchImpl: api.fetchImpl,
+    }),
+    /neither safely cancelled nor fully completed/u,
+  );
+  assert.equal(api.state.listing.status, 'active');
+});
+
+test('captures, proves, and restores one isolated non-reserving rental-cart intent', async () => {
+  const fixture = privateFixture();
+  const api = stagingApi(fixture.accounts);
+  const prepared = await prepareStagingEmailVerifiedTwoRoleJourney({
+    sourceVaultFile: fixture.sourceVaultFile,
+    vaultRoot: fixture.journeyDirectory,
+    imagePath: fixture.imagePath,
+    fetchImpl: api.fetchImpl,
+    now: new Date('2026-09-03T08:00:00.000Z'),
+    random: () => Buffer.from([1, 2, 3, 4]),
+  });
+  await activateStagingEmailVerifiedJourneyFixture({
+    vaultFile: prepared.vaultFile,
+    fetchImpl: api.fetchImpl,
+  });
+  const baseline = structuredClone(api.state.cart);
+  const captured = await prepareStagingEmailVerifiedRentalCartLifecycle({
+    vaultFile: prepared.vaultFile,
+    fetchImpl: api.fetchImpl,
+  });
+  assert.equal(captured.status, 'isolated-rental-cart-baseline-captured');
+  assert.equal(captured.containsPrivateCartData, false);
+
+  const vault = JSON.parse(readFileSync(prepared.vaultFile, 'utf8'));
+  const listingId = vault.realTwoRoleJourney.listingId;
+  const projectTitle = vault.rentalCartLifecycle.projectTitle;
+  api.state.cart.items.push({
+    id: `cartitem_${'a'.repeat(64)}`,
+    listingId,
+    projectId: null,
+    startDate: '2026-09-24',
+    endDate: '2026-09-25',
+  });
+  api.state.cart.revision += 1;
+  const intent = await inspectStagingEmailVerifiedRentalCartLifecycle({
+    vaultFile: prepared.vaultFile,
+    fetchImpl: api.fetchImpl,
+  });
+  assert.equal(intent.status, 'isolated-rental-cart-single-intent-server-confirmed');
+  assert.equal(intent.exactIntentCount, 1);
+  assert.equal(intent.reservationCreated, false);
+
+  api.state.cart.projects.push({ id: 'isolated-project', title: projectTitle });
+  api.state.cart.items.at(-1).projectId = 'isolated-project';
+  api.state.cart.revision += 1;
+  const assigned = await inspectStagingEmailVerifiedRentalCartLifecycle({
+    vaultFile: prepared.vaultFile,
+    expectedProjectAssignment: true,
+    fetchImpl: api.fetchImpl,
+  });
+  assert.equal(assigned.status, 'isolated-rental-cart-project-server-confirmed');
+  assert.equal(assigned.exactProjectCount, 1);
+
+  const cleaned = await cleanupStagingEmailVerifiedRentalCartLifecycle({
+    vaultFile: prepared.vaultFile,
+    fetchImpl: api.fetchImpl,
+  });
+  assert.equal(cleaned.status, 'isolated-rental-cart-baseline-restored');
+  assert.equal(cleaned.unrelatedCartDataRestored, true);
+  assert.deepEqual(
+    { projects: api.state.cart.projects, items: api.state.cart.items },
+    { projects: baseline.projects, items: baseline.items },
+  );
+
+  await retireStagingEmailVerifiedTwoRoleJourney({
+    vaultFile: prepared.vaultFile,
+    fetchImpl: api.fetchImpl,
+  });
+});
+
+test('rejects fixture activation unless the exact isolated listing remains a draft', async () => {
+  const fixture = privateFixture();
+  const api = stagingApi(fixture.accounts);
+  const prepared = await prepareStagingEmailVerifiedTwoRoleJourney({
+    sourceVaultFile: fixture.sourceVaultFile,
+    vaultRoot: fixture.journeyDirectory,
+    imagePath: fixture.imagePath,
+    fetchImpl: api.fetchImpl,
+    now: new Date('2026-09-03T08:00:00.000Z'),
+    random: () => Buffer.from([1, 2, 3, 4]),
+  });
+  api.state.listing.status = 'paused';
+  await assert.rejects(
+    () => activateStagingEmailVerifiedJourneyFixture({
+      vaultFile: prepared.vaultFile,
+      fetchImpl: api.fetchImpl,
+    }),
+    /not exactly one owner draft/u,
+  );
+});
+
+test('rejects a source vault that has not completed both email links', async () => {
+  const fixture = privateFixture();
+  const source = JSON.parse(readFileSync(fixture.sourceVaultFile, 'utf8'));
+  source.accounts[1].verificationStatus = 'pending';
+  writeFileSync(fixture.sourceVaultFile, `${JSON.stringify(source)}\n`, { mode: 0o600 });
+  await assert.rejects(
+    () => prepareStagingEmailVerifiedTwoRoleJourney({
+      sourceVaultFile: fixture.sourceVaultFile,
+      vaultRoot: fixture.journeyDirectory,
+      imagePath: fixture.imagePath,
+      fetchImpl: async () => response(500, {}),
+    }),
+    /exact email-link-verified two-role Staging fixture/u,
+  );
+});
+
+test('removes a partial private journey vault when preparation fails before listing creation', async () => {
+  const fixture = privateFixture();
+  await assert.rejects(
+    () => prepareStagingEmailVerifiedTwoRoleJourney({
+      sourceVaultFile: fixture.sourceVaultFile,
+      vaultRoot: fixture.journeyDirectory,
+      imagePath: fixture.imagePath,
+      fetchImpl: async () => {
+        throw new Error('transport unavailable');
+      },
+      now: new Date('2026-09-03T08:00:00.000Z'),
+      random: () => Buffer.from([1, 2, 3, 4]),
+    }),
+    /transport unavailable/u,
+  );
+  assert.deepEqual(readdirSync(fixture.journeyDirectory), []);
+});

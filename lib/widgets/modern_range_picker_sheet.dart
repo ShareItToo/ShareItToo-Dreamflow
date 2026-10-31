@@ -49,16 +49,6 @@ class _ModernRangePickerSheetState extends State<ModernRangePickerSheet> {
     'November',
     'Dezember'
   ];
-  static const _wdDe = [
-    'Mo',
-    'Di',
-    'Mi',
-    'Do',
-    'Fr',
-    'Sa',
-    'So'
-  ]; // Monday start
-
   @override
   void initState() {
     super.initState();
@@ -75,10 +65,6 @@ class _ModernRangePickerSheetState extends State<ModernRangePickerSheet> {
   DateTime _stripTime(DateTime d) => DateTime(d.year, d.month, d.day);
   bool _isSameOrAfter(DateTime a, DateTime b) => !a.isBefore(b);
   bool _isStrictBefore(DateTime a, DateTime b) => a.isBefore(b);
-  String _fmtFull(DateTime d) {
-    String two(int v) => v.toString().padLeft(2, '0');
-    return '${two(d.day)}.${two(d.month)}.${d.year}';
-  }
 
   Future<void> _maybeLoadAiTip() async {
     final item = widget.item;
@@ -181,7 +167,6 @@ class _ModernRangePickerSheetState extends State<ModernRangePickerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final bg = Colors.black.withValues(alpha: 0.5);
     final border = Colors.white.withValues(alpha: 0.10);
     final headerText = Colors.white;
@@ -515,52 +500,6 @@ class _DayCell extends StatelessWidget {
   }
 }
 
-class _HintRow extends StatelessWidget {
-  final DateTime? start;
-  final DateTime? end;
-  final Color primary;
-  final Color textColor;
-  final Color subText;
-  final bool blocked;
-  const _HintRow(
-      {required this.start,
-      required this.end,
-      required this.primary,
-      required this.textColor,
-      required this.subText,
-      this.blocked = false});
-
-  @override
-  Widget build(BuildContext context) {
-    String text;
-    if (start == null) {
-      text = 'Wähle Startdatum';
-    } else if (end == null) {
-      text = 'Wähle Enddatum';
-    } else {
-      text = blocked
-          ? 'In diesem Zeitraum bereits gebucht'
-          : 'Bereit zur Bestätigung';
-    }
-    // Centered hint only; no date summaries inside the sheet
-    return Center(
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(blocked ? Icons.block : Icons.date_range,
-            color: blocked ? const Color(0xFFF43F5E) : Colors.white, size: 18),
-        const SizedBox(width: 8),
-        Text(text,
-            style:
-                TextStyle(color: blocked ? const Color(0xFFF43F5E) : subText)),
-      ]),
-    );
-  }
-
-  String _fmtFull(DateTime d) {
-    String two(int v) => v.toString().padLeft(2, '0');
-    return '${two(d.day)}.${two(d.month)}.${d.year}';
-  }
-}
-
 class _ChatTipsBox extends StatelessWidget {
   final String? aiTip;
   final Item item;
@@ -635,13 +574,13 @@ class _ChatTipsBox extends StatelessWidget {
       else if (dynamicLine != null) ...[
         _BotBubble(
             icon: Icons.event_available,
-            text: dynamicLine!,
+            text: dynamicLine,
             color: bubbleBg,
             border: bubbleBorder),
         if (savingsLine != null)
           _BotBubble(
               icon: Icons.local_offer_outlined,
-              text: savingsLine!,
+              text: savingsLine,
               color: bubbleBg,
               border: bubbleBorder),
       ] else ...[

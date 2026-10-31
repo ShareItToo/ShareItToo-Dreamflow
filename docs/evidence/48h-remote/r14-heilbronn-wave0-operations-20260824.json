@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-48h-r14-heilbronn-wave0-operations",
+  "status": "verified-regression-and-codeql-passed-ready-for-r15",
+  "implementationBaseHead": "a8eb996db3056053a2201e652e8c1c24d9524a03",
+  "predecessor": {
+    "package": "N9",
+    "evidence": "docs/evidence/blue-ocean/n9-heilbronn-wave0-preparation-20260824.json",
+    "status": "verified-ready-for-n10",
+    "verifiedHead": "b606e2864b6ab429a9dd64c04280968720454581",
+    "scopeChanged": false
+  },
+  "preparedArtifacts": {
+    "operations": "docs/operations/48H_R14_HEILBRONN_WAVE0_OPERATIONS_2026-08-24.md",
+    "n9Runbook": "docs/operations/BLUE_OCEAN_HEILBRONN_WAVE0_RUNBOOK.md",
+    "threeTesterScript": "docs/templates/48H_R14_3_TESTER_WAVE0_SCRIPT_DE.md",
+    "safePhotoOnePager": "docs/templates/48H_R14_SAFE_LISTING_PHOTOS_ONE_PAGER_DE.md",
+    "testerInstructions": "docs/templates/BLUE_OCEAN_INTERNAL_TESTER_INSTRUCTIONS.md",
+    "feedbackForm": "docs/templates/BLUE_OCEAN_HEILBRONN_WAVE0_FEEDBACK_FORM.md",
+    "aggregateEvaluationSheet": "docs/templates/blue_ocean_heilbronn_wave0_evaluation_sheet.csv"
+  },
+  "testerPlan": {
+    "opaqueSlots": ["HW0-A", "HW0-B", "HW0-C"],
+    "realTesterIdentityStored": false,
+    "requiredTasksPerSlot": 3,
+    "optionalTasksPerSlot": 2,
+    "minimumTotalTasks": 9,
+    "maximumTotalTasks": 15,
+    "taskIds": [
+      "HW0-A1", "HW0-A2", "HW0-A3", "HW0-A4", "HW0-A5",
+      "HW0-B1", "HW0-B2", "HW0-B3", "HW0-B4", "HW0-B5",
+      "HW0-C1", "HW0-C2", "HW0-C3", "HW0-C4", "HW0-C5"
+    ],
+    "meetingPointLabels": ["Pilot Treffpunkt A", "Pilot Treffpunkt B", "Pilot Treffpunkt C"],
+    "physicalMeetingAuthorized": false
+  },
+  "participantMaterials": {
+    "safePhotographyOnePager": "complete",
+    "aiDisclosureCopy": "complete",
+    "pilotNonBindingNoMoneyCopy": "complete",
+    "exactTaskSequence": "complete-10-steps",
+    "severityGuide": ["P0", "P1", "P2", "P3"],
+    "postTaskQuestionCount": 9,
+    "blueOceanValueQuestionCount": 5,
+    "freeTextStoredInGit": false,
+    "rawPhotosOrModelOutputStoredInGit": false
+  },
+  "activationState": {
+    "humanPilotActivated": false,
+    "testerInvitedOrEnrolled": false,
+    "playInternalCandidateApproved": false,
+    "externalAiProviderApproved": false,
+    "manualMockFallbackOnlyUntilProviderGate": true,
+    "operatorPrivacyRetentionGatesSatisfiedByR14": false,
+    "ownerActivationGateSatisfiedByR14": false
+  },
+  "focusedVerification": {
+    "n9WiringTests": "passed-4",
+    "n9ArtifactValidatorTests": "passed-7",
+    "n9ArtifactValidator": "passed",
+    "r14ArtifactValidatorTests": "passed-8",
+    "r14ArtifactValidator": "passed",
+    "fullTechnicalRegression": "passed-candidate-rollover-ci-metadata-mode",
+    "githubRegression": "passed",
+    "githubCodeql": "passed-no-new-alerts"
+  },
+  "technicalDebtClosure": {
+    "finding": "r9-postgres-pool-administrative-shutdown-unhandled",
+    "discoveredByRegressionRunId": 32776316335,
+    "failedJobId": 97588090203,
+    "observedPostgresCode": "57P01",
+    "closure": "verified-in-follow-up-regression",
+    "unexpectedPoolErrorsRemainFatal": true,
+    "permanentTimingOrRetryWorkaroundAdded": false
+  },
+  "githubVerification": {
+    "implementationCommit": "dd70f27f3681451db90124ba22287e07cd7b7dcf",
+    "regressionRunId": 32777252949,
+    "regressionConclusion": "success",
+    "codeqlRunId": 32777252976,
+    "codeqlConclusion": "success",
+    "advancedSecurityCheckId": 97591639936,
+    "advancedSecurityConclusion": "success",
+    "newAlerts": 0
+  },
+  "boundaries": {
+    "realPersonDataStored": false,
+    "realTesterContacted": false,
+    "realPhotoCollected": false,
+    "externalProviderCallPerformed": false,
+    "paidCallPerformed": false,
+    "billingActivated": false,
+    "realMoneyEnabled": false,
+    "playConsoleChanged": false,
+    "storeUploadPerformed": false,
+    "firebaseChanged": false,
+    "productionChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "cloudChanged": false,
+    "publicReleasePerformed": false,
+    "pullRequestMerged": false
+  },
+  "next48hPackage": "R15"
+}

@@ -1,0 +1,181 @@
+{
+  "schemaVersion": 1,
+  "kind": "google-play-service-provider-sharing-classification",
+  "capturedAt": "2026-08-13T05:50:00Z",
+  "status": "technical-provider-roles-classified-owner-contract-and-legal-approval-open",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081405",
+    "commit": "a00606f979315930ea6c28c0ce7495ef4ec56368",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1"
+  },
+  "playRule": {
+    "url": "https://support.google.com/googleplay/android-developer/answer/10787469?hl=en",
+    "technicalConclusion": "Off-device collection remains disclosable. A transfer can use the service-provider sharing exception only when the recipient processes data on the developer's behalf and the applicable contract supports that role."
+  },
+  "services": [
+    {
+      "id": "hostingerVps",
+      "candidateState": "active-first-party-backend-and-database-hosting",
+      "technicalRole": "processor",
+      "officialContractUrl": "https://www.hostinger.com/legal/dpa",
+      "officialFinding": "Hostinger states that it is a processor of Customer Data and that the customer is a controller or processor as applicable.",
+      "actualCandidateTransfers": [
+        "all user data submitted to or persisted by the ShareItToo backend"
+      ],
+      "playTechnicalRecommendation": "service-provider-sharing-exception-supported-subject-to-account-contract-and-legal-confirmation"
+    },
+    {
+      "id": "firebaseCloudMessaging",
+      "candidateState": "active-and-runtime-passed",
+      "technicalRole": "processor",
+      "officialContractUrl": "https://firebase.google.com/terms/data-processing-terms/",
+      "officialFinding": "Firebase's Data Processing and Security Terms identify Google as processor for Customer Personal Data and limit processing to providing, securing and monitoring the covered Firebase services under customer instructions.",
+      "actualCandidateTransfers": [
+        "firebase installation or messaging token",
+        "notification title and generic booking or message context",
+        "notification action routing identifiers"
+      ],
+      "playDataTypes": [
+        "deviceOrOtherIds"
+      ],
+      "playTechnicalRecommendation": "service-provider-sharing-exception-supported-subject-to-account-contract-and-legal-confirmation"
+    },
+    {
+      "id": "firebaseCrashlytics",
+      "candidateState": "active-in-release-build",
+      "technicalRole": "processor",
+      "officialContractUrl": "https://firebase.google.com/terms/data-processing-terms/",
+      "officialFinding": "The Firebase Data Processing and Security Terms apply to Firebase Crashlytics and identify Google as processor for covered Customer Personal Data.",
+      "actualCandidateTransfers": [
+        "installation or session identifiers",
+        "crash traces and diagnostics",
+        "app interaction context attached to crash diagnostics"
+      ],
+      "playDataTypes": [
+        "deviceOrOtherIds",
+        "crashData",
+        "otherDiagnostics",
+        "appInteractions"
+      ],
+      "playTechnicalRecommendation": "service-provider-sharing-exception-supported-subject-to-account-contract-and-legal-confirmation"
+    },
+    {
+      "id": "firebaseAuthentication",
+      "candidateState": "phone-active-staging-social-provider-login-disabled",
+      "technicalRole": "processor-for-firebase-authentication-phone-active-separate-social-provider-role-review-if-enabled",
+      "officialContractUrl": "https://firebase.google.com/terms/data-processing-terms/",
+      "officialFinding": "Firebase identifies Google as processor for covered Firebase Customer Personal Data; the Google, Apple and Facebook provider flows remain externally disabled in the bound candidate environment.",
+      "actualCandidateTransfers": [
+        "optional phone number supplied for account verification",
+        "Firebase authentication user identifier",
+        "app-verification and abuse-prevention device context"
+      ],
+      "playDataTypes": [
+        "phoneNumber",
+        "userId",
+        "deviceOrOtherIds"
+      ],
+      "playTechnicalRecommendation": "active-processor-transfer-service-provider-sharing-exception-supported-subject-to-account-contract-and-legal-confirmation"
+    },
+    {
+      "id": "googleWorkspaceSmtpRelay",
+      "candidateState": "active-staging-transactional-mail",
+      "technicalRole": "processor",
+      "officialContractUrl": "https://cloud.google.com/terms/data-processing-addendum/",
+      "officialFinding": "The current Cloud Data Processing Addendum, which replaces the former Google Workspace Data Processing Amendment, states that Google is processor and the customer is controller or processor as applicable.",
+      "actualCandidateTransfers": [
+        "recipient email address",
+        "transactional verification, security, booking or message email content"
+      ],
+      "playDataTypes": [
+        "emailAddress"
+      ],
+      "playTechnicalRecommendation": "service-provider-sharing-exception-supported-subject-to-account-contract-and-legal-confirmation"
+    },
+    {
+      "id": "googleMapsPlatform",
+      "candidateState": "server-proxy-code-present-server-key-unverified-and-current-transfer-not-proven",
+      "technicalRole": "independent-controller-if-activated",
+      "officialContractUrl": "https://cloud.google.com/maps-platform/terms?hl=en-EN",
+      "officialFinding": "Google Maps Platform terms state that Google receives data such as search terms, IP addresses and latitude or longitude and incorporates controller-to-controller data protection terms.",
+      "actualCandidateTransfers": [],
+      "potentialTransfersIfActivated": [
+        "typed address search terms through the first-party backend proxy",
+        "place identifiers through the first-party backend proxy",
+        "the VPS egress IP address"
+      ],
+      "playDataTypes": [],
+      "playTechnicalRecommendation": "no-active-transfer-claim-until-enabled-if-activated-independent-controller-sharing-reclassification-required-before-release"
+    },
+    {
+      "id": "stripe",
+      "candidateState": "disabled-payment-memory-mode",
+      "technicalRole": "not-evaluated-for-this-candidate",
+      "officialContractUrl": null,
+      "officialFinding": "The bound candidate performs no real Stripe payment transfer.",
+      "actualCandidateTransfers": [],
+      "playDataTypes": [],
+      "playTechnicalRecommendation": "not-applicable-to-bound-candidate-full-reclassification-required-before-enabling-real-payments"
+    },
+    {
+      "id": "openAiHelpers",
+      "candidateState": "disabled-and-endpoint-absent",
+      "technicalRole": "not-evaluated-for-this-candidate",
+      "officialContractUrl": null,
+      "officialFinding": "The bound candidate does not call an OpenAI endpoint.",
+      "actualCandidateTransfers": [],
+      "playDataTypes": [],
+      "playTechnicalRecommendation": "not-applicable-to-bound-candidate-full-reclassification-required-before-enabling"
+    }
+  ],
+  "technicalConclusion": {
+    "classificationResearchComplete": true,
+    "activeIndependentControllerTransferProven": false,
+    "activeProcessorServices": [
+      "hostingerVps",
+      "firebaseCloudMessaging",
+      "firebaseCrashlytics",
+      "firebaseAuthentication",
+      "googleWorkspaceSmtpRelay"
+    ],
+    "disabledOrUnprovenServices": [
+      "googleMapsPlatform",
+      "stripe",
+      "openAiHelpers"
+    ],
+    "preparedOverallSharingAnswer": "no-subject-to-owner-contract-acceptance-and-legal-approval",
+    "consoleAnswerAllowed": false
+  },
+  "blockingGates": {
+    "currentAccountContractAcceptanceConfirmed": false,
+    "ownerProviderRoleConfirmation": false,
+    "legalApproval": false,
+    "retentionAndDeletionScheduleApproved": false,
+    "googleMapsActivationAllowed": false,
+    "consoleDraftSaveAllowed": false,
+    "submissionAllowed": false
+  },
+  "evidenceRefs": [
+    "store/privacy-disclosures.json",
+    "docs/evidence/b11/android-binary-privacy-release-check-2026081405.json",
+    "docs/evidence/b11/staging-mail-push-runtime-20260811.json",
+    "docs/evidence/b11/google-cloud-android-api-key-restriction-20260813.json",
+    "docs/architecture/B4_SOCIAL_AUTH_GOOGLE_APPLE_FACEBOOK_2026-08-12.md"
+  ],
+  "boundaries": {
+    "technicalClassificationOnly": true,
+    "legalAdviceProvided": false,
+    "providerContractAcceptedByAgent": false,
+    "consoleAnswersChanged": false,
+    "draftSaved": false,
+    "formSubmitted": false,
+    "mapsActivated": false,
+    "productionChanged": false,
+    "containsSecrets": false,
+    "containsEmailAddresses": false,
+    "containsAccountIdentifiers": false
+  }
+}

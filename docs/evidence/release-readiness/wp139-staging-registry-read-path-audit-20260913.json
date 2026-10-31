@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp139-staging-registry-read-path-audit",
+  "status": "partial-authenticated-read-proven-scope-and-fresh-layer-pull-open",
+  "capturedAt": "2026-09-13T12:06:28Z",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "publishedSourceCommit": "fb04892331758e19b2b3835026ed8174e382dfb7",
+    "auditImplementationCommit": "864d56f08cfd48effd9d877090e30dc92891c667",
+    "sourceInventory": {
+      "tool/audit_staging_registry_read_path.mjs": "a6f3b7d4be5c112b18d44bda24fa22feac950efb489d0c2fbc2614f34d5c0fdf",
+      "test/tool/audit_staging_registry_read_path.test.mjs": "a583ebe0bdee44f51929f02f360fc6abc29d465d1b40e25f17cfffe55f9c86f5"
+    }
+  },
+  "publication": {
+    "githubWorkflowRunId": 34755213368,
+    "conclusion": "success",
+    "backendRegression": "passed",
+    "postgresRunnerProof": "passed",
+    "flutterRegression": "passed",
+    "cleanCheckoutReproducibility": "passed",
+    "publishApiImage": "passed"
+  },
+  "registryTarget": {
+    "repository": "ghcr.io/shareittoo/shareittoo-api",
+    "tag": "fb04892331758e19b2b3835026ed8174e382dfb7",
+    "manifestDigest": "sha256:abd9a7c5b58ee875d10b3818d457db4101943d8b329bcbf963d19dcf24e71e6e",
+    "configDigest": "sha256:57b34ca841aaaaede8ff35cb8b9d56d139924cff265cb177d32eff458b1ef356",
+    "platform": "linux/amd64",
+    "revisionLabel": "fb04892331758e19b2b3835026ed8174e382dfb7",
+    "versionLabel": "0.1.0-fb0489233175",
+    "layerCount": 11,
+    "compressedLayerBytes": 94258580,
+    "orderedLayerDigestListSha256": "b9fe7126e8e149784130f1432c2692f35b25e86213c8d6b50748711ad56e59d7"
+  },
+  "currentRuntime": {
+    "tag": "df39a14b7a19afe467842461a28f1e77fec8445e",
+    "imageId": "sha256:4d440d9481369b477b9495f5cefa419783f974ff35438c3490e54b42322ddfd6",
+    "revisionLabel": "df39a14b7a19afe467842461a28f1e77fec8445e",
+    "versionLabel": "0.1.0-df39a14b7a19",
+    "restartCount": 0,
+    "layerCount": 11,
+    "compressedLayerBytes": 94258002,
+    "orderedLayerDigestListSha256": "82e5a3943de2905d0f6471e2674a5105ce965d90cd0f5afddc9861a9187b38cb",
+    "dockerRuntimeInputsMatchPublishedSource": true,
+    "targetLayerSetMatchesRuntime": false,
+    "targetImageCachedBeforeAudit": false
+  },
+  "readPath": {
+    "dedicatedHeadlessConnection": "passed",
+    "protectedDockerConfigPresent": true,
+    "protectedDockerConfigMode": "600",
+    "protectedDockerConfigOwner": "root",
+    "protectedDockerConfigSizeBytes": 135,
+    "credentialContentRead": false,
+    "authenticatedManifestRead": "passed",
+    "authenticatedConfigBlobRead": "passed",
+    "anonymousManifestHttpStatus": 401,
+    "anonymousTokenHttpStatus": 401,
+    "localGithubCliPackageApiHttpStatus": 403,
+    "credentialScopeInspected": false,
+    "leastPrivilegeReadPackagesOnlyProven": false,
+    "freshLayerPullPerformed": false
+  },
+  "decision": {
+    "requirement": "durable-private-registry-pull",
+    "before": "OPEN",
+    "after": "OPEN",
+    "provenNow": "existing-server-auth-can-read-current-private-manifest-and-config",
+    "stillRequired": "verify-or-replace-server-credential-as-read-packages-only-then-pull-the-exact-uncached-digest-without-switching-runtime",
+    "whyNotPromoted": "stored-credential-scope-was-not-read-or-inferred-and-the-uncached-layer-set-was-not-downloaded"
+  },
+  "officialBasis": {
+    "source": "https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry",
+    "minimumPrivatePullScope": "read:packages",
+    "tokenTypeDocumentedByGithub": "personal-access-token-classic"
+  },
+  "verification": {
+    "focusedAuditContractTests": "passed-3-of-3",
+    "fullLocalTechnicalRegression": "passed-ci-metadata-and-candidate-rollover-mode",
+    "implementationGithubRegressionRunId": 34755676668,
+    "implementationGithubRegressionConclusion": "success",
+    "implementationGithubCodeqlRunId": 34755676684,
+    "implementationGithubCodeqlConclusion": "success",
+    "portfolioBefore": { "pass": 20, "partial": 4, "open": 8 },
+    "portfolioAfter": { "pass": 20, "partial": 4, "open": 8 }
+  },
+  "boundaries": {
+    "githubPackageImagePublished": true,
+    "vpsConfigurationChanged": false,
+    "vpsImageCacheChanged": false,
+    "stagingRuntimeChanged": false,
+    "dockerLoginChanged": false,
+    "credentialCreatedRotatedOrExtracted": false,
+    "packageVisibilityChanged": false,
+    "productionChanged": false,
+    "paymentChanged": false,
+    "storeChanged": false,
+    "firebaseChanged": false,
+    "dnsChanged": false,
+    "deviceContacted": false,
+    "pullRequestMerged": false,
+    "containsCredential": false,
+    "containsToken": false,
+    "containsPrivateFilesystemPath": false
+  }
+}

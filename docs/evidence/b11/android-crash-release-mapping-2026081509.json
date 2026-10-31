@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-crash-release-mapping",
+  "status": "mapping-and-native-symbols-uploaded-console-release-observed-controlled-event-pending",
+  "capturedAt": "2026-08-15T14:01:53Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081509",
+    "commit": "3fa045b98897f9551f91da932136c2b100b2d700",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "artifacts": {
+    "aabSha256": "8295b7cef0de1061acdf4179080deda0fb13133c4d7fd306da0d51062312fcc5",
+    "apkSha256": "517e1e15b8bbb4409444d29aa5094feedba590078fadaba3293142ab62f1593f",
+    "embeddedProguardMappingSha256": "fd86807e0533eedbae78052979920bcd8f40124e8e6a1db1a3f76eee92286651",
+    "embeddedMappingIdSha256": "8018f404e2ec99faeda4bfb6b9fb3a583b7ff30e8760a89a25be58085ebec239",
+    "nativeDebugSymbolsZipSha256": "b5964d753ff1193a77f3c9de4bf56c832c72cc5807d25e25478b411cb90f5c51",
+    "nativeSymbolMembers": [
+      {
+        "abi": "armeabi-v7a",
+        "sha256": "27bf0edea5454c1a63e8c2caa9cda43ad335ed4e663626dfbb32bcd602e6f29f"
+      },
+      {
+        "abi": "arm64-v8a",
+        "sha256": "1dad644b879e1ddd6e8134d7892a2dc8127e08bee3490d565a89ea39cc4508c2"
+      },
+      {
+        "abi": "x86_64",
+        "sha256": "ef827b186c04aacd96893ce551de8f6f17a6fc37e126099f5433c1a3d55c02f2"
+      }
+    ]
+  },
+  "verifications": {
+    "aabIdentity": "passed",
+    "embeddedMappingPresent": "passed",
+    "mappingIdPresentAndHashed": "passed",
+    "nativeSymbolsPresentForAllBundledAbis": "passed",
+    "nativeSymbolsMatchStandaloneArchive": "passed",
+    "nativeSymbolsPackagedForAllBundledAbis": "passed",
+    "nativeSymbolGeneration": "passed",
+    "nativeSymbolGenerator": "csym",
+    "nativeSymbolUploadToCrashlytics": "passed",
+    "nativeSymbolUploadBuildResult": "successful",
+    "nativeSymbolCacheDrainedAfterUpload": "passed",
+    "originalAabMappingUploadedToCrashlytics": "passed",
+    "uploadBuildResult": "successful",
+    "controlledSanitizedCrashEvent": "pending",
+    "consoleReleaseAssignment": "passed",
+    "consoleObservedVersion": "1.0.0 (2026081509)"
+  },
+  "uploadProof": {
+    "mappingUpload": "exact-build-2026081509-mapping-and-id",
+    "mappingUploadTaskResult": "successful",
+    "mappingIdMatchesArchivedApk": true,
+    "mappingFileMatchesArchivedAab": true,
+    "nativeSymbolUploadSourceBuildNumber": "2026081405",
+    "nativeDebugSymbolsZipSha256Matches": true,
+    "allNativeSymbolMemberHashesMatch": true,
+    "differentMappingIdReused": false
+  },
+  "consoleObservation": {
+    "capturedAt": "2026-08-17T03:40:25Z",
+    "source": "firebase-console-read-only",
+    "observedLatestRelease": "1.0.0 (2026081509)",
+    "latestReleaseMatchesExactCandidate": true,
+    "issueCountsUsedAsCandidateProof": false,
+    "settingsChanged": false,
+    "eventGenerated": false
+  },
+  "releaseMonitorObservation": {
+    "capturedAt": "2026-08-17T04:02:32Z",
+    "source": "firebase-console-read-only",
+    "observedRelease": "1.0.0 (2026081509)",
+    "displayedState": "operational",
+    "crashFreeUsersPercent": 100,
+    "crashFreeSessionsPercent": 100,
+    "newIssuesDisplayed": false,
+    "usedAsControlledEventProof": false,
+    "settingsChanged": false,
+    "eventGenerated": false
+  },
+  "deviceGateObservation": {
+    "capturedAt": "2026-08-17T06:19:00Z",
+    "evidenceRef": "docs/evidence/b11/android-crash-controlled-event-gate-2026081509-20260817T061900Z.json",
+    "independentCrashOptInUiAvailableInCandidate": false,
+    "coldDiagnosticLinkResult": "blocked",
+    "eventGenerated": false,
+    "newCandidateRequired": true
+  },
+  "boundaries": {
+    "uploadedToStore": true,
+    "productionCrashGenerated": false,
+    "controlledStagingEventGenerated": false,
+    "eventContainsAccountData": false,
+    "eventContainsMessageOrAddressData": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

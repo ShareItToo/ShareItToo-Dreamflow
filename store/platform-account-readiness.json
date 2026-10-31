@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "state": "setup-required",
+  "googlePlay": {
+    "status": "ready",
+    "accountType": "personal",
+    "developerAccountCreated": true,
+    "registrationFeePaid": true,
+    "identityVerification": "verified",
+    "deviceVerification": "verified",
+    "phoneVerification": "verified",
+    "appRecordCreated": true,
+    "evidenceRef": "docs/evidence/b11/store-platform-account-readiness-20260812.json"
+  },
+  "apple": {
+    "status": "membership-required",
+    "developerAccountCreated": false,
+    "membershipActive": false,
+    "identityVerification": "pending",
+    "agreementsAccepted": false,
+    "signingTeamAvailable": false,
+    "appRecordCreated": false,
+    "evidenceRef": "docs/evidence/b11/store-platform-account-readiness-20260812.json"
+  },
+  "firebase": {
+    "status": "owner-terms-pending-confirmation",
+    "ownerTermsAccepted": false,
+    "evidenceRef": null
+  },
+  "boundaries": {
+    "containsEmailAddresses": false,
+    "containsAccountIdentifiers": false,
+    "containsSecrets": false,
+    "purchaseMade": true,
+    "agreementAccepted": true,
+    "storeSubmissionChanged": false
+  }
+}

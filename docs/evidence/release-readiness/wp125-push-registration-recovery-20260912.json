@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp125-push-registration-recovery",
+  "status": "source-complete-physical-successor-candidate-replay-pending",
+  "capturedOn": "2026-09-12",
+  "installedCandidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091110",
+    "candidateSourceCommit": "c8e2a49e14f5cae0026fa5f2bc327859fe0ff17b",
+    "apkSha256": "711f058c113bd714abb1e4bcedf05d62a382004e1bf9882f6d85d04b876dd0f7",
+    "environment": "staging",
+    "containsWp125": false
+  },
+  "onePlusObservation": {
+    "visiblePushOptInEnabled": true,
+    "androidNotificationPermissionGranted": true,
+    "controlledForegroundProbeCount": 1,
+    "foregroundBannerObserved": false,
+    "backendRegistrationCountObserved": 2,
+    "activationRegistrationAttribution": "unknown",
+    "transportResponseLoss": "hypothesis-not-proven",
+    "physicalSuccessProven": false,
+    "furtherProbeAfterDisconnect": false,
+    "deviceAvailableForWp125Replay": false
+  },
+  "provenRootCauseClass": {
+    "visibleOptInCouldOutliveFailedRegistration": true,
+    "registrationFailureCouldBeReturnedAsSuccess": true,
+    "tokenRefreshListenerDependedOnInitialToken": true,
+    "resumeRecoveryWasMissing": true,
+    "authenticatedRealtimeRecoveryWasMissing": true,
+    "backendMutationLackedExactOwnerEpoch": true,
+    "pendingCleanupLackedExactOwnerBinding": true,
+    "dialogOutcomeLackedExactRouteOwnership": true
+  },
+  "implementation": {
+    "sourceHead": "a695306350bd868eda64fb9af8b388ed61923578",
+    "epochBoundSerialOperations": true,
+    "exactOwnerEpochBackendMutations": true,
+    "tokenRefreshListenerInstalledBeforeInitialTokenAttempt": true,
+    "resumeRegistrationRecovery": true,
+    "authenticatedRealtimeRegistrationRecovery": true,
+    "opaqueExactOwnerCleanupBinding": true,
+    "transportFailureNeverPresentedAsRegistrationSuccess": true,
+    "visibleOptInRetainedWhileDeliveryUnconfirmed": true,
+    "staleAccountResultSuppressed": true,
+    "exactDialogRouteOwnership": true,
+    "sourceInventory": [
+      {
+        "path": "lib/services/firebase_runtime.dart",
+        "sha256": "b35d4952146e108b581a7d8fe680cfc5642f065cb755e2f66efad13e94678936"
+      },
+      {
+        "path": "lib/services/backend_repository.dart",
+        "sha256": "8f646c05bf52b45ec9ba9e892c4944ea588715e46a4c35b7ad5c33fe627dfb62"
+      },
+      {
+        "path": "lib/screens/notification_settings_screen.dart",
+        "sha256": "de74becf597365dec2f1ddb738696af9b6373ab6a586dbed3c4ad5cea2941f86"
+      },
+      {
+        "path": "lib/services/firebase_service_preferences.dart",
+        "sha256": "7a649291a0997086bceb760fd587ff7f8d27a0536fe6b89e323dc87060274f53"
+      },
+      {
+        "path": "lib/services/local_principal_scope.dart",
+        "sha256": "d464e55c40345404883fc6c09711a9dbc6830e19f69b961b1cedeca901e7fa52"
+      },
+      {
+        "path": "lib/services/backend_realtime_service.dart",
+        "sha256": "aed546b291363cfb3433aa5444c0a75a5d8f9a224f429e32502935cc85f710f2"
+      },
+      {
+        "path": "lib/widgets/foreground_push_host.dart",
+        "sha256": "e4bb9bbe475c50a6a0dc2ffdc716487b1357ec7bdefd2fe27c0b2b506ff7e399"
+      }
+    ]
+  },
+  "verification": {
+    "focusedAnalyzerIssues": 0,
+    "focusedFlutterTestsPassed": 37,
+    "focusedNodeTestsPassed": 22,
+    "fullScopedLocalTechnicalRegressionPassed": true,
+    "webWasmPassed": true,
+    "loopbackSmokePassed": true,
+    "androidDebugBuildPassed": true,
+    "privacyValidatorPassed": true,
+    "retentionValidatorPassed": true,
+    "githubRegression": {
+      "runId": "34700596400",
+      "headSha": "a695306350bd868eda64fb9af8b388ed61923578",
+      "status": "success"
+    },
+    "githubCodeql": {
+      "runId": "34700596346",
+      "headSha": "a695306350bd868eda64fb9af8b388ed61923578",
+      "status": "success"
+    },
+    "openBranchCodeScanningAlerts": 0
+  },
+  "remaining": {
+    "successorCandidateBuilt": false,
+    "pixelPhysicalReplayPassed": false,
+    "onePlusPhysicalReplayPassed": false,
+    "onePlusRetestRequiredWhileDisconnected": false,
+    "next": "strictly-higher-signed-internal-staging-successor-and-pixel-push-replay"
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "firebaseChanged": false,
+    "backendDeploymentChanged": false,
+    "paymentChanged": false,
+    "realMoneyUsed": false,
+    "prMerged": false,
+    "credentialsRecorded": false,
+    "emailAddressRecorded": false,
+    "tokenRecorded": false,
+    "rawDeviceIdentifierRecorded": false
+  }
+}

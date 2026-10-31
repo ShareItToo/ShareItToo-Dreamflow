@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-release-candidate",
+  "status": "installed-launched-controlled-crash-diagnostic-sent-manual-matrix-pending",
+  "generatedAt": "2026-08-10T15:13:50Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081027",
+    "commit": "341a8356015bc367e48fe6a7134c10a1e7bc0193",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "android": {
+    "delivery": "pending",
+    "aabSha256": "7ea2c358914ac2934e5401119ee7bf3417f75e25a20e571e9d4f8d81813d79e0",
+    "apkSha256": "341d4a695209795423f756beffb8062a10da1ea428820014793d99d4269a81ae",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "packageIdentityVerified": true
+  },
+  "privacyAndNetwork": {
+    "binaryScan": "passed",
+    "binaryScanReportSha256": "a625cf9780f4971e61339ab2bcd950de27ab4b02eb6134fd0e025d0fa3f94079",
+    "targetSdkVersion": 35,
+    "backupDisabled": true,
+    "cleartextTrafficDisabled": true,
+    "analyticsSdkPresent": false,
+    "advertisingSdkPresent": false,
+    "disclosedSdks": [
+      "Firebase Cloud Messaging",
+      "Firebase Crashlytics"
+    ],
+    "findings": []
+  },
+  "exactCandidateDiagnostics": {
+    "directInstallAndLaunch": "passed",
+    "controlledSanitizedCrashEvent": "passed",
+    "crashlyticsConsoleReleaseAssignment": "passed",
+    "guestAppLinks": "passed",
+    "authenticatedSessionRestore": "passed",
+    "syntheticRoleBooking": "pending",
+    "authenticatedDeepLinks": "passed",
+    "foregroundFcm": "pending",
+    "backgroundFcm": "pending",
+    "terminatedProcessFcm": "pending"
+  },
+  "staging": {
+    "serverCommit": "ec570acfddc218cec6d2bfba43d4feb33bda4cfc",
+    "liveHttpStatus": 200,
+    "readyHttpStatus": 200,
+    "fcmEnabled": true,
+    "googleCredentialValidation": "passed",
+    "productionInvariant": "passed"
+  },
+  "boundaries": {
+    "uploadedToStore": false,
+    "installedOnPhysicalDevice": true,
+    "controlledFcmSentToSyntheticAccount": false,
+    "controlledCrashDiagnosticSent": true,
+    "productionPushSent": false,
+    "productionCrashGenerated": false,
+    "iosValidated": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

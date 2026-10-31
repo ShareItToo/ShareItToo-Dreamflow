@@ -1,0 +1,306 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-48h-r4-android-lifecycle-failure-matrix",
+  "status": "verified-r4-regression-and-codeql-passed",
+  "observedOn": "2026-08-24",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "r4ImplementationCommit": "a843e33e7b86d2e7fd1a8dec288a834af51f49fc",
+    "physicalCandidateCommit": "19fc3221bc3879788db9c48b70a89a33656116b6",
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026082404"
+  },
+  "physicalDeviceObservation": {
+    "status": "passed-bounded-device-lifecycle-diagnostic",
+    "capturedAt": "2026-08-24T13:25:17.522Z",
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "17",
+    "apiLevel": 37,
+    "securityPatch": "2026-07-05",
+    "installedCandidateHashMatched": true,
+    "appDataPreserved": true,
+    "navigationDestinationCount": 5,
+    "fatalOrAnrEntries": 0,
+    "containsRawDeviceIdentifier": false
+  },
+  "systemSettings": {
+    "orientationReadBeforeChange": true,
+    "orientationChangedReversibly": true,
+    "orientationRestoredExactly": true,
+    "cameraPermissionObservedDenied": true,
+    "cameraPermissionChanged": false,
+    "talkBackChanged": false,
+    "fontScaleChanged": false,
+    "networkChanged": false,
+    "accessibilitySettingsChanged": false,
+    "deviceLeftAltered": false
+  },
+  "matrix": [
+    {
+      "id": "cold_start",
+      "result": "passed-force-stop-to-foreground",
+      "method": "physical-device-bounded",
+      "evidence": "tool/diagnose_r4_android_lifecycle.mjs"
+    },
+    {
+      "id": "warm_start",
+      "result": "passed-existing-process-to-foreground",
+      "method": "physical-device-bounded",
+      "evidence": "tool/diagnose_r4_android_lifecycle.mjs"
+    },
+    {
+      "id": "process_kill",
+      "result": "passed-process-absent-before-restart",
+      "method": "physical-device-bounded",
+      "evidence": "tool/diagnose_r4_android_lifecycle.mjs"
+    },
+    {
+      "id": "app_resume",
+      "result": "passed-same-process-resume",
+      "method": "physical-device-bounded",
+      "evidence": "tool/diagnose_r4_android_lifecycle.mjs"
+    },
+    {
+      "id": "background_foreground",
+      "result": "passed-same-process-background-foreground",
+      "method": "physical-device-bounded",
+      "evidence": "tool/diagnose_r4_android_lifecycle.mjs"
+    },
+    {
+      "id": "repeated_navigation",
+      "result": "passed-five-primary-destinations",
+      "method": "physical-device-bounded",
+      "evidence": "tool/diagnose_r4_android_lifecycle.mjs"
+    },
+    {
+      "id": "configuration_orientation",
+      "result": "passed-change-and-exact-restore",
+      "method": "physical-device-bounded",
+      "evidence": "tool/diagnose_r4_android_lifecycle.mjs"
+    },
+    {
+      "id": "large_text_accessibility_semantics",
+      "result": "passed-two-hundred-percent-and-semantic-contracts",
+      "method": "automated-flutter-and-validator",
+      "evidence": "test/large_text_primary_surfaces_test.dart"
+    },
+    {
+      "id": "permission_denied",
+      "result": "passed-existing-denied-state-without-mutation",
+      "method": "physical-device-bounded",
+      "evidence": "tool/diagnose_r4_android_lifecycle.mjs"
+    },
+    {
+      "id": "permission_permanently_denied",
+      "result": "passed-visible-settings-guidance-contract-not-physical-mutation",
+      "method": "automated-fail-closed-contract",
+      "evidence": "test/tool/create_listing_photo_async_lifecycle_wiring.test.mjs"
+    },
+    {
+      "id": "camera_unavailable",
+      "result": "passed-visible-error-and-no-silent-source-switch",
+      "method": "automated-fail-closed-contract",
+      "evidence": "test/tool/create_listing_photo_async_lifecycle_wiring.test.mjs"
+    },
+    {
+      "id": "image_access_unavailable",
+      "result": "passed-visible-error-and-preserved-editor",
+      "method": "automated-fail-closed-contract",
+      "evidence": "test/tool/create_listing_photo_async_lifecycle_wiring.test.mjs"
+    },
+    {
+      "id": "backend_unavailable",
+      "result": "passed-manual-editor-fallback-with-state-preserved",
+      "method": "automated-synthetic-failure-injection",
+      "evidence": "test/tool/blue_ocean_draft_recovery_wiring.test.mjs"
+    },
+    {
+      "id": "mock_ai_timeout",
+      "result": "passed-timeout-fails-closed-and-cleans-buffers",
+      "method": "automated-synthetic-failure-injection",
+      "evidence": "backend/test/listing_ai_image_pipeline.test.js"
+    },
+    {
+      "id": "malformed_ai_response",
+      "result": "passed-schema-rejection-without-publication",
+      "method": "automated-synthetic-failure-injection",
+      "evidence": "backend/test/listing_ai_gateway.test.js"
+    },
+    {
+      "id": "price_engine_unavailable",
+      "result": "passed-review-failure-preserves-manual-editor",
+      "method": "automated-fail-closed-contract",
+      "evidence": "test/tool/blue_ocean_draft_recovery_wiring.test.mjs"
+    },
+    {
+      "id": "stale_quote",
+      "result": "passed-server-authoritative-stale-rejection",
+      "method": "automated-node-regression",
+      "evidence": "backend/test/v52_contract_workflow.test.js"
+    },
+    {
+      "id": "local_state_restoration",
+      "result": "passed-encrypted-owner-bound-twenty-four-hour-restore",
+      "method": "automated-encrypted-storage",
+      "evidence": "test/blue_ocean_draft_recovery_service_test.dart"
+    },
+    {
+      "id": "logout_login_synthetic",
+      "result": "passed-stale-session-rejection-and-draft-cleanup",
+      "method": "automated-synthetic-session",
+      "evidence": "test/auth_logout_resilience_test.dart"
+    },
+    {
+      "id": "deep_link_rejection_acceptance",
+      "result": "passed-invalid-and-valid-app-intents",
+      "method": "physical-device-bounded",
+      "evidence": "tool/diagnose_r4_android_lifecycle.mjs"
+    },
+    {
+      "id": "duplicate_submission",
+      "result": "passed-authoritative-replay-with-single-listing",
+      "method": "local-postgres-integration",
+      "evidence": "backend/test/postgres_foundation.integration.test.js"
+    },
+    {
+      "id": "double_tap",
+      "result": "passed-client-busy-guard-and-disabled-actions",
+      "method": "automated-ui-contract",
+      "evidence": "test/tool/blue_ocean_draft_recovery_wiring.test.mjs"
+    },
+    {
+      "id": "interrupted_draft",
+      "result": "passed-bounded-local-snapshot-with-fresh-review-required",
+      "method": "automated-encrypted-storage",
+      "evidence": "test/blue_ocean_draft_recovery_service_test.dart"
+    },
+    {
+      "id": "interrupted_publication",
+      "result": "passed-owner-bound-receipt-replay-no-auto-publish",
+      "method": "local-postgres-integration",
+      "evidence": "backend/test/postgres_foundation.integration.test.js"
+    },
+    {
+      "id": "app_restart_during_draft",
+      "result": "passed-secure-storage-reload-and-gate-reset",
+      "method": "automated-encrypted-storage",
+      "evidence": "test/tool/blue_ocean_draft_recovery_wiring.test.mjs"
+    },
+    {
+      "id": "server_restart_during_draft",
+      "result": "passed-draft-review-survives-server-restart",
+      "method": "local-postgres-integration",
+      "evidence": "backend/test/postgres_foundation.integration.test.js"
+    },
+    {
+      "id": "server_restart_during_cart_request",
+      "result": "passed-cart-recheck-and-request-replay-after-restart",
+      "method": "local-postgres-integration",
+      "evidence": "backend/test/postgres_foundation.integration.test.js"
+    },
+    {
+      "id": "offline_to_online_recovery",
+      "result": "passed-local-draft-recovery-contract-without-device-network-mutation",
+      "method": "automated-fail-closed-contract",
+      "evidence": "test/tool/blue_ocean_draft_recovery_wiring.test.mjs"
+    }
+  ],
+  "localRecovery": {
+    "encryptedPlatformStorage": true,
+    "ownerBound": true,
+    "retentionHours": 24,
+    "maximumEncodedBytes": 131072,
+    "rawImageBytesStored": false,
+    "credentialsStored": false,
+    "ownerConfirmationsStored": false,
+    "readyFingerprintStored": false,
+    "freshConsentAndReviewRequired": true,
+    "clearedOnLogout": true,
+    "clearedOnPublication": true,
+    "clearedOnPhotoMutation": true
+  },
+  "publicationRecovery": {
+    "explicitOwnerActionStillRequired": true,
+    "ownerAndDraftBound": true,
+    "appendOnlyReceiptRequired": true,
+    "sameListingReturnedOnRetry": true,
+    "automaticPublicationAllowed": false,
+    "missingReceiptFailsClosed": true
+  },
+  "verification": {
+    "focusedR4NodeTests": "passed-109",
+    "focusedR4FlutterTests": "passed-19",
+    "quoteLogoutOfflineNodeTests": "passed-24",
+    "logoutResilienceFlutterTests": "passed-5",
+    "postgresRestartIntegration": "passed-one-complete-scenario-and-cleaned",
+    "flutterAnalyze": "passed-no-issues",
+    "privacyDisclosureValidator": "passed-draft-fail-closed",
+    "retentionValidator": "passed-draft-fail-closed",
+    "fullTechnicalRegression": "passed-candidate-rollover-ci-metadata-mode",
+    "githubRegression": "passed",
+    "githubCodeql": "passed-no-new-alerts"
+  },
+  "githubVerification": {
+    "implementationCommit": "a843e33e7b86d2e7fd1a8dec288a834af51f49fc",
+    "verifiedHead": "c7dba0d0af5d00c5e2b4c5439bf0002e1185a9c5",
+    "regression": {
+      "runId": 32736181817,
+      "conclusion": "success",
+      "postgresJobId": 97459436744,
+      "postgresConclusion": "success",
+      "flutterJobId": 97459437155,
+      "flutterConclusion": "success",
+      "backendJobId": 97459437367,
+      "backendConclusion": "success",
+      "parallelStabilityExecuted": false,
+      "signedCandidateBuilt": false,
+      "apiImageBuilt": true,
+      "apiImagePublished": false,
+      "publishApiImageJobId": 97461834174,
+      "publishApiImageConclusion": "skipped"
+    },
+    "codeql": {
+      "workflowRunId": 32736181796,
+      "workflowConclusion": "success",
+      "advancedSecurityCheckId": 97459435293,
+      "advancedSecurityConclusion": "success",
+      "newAlerts": 0
+    }
+  },
+  "limitations": {
+    "physicalCandidatePrecedesR4Implementation": true,
+    "permanentlyDeniedPermissionPhysicallyMutated": false,
+    "offlineNetworkPhysicallyMutated": false,
+    "newR4RecoveryCodeClaimedPhysical": false,
+    "performanceCertificationClaimed": false,
+    "releaseCertificationClaimed": false,
+    "temporaryWorkaroundMadePermanent": false
+  },
+  "boundaries": {
+    "privateDeviceMediaRead": false,
+    "screenshotsCaptured": false,
+    "rawDeviceIdentifierRecorded": false,
+    "deviceUninstalled": false,
+    "deviceDataReset": false,
+    "apiBillingCreated": false,
+    "externalAiProviderCalled": false,
+    "realMoneyUsed": false,
+    "productionChanged": false,
+    "cloudChanged": false,
+    "firebaseChanged": false,
+    "paymentChanged": false,
+    "storeChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "pilotActivated": false,
+    "publicReleasePerformed": false,
+    "pullRequestMerged": false,
+    "credentialsPersistedInRepository": false,
+    "containsSecrets": false
+  },
+  "nextPackage": "R5_REPEATED_DEVICE_STABILITY"
+}

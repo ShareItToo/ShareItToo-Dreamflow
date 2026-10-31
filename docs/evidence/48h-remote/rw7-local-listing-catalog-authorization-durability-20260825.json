@@ -1,0 +1,239 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-rw7-local-listing-catalog-authorization-durability",
+  "status": "verified-regression-and-codeql-passed",
+  "implementationBaseHead": "085c4b497083f0df3dc5209d9fa39177290695e0",
+  "implementationHead": "33d1766467dbfdbbabe0d12823ac76e4614b7224",
+  "architecture": "docs/architecture/rw7-local-listing-catalog-authorization-durability-recovery-2026-08-25.md",
+  "report": "docs/operations/RW7_LOCAL_LISTING_CATALOG_AUTHORIZATION_DURABILITY_RECOVERY_2026-08-25.md",
+  "predecessor": {
+    "package": "RW6",
+    "evidence": "docs/evidence/48h-remote/rw6-local-operational-record-authorization-truth-recovery-20260825.json",
+    "verifiedImplementationHead": "bb0d651b133b048084758dd558d52ae5d09242ee",
+    "closureCommit": "085c4b497083f0df3dc5209d9fa39177290695e0"
+  },
+  "scope": {
+    "allowed": [
+      "matching-auth-session-and-exact-owner-listing-mutations",
+      "public-catalog-reads-preserved",
+      "strict-bounded-whole-document-decoding",
+      "exact-raw-corruption-preservation",
+      "serialized-verified-listing-mutations",
+      "local-catalog-revision-conflict-guard",
+      "capacity-and-storage-failure-without-media-pruning",
+      "no-unapproved-ended-listing-auto-deletion",
+      "current-owner-listing-privacy-export",
+      "scoped-account-deletion-listing-deactivation",
+      "account-transition-safe-owner-listing-ui",
+      "synthetic-deterministic-local-regression"
+    ],
+    "excluded": [
+      "booking-contract-acceptance-quote-and-cancellation",
+      "payment-refund-payout-and-real-money",
+      "handover-return-damage-and-needs-review",
+      "listing-business-content-and-moderation-policy",
+      "production-backend-schema-authority-and-live-infrastructure",
+      "provider-ai-candidate-device-store-pilot-and-legal-owner-gates",
+      "gitguardian-finding-content-pr-merge-and-history-rewrite"
+    ],
+    "syntheticOnly": true,
+    "localOnly": true,
+    "timingWorkaroundAllowed": false,
+    "testParallelismReductionAllowed": false,
+    "silentMediaPruningAllowed": false
+  },
+  "findings": [
+    {
+      "id": "RW7-P0-FOREIGN-LISTING-MUTATION-001",
+      "state": "resolved-and-tested",
+      "resolution": "Local listing mutations require the current session and exact stored owner."
+    },
+    {
+      "id": "RW7-P0-STALE-PROFILE-AUTHORIZATION-002",
+      "state": "resolved-and-tested",
+      "resolution": "A cached profile without its matching auth session cannot authorize a listing write."
+    },
+    {
+      "id": "RW7-P0-PARTIAL-CORRUPTION-REWRITE-003",
+      "state": "resolved-and-tested",
+      "resolution": "One malformed listing closes the whole document and preserves exact prior bytes."
+    },
+    {
+      "id": "RW7-P0-DUPLICATE-ID-AMBIGUITY-004",
+      "state": "resolved-and-tested",
+      "resolution": "Duplicate listing identifiers are rejected as ambiguous without sanitization."
+    },
+    {
+      "id": "RW7-P0-UNAPPROVED-60-DAY-DELETION-005",
+      "state": "resolved-and-tested",
+      "resolution": "Ended listings remain retained until an approved retention rule exists."
+    },
+    {
+      "id": "RW7-P0-LOST-UPDATE-CONCURRENCY-006",
+      "state": "resolved-and-tested",
+      "resolution": "One listing queue serializes verified read-modify-write operations."
+    },
+    {
+      "id": "RW7-P0-STALE-EDIT-AND-MISSING-UPSERT-007",
+      "state": "resolved-and-tested",
+      "resolution": "Stale revisions and missing local mutation targets fail closed without upsert."
+    },
+    {
+      "id": "RW7-P0-STORAGE-FAILURE-MEDIA-PRUNING-008",
+      "state": "resolved-and-tested",
+      "resolution": "Capacity and storage failures preserve prior bytes and never strip retained media."
+    },
+    {
+      "id": "RW7-P0-PRIVACY-EXPORT-DELETION-SCOPE-009",
+      "state": "resolved-and-tested",
+      "resolution": "Export and confirmed local deletion apply current-owner listing lifecycle truth."
+    },
+    {
+      "id": "RW7-P1-STALE-OWNER-UI-FALSE-SUCCESS-010",
+      "state": "resolved-and-tested",
+      "resolution": "Owner surfaces clear stale accounts and report success only after verified reload."
+    }
+  ],
+  "verification": {
+    "changedFileAnalyze": "passed-zero-issues",
+    "focusedRw7Flutter": "passed-15",
+    "defaultFlutter": "passed-486-with-3-documented-profile-skips",
+    "lifecyclePrivacyRetentionProvider": "passed",
+    "rw7WiringTests": "passed",
+    "fullTechnicalRegression": "passed",
+    "githubRegression": "passed",
+    "githubCodeql": "passed-no-new-alerts"
+  },
+  "githubVerification": {
+    "head": "33d1766467dbfdbbabe0d12823ac76e4614b7224",
+    "regressionRunId": 32825143509,
+    "codeqlRunId": 32825143456,
+    "regressionConclusion": "success",
+    "codeqlConclusion": "success",
+    "openCodeScanningAlerts": 0
+  },
+  "ratchets": {
+    "reason": "validated-local-listing-lifecycle-privacy-and-retention-source-change",
+    "privacyManifestSha256": "35c3a08e20e4f55183649af934e9415ea8cfd0c2d3327483a518cf477daee449",
+    "retentionManifestSha256": "955a901bbaec6511d119558b953274c3e5059a97c657fdcf93f2a939523315c8",
+    "activeProviderState": "prepared-hold",
+    "completedOwnerDecisions": 0,
+    "requiredOwnerDecisions": 10,
+    "externalReadiness": false
+  },
+  "gates": {
+    "BUILD_READY": "not-granted",
+    "PLAY_UPLOAD_APPROVED": "not-granted",
+    "HUMAN_PILOT_ACTIVATED": "not-granted",
+    "PR7_MERGE_APPROVED": "not-granted",
+    "R17_GITGUARDIAN_HISTORY_REVIEW_COMPLETE": "not-granted"
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "cloudChanged": false,
+    "firebaseChanged": false,
+    "storeChanged": false,
+    "paymentChanged": false,
+    "realMoneyUsed": false,
+    "realProviderTrafficSent": false,
+    "externalAiRuntimeEnabled": false,
+    "realTesterEnrolled": false,
+    "candidateCreated": false,
+    "deviceGateClaimed": false,
+    "legalApprovalChanged": false,
+    "gitHistoryRewritten": false,
+    "prMerged": false
+  },
+  "sourceInventory": [
+    {
+      "path": "lib/screens/create_listing_screen.dart",
+      "sha256": "331b7c58116bc0fa76d25eca68c0352f76326dcbb0ab6521200a3d12f1988ce6"
+    },
+    {
+      "path": "lib/screens/my_listings_screen.dart",
+      "sha256": "c43d48a4eecbbd7e58ed5f6a47787f864130d7e81a44c2fe31ca221e21cbe65e"
+    },
+    {
+      "path": "lib/screens/own_profile_screen.dart",
+      "sha256": "3c59cc158fd327bb19a82553e24adf7c1c867367a26020c99c3f065ab7720a5e"
+    },
+    {
+      "path": "lib/screens/privacy_info_screen.dart",
+      "sha256": "b8322e4b53f08b8c644bee12d498bc713a0f28ef6f55a263f28f017fe9a24b61"
+    },
+    {
+      "path": "lib/services/account_deletion_service.dart",
+      "sha256": "c4f4da84e907f6007e61a04b54654c4386ad93ed7b16657c517ad99bd8599c3a"
+    },
+    {
+      "path": "lib/services/data_service.dart",
+      "sha256": "f23002e697a484a16e392e8fcf5dd9de527ecc55eb791dde7fab98386e37375f"
+    },
+    {
+      "path": "lib/services/shared_persistence_sync.dart",
+      "sha256": "b4294550220badf563c3a2fb0ea1929e15b0026483fb3dd3633370c6b486adb2"
+    },
+    {
+      "path": "store/g2-data-lifecycle.json",
+      "sha256": "1753947c8f92f4f6e82a6a7bb5e3a6e990368589b48dc3a1716ca7c9aecd749d"
+    },
+    {
+      "path": "store/privacy-disclosures.json",
+      "sha256": "35c3a08e20e4f55183649af934e9415ea8cfd0c2d3327483a518cf477daee449"
+    },
+    {
+      "path": "store/retention-deletion-readiness.json",
+      "sha256": "955a901bbaec6511d119558b953274c3e5059a97c657fdcf93f2a939523315c8"
+    },
+    {
+      "path": "tool/validate_g2_data_lifecycle.mjs",
+      "sha256": "c0aede510163ab7580a6765d878d706ad6d957e795a8326053aeae84a5bbee97"
+    },
+    {
+      "path": "tool/validate_privacy_disclosures.mjs",
+      "sha256": "b78f41588e8a1a14520df4f5a730ae1190924f3b2f177fe40f6569f76bfb56f9"
+    },
+    {
+      "path": "tool/validate_retention_deletion_readiness.mjs",
+      "sha256": "dc7d749b5fb4100231f1de756b41f1406507f6abfe2c0953d4a5ad49bcb91b96"
+    },
+    {
+      "path": "tool/validate_active_infrastructure_mail_provider_readiness.mjs",
+      "sha256": "6618e79f9148634ddd6ef7ccf2b96d54b5ed4b8fd081ad9e20db1110646e8ec6"
+    },
+    {
+      "path": "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
+      "sha256": "364037cefb30cfd55da5f19a8e3394e0308dae7e15b3760e159f9f28e5d17f7d"
+    },
+    {
+      "path": "scripts/technical_regression_check.sh",
+      "sha256": "61e7a485cf99f041394995b49355e2b283f6e36a04977589e2ba228e22137fb2"
+    },
+    {
+      "path": "test/rw7_local_listing_catalog_authorization_durability_test.dart",
+      "sha256": "b4a54f27e5af0982029b93ea22946e6c29311de001814714bfc76ab31a798d85"
+    },
+    {
+      "path": "test/tool/rw7_local_listing_catalog_authorization_durability_wiring.test.mjs",
+      "sha256": "029061ed2df650fc53fdd464f7c86a077825229a2cbd6aa58feef0b5dc872d7c"
+    },
+    {
+      "path": "test/tool/validate_rw7_local_listing_catalog_authorization_durability.test.mjs",
+      "sha256": "049e4da6a65b7b289bcfe36715c6d69083a31625f98cf7c62be6e6c7575e4bcc"
+    },
+    {
+      "path": "docs/compliance/g2l-g2-data-lifecycle-2026-08-20.md",
+      "sha256": "c9336c11f10270bff1127cce568106d48461e1f6ffb00c2dd08119401c8b5a20"
+    },
+    {
+      "path": "docs/architecture/rw7-local-listing-catalog-authorization-durability-recovery-2026-08-25.md",
+      "sha256": "61852ed763e191ac999c67313758a09f772452d991b6799f028b831aa428b563"
+    },
+    {
+      "path": "docs/operations/RW7_LOCAL_LISTING_CATALOG_AUTHORIZATION_DURABILITY_RECOVERY_2026-08-25.md",
+      "sha256": "f93112a4326103db03c3fbb57b93e427ec5c9fd6bcf16172edc3e05fc159f947"
+    }
+  ]
+}

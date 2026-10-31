@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "kind": "git-history-cleanup-dry-run",
+  "capturedAt": "2026-08-10T23:36:43Z",
+  "sourceHead": "0561f2a",
+  "baseBranch": "main",
+  "status": "ready-awaiting-explicit-approval",
+  "strategy": {
+    "name": "consolidated-feature-snapshot",
+    "description": "Create one security-safe feature commit with the current tree and the current main branch as its parent.",
+    "featureCommitCountAfterRewrite": 1,
+    "pushModeAfterApproval": "force-with-lease"
+  },
+  "verification": {
+    "isolatedCloneUsed": true,
+    "historicalFindingsBefore": 8,
+    "historicalFindingsAfter": 0,
+    "workingTreeFindingsAfter": 0,
+    "fullHistorySecretScan": "passed"
+  },
+  "boundaries": {
+    "realBranchHistoryChanged": false,
+    "forcePushPerformed": false,
+    "pullRequestUpdatedByRewrite": false,
+    "productionChanged": false,
+    "containsSecretValues": false
+  },
+  "approvalRequired": "Explicit approval to replace the feature-branch history and push it with force-with-lease."
+}

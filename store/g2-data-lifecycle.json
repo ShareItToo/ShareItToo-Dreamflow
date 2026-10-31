@@ -1,0 +1,208 @@
+{
+  "schemaVersion": 1,
+  "state": "g2b-persistent-cart-active",
+  "terminology": {
+    "savedItems": "Gemerkt",
+    "cartArea": "Mietkorb",
+    "projectContainer": "Projektkorb"
+  },
+  "currentSavedItems": {
+    "runtimeStatus": "active-local-device-principal-scoped",
+    "binding": "non-binding-no-reservation",
+    "storageScope": "local-device-opaque-principal-shared-preferences",
+    "canonicalKey": "wishlist_state_v3",
+    "legacyKeys": [
+      "wishlist_state_v2",
+      "saved_item_ids",
+      "wishlists_meta_v1",
+      "wishlist_assign_v1"
+    ],
+    "principalBinding": "opaque-stable-token-or-guest",
+    "legacyMigrationRule": "guest-only-or-quarantine",
+    "exportStatus": "implemented-current-principal-local-section",
+    "accountDeletionStatus": "implemented-confirmed-account-principal-purge-by-explicit-identity-successor-preserved",
+    "retentionRule": "user-controlled-until-removal-account-deletion-or-app-data-clear"
+  },
+  "localSafetyPrivacy": {
+    "runtimeStatus": "active-local-device-principal-scoped",
+    "storageScope": "local-device-opaque-principal-shared-preferences",
+    "canonicalKey": "local_safety_privacy_state_v1",
+    "legacyKeys": [
+      "blocked_user_ids_v1",
+      "user_reports_v1",
+      "hidden_listing_ids_v1",
+      "listing_feedback_log_v1",
+      "listing_feedback_reason_profile_v1",
+      "muted_message_threads_v1",
+      "messages_settings_v1",
+      "notification_preferences_v2"
+    ],
+    "dataClasses": [
+      "blocked-users",
+      "local-user-reports",
+      "hidden-listings-and-feedback-profile",
+      "muted-message-threads",
+      "message-settings",
+      "notification-preferences"
+    ],
+    "principalBinding": "opaque-stable-token-or-guest",
+    "legacyMigrationRule": "unattributed-guest-only-attributed-exact-owner-or-quarantine",
+    "corruptionPolicy": "principal-bucket-quarantine-fail-closed-preserve-raw",
+    "maximumRetainedPrincipals": 12,
+    "exportStatus": "implemented-current-principal-local-section",
+    "accountDeletionStatus": "implemented-confirmed-account-principal-purge-by-explicit-identity-successor-preserved",
+    "retentionRule": "user-controlled-until-removal-confirmed-account-deletion-or-app-data-clear",
+    "backendAuthority": "remote-authoritative-when-enabled-local-qa-fallback-otherwise"
+  },
+  "localOperationalRecords": {
+    "runtimeStatus": "active-local-fallback-authenticated-participant-scoped",
+    "storageScope": "local-device-shared-preferences-remote-authoritative-when-enabled",
+    "storageKeys": [
+      "message_threads_v1",
+      "notifications",
+      "rental_requests",
+      "timeline_events",
+      "read_requests_v1",
+      "requests_last_seen_by_owner",
+      "handover_return_state_v1",
+      "handover_fail_counts",
+      "handover_banners",
+      "booking_selections_v2"
+    ],
+    "dataClasses": [
+      "participant-message-threads-and-messages",
+      "account-notifications",
+      "participant-rental-requests-and-timeline",
+      "account-read-and-last-seen-markers",
+      "participant-handover-return-state",
+      "participant-failure-counters-and-banners",
+      "principal-booking-selections"
+    ],
+    "identityBinding": "current-session-and-participant-or-current-principal-selection",
+    "legacyAttributionRule": "unattributed-notifications-preserved-unassigned-and-excluded",
+    "corruptionPolicy": "fail-closed-preserve-exact-raw-no-partial-rewrite",
+    "capacityPolicy": "bounded-reject-overflow-without-pruning",
+    "mutationPolicy": "serialized-verified-and-session-rechecked",
+    "exportStatus": "implemented-current-account-and-participant-local-section",
+    "accountDeletionStatus": "confirmed-account-convenience-state-purged-by-explicit-identity-shared-counterparty-audit-records-retained",
+    "retentionRule": "no-period-invented-shared-records-retained-for-counterparty-and-legal-audit-continuity",
+    "backendAuthority": "remote-authoritative-when-enabled-local-qa-fallback-otherwise"
+  },
+  "localListingCatalog": {
+    "runtimeStatus": "active-local-fallback-authenticated-owner-scoped",
+    "storageScope": "local-device-shared-preferences-remote-authoritative-when-enabled",
+    "storageKey": "items",
+    "dataClasses": [
+      "public-listing-content-and-media",
+      "listing-location-and-pricing",
+      "owner-and-lifecycle-metadata"
+    ],
+    "readScope": "public-catalog-read",
+    "mutationIdentityBinding": "matching-auth-session-and-exact-listing-owner",
+    "corruptionPolicy": "fail-closed-preserve-exact-raw-no-partial-rewrite",
+    "capacityPolicy": "maximum-1000-reject-overflow-without-media-pruning",
+    "mutationPolicy": "serialized-verified-session-rechecked-and-revision-guarded",
+    "exportStatus": "implemented-current-owner-local-section",
+    "accountDeletionStatus": "current-owner-listings-ended-and-retained-no-period-invented",
+    "retentionRule": "no-automatic-60-day-deletion-no-period-invented",
+    "backendAuthority": "remote-authoritative-when-enabled-local-qa-fallback-otherwise"
+  },
+  "localReviewReputation": {
+    "runtimeStatus": "active-local-fallback-public-read-authenticated-participant-write",
+    "storageScope": "local-device-shared-preferences-remote-authoritative-when-enabled",
+    "storageKeys": [
+      "reviews",
+      "multi_reviews_v1"
+    ],
+    "dataClasses": [
+      "public-reviewer-reviewed-user-rating-and-comment",
+      "booking-bound-directional-criteria-ratings-and-notes"
+    ],
+    "readScope": "public-reputation-read",
+    "mutationIdentityBinding": "matching-auth-session-exact-completed-booking-direction-counterparty-item-and-needs-review-clear",
+    "corruptionPolicy": "fail-closed-preserve-exact-raw-no-partial-rewrite",
+    "capacityPolicy": "maximum-1000-per-document-reject-overflow-without-pruning",
+    "mutationPolicy": "serialized-verified-session-rechecked-and-booking-snapshot-guarded",
+    "demoSeedPolicy": "explicit-qa-bootstrap-only-no-read-time-seeding",
+    "exportStatus": "implemented-current-account-authored-and-received-local-section",
+    "accountDeletionStatus": "shared-public-reviews-retained-with-account-anonymization-no-period-invented",
+    "retentionRule": "no-period-invented-shared-reputation-records-retained",
+    "backendAuthority": "remote-authoritative-when-enabled-local-qa-fallback-otherwise"
+  },
+  "localAccountProfile": {
+    "runtimeStatus": "active-local-fallback-authenticated-current-account-scoped",
+    "storageScope": "local-device-shared-preferences-remote-authoritative-when-enabled",
+    "storageKeys": [
+      "currentUser",
+      "users"
+    ],
+    "dataClasses": [
+      "public-profile-and-visibility-preferences",
+      "private-contact-address-and-approximate-location",
+      "account-identity-verification-moderation-payout-and-reputation"
+    ],
+    "readScope": "exact-current-account-plus-public-profile-cache",
+    "mutationIdentityBinding": "matching-auth-session-and-exact-current-account-field-patch",
+    "protectedFieldPolicy": "identity-verification-moderation-payout-reputation-and-deactivation-not-caller-mutable",
+    "corruptionPolicy": "fail-closed-preserve-exact-raw-no-read-time-normalization",
+    "capacityPolicy": "maximum-1000-profiles-and-16-mib-document-reject-overflow-without-pruning",
+    "mutationPolicy": "serialized-verified-paired-current-and-cache-write-with-exact-rollback",
+    "exportStatus": "implemented-current-account-profile-only-cache-and-session-excluded",
+    "accountDeletionStatus": "confirmed-account-profile-anonymized-exact-current-cache-and-session-cleared-successor-preserved",
+    "retentionRule": "current-cache-cleared-on-logout-or-deletion-anonymized-public-entry-retained-no-period-invented",
+    "backendAuthority": "remote-authoritative-when-enabled-local-qa-fallback-otherwise"
+  },
+  "persistentData": {
+    "rentalCart": {
+      "runtimeStatus": "active-guest-local-principal-account-server",
+      "binding": "non-binding-no-reservation-no-hold",
+      "storageKeys": [
+        "rental_cart_v2",
+        "rental_cart_v1",
+        "rental_cart_sync_owner_v1"
+      ],
+      "principalBinding": "opaque-stable-token-or-guest",
+      "legacyMigrationRule": "guest-only-or-quarantine",
+      "serverDatasets": [
+        "rental_carts",
+        "rental_cart_items"
+      ],
+      "exportStatus": "implemented-current-principal-local-and-account-export",
+      "accountDeletionStatus": "implemented-explicit-server-delete-and-current-principal-local-purge",
+      "retentionRule": "user-controlled-until-removal-confirmed-account-deletion-or-app-data-clear",
+      "serverAuthoritativeRecheck": true
+    },
+    "projectCart": {
+      "runtimeStatus": "active-guest-local-principal-account-server",
+      "binding": "organizational-container-no-group-request",
+      "storageKeys": [
+        "rental_cart_v2",
+        "project_cart_v1"
+      ],
+      "principalBinding": "opaque-stable-token-or-guest",
+      "legacyMigrationRule": "guest-only-or-quarantine",
+      "serverDatasets": [
+        "rental_cart_projects"
+      ],
+      "exportStatus": "implemented-current-principal-local-and-account-export",
+      "accountDeletionStatus": "implemented-cascade-and-current-principal-local-purge",
+      "retentionRule": "user-controlled-until-removal-confirmed-account-deletion-or-app-data-clear"
+    }
+  },
+  "boundaries": {
+    "persistentCartEnabled": true,
+    "projectCartEnabled": true,
+    "newDataCollectionEnabled": true,
+    "operationalLocalFallbackHardened": true,
+    "reservationCreatedByCart": false,
+    "availabilityHoldCreatedByCart": false,
+    "groupRequestEnabled": false,
+    "paymentChanged": false,
+    "retentionPeriodInvented": false,
+    "legalApprovalChanged": false,
+    "historicalSnapshotsChanged": false,
+    "safetyBackendAuthorityChanged": false,
+    "operationalBackendAuthorityChanged": false,
+    "productionChanged": false
+  }
+}

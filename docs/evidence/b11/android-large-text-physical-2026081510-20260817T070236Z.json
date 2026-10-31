@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-large-text-physical-candidate-verification",
+  "status": "large-text-remediation-passed-talkback-separate-and-open",
+  "capturedAt": "2026-08-17T07:02:36Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081510",
+    "commit": "4cb004641391efe40fa2bf89f62da11bc1f71291",
+    "installMethod": "direct-apk"
+  },
+  "device": {
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "Android 16",
+    "textScale": 2.0,
+    "screenReaderEnabledDuringThisProbe": false
+  },
+  "checks": {
+    "exploreRenderedWithMainNavigation": "passed",
+    "wishlistsSingleColumnAtLargeText": "passed",
+    "wishlistTitleDemnaechstBenoetigtFullyVisible": "passed",
+    "wishlistEmptyStateReadable": "passed",
+    "profileIdentityStacked": "passed",
+    "profileRatingFullyVisible": "passed",
+    "profileBookingsFullyVisible": "passed",
+    "profileMemberSinceFullyVisible": "passed",
+    "profileListingCountFullyVisible": "passed",
+    "coreNavigationVisible": "passed",
+    "talkBackManualTraversal": "open-separate-test"
+  },
+  "privateLocalVisualEvidence": {
+    "wishlistsScreenshotSha256": "245bf0ee65104e7b37a533a83f49d7525c500efc4e6d990e82b3392e2ce55422",
+    "profileScreenshotSha256": "693bbfd92d5becf24dad28a92f8316f360674aafc65b31a6235c68f0d9910e77",
+    "screenshotsStoredInRepository": false
+  },
+  "restoration": {
+    "fontScaleRestored": 0.85,
+    "accessibilityEnabledRestored": 0,
+    "autoRotationRestored": 1,
+    "status": "passed"
+  },
+  "boundaries": {
+    "talkBackClaimedPassed": false,
+    "storeInstallClaimed": false,
+    "storeChanged": false,
+    "productionChanged": false,
+    "containsSecrets": false,
+    "containsAccountIdentifiers": false,
+    "containsRawDeviceIdentifiers": false
+  }
+}

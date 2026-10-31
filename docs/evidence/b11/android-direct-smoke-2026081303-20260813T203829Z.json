@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-direct-device-smoke",
+  "status": "installed-launched-pending-manual-matrix",
+  "capturedAt": "2026-08-13T20:38:29Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081303",
+    "commit": "4144d0c0a3a2e19e89b6523594607c14625b0119",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false,
+    "apkSha256": "19505969ca133bb773b59c3e0afd0d4e733b844bcde926fca742d6f3c91813b8",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "privacyScan": "passed"
+  },
+  "installation": {
+    "method": "direct-apk-diagnostic",
+    "installed": true,
+    "installedVersionVerified": true,
+    "installedBuildVerified": true,
+    "foregroundActivityVerified": true,
+    "firstLaunchEvent": "passed",
+    "storeInstallationGateSatisfied": false
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "16",
+    "apiLevel": 36,
+    "securityPatch": "2026-04-05",
+    "containsRawDeviceIdentifier": false
+  },
+  "regressionProbe": {
+    "id": "search-overlay-async-dispose",
+    "status": "passed",
+    "openCloseCycles": 5,
+    "timing": "immediate-to-one-second",
+    "foregroundActivityPreserved": true,
+    "fatalAndroidExceptionObserved": false,
+    "flutterLifecycleExceptionObserved": false,
+    "summary": "The exact candidate stayed foreground and crash-free across five rapid search-overlay open/close cycles, including immediate dismissal while asynchronous data loading was active."
+  },
+  "boundaries": {
+    "manualFunctionalMatrixPassed": false,
+    "playInternalInstallPassed": false,
+    "realPushPassed": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  },
+  "nextRequired": [
+    "Google Play Internal upload and installation of the same unchanged build",
+    "controlled FCM foreground, background, and terminated-process delivery",
+    "remaining physical-device and accessibility matrix"
+  ]
+}

@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "kind": "rw20-current-google-play-internal-candidate-manifest",
+  "status": "build-ready-local-only",
+  "generatedAt": "2026-08-26T20:12:16Z",
+  "manifestScope": "artifact-build-snapshot-with-post-build-play-state",
+  "provenance": {
+    "rw20ClosureHead": "088f6a2f7eac962f0bf1b6aa5ba9815364ac23eb",
+    "branch": "codex/master-workflow-20260808",
+    "artifactSourceHead": "a1aa3f2528f1923c092a1fb15bdd3dc083673890",
+    "sourceWorktreeCleanAtBuild": true,
+    "sourceRemoteDivergenceAtBuild": {
+      "ahead": 0,
+      "behind": 0
+    }
+  },
+  "versionSelection": {
+    "highestGooglePlayVersionCodeObserved": "2026081509",
+    "observationMode": "authenticated-console-read-only",
+    "candidateVersionCode": "2026082601",
+    "candidateWasAbsentFromPlayVersionInventory": true,
+    "candidateWasAbsentFromRepositoryAndPrivateArchiveInventory": true
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026082601",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "compileSdkVersion": 35,
+    "minSdkVersion": 24,
+    "targetSdkVersion": 35,
+    "firebaseAndroidConfigured": true,
+    "blueOceanListingAssistantEnabled": true,
+    "stageANonBindingPilotEnabled": true
+  },
+  "artifact": {
+    "archiveDirectoryName": "2026082601-a1aa3f2528f1923c092a1fb15bdd3dc083673890",
+    "aabFileName": "shareittoo-1.0.0-2026082601-a1aa3f2528f1923c092a1fb15bdd3dc083673890.aab",
+    "aabBytes": 108538228,
+    "aabSha256": "8cf36552f39fe9558411809518b374c437125cbd6ef123258ad9df7061acd873",
+    "apkFileName": "shareittoo-1.0.0-2026082601-a1aa3f2528f1923c092a1fb15bdd3dc083673890.apk",
+    "apkBytes": 134614667,
+    "apkSha256": "e8d3664371565bbdda2b91b1dae032037767c935dfdb9af71112c30f3e3558df",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "bundletoolValidation": "passed",
+    "zipStructureValidation": "passed",
+    "binaryPrivacyScan": "passed",
+    "binaryPrivacyReportSha256": "313f46fa2419a4cf26d32f8f2555c5c736294274c9fd8a1790da6c399fe7ebba",
+    "ownerOnlyPermissionsVerified": true,
+    "nonOverwritingArchive": true
+  },
+  "providerAndLiveHolds": {
+    "snapshotScope": "artifact-build-time",
+    "externalListingAiEnabled": false,
+    "openAiRuntimeEndpointDetected": false,
+    "realPaymentsEnabled": false,
+    "storeUploadPerformed": false,
+    "internalReleaseActivated": false,
+    "testerListChanged": false,
+    "firebaseProjectChanged": false,
+    "productionChanged": false,
+    "cloudOrVpsChanged": false,
+    "pixelAccessed": false
+  },
+  "postBuildPlayState": {
+    "sourceRef": "store/google-play/rw20a-internal-draft-oneplus-handoff.json",
+    "sourceClassification": "owner-provided-macbook-codex-handover",
+    "directConsoleReverifiedFromThisWorktree": false,
+    "exactCandidateUploaded": true,
+    "bundleProcessed": true,
+    "draftSaved": true,
+    "releaseActivated": false,
+    "sentForReview": false,
+    "activeInternalVersionCode": "2026081509",
+    "candidateExpectedInstalledOnOnePlus": false
+  },
+  "evidenceRef": "docs/evidence/release-readiness/rw20-current-play-internal-candidate-2026082601.json",
+  "playInternalHandoffRef": "store/google-play/rw20-current-internal-upload-handoff.json",
+  "secondAndroidInstallRef": "docs/templates/RW20_CURRENT_PLAY_INTERNAL_SECOND_ANDROID_INSTALL_DE.md",
+  "secondAndroidTestMatrixRef": "docs/templates/RW20_CURRENT_PLAY_INTERNAL_SECOND_ANDROID_TEST_MATRIX.md",
+  "containsSecrets": false,
+  "containsTesterAccount": false,
+  "containsOptInUrl": false
+}

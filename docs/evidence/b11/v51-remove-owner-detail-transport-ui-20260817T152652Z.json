@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "checkpoint": "16.173",
+  "capturedAtUtc": "2026-08-17T15:26:52Z",
+  "sourceBaseCommit": "b0faec65aa8a7e4518405f29134ab5a9a2b7bd41",
+  "status": "passed",
+  "ownerDetailBoundary": {
+    "savedTransportSelectionRead": false,
+    "expressRequestUiPresent": false,
+    "expressAcceptActionPresent": false,
+    "expressDeclineActionPresent": false,
+    "legacyDeliveryAddressUiPresent": false,
+    "legacyDeliveryMapUiPresent": false,
+    "selfPickupCopyPresent": true,
+    "selfReturnCopyPresent": true,
+    "confirmedHandoverLocationPreserved": true,
+    "confirmedReturnLocationPreserved": true,
+    "bindingAcceptanceDeadlinePreserved": true,
+    "ownerAcceptanceAndDeclinePreserved": true,
+    "securePickupAndReturnPreserved": true,
+    "cancellationAndReviewPreserved": true
+  },
+  "privacyBoundary": {
+    "collectionChanged": false,
+    "storageChanged": false,
+    "transmissionChanged": false,
+    "permissionsChanged": false,
+    "boundSourceInventoryHashUpdated": true,
+    "privacyValidator": "passed in draft fail-closed state"
+  },
+  "verification": {
+    "newTransportWiring": "6/6 passed",
+    "targetedCombinedWiring": "26/26 passed",
+    "targetedPrivacyAndStore": "30/30 passed",
+    "runtimeDiff": "5 insertions, 274 deletions",
+    "fullTechnicalRegression": "passed with exit code 0",
+    "fullFlutter": "292 passed, 1 intentional skip",
+    "backend": "213 passed, 1 intentional PostgreSQL skip",
+    "flutterAnalyzer": "224 findings, 0 errors",
+    "webDebugBuild": "passed",
+    "androidDebugBuild": "passed"
+  },
+  "serviceBoundary": {
+    "pushRetained": true,
+    "crashlyticsRetained": true,
+    "separateVoluntaryDefaultOffChoices": true,
+    "pushEnablesCrashlytics": false,
+    "adsMarketingAnalyticsExternalGenAiEnabled": false
+  },
+  "externalActions": {
+    "deployment": false,
+    "upload": false,
+    "storeMutation": false,
+    "providerConsoleMutation": false,
+    "liveMoney": false,
+    "candidateBuiltOrRelabeled": false
+  },
+  "sourceHashesSha256": {
+    "lib/screens/ongoing_owner_detail_screen.dart": "b05dc82e4ad57a94f5c99305a21ff84c0da16ec07109eca139d278d7c914d93d",
+    "store/privacy-disclosures.json": "7b3d11e404c15d7a00954ce8c9154f4f1822ddc7d5e78cdf726ac187ecade25f",
+    "test/tool/v51_owner_detail_transport_disabled_wiring.test.mjs": "932023f58030a2b1f54de25f383f7cc53b80842aad3d5b8a8d2f44c1b38ef0a9"
+  }
+}

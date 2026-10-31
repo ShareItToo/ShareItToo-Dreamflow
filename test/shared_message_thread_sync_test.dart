@@ -10,6 +10,21 @@ import 'support/test_builders.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('read-only remote thread cache refresh stays silent', () {
+    expect(
+      DataService.shouldAnnounceMessageThreadCacheWrite(
+        readOnlyRemoteRefresh: true,
+      ),
+      isFalse,
+    );
+    expect(
+      DataService.shouldAnnounceMessageThreadCacheWrite(
+        readOnlyRemoteRefresh: false,
+      ),
+      isTrue,
+    );
+  });
+
   final owner = buildTestUser('u1', name: 'Walid Chraibi');
   final renter = buildTestUser('u2', name: 'Max Mustermann');
   final outsider = buildTestUser('u3', name: 'Sarah Schmidt');
@@ -65,8 +80,16 @@ void main() {
   ];
 
   Future<void> usePersona(String userId) async {
-    await DataService.setCurrentUser(
-      users.singleWhere((user) => user.id == userId),
+    final user = users.singleWhere((candidate) => candidate.id == userId);
+    await DataService.setCurrentUser(user);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      'auth_session_v1',
+      jsonEncode(<String, Object>{
+        'userId': user.id,
+        'email': user.email,
+        'createdAt': '2026-08-25T04:00:00.000Z',
+      }),
     );
     expect((await DataService.getCurrentUser())?.id, userId);
   }
@@ -81,6 +104,11 @@ void main() {
       'review_reminders_v1': '[]',
       'multi_reviews_v1': '[]',
       'currentUser': jsonEncode(owner.toJson()),
+      'auth_session_v1': jsonEncode(<String, Object>{
+        'userId': owner.id,
+        'email': owner.email,
+        'createdAt': '2026-08-25T04:00:00.000Z',
+      }),
     });
     await usePersona(owner.id);
   });

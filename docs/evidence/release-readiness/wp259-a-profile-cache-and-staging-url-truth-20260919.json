@@ -1,0 +1,30 @@
+{
+  "package": "WP259-A",
+  "status": "SOURCE_FIX_PENDING_SUCCESSOR_BUILD",
+  "finding": "Staging profile uploads used an internal container hostname that the client correctly rejected as unmanaged.",
+  "sourceChange": {
+    "file": "lib/services/data_service.dart",
+    "behavior": "Owner-bound backend profile hydration once per exact session with retry after transient failure; local profile remains an offline cache.",
+    "candidate1704Updated": false
+  },
+  "verification": {
+    "staticContractTests": "2/2 PASS",
+    "focusedFlutterSuites": "25/25 PASS",
+    "flutterAnalyze": "PASS",
+    "diffCheck": "PASS"
+  },
+  "runtimeEvidence": {
+    "environment": "Staging only",
+    "externalBaseUrlCorrection": "PASS",
+    "pixelProfileCard": "PASS",
+    "pixelNavigationAvatar": "PASS",
+    "pixelPublicProfile": "PASS",
+    "restartAndLogoutLogin": "PASS"
+  },
+  "next": "Build and verify a strictly higher successor candidate containing the source patch before any release or Play action.",
+  "boundaries": [
+    "No secrets or credentials stored",
+    "No production/provider/payment/Play mutation",
+    "No claim that immutable 1704 contains this source fix"
+  ]
+}

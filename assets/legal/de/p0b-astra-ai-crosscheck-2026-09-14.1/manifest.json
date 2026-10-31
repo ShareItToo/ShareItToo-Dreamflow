@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-p0b-astra-ai-legal-crosscheck",
+  "packageVersion": "P0B-L3-ASTRA-AI-CROSSCHECK-2026-09-14.1",
+  "status": "AI_CROSSCHECK_PARTIAL_NORMALIZED_OUTCOME_CAPTURE",
+  "jurisdiction": "DE",
+  "reviewedAt": "2026-09-14",
+  "sourceAssessment": {
+    "packageVersion": "P0B-L2-AI-PREASSESSMENT-2026-09-14.1",
+    "branch": "codex/master-workflow-20260808",
+    "sourceCommit": "2db2b90aab385aeba527fd559a33c269c8dc00cf",
+    "sourceInventory": {
+      "assets/legal/de/p0b-ai-preassessment-2026-09-14.1/manifest.json": "ff752ea1a9192d91d0940678d3ba403fda327cc25bf413eaaa59f8d89477552e",
+      "assets/legal/de/p0b-ai-preassessment-2026-09-14.1/01_ai_rechtliche_vorpruefung.md": "a1772c59c24158315f8e23e48bf81e4c225f26a6a1f8087bfb2339c0cc5f6e44",
+      "assets/legal/de/p0b-ai-preassessment-2026-09-14.1/02_decision_matrix.json": "c715cc28e50e6f47d92d5ac7c8143a02eeca7d6ef4dd535d20490127ee5b333a",
+      "assets/legal/de/p0b-ai-preassessment-2026-09-14.1/03_astra_crosscheck_scope.md": "fcbdaf3fb545a351617aa35411b2273210e012775665cad2b821441b5589092d"
+    }
+  },
+  "result": {
+    "report": "assets/legal/de/p0b-astra-ai-crosscheck-2026-09-14.1/01_crosscheck_result.md",
+    "verdictMatrix": "assets/legal/de/p0b-astra-ai-crosscheck-2026-09-14.1/02_verdict_matrix.json",
+    "outcome": "CORRECTIONS_REQUIRED",
+    "resultCapture": "partial-normalized-outcome-only-raw-response-not-persisted",
+    "decisionDetailComplete": false,
+    "decisionCount": 18,
+    "verdictCounts": {
+      "CONFIRM": 3,
+      "CORRECT": 12,
+      "INSUFFICIENT_EVIDENCE": 3
+    },
+    "priorityCounts": {
+      "P0": 14,
+      "P1": 4
+    }
+  },
+  "taskProvenance": {
+    "taskId": "01a09e1b-0c59-71d2-b323-8c79b0b73bbd",
+    "taskTitle": "Astra Ultra für SIT am Macbook",
+    "executionClass": "remote-macbook-codex-task",
+    "requestedReviewer": "Astra Ultra",
+    "backendModelIdentityCaptured": false
+  },
+  "gates": {
+    "crosscheckTaskCompleted": true,
+    "crosscheckScopeComplete": false,
+    "normalizedOutcomeRecorded": true,
+    "rawResponsePersisted": false,
+    "ownerAdoptionRecorded": false,
+    "professionalLegalApproval": false,
+    "publicActivationAllowed": false,
+    "productionProvisioningAllowed": false,
+    "storeSubmissionAllowed": false,
+    "realMoneyAllowed": false,
+    "g3MultiItemPubliclyAvailable": false
+  },
+  "officialSourceScope": "day-end-correction-and-section-193-caveat-only",
+  "officialSources": [
+    "https://www.gesetze-im-internet.de/bgb/__187.html",
+    "https://www.gesetze-im-internet.de/bgb/__188.html",
+    "https://www.gesetze-im-internet.de/bgb/__355.html",
+    "https://www.gesetze-im-internet.de/bgb/__193.html"
+  ],
+  "artifactInventory": {
+    "assets/legal/de/p0b-astra-ai-crosscheck-2026-09-14.1/01_crosscheck_result.md": "5f78aaa93a94d4b0d8e5d698a603f2b8b9d33cf4b07c81f81c7ad5ee608f2487",
+    "assets/legal/de/p0b-astra-ai-crosscheck-2026-09-14.1/02_verdict_matrix.json": "f1c66c993d966b0d6c83c1e7b5201e7da9de9d515b53aa77f10aa6faffeb48d8"
+  }
+}

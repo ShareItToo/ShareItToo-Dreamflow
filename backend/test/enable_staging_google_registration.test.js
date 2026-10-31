@@ -1,0 +1,1827 @@
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { chmod, lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import test from 'node:test';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+
+import {
+  assertGoogleRegistrationRuntimeManifest,
+  readGoogleRegistrationRuntimeManifest,
+  readRegistrationMapping,
+  runStagingGoogleRegistrationEnable,
+  runStagingGoogleRegistrationFinalize,
+  runStagingWebCorsTransition,
+  buildEnrolledIdentitySql,
+  sanitizeGoogleRegistrationEnableError,
+} from '../ops/enable_staging_google_registration.mjs';
+import { corsAfter, corsBefore, corsContainerFingerprint, corsManifestKind } from '../ops/staging_web_cors_transition.mjs';
+import { greenWebCorsOrigins } from '../ops/green_staging_promotion.mjs';
+
+const corsOptions = (fx, command, execute = true) => ({
+  manifest: fx.manifest, evidenceFile: fx.evidenceFile, command, execute,
+  commandEnv: { STAGING_WEB_CORS_EXECUTE: '1', STAGING_WEB_CORS_CONFIRM: revision },
+});
+
+const revision = '0123456789abcdef0123456789abcdef01234567';
+const imageDigest = `sha256:${'a'.repeat(64)}`;
+const mappingDigest = 'b'.repeat(64);
+const userId = 'synthetic_google_registration_user';
+const registrationAllowlistKey = 'SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST';
+const migrationLedgerDigest = '6efea4658512ee6a19559b95df392bd62a47dd40a18101cfeac617258249c999';
+const originalAllowedIds = 'synthetic-owner,synthetic-renter,synthetic-sandbox';
+const primaryNetworkId = 'd'.repeat(64);
+const providerNetworkId = 'e'.repeat(64);
+
+function envContent({ unrelated = 'preserve-me', registration = false, allowlist = null } = {}) {
+  return [
+    'NODE_ENV=production', 'DEPLOYMENT_ENVIRONMENT=test',
+    'FIREBASE_AUTH_ENABLED=true', 'FIREBASE_PHONE_VERIFICATION_ENABLED=false',
+    'DATABASE_URL=postgres://shareittoo_green:pw@canonical-db:5432/shareittoo_green',
+    'PAYMENT_TRANSPORT=memory', 'STRIPE_LIVEMODE=false',
+    'SIT_STAGING_ACCESS_GATE_ENABLED=true', `SIT_STAGING_ALLOWED_USER_IDS=${originalAllowedIds}`,
+    'SIT_STAGING_COMPOSE_PROJECT=sit-green', `APP_COMMIT=${revision}`, `UNRELATED=${unrelated}`,
+    ...(registration ? [`SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=true`] : []),
+    ...(allowlist ? [`SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST=${allowlist}`] : []),
+    '',
+  ].join('\n');
+}
+
+function mappingLine() {
+  return `${mappingDigest}=${userId}\n`;
+}
+
+async function fixture({ apiContainer = 'shareittoo-staging-api', image = `registry.example/shareittoo-api:${revision}`, mapping = mappingLine(), hostname = null, finalize = false, cors = false } = {}) {
+  const root = await mkdtemp(join(tmpdir(), 'sit-google-registration-enable-'));
+  const envFile = join(root, 'green.env');
+  const mappingFile = join(root, 'mapping.txt');
+  const evidenceFile = join(root, 'evidence.json');
+  const firebase = join(root, 'firebase.json');
+  const mfa = join(root, 'mfa.key');
+  await writeFile(firebase, '{}');
+  await writeFile(mfa, 'm'.repeat(32));
+  const originalEnv = cors ? `${envContent()}CORS_ORIGINS=${corsBefore}\nSIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false\nSIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED=0\n` : finalize ? envContent({ registration: true, allowlist: mappingLine().trimEnd() }).replace(`SIT_STAGING_ALLOWED_USER_IDS=${originalAllowedIds}`, `SIT_STAGING_ALLOWED_USER_IDS=${originalAllowedIds},${userId}`) : envContent();
+  await writeFile(envFile, originalEnv, { mode: 0o600 });
+  await chmod(envFile, 0o600);
+  await writeFile(mappingFile, mapping, { mode: 0o600 });
+  await chmod(mappingFile, 0o600);
+  const uid = process.getuid?.() ?? 0;
+  const gid = process.getgid?.() ?? 0;
+  const manifest = {
+    kind: 'sit-staging-google-registration-runtime-manifest', schemaVersion: 1, apiContainerId: 'a'.repeat(64),
+    environment: 'staging', composeProject: 'sit-green', apiContainer,
+    databaseContainer: 'sit-green-postgres-20260918011528-wp254',
+    databaseVolume: 'sit-green-volume-20260918011528-wp254', databaseName: 'shareittoo_green', databaseUser: 'shareittoo_green',
+    network: 'sit-green-network-20260918011528-wp254', providerNetwork: 'sit-staging-provider-egress',
+    uploadsVolume: 'sit-green-uploads-20260918011528-wp254', image, runtimeRevision: revision, imageDigest,
+    envFile, envUid: uid, envGid: gid,
+    mounts: [
+      { type: 'bind', name: 'mfa', source: mfa, destination: '/run/secrets/mfa-encryption-key', readOnly: true },
+      { type: 'bind', name: 'firebase', source: firebase, destination: '/run/secrets/firebase-service-account.json', readOnly: true },
+      { type: 'volume', name: 'sit-green-uploads-20260918011528-wp254', source: join(root, 'uploads'), destination: '/data/uploads', readOnly: false },
+    ],
+    safetyEnv: {
+      DEPLOYMENT_ENVIRONMENT: 'test', FIREBASE_AUTH_ENABLED: 'true', FIREBASE_PHONE_VERIFICATION_ENABLED: 'false',
+      PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false', SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '0',
+    },
+    label: { key: 'com.shareittoo.sit.green', value: 'true' },
+  };
+  const api = {
+    Id: 'a'.repeat(64), Name: `/${apiContainer}`, State: { Running: true }, Config: {
+      Image: image, Env: originalEnv.trim().split('\n'), Cmd: ['node', 'src/server.js'], Entrypoint: null,
+      WorkingDir: '/app', User: 'shareittoo', Hostname: hostname ?? 'a'.repeat(12), Tty: false, OpenStdin: false,
+      Labels: { 'com.shareittoo.sit.green': 'true' },
+    },
+    HostConfig: {
+      GroupAdd: ['65532'], RestartPolicy: { Name: 'unless-stopped', MaximumRetryCount: 0 }, PortBindings: {}, NetworkMode: manifest.network,
+      SecurityOpt: ['no-new-privileges'], NoNewPrivileges: true, Memory: 64,
+    },
+    Mounts: manifest.mounts.map((mount) => ({ Type: mount.type, Name: mount.type === 'volume' ? mount.name : null, Source: mount.source, Destination: mount.destination, RW: !mount.readOnly })),
+    NetworkSettings: { Ports: {}, Networks: { [manifest.network]: { NetworkID: primaryNetworkId }, [manifest.providerNetwork]: { NetworkID: providerNetworkId } } },
+  };
+  if (finalize) {
+    manifest.kind = 'sit-staging-google-registration-finalization-runtime-manifest';
+    manifest.finalizationBinding = {
+      mappingDigest: crypto.createHash('sha256').update(mappingLine().trimEnd()).digest('hex'),
+      allowedUserIdsDigest: crypto.createHash('sha256').update(`${originalAllowedIds},${userId}`).digest('hex'),
+      allowedUserIdsCount: 4,
+    };
+  }
+  const witnesses = {
+    'shareittoo-api': { Id: '7'.repeat(64), Name: '/shareittoo-api', State: { Running: true }, Config: { Image: 'synthetic-production-image', Env: ['SYNTHETIC=preserved'] } },
+    'shareittoo-web': { Id: '8'.repeat(64), Name: '/shareittoo-web', State: { Running: true }, Config: { Image: 'synthetic-gateway-image' } },
+  };
+  if (cors) {
+    api.Image = `sha256:${'9'.repeat(64)}`;
+    manifest.kind = corsManifestKind;
+    manifest.corsBinding = {
+      apiFingerprint: corsContainerFingerprint(api), envSha256: crypto.createHash('sha256').update(originalEnv).digest('hex'),
+      productionApiId: witnesses['shareittoo-api'].Id, productionApiFingerprint: corsContainerFingerprint(witnesses['shareittoo-api']),
+      webId: witnesses['shareittoo-web'].Id, webFingerprint: corsContainerFingerprint(witnesses['shareittoo-web']),
+      productionRootSha256: crypto.createHash('sha256').update('synthetic-production-root').digest('hex'),
+    };
+  }
+  return { root, envFile, mappingFile, evidenceFile, manifest, api, image, originalEnv, finalize, cors, witnesses, state: { api, stopped: false, sealed: false, created: false, failurePhase: null } };
+}
+
+function startupPayload(fx, enabled) {
+  return JSON.stringify({
+    ok: true, attempts: { live: 1, ready: 1 }, last: { live: { status: 200 }, ready: { status: 200 } },
+    version: { status: 200, commit: revision, environment: 'test' },
+    flags: {
+      DEPLOYMENT_ENVIRONMENT: 'test', FIREBASE_AUTH_ENABLED: 'true', FIREBASE_PHONE_VERIFICATION_ENABLED: 'false',
+      PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false', SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '0',
+    },
+  });
+}
+
+function envMap(entries) {
+  return Object.fromEntries((entries ?? []).map((entry) => {
+    const index = String(entry).indexOf('=');
+    return index < 0 ? [String(entry), ''] : [String(entry).slice(0, index), String(entry).slice(index + 1)];
+  }));
+}
+
+function statefulDockerExecutor(fx, {
+  mutateUnrelated = false,
+  falsePass = false,
+  failOperation = null,
+  wrongSchema = false,
+  wrongImage = false,
+  driftHealth = false,
+  driftMemory = false,
+  driftMaskedPaths = false,
+  stopMode = null,
+  createMode = null,
+  renameMode = null,
+  rebindForeignOnStart = false,
+  createMutation = null,
+  occupiedTarget = false,
+  invalidTokenStatus = 401,
+} = {}) {
+  const db = { Name: `/${fx.manifest.databaseContainer}`, State: { Running: true }, Config: { Image: `postgres:16-alpine@sha256:${'c'.repeat(64)}`, Env: ['POSTGRES_DB=shareittoo_green', 'POSTGRES_USER=shareittoo_green'] } };
+  const volume = { Name: fx.manifest.databaseVolume };
+  const network = { Name: fx.manifest.network, Id: primaryNetworkId, Internal: true };
+  const providerNetwork = { Name: fx.manifest.providerNetwork, Id: providerNetworkId };
+  const uploads = { Name: fx.manifest.uploadsVolume };
+  const image = { ...(fx.cors ? { Id: `sha256:${'9'.repeat(64)}` } : {}), RepoTags: [fx.image], Config: { User: 'shareittoo', Labels: { 'org.opencontainers.image.revision': revision } }, RepoDigests: [`${fx.image}@${imageDigest}`] };
+  const containers = new Map([[fx.manifest.apiContainer, fx.api]]);
+  const calls = [];
+  const state = { stopReadbackConsumed: false };
+  const json = (value) => ({ stdout: JSON.stringify(value), code: 0 });
+  const fail = (code, phase) => { throw Object.assign(new Error(`${code}_failed`), { code: `${code}_failed`, failurePhase: phase }); };
+  const inspectContainer = (name) => {
+    const value = containers.get(name);
+    if (!value) fail('container_not_found', 'inspect');
+    return value;
+  };
+  const inspectContainerReference = (reference) => {
+    const byName = containers.get(reference);
+    if (byName) return byName;
+    const byId = [...containers.values()].find((container) => container.Id === reference);
+    if (!byId) fail('container_not_found', 'start');
+    return byId;
+  };
+  const optionValue = (args, name) => {
+    const index = args.indexOf(name);
+    return index < 0 ? null : args[index + 1];
+  };
+  const parseExec = (args) => {
+    let index = 1;
+    while (args[index] === '-e') index += 2;
+    const container = args[index];
+    return { container, script: args.slice(index + 1).join(' ') };
+  };
+  const command = async (cmd, args, options = {}) => {
+    if (fx.cors && cmd === process.execPath) {
+      assert.deepEqual(args.slice(0, 2), ['--input-type=module', '-e']);
+      assert.ok(args[2].includes("fetch('https://shareittoo.com/'"));
+      const includeCors = args[2].includes("method:'OPTIONS'");
+      if (includeCors) {
+        assert.ok(args[2].includes("fetch('https://staging.shareittoo.com/api/v1/auth/register'"));
+        assert.ok(args[2].includes("body:'{}'"));
+      }
+      calls.push({ phase: options.phase, args: [...args] });
+      return json({ productionRootSha256: fx.manifest.corsBinding.productionRootSha256, ...(includeCors ? {
+        options: { status: 204, origin: 'https://staging.shareittoo.com', methods: 'GET,POST,OPTIONS', headers: 'Content-Type' },
+        post: { status: 403, origin: 'https://staging.shareittoo.com', error: 'staging_registration_disabled' },
+      } : {}) });
+    }
+    assert.equal(cmd, 'docker');
+    calls.push({ phase: options.phase, args: [...args] });
+    let operation = args[0];
+    if (args[0] === 'image') {
+      if (args[1] !== 'inspect' || args.length !== 5 || args[2] !== '--format' || args[3] !== '{{json .}}') throw new Error(`unexpected_docker_command:${args.join(' ')}`);
+      operation = 'image_inspect';
+    } else if (args[0] === 'network') {
+      if (args[1] !== 'connect' || args.length !== 4) throw new Error(`unexpected_docker_command:${args.join(' ')}`);
+      operation = 'network_connect';
+    }
+    const failFor = (name) => failOperation === name;
+    if (operation === 'inspect') {
+      if (args.length !== 4 || args[1] !== '--format' || args[2] !== '{{json .}}') throw new Error(`unexpected_docker_command:${args.join(' ')}`);
+      const target = args.at(-1);
+      if (fx.cors && fx.witnesses[target]) return json(fx.witnesses[target]);
+      if (fx.cors && /^[a-f0-9]{64}$/u.test(target)) return json(inspectContainerReference(target));
+      if (target === fx.manifest.apiContainer && state.stopAttempted && (stopMode === 'unknown-inspect-no-recovery' || stopMode === 'unknown-inspect' && !state.stopReadbackConsumed)) {
+        state.stopReadbackConsumed = true;
+        fail('stop_state_readback', options.phase);
+      }
+      if (!containers.has(target) && options.allowFailure) return { stdout: '', stderr: 'Error: No such container', code: 1 };
+      if (target === fx.manifest.apiContainer && containers.get(target)?.Id === 'b'.repeat(64)) {
+        const replacement = structuredClone(containers.get(target));
+        if (driftHealth) replacement.Config.Healthcheck = { Test: ['CMD-SHELL', 'false'], Interval: 1, Timeout: 1, Retries: 1, StartPeriod: 1, StartInterval: 1 };
+        if (driftMemory) replacement.HostConfig.Memory = 99;
+        if (driftMaskedPaths) replacement.HostConfig.MaskedPaths = ['/proc/drifted'];
+        return json(replacement);
+      }
+      return json(target === fx.manifest.databaseContainer ? db
+        : target === fx.manifest.databaseVolume ? volume
+          : target === fx.manifest.network ? network
+            : target === fx.manifest.providerNetwork ? providerNetwork
+              : target === fx.manifest.uploadsVolume ? uploads
+                : inspectContainer(target));
+    }
+    if (operation === 'image_inspect') return json(wrongImage ? { ...image, RepoTags: [`${fx.image}-drift`] } : image);
+    if (operation === 'ps') {
+      if (args.length !== 6 || args[1] !== '--all' || args[2] !== '--filter' || args[4] !== '--format' || args[5] !== '{{.Names}}') throw new Error(`unexpected_docker_command:${args.join(' ')}`);
+      const filter = args.find((arg) => arg.startsWith('name=')) ?? '';
+      const match = /^name=\^\/(.+)\$$/u.exec(filter)?.[1];
+      return { stdout: match && containers.has(match) ? `${match}\n` : '', code: 0 };
+    }
+    if (operation === 'exec') {
+      const { container, script } = parseExec(args);
+      const apiReference = fx.cors && /^[a-f0-9]{64}$/u.test(container) ? inspectContainerReference(container).Name.slice(1) : container;
+      if (!containers.has(apiReference) && container !== fx.manifest.databaseContainer) fail('exec_target', options.phase);
+      if (container === fx.manifest.databaseContainer) {
+        const directPsql = args[2] === 'psql' && !args.includes('-e');
+        const ledgerShell = args[2] === 'sh' && args[3] === '-c' && !args.includes('-e');
+        if ((!directPsql && !ledgerShell) || args.length < 3) throw new Error(`unexpected_docker_command:${args.join(' ')}`);
+        if (script.includes('SELECT 1')) return { stdout: '1\n', code: 0 };
+        if (fx.cors && script.includes("SELECT count(*) || '|' || (SELECT count(*) FROM auth_identities")) return { stdout: '4|1\n', code: 0 };
+        if (script.includes('WITH target AS')) return { stdout: '1|1|1\n', code: 0 };
+        if (script.includes('SELECT count(*) FROM users')) return { stdout: `${occupiedTarget ? 1 : 0}\n`, code: 0 };
+        if (script.includes('ORDER BY applied_at')) return { stdout: `${wrongSchema ? '097_registration_consent_bundle.up.sql' : '101_mission_fit_checks.up.sql'}\n`, code: 0 };
+        if (script.includes('string_agg')) return { stdout: `${migrationLedgerDigest}\n`, code: 0 };
+        fail('unknown_database_exec', options.phase);
+      }
+      if (args.filter((arg) => arg === '-e').length !== 1 || !args.includes('--input-type=module') || args.at(-2) !== '-e') throw new Error(`unexpected_docker_command:${args.join(' ')}`);
+      if (script.includes("import('./src/config.js')")) {
+        if (fx.cors) {
+          const values = envMap(inspectContainerReference(container).Config.Env);
+          if (options.phase === 'candidate_cors_config_import') {
+            assert.ok(script.includes(`process.env.CORS_ORIGINS=${JSON.stringify(corsAfter)};`));
+            values.CORS_ORIGINS = corsAfter;
+          } else assert.equal(options.phase, 'replacement_cors_config_import');
+          return json({ origins: values.CORS_ORIGINS.split(','), registration: values.SIT_STAGING_GOOGLE_REGISTRATION_ENABLED === 'true', accessGate: values.SIT_STAGING_ACCESS_GATE_ENABLED === 'true' });
+        }
+        const assignment = /Object\.assign\(process\.env,(\{[^;]+\})\);/u.exec(script)?.[1];
+        assert.ok(assignment, 'candidate imports exact derived env in the same current image');
+        const derived = JSON.parse(assignment);
+        assert.deepEqual(derived, {
+          SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: fx.finalize ? 'false' : 'true',
+          SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST: fx.finalize ? '' : `${mappingDigest}=${userId}`,
+          SIT_STAGING_ALLOWED_USER_IDS: `${originalAllowedIds},${userId}`,
+        });
+        return json({ enabled: !fx.finalize, mappingCount: fx.finalize ? 0 : 1, targetAllowed: true });
+      }
+      if (script.includes('runtimeNames')) {
+        if (failOperation === 'replacement-startup' && inspectContainerReference(container).Id === 'b'.repeat(64)) fail('replacement_public_runtime_probe', options.phase);
+        return { stdout: startupPayload(fx, true), code: 0 };
+      }
+      if (script.includes('/health/live')) return { stdout: JSON.stringify({ status: 200, payload: { status: 'ok' } }), code: 0 };
+      if (script.includes('/health/ready')) return { stdout: JSON.stringify({ status: 200, payload: { status: 'ok' } }), code: 0 };
+      if (script.includes('/version')) return { stdout: JSON.stringify({ commit: revision, environment: 'test' }), code: 0 };
+      if (script.includes('/v1/auth/social')) return json({ status: invalidTokenStatus, error: 'invalid_social_token' });
+      if (script.includes('allowlistEntryCount')) {
+        const inspected = inspectContainer(container);
+        if (mutateUnrelated && inspected.Config.Image === fx.image) await writeFile(fx.envFile, envContent({ unrelated: 'changed-after-preflight' }), { mode: 0o600 });
+        const values = envMap(inspected.Config.Env);
+        const replacement = inspected.Config.Image === `${fx.image}@${imageDigest}`;
+        const raw = falsePass && replacement ? '' : values.SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST ?? '';
+        const enabled = falsePass && replacement ? false : values.SIT_STAGING_GOOGLE_REGISTRATION_ENABLED === 'true';
+        return { stdout: JSON.stringify({ enabled, allowlist: raw ? 'present' : 'absent', allowlistDigest: crypto.createHash('sha256').update(raw).digest('hex'), allowlistEntryCount: raw ? raw.split(',').length : 0, accessGateEnabled: values.SIT_STAGING_ACCESS_GATE_ENABLED === 'true' }), code: 0 };
+      }
+      if (script.includes('SIT_STAGING_ACCESS_GATE_ENABLED')) {
+        const values = envMap(inspectContainer(container).Config.Env);
+        return { stdout: JSON.stringify({ DEPLOYMENT_ENVIRONMENT: values.DEPLOYMENT_ENVIRONMENT, FIREBASE_AUTH_ENABLED: values.FIREBASE_AUTH_ENABLED, FIREBASE_PHONE_VERIFICATION_ENABLED: values.FIREBASE_PHONE_VERIFICATION_ENABLED, PAYMENT_TRANSPORT: values.PAYMENT_TRANSPORT, STRIPE_LIVEMODE: values.STRIPE_LIVEMODE, SIT_STAGING_ACCESS_GATE_ENABLED: values.SIT_STAGING_ACCESS_GATE_ENABLED, SIT_STAGING_GOOGLE_REGISTRATION_ENABLED: values.SIT_STAGING_GOOGLE_REGISTRATION_ENABLED === 'true', SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST: values.SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST ? 'present' : 'absent' }), code: 0 };
+      }
+      fail('unknown_api_exec', options.phase);
+    }
+    if (operation === 'stop') {
+      if (args.length !== 2) throw new Error(`unexpected_docker_command:${args.join(' ')}`);
+      if (failFor('stop-before') || stopMode === 'fail-before') fail('stop_current_api', options.phase);
+      state.stopAttempted = true;
+      const container = inspectContainerReference(args[1]);
+      container.State.Running = false;
+      fx.state.stopped = true;
+      if (stopMode === 'foreign-inspect') {
+        const foreign = structuredClone(container);
+        foreign.Id = 'f'.repeat(64);
+        foreign.State = { Running: false };
+        containers.set(container.Name.slice(1), foreign);
+        fail('stop_response_lost', options.phase);
+      }
+      if (stopMode === 'response-loss' || stopMode === 'unknown-inspect' || stopMode === 'unknown-inspect-no-recovery') fail('stop_response_lost', options.phase);
+      return { stdout: '', code: 0 };
+    }
+    if (operation === 'rename') {
+      if (args.length !== 3) throw new Error(`unexpected_docker_command:${args.join(' ')}`);
+      if (failFor('rename')) fail('seal_current_api', options.phase);
+      const [oldName, newName] = args.slice(1);
+      const container = inspectContainerReference(oldName);
+      containers.delete(container.Name.slice(1));
+      container.Name = `/${newName}`;
+      containers.set(newName, container);
+      fx.state.sealed = newName !== fx.manifest.apiContainer;
+      if ((renameMode === 'response-loss' || renameMode === 'foreign-response-loss') && !state.renameResponseConsumed) {
+        state.renameResponseConsumed = true;
+        if (renameMode === 'foreign-response-loss') {
+          const foreign = structuredClone(fx.api);
+          foreign.Id = 'f'.repeat(64);
+          foreign.Name = `/${fx.manifest.apiContainer}`;
+          foreign.State = { Running: false };
+          foreign.Config.Image = `${fx.image}@sha256:${'f'.repeat(64)}`;
+          containers.set(fx.manifest.apiContainer, foreign);
+        }
+        fail('rename_response_lost', options.phase);
+      }
+      return { stdout: '', code: 0 };
+    }
+    if (operation === 'create') {
+      if (failFor('create')) fail('create_replacement_api', options.phase);
+      if (createMode === 'foreign-preexisting') {
+        const foreign = structuredClone(fx.api);
+        foreign.Id = 'f'.repeat(64);
+        foreign.Name = `/${fx.manifest.apiContainer}`;
+        foreign.State = { Running: true };
+        foreign.Config.Image = `${fx.image}@sha256:${'f'.repeat(64)}`;
+        containers.set(fx.manifest.apiContainer, foreign);
+        fail('create_name_conflict', options.phase);
+      }
+      let effectiveArgs = [...args];
+      const removeOption = (option) => {
+        const index = effectiveArgs.indexOf(option);
+        if (index >= 0) effectiveArgs.splice(index, 2);
+      };
+      const replaceOption = (option, value) => {
+        const index = effectiveArgs.indexOf(option);
+        if (index >= 0) effectiveArgs[index + 1] = value;
+      };
+      if (createMutation === 'user-root') replaceOption('--user', 'root');
+      if (createMutation === 'remove-group') removeOption('--group-add');
+      if (createMutation === 'remove-mount') removeOption('--mount');
+      if (createMutation === 'wrong-mount') {
+        const index = effectiveArgs.findIndex((entry, position) => entry === '--mount' && effectiveArgs[position + 1]?.includes('dst=/data/uploads'));
+        if (index >= 0) effectiveArgs[index + 1] = effectiveArgs[index + 1].replace('dst=/data/uploads', 'dst=/data/wrong');
+      }
+      if (createMutation === 'security-drift') replaceOption('--security-opt', 'seccomp=unconfined');
+      if (createMutation === 'memory-drift') replaceOption('--memory', '99');
+      if (createMutation === 'cap-add-drift') replaceOption('--cap-add', 'CHOWN');
+      if (createMutation === 'memory-swap-drift') replaceOption('--memory-swap', '256');
+      if (createMutation === 'network-name-drift') replaceOption('--network', fx.manifest.network);
+      if (createMutation === 'health-drift') {
+        const networkOption = effectiveArgs.indexOf('--network');
+        effectiveArgs.splice(networkOption, 0, '--health-cmd', 'false', '--health-interval', '1000000000');
+      }
+      const valueOptions = new Set(['--name', '--env-file', '--restart', '--restart-max-retries', '--user', '--workdir', '--entrypoint', '--security-opt', '--cap-add', '--cap-drop', '--stop-timeout', '--stop-signal', '--shm-size', '--dns', '--dns-search', '--add-host', '--ipc', '--pid', '--userns', '--log-driver', '--log-opt', '--memory', '--memory-swap', '--cpu-shares', '--cpu-quota', '--cpu-period', '--cpus', '--cpuset-cpus', '--cpuset-mems', '--pids-limit', '--device', '--ulimit', '--tmpfs', '--cgroupns', '--runtime', '--isolation', '--health-cmd', '--health-interval', '--health-timeout', '--health-retries', '--health-start-period', '--health-start-interval', '--group-add', '--label', '--mount', '--hostname', '--network']);
+      const booleanOptions = new Set(['--privileged', '--read-only', '--no-new-privileges', '--init', '--oom-kill-disable', '--rm']);
+      let cursor = 1;
+      while (cursor < effectiveArgs.length) {
+        const arg = effectiveArgs[cursor];
+        if (arg === '--network') { if (!effectiveArgs[cursor + 1] || !effectiveArgs[cursor + 2]) throw new Error(`unexpected_docker_command:${effectiveArgs.join(' ')}`); break; }
+        if (booleanOptions.has(arg)) { cursor += 1; continue; }
+        if (!valueOptions.has(arg) || !effectiveArgs[cursor + 1]) throw new Error(`unexpected_docker_command:${effectiveArgs.join(' ')}`);
+        cursor += 2;
+      }
+      const optionValues = (option) => effectiveArgs.flatMap((entry, index) => entry === option ? [effectiveArgs[index + 1]] : []);
+      const optionFirst = (option) => optionValues(option)[0] ?? null;
+      const healthOptionNames = ['--health-cmd', '--health-interval', '--health-timeout', '--health-retries', '--health-start-period', '--health-start-interval'];
+      const hasHealthOptions = healthOptionNames.some((option) => optionValues(option).length > 0);
+      if (hasHealthOptions && optionFirst('--health-cmd') === null) fail('unsupported_health_options', options.phase);
+      const name = optionFirst('--name');
+      const envFile = optionFirst('--env-file');
+      const networkIndex = effectiveArgs.indexOf('--network');
+      const networkName = optionFirst('--network');
+      const imageArg = effectiveArgs[networkIndex + 2];
+      if (!name || envFile !== fx.envFile || networkIndex < 0 || ![fx.manifest.network, network.Id].includes(networkName) || imageArg !== `${fx.image}@${imageDigest}`
+          || JSON.stringify(effectiveArgs.slice(networkIndex + 3)) !== JSON.stringify(fx.api.Config.Cmd)) fail('unexpected_create_args', options.phase);
+      const env = (await readFile(envFile, 'utf8')).split(/\r?\n/u).filter((line) => line && !line.startsWith('#'));
+      const labels = Object.fromEntries(optionValues('--label').map((entry) => {
+        const index = entry.indexOf('=');
+        return [entry.slice(0, index), entry.slice(index + 1)];
+      }));
+      const parsedMounts = optionValues('--mount').map((spec) => {
+        const fields = Object.fromEntries(spec.split(',').map((part) => part.split('=')));
+        const type = fields.type;
+        const destination = fields.dst;
+        const readOnly = fields.readonly === 'true';
+        if (!type || !destination || !['bind', 'volume'].includes(type)) fail('unexpected_create_mount', options.phase);
+        if (type === 'volume') {
+          const original = fx.api.Mounts.find((mount) => mount.Type === 'volume' && mount.Name === fields.src);
+          if (!original) fail('unexpected_create_mount', options.phase);
+          return { Type: 'volume', Name: fields.src, Source: original.Source, Destination: destination, RW: !readOnly };
+        }
+        return { Type: 'bind', Name: null, Source: fields.src, Destination: destination, RW: !readOnly };
+      });
+      const securityOpt = optionValues('--security-opt');
+      const source = structuredClone(fx.api);
+      source.Id = 'b'.repeat(64);
+      source.Name = `/${name}`;
+      source.State = { Running: false };
+      source.Config.Image = imageArg;
+      source.Config.Env = env;
+      source.Config.Cmd = effectiveArgs.slice(networkIndex + 3);
+      source.Config.WorkingDir = optionFirst('--workdir') ?? '';
+      source.Config.User = optionFirst('--user') ?? '';
+      source.Config.Hostname = optionFirst('--hostname') ?? 'b'.repeat(12);
+      source.Config.Entrypoint = optionFirst('--entrypoint') === null ? null : [optionFirst('--entrypoint')];
+      if (optionFirst('--stop-signal') !== null) source.Config.StopSignal = optionFirst('--stop-signal');
+      source.Config.Labels = labels;
+      source.HostConfig.GroupAdd = optionValues('--group-add');
+      source.HostConfig.RestartPolicy = { Name: optionFirst('--restart') ?? '', MaximumRetryCount: Number(optionFirst('--restart-max-retries') ?? 0) };
+      source.HostConfig.NetworkMode = networkName;
+      source.HostConfig.SecurityOpt = securityOpt;
+      source.HostConfig.NoNewPrivileges = effectiveArgs.includes('--no-new-privileges') || securityOpt.includes('no-new-privileges');
+      source.HostConfig.CapAdd = optionValues('--cap-add');
+      source.HostConfig.CapDrop = optionValues('--cap-drop');
+      source.HostConfig.Privileged = effectiveArgs.includes('--privileged');
+      source.HostConfig.ReadonlyRootfs = effectiveArgs.includes('--read-only');
+      source.HostConfig.Init = effectiveArgs.includes('--init');
+      source.HostConfig.AutoRemove = effectiveArgs.includes('--rm');
+      source.HostConfig.StopTimeout = Number(optionFirst('--stop-timeout') ?? 0);
+      source.HostConfig.ShmSize = Number(optionFirst('--shm-size') ?? 0);
+      source.HostConfig.Dns = optionValues('--dns');
+      source.HostConfig.DnsSearch = optionValues('--dns-search');
+      source.HostConfig.ExtraHosts = optionValues('--add-host');
+      source.HostConfig.IpcMode = optionFirst('--ipc') ?? '';
+      source.HostConfig.PidMode = optionFirst('--pid') ?? '';
+      source.HostConfig.UsernsMode = optionFirst('--userns') ?? '';
+      source.HostConfig.CgroupnsMode = optionFirst('--cgroupns') ?? '';
+      source.HostConfig.Runtime = optionFirst('--runtime') ?? '';
+      source.HostConfig.Isolation = optionFirst('--isolation') ?? '';
+      source.HostConfig.Memory = Number(optionFirst('--memory') ?? 0);
+      source.HostConfig.MemorySwap = Number(optionFirst('--memory-swap') ?? 0);
+      source.HostConfig.CpuShares = Number(optionFirst('--cpu-shares') ?? 0);
+      source.HostConfig.CpuQuota = Number(optionFirst('--cpu-quota') ?? 0);
+      source.HostConfig.CpuPeriod = Number(optionFirst('--cpu-period') ?? 0);
+      source.HostConfig.NanoCpus = optionFirst('--cpus') === null ? 0 : Number(optionFirst('--cpus')) * 1e9;
+      source.HostConfig.CpusetCpus = optionFirst('--cpuset-cpus') ?? '';
+      source.HostConfig.CpusetMems = optionFirst('--cpuset-mems') ?? '';
+      source.HostConfig.PidsLimit = optionFirst('--pids-limit') === null ? null : Number(optionFirst('--pids-limit'));
+      source.HostConfig.Devices = optionValues('--device').map((value) => {
+        const [pathOnHost, pathInContainer, cgroupPermissions = ''] = value.split(':');
+        return { PathOnHost: pathOnHost, PathInContainer: pathInContainer, CgroupPermissions: cgroupPermissions };
+      });
+      source.HostConfig.Ulimits = optionValues('--ulimit').map((value) => {
+        const [nameValue, limits] = value.split('=');
+        const [soft, hard] = limits.split(':');
+        return { Name: nameValue, Soft: Number(soft), Hard: Number(hard) };
+      });
+      source.HostConfig.OomKillDisable = effectiveArgs.includes('--oom-kill-disable');
+      source.HostConfig.Tmpfs = Object.fromEntries(optionValues('--tmpfs').map((value) => {
+        const separator = value.indexOf(':');
+        return separator < 0 ? [value, ''] : [value.slice(0, separator), value.slice(separator + 1)];
+      }));
+      source.HostConfig.LogConfig = {
+        Type: optionFirst('--log-driver') ?? '',
+        Config: Object.fromEntries(optionValues('--log-opt').map((value) => {
+          const separator = value.indexOf('=');
+          return separator < 0 ? [value, ''] : [value.slice(0, separator), value.slice(separator + 1)];
+        })),
+      };
+      if (source.Config.Healthcheck || hasHealthOptions) {
+        if (!source.Config.Healthcheck) source.Config.Healthcheck = { Test: ['CMD-SHELL', optionFirst('--health-cmd')] };
+        else if (optionFirst('--health-cmd') !== null) source.Config.Healthcheck.Test = ['CMD-SHELL', optionFirst('--health-cmd')];
+        source.Config.Healthcheck.Interval = Number(optionFirst('--health-interval') ?? 0);
+        source.Config.Healthcheck.Timeout = Number(optionFirst('--health-timeout') ?? 0);
+        source.Config.Healthcheck.Retries = Number(optionFirst('--health-retries') ?? 0);
+        source.Config.Healthcheck.StartPeriod = Number(optionFirst('--health-start-period') ?? 0);
+        source.Config.Healthcheck.StartInterval = Number(optionFirst('--health-start-interval') ?? 0);
+      }
+      source.Mounts = parsedMounts;
+      source.NetworkSettings = { Ports: {}, Networks: { [network.Name]: { NetworkID: network.Id } } };
+      if (createMode === 'mismatched-registration') {
+        source.Config.Env = source.Config.Env.map((entry) => entry.startsWith(`${registrationAllowlistKey}=`) ? `${registrationAllowlistKey}=${'c'.repeat(64)}=other-user` : entry);
+      }
+      fx.state.acceptedCreateArgs = [...effectiveArgs];
+      containers.set(name, source);
+      fx.state.created = true;
+      if (createMode === 'response-loss' || createMode === 'foreign-response-loss' || createMode === 'mismatched-registration') {
+        if (createMode === 'foreign-response-loss') {
+          const foreign = structuredClone(source);
+          foreign.Id = 'f'.repeat(64);
+          foreign.Config.Image = `${fx.image}@sha256:${'f'.repeat(64)}`;
+          containers.set(name, foreign);
+        }
+        fail('create_response_lost', options.phase);
+      }
+      return { stdout: `${source.Id}\n`, code: 0 };
+    }
+    if (operation === 'network_connect') {
+      const networkName = args[2];
+      if (networkName !== fx.manifest.providerNetwork || args[3] !== 'b'.repeat(64)) fail('unexpected_network_connect', options.phase);
+      const container = inspectContainerReference(args[3]);
+      container.NetworkSettings.Networks[networkName] = { NetworkID: providerNetwork.Id };
+      return { stdout: '', code: 0 };
+    }
+    if (operation === 'start') {
+      if (args.length !== 2) throw new Error(`unexpected_docker_command:${args.join(' ')}`);
+      if (rebindForeignOnStart && options.phase === 'rollback_restore_start' && args[1] === fx.manifest.apiContainer && containers.has(fx.manifest.apiContainer)) {
+        const original = containers.get(fx.manifest.apiContainer);
+        containers.delete(fx.manifest.apiContainer);
+        const sealedName = `${fx.manifest.apiContainer}-google-registration-rollback-${revision.slice(0, 12)}`;
+        original.Name = `/${sealedName}`;
+        containers.set(sealedName, original);
+        const foreign = structuredClone(fx.api);
+        foreign.Id = 'f'.repeat(64);
+        foreign.Name = `/${fx.manifest.apiContainer}`;
+        foreign.State = { Running: false };
+        foreign.Config.Image = `${fx.image}@sha256:${'f'.repeat(64)}`;
+        containers.set(fx.manifest.apiContainer, foreign);
+      }
+      const container = inspectContainerReference(args[1]);
+      container.State.Running = true;
+      fx.state.stopped = false;
+      return { stdout: '', code: 0 };
+    }
+    if (operation === 'rm') {
+      if (args.length !== 3 || args[1] !== '--force') throw new Error(`unexpected_docker_command:${args.join(' ')}`);
+      const name = inspectContainerReference(args.at(-1)).Name.slice(1);
+      containers.delete(name);
+      fx.state.created = false;
+      return { stdout: '', code: 0 };
+    }
+    throw new Error(`unexpected_docker_command:${args.join(' ')}`);
+  };
+  return { command, calls, state: { containers } };
+}
+
+test('CORS default preflight is read-only and its manifest cannot activate Google registration', async () => {
+  assert.equal(corsAfter, greenWebCorsOrigins);
+  const fx = await fixture({ cors: true });
+  try {
+    const fake = statefulDockerExecutor(fx);
+    const result = await runStagingWebCorsTransition(corsOptions(fx, fake.command, false));
+    assert.equal(result.status, 'preflight-passed-no-mutation');
+    assert.equal(result.firstIrreversiblePhase, 'atomic_cors_enable');
+    assert.deepEqual(result.changedEnvironmentKeys, ['CORS_ORIGINS']);
+    assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+    assert.ok(fake.calls.every((entry) => !['create', 'stop', 'rename', 'start', 'rm'].includes(entry.args[0])));
+    await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+    await assert.rejects(lstat(`${fx.envFile}.web-cors.lock`), { code: 'ENOENT' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ ...corsOptions(fx, fake.command, false), mappingFile: fx.mappingFile }), /registration_manifest_pre_state_invalid/u);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('CORS success changes one env value only and retains exact rollback seal, production and closed registration', async () => {
+  const fx = await fixture({ cors: true });
+  try {
+    fx.api.HostConfig.NetworkMode = primaryNetworkId;
+    fx.manifest.corsBinding.apiFingerprint = corsContainerFingerprint(fx.api);
+    const fake = statefulDockerExecutor(fx);
+    const result = await runStagingWebCorsTransition(corsOptions(fx, fake.command));
+    assert.equal(result.status, 'staging-web-cors-enabled-registration-closed');
+    const expected = fx.originalEnv.replace(`CORS_ORIGINS=${corsBefore}\n`, `CORS_ORIGINS=${corsAfter}\n`);
+    assert.equal(await readFile(fx.envFile, 'utf8'), expected);
+    assert.equal(fake.state.containers.get(result.sealedName).Id, fx.manifest.apiContainerId);
+    assert.equal(fake.state.containers.get(result.sealedName).State.Running, false);
+    assert.equal(fake.state.containers.get(fx.manifest.apiContainer).Id, 'b'.repeat(64));
+    const proof = JSON.parse(await readFile(fx.evidenceFile, 'utf8'));
+    assert.deepEqual(proof.changedEnvironmentKeys, ['CORS_ORIGINS']);
+    assert.equal(proof.postError, 'staging_registration_disabled');
+    assert.equal(proof.userCountsUnchanged, true);
+    assert.equal(proof.envSha256Before, crypto.createHash('sha256').update(fx.originalEnv).digest('hex'));
+    assert.equal(proof.envSha256After, crypto.createHash('sha256').update(expected).digest('hex'));
+    assert.equal((await lstat(fx.evidenceFile)).mode & 0o777, 0o600);
+    assert.doesNotMatch(JSON.stringify(proof), /preserve-me|DATABASE_URL|synthetic-owner/u);
+    for (const call of fake.calls.filter((entry) => ['stop', 'rename', 'start', 'rm'].includes(entry.args[0]))) {
+      assert.ok(call.args.some((arg) => [fx.manifest.apiContainerId, 'b'.repeat(64)].includes(arg)));
+      assert.ok(!call.args.includes('shareittoo-api') && !call.args.includes('shareittoo-web'));
+    }
+    const external = fake.calls.find((entry) => entry.phase === 'replacement_cors_external_readback');
+    const stub = `let calls=0;globalThis.fetch=async(url,options)=>{calls++;if(url==='https://shareittoo.com/')return new Response('synthetic-production-root');if(url!=='https://staging.shareittoo.com/api/v1/auth/register'||options.headers.Origin!=='https://staging.shareittoo.com'||options.redirect!=='error')throw new Error('bad target');if(options.method==='OPTIONS')return new Response(null,{status:204,headers:{'access-control-allow-origin':options.headers.Origin,'access-control-allow-methods':'POST','access-control-allow-headers':'Content-Type'}});if(options.method!=='POST'||options.body!=='{}')throw new Error('unsafe payload');return new Response(JSON.stringify({error:'staging_registration_disabled'}),{status:403,headers:{'access-control-allow-origin':options.headers.Origin}});};`;
+    const scriptProof = JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e', `${stub}\n${external.args[2]}\nif(calls!==3)throw new Error('wrong count');`], { encoding: 'utf8' }));
+    assert.equal(scriptProof.options.status, 204);
+    assert.equal(scriptProof.post.status, 403);
+    assert.equal(scriptProof.productionRootSha256, fx.manifest.corsBinding.productionRootSha256);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('CORS stale bindings, wrong targets, registration and unsafe origins fail before mutation', async () => {
+  for (const mutation of [
+    (fx) => { fx.manifest.corsBinding.envSha256 = '0'.repeat(64); },
+    (fx) => { fx.manifest.corsBinding.apiFingerprint = '0'.repeat(64); },
+    (fx) => { fx.manifest.corsBinding.productionApiId = '0'.repeat(64); },
+    (fx) => { fx.manifest.corsBinding.webFingerprint = '0'.repeat(64); },
+    (fx) => { fx.manifest.apiContainer = 'shareittoo-api'; },
+    (fx) => { fx.api.Config.Env.push('CORS_ORIGINS=*'); },
+    (fx) => { fx.api.Config.Labels.foreign = 'drift'; },
+    (fx) => { fx.api.Image = `sha256:${'6'.repeat(64)}`; fx.manifest.corsBinding.apiFingerprint = corsContainerFingerprint(fx.api); },
+    async (fx) => { await writeFile(fx.envFile, fx.originalEnv.replace('CORS_ORIGINS=http://shareittoo-staging-api:8080', 'CORS_ORIGINS=https://shareittoo.com')); },
+    async (fx) => { await writeFile(fx.envFile, fx.originalEnv.replace('SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=false', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=true')); },
+  ]) {
+    const fx = await fixture({ cors: true });
+    try {
+      await mutation(fx);
+      const before = await readFile(fx.envFile, 'utf8');
+      const fake = statefulDockerExecutor(fx);
+      await assert.rejects(runStagingWebCorsTransition(corsOptions(fx, fake.command)));
+      assert.equal(await readFile(fx.envFile, 'utf8'), before);
+      assert.ok(fake.calls.every((entry) => !['create', 'stop', 'rename', 'start', 'rm'].includes(entry.args[0])));
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('CORS forward failure matrix restores exact env and original immutable container', async () => {
+  for (const phase of [
+    'pre_mutation_api_readback', 'pre_mutation_cors_external_readback',
+    'stop_current_api', 'seal_current_api', 'create_replacement_api',
+    'attach_provider_network', 'start_replacement_api', 'replacement_config_readback',
+    'replacement_public_runtime_probe', 'replacement_registration_config_readback',
+    'replacement_schema_readback', 'replacement_migration_ledger_readback',
+    'cors_rollback_seal_readback', 'replacement_cors_config_import',
+    'pre_external_cors_user_counts', 'replacement_cors_shareittoo-api_witness',
+    'replacement_cors_shareittoo-web_witness', 'replacement_cors_external_readback', 'final_cors_user_counts',
+  ]) {
+    const fx = await fixture({ cors: true });
+    try {
+      const fake = statefulDockerExecutor(fx);
+      let fired = false;
+      const command = (cmd, args, options) => {
+        if (!fired && options.phase === phase) { fired = true; throw Object.assign(new Error('injected'), { code: 'cors_injected_fault' }); }
+        return fake.command(cmd, args, options);
+      };
+      await assert.rejects(runStagingWebCorsTransition(corsOptions(fx, command)), (error) => error.code === 'cors_injected_fault' && error.rollback.restored);
+      assert.equal(fired, true, phase);
+      assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv, phase);
+      assert.equal(fake.state.containers.get(fx.manifest.apiContainer).Id, fx.manifest.apiContainerId);
+      assert.equal(fake.state.containers.get(fx.manifest.apiContainer).State.Running, true);
+      await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('CORS lost create rename and stop responses reconcile only owned exact state', async () => {
+  for (const options of [{ createMode: 'response-loss' }, { renameMode: 'response-loss' }, { stopMode: 'response-loss' }]) {
+    const fx = await fixture({ cors: true });
+    try {
+      const fake = statefulDockerExecutor(fx, options);
+      if (options.stopMode) {
+        assert.equal((await runStagingWebCorsTransition(corsOptions(fx, fake.command))).status, 'staging-web-cors-enabled-registration-closed');
+      } else {
+        await assert.rejects(runStagingWebCorsTransition(corsOptions(fx, fake.command)), (error) => error.rollback.restored);
+        assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+        assert.equal(fake.state.containers.get(fx.manifest.apiContainer).Id, fx.manifest.apiContainerId);
+      }
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('CORS external false success, extra env drift and account-count drift never write success evidence', async () => {
+  for (const fault of ['external', 'extra-env', 'image', 'counts', 'production']) {
+    const fx = await fixture({ cors: true });
+    try {
+      const fake = statefulDockerExecutor(fx);
+      const command = async (cmd, args, options) => {
+        const result = await fake.command(cmd, args, options);
+        if (fault === 'extra-env' && options.phase === 'replacement_config_readback') {
+          const parsed = JSON.parse(result.stdout); parsed.Config.Env.push('UNEXPECTED=drift'); return { stdout: JSON.stringify(parsed) };
+        }
+        if (fault === 'image' && options.phase === 'replacement_config_readback') {
+          const parsed = JSON.parse(result.stdout); parsed.Image = `sha256:${'6'.repeat(64)}`; return { stdout: JSON.stringify(parsed) };
+        }
+        if (fault === 'external' && options.phase === 'replacement_cors_external_readback') {
+          const parsed = JSON.parse(result.stdout); parsed.post = { status: 201 }; return { stdout: JSON.stringify(parsed) };
+        }
+        if (fault === 'production' && options.phase === 'replacement_cors_shareittoo-api_witness') {
+          const parsed = JSON.parse(result.stdout); parsed.Config.Image = 'foreign'; return { stdout: JSON.stringify(parsed) };
+        }
+        if (fault === 'counts' && options.phase === 'final_cors_user_counts') return { stdout: '5|1' };
+        return result;
+      };
+      await assert.rejects(runStagingWebCorsTransition(corsOptions(fx, command)), (error) => error.rollback.restored);
+      assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+      await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('CORS occupied evidence and exclusive lock refuse mutation; failed rollback is explicit', async () => {
+  for (const fault of ['evidence', 'lock', 'rollback']) {
+    const fx = await fixture({ cors: true });
+    try {
+      if (fault === 'evidence') await writeFile(fx.evidenceFile, 'independent', { mode: 0o600 });
+      if (fault === 'lock') await writeFile(`${fx.envFile}.web-cors.lock`, 'another-run', { mode: 0o600 });
+      const fake = statefulDockerExecutor(fx);
+      const command = (cmd, args, options) => {
+        if (fault === 'rollback' && ['replacement_cors_config_import', 'rollback_restore_start'].includes(options.phase)) throw Object.assign(new Error('injected'), { code: 'cors_injected_fault' });
+        return fake.command(cmd, args, options);
+      };
+      await assert.rejects(runStagingWebCorsTransition(corsOptions(fx, command)), (error) => fault !== 'rollback' || error.rollback.restored === false);
+      if (fault !== 'rollback') assert.ok(fake.calls.every((entry) => !['create', 'stop', 'rename', 'start', 'rm'].includes(entry.args[0])));
+      assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('CORS CLI is separately loadable and missing manifest never invokes an external command', () => {
+  const result = spawnSync(process.execPath, ['ops/enable_staging_web_cors.mjs'], {
+    env: { PATH: '/nonexistent', STAGING_WEB_CORS_RUNTIME_MANIFEST: '' }, encoding: 'utf8', timeout: 5000,
+  });
+  assert.equal(result.status, 1);
+  assert.equal(JSON.parse(result.stderr).code, 'manifest_path_invalid');
+  assert.equal(result.stdout, '');
+});
+
+test('CORS preserves CRLF comments and credential-like bytes with no raw env in evidence', async () => {
+  const fx = await fixture({ cors: true });
+  try {
+    const privateMarker = ['fixture', '$literal', '=kept', '#unchanged'].join('-');
+    fx.originalEnv = `# retained comment\r\n${fx.originalEnv.replaceAll('\n', '\r\n')}UNRELATED_MORE=${privateMarker}\r\n`;
+    await writeFile(fx.envFile, fx.originalEnv);
+    fx.api.Config.Env = fx.originalEnv.split('\r\n').filter((line) => line && !line.startsWith('#'));
+    fx.manifest.corsBinding.envSha256 = crypto.createHash('sha256').update(fx.originalEnv).digest('hex');
+    fx.manifest.corsBinding.apiFingerprint = corsContainerFingerprint(fx.api);
+    const fake = statefulDockerExecutor(fx);
+    await runStagingWebCorsTransition(corsOptions(fx, fake.command));
+    assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv.replace(`CORS_ORIGINS=${corsBefore}\r\n`, `CORS_ORIGINS=${corsAfter}\r\n`));
+    assert.ok(!(await readFile(fx.evidenceFile, 'utf8')).includes(privateMarker));
+    assert.ok(!fake.calls.some((call) => call.args.some((arg) => arg.includes(privateMarker))));
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('CORS private-file permissions symlinks and missing execute confirmation fail closed', async () => {
+  for (const fault of ['env-mode', 'env-symlink', 'lock-symlink', 'confirm', 'real-path']) {
+    const fx = await fixture({ cors: true });
+    try {
+      const fake = statefulDockerExecutor(fx);
+      if (fault === 'env-mode') await chmod(fx.envFile, 0o644);
+      if (fault === 'env-symlink') {
+        const backing = join(fx.root, 'original.env');
+        await writeFile(backing, fx.originalEnv, { mode: 0o600 });
+        await rm(fx.envFile); await symlink(backing, fx.envFile);
+      }
+      if (fault === 'lock-symlink') await symlink(fx.envFile, `${fx.envFile}.web-cors.lock`);
+      const options = corsOptions(fx, fake.command);
+      if (fault === 'confirm') options.commandEnv.STAGING_WEB_CORS_CONFIRM = 'wrong';
+      if (fault === 'real-path') { delete options.command; options.execute = false; }
+      await assert.rejects(runStagingWebCorsTransition(options));
+      assert.ok(fake.calls.every((entry) => !['create', 'stop', 'rename', 'start', 'rm'].includes(entry.args[0])));
+      assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('CORS late evidence collision restores original; concurrent env ownership is never overwritten', async () => {
+  for (const fault of ['evidence', 'foreign-env']) {
+    const fx = await fixture({ cors: true });
+    try {
+      const fake = statefulDockerExecutor(fx);
+      const command = async (cmd, args, options) => {
+        const result = await fake.command(cmd, args, options);
+        if (options.phase === 'final_cors_user_counts') {
+          if (fault === 'evidence') await writeFile(fx.evidenceFile, 'independent', { mode: 0o600 });
+          else await writeFile(fx.envFile, 'FOREIGN=owned\n', { mode: 0o600 });
+        }
+        return result;
+      };
+      await assert.rejects(runStagingWebCorsTransition(corsOptions(fx, command)), (error) => error.rollback.restored === (fault === 'evidence'));
+      if (fault === 'evidence') {
+        assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+        assert.equal(await readFile(fx.evidenceFile, 'utf8'), 'independent');
+      } else {
+        assert.equal(await readFile(fx.envFile, 'utf8'), 'FOREIGN=owned\n');
+        await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+      }
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('default-off preflight validates schema 101 and does not mutate or expose mapping', async () => {
+  const fx = await fixture();
+  try {
+    const fake = statefulDockerExecutor(fx);
+    const result = await runStagingGoogleRegistrationEnable({ manifest: fx.manifest, mappingFile: fx.mappingFile, command: fake.command });
+    assert.equal(result.status, 'preflight-passed-no-mutation');
+    assert.equal(await readFile(fx.envFile, 'utf8'), envContent());
+    assert.equal(JSON.stringify(result).includes(mappingLine()), false);
+    assert.ok(fake.calls.some((call) => call.phase === 'current_migration_ledger_readback'));
+    assert.ok(fake.calls.some((call) => call.phase === 'candidate_registration_config_import'));
+    assert.equal(fake.calls.some((call) => call.phase === 'stop_current_api'), false);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('enable and finalization preserve the exact primary network name or full ID through generated create commands', async () => {
+  for (const finalize of [false, true]) {
+    for (const useId of [false, true]) {
+      const fx = await fixture({ finalize });
+      try {
+        const mode = useId ? primaryNetworkId : fx.manifest.network;
+        fx.api.HostConfig.NetworkMode = mode;
+        const fake = statefulDockerExecutor(fx);
+        const options = finalize ? finalizeOptions(fx, fake.command) : {
+          manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile,
+          command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true,
+        };
+        await (finalize ? runStagingGoogleRegistrationFinalize : runStagingGoogleRegistrationEnable)(options);
+        const args = fake.calls.find((call) => call.phase === 'create_replacement_api').args;
+        assert.equal(args[args.indexOf('--network') + 1], mode);
+        const replacement = fake.state.containers.get(fx.manifest.apiContainer);
+        assert.equal(replacement.HostConfig.NetworkMode, mode);
+        assert.deepEqual(replacement.NetworkSettings.Networks, {
+          [fx.manifest.network]: { NetworkID: primaryNetworkId },
+          [fx.manifest.providerNetwork]: { NetworkID: providerNetworkId },
+        });
+      } finally { await rm(fx.root, { recursive: true, force: true }); }
+    }
+  }
+});
+
+test('foreign shortened missing or ambiguously bound primary network modes fail before mutation', async () => {
+  const cases = [
+    (fx) => { fx.api.HostConfig.NetworkMode = fx.manifest.providerNetwork; },
+    (fx) => { fx.api.HostConfig.NetworkMode = providerNetworkId; },
+    (fx) => { fx.api.HostConfig.NetworkMode = 'f'.repeat(64); },
+    (fx) => { fx.api.HostConfig.NetworkMode = primaryNetworkId.slice(0, 12); },
+    (fx) => { fx.api.HostConfig.NetworkMode = 'host'; },
+    (fx) => { delete fx.api.HostConfig.NetworkMode; },
+    (fx) => { fx.api.NetworkSettings.Networks[fx.manifest.network].NetworkID = providerNetworkId; },
+    (fx) => { delete fx.api.NetworkSettings.Networks[fx.manifest.network].NetworkID; },
+    (fx) => { fx.api.NetworkSettings.Networks[fx.manifest.providerNetwork].NetworkID = primaryNetworkId; },
+  ];
+  const inventoryCases = [
+    ['current_network_inspect', (record) => { record.Id = 'f'.repeat(64); }],
+    ['current_network_inspect', (record) => { delete record.Id; }],
+    ['current_network_inspect', (record) => { record.Id = primaryNetworkId.slice(0, 12); }],
+    ['current_provider_network_inspect', (record) => { record.Id = primaryNetworkId; }],
+  ];
+  for (const [configure, inventory] of [
+    ...cases.map((configure) => [configure, null]),
+    ...inventoryCases.map((inventory) => [() => {}, inventory]),
+  ]) {
+    const fx = await fixture();
+    try {
+      configure(fx);
+      const fake = statefulDockerExecutor(fx);
+      const command = async (cmd, args, options) => {
+        const result = await fake.command(cmd, args, options);
+        if (!inventory || options.phase !== inventory[0]) return result;
+        const record = JSON.parse(result.stdout);
+        inventory[1](record);
+        return { ...result, stdout: JSON.stringify(record) };
+      };
+      await assert.rejects(runStagingGoogleRegistrationEnable({
+        manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile,
+        command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true,
+      }), { code: 'api_primary_network_binding_invalid' });
+      assert.equal(fake.calls.some((call) => ['stop', 'rename', 'create', 'start', 'network'].includes(call.args[0])), false);
+      assert.equal(await readFile(fx.envFile, 'utf8'), envContent());
+      await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('equivalent primary network name is not normalized over captured ID drift', async () => {
+  const fx = await fixture();
+  try {
+    fx.api.HostConfig.NetworkMode = primaryNetworkId;
+    const fake = statefulDockerExecutor(fx, { createMutation: 'network-name-drift' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({
+      manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile,
+      command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true,
+    }), (error) => {
+      assert.equal(error.code, 'replacement_config_drift');
+      assert.deepEqual(sanitizeGoogleRegistrationEnableError(error).configDrift.fields, ['host.NetworkMode']);
+      assert.equal(error.rollback.restored, true);
+      return true;
+    });
+    assert.equal(fake.state.containers.get(fx.manifest.apiContainer).Id, fx.api.Id);
+    assert.equal(await readFile(fx.envFile, 'utf8'), envContent());
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('replacement must retain exactly both bound network identities', async () => {
+  for (const mutate of [
+    (record, fx) => { delete record.NetworkSettings.Networks[fx.manifest.providerNetwork]; },
+    (record) => { record.NetworkSettings.Networks.foreign = { NetworkID: 'f'.repeat(64) }; },
+    (record, fx) => { record.NetworkSettings.Networks[fx.manifest.providerNetwork].NetworkID = 'f'.repeat(64); },
+    (record, fx) => { record.NetworkSettings.Networks[fx.manifest.network].NetworkID = 'f'.repeat(64); },
+  ]) {
+    const fx = await fixture();
+    try {
+      const fake = statefulDockerExecutor(fx);
+      const command = async (cmd, args, options) => {
+        const result = await fake.command(cmd, args, options);
+        if (options.phase !== 'replacement_config_readback') return result;
+        const record = JSON.parse(result.stdout);
+        mutate(record, fx);
+        return { ...result, stdout: JSON.stringify(record) };
+      };
+      await assert.rejects(runStagingGoogleRegistrationEnable({
+        manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile,
+        command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true,
+      }), (error) => ['network_inventory_invalid', 'api_primary_network_binding_invalid'].includes(error.code) && error.rollback.restored);
+      assert.equal(await readFile(fx.envFile, 'utf8'), envContent());
+      await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('successful execution appends exactly one allowed ID and changes only three env keys', async () => {
+  const fx = await fixture();
+  try {
+    const fake = statefulDockerExecutor(fx);
+    const result = await runStagingGoogleRegistrationEnable({
+      manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile,
+      command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true,
+    });
+    assert.equal(result.status, 'enabled-awaiting-live-google-token-gate');
+    const env = await readFile(fx.envFile, 'utf8');
+    assert.match(env, /SIT_STAGING_GOOGLE_REGISTRATION_ENABLED=true/u);
+    assert.match(env, new RegExp(`SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST=${mappingDigest}=${userId}`));
+    assert.match(env, /UNRELATED=preserve-me/u);
+    const before = envMap(envContent().trim().split('\n'));
+    const after = envMap(env.trim().split('\n'));
+    assert.deepEqual(Object.keys(after).filter((key) => after[key] !== before[key]).sort(), ['SIT_STAGING_ALLOWED_USER_IDS', 'SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED']);
+    assert.equal(after.SIT_STAGING_ALLOWED_USER_IDS, `${originalAllowedIds},${userId}`);
+    const evidence = JSON.parse(await readFile(fx.evidenceFile, 'utf8'));
+    assert.equal(evidence.mappingDigest, crypto.createHash('sha256').update(mappingLine().trimEnd()).digest('hex'));
+    assert.equal(evidence.targetUserIdDigest, crypto.createHash('sha256').update(userId).digest('hex'));
+    assert.equal(JSON.stringify(evidence).includes(userId), false);
+    assert.equal(JSON.stringify(evidence).includes(mappingLine()), false);
+    assert.equal(fake.calls.some((call) => call.args?.includes('--publish') || call.args?.includes('-p')), false);
+    const create = fake.calls.find((call) => call.args[0] === 'create');
+    assert.ok(create);
+    assert.equal(create.args.includes('--hostname'), false);
+    assert.ok(fake.calls.some((call) => call.phase === 'replacement_invalid_social_token_probe'));
+    assert.ok(fake.calls.some((call) => call.phase === 'current_mapping_target_absent'));
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('successor manifest binds enabled Firebase, exact current ID, and the three live mounts', async () => {
+  const fx = await fixture();
+  try {
+    const file = join(fx.root, 'runtime.json');
+    await writeFile(file, JSON.stringify(fx.manifest), { mode: 0o600 });
+    assert.equal(readGoogleRegistrationRuntimeManifest(file).apiContainerId, fx.api.Id);
+    for (const mutate of [
+      (m) => { m.kind = 'sit-staging-google-auth-runtime-manifest'; },
+      (m) => { m.apiContainerId = 'short'; },
+      (m) => { m.safetyEnv.FIREBASE_AUTH_ENABLED = 'false'; },
+      (m) => { m.safetyEnv.DEPLOYMENT_ENVIRONMENT = 'staging'; },
+      (m) => { m.mounts.push({ ...m.mounts[0], destination: '/run/secrets/technical-sandbox-key' }); },
+    ]) {
+      const changed = structuredClone(fx.manifest);
+      mutate(changed);
+      assert.throws(() => assertGoogleRegistrationRuntimeManifest(changed));
+    }
+    await chmod(file, 0o640);
+    assert.throws(() => readGoogleRegistrationRuntimeManifest(file), /manifest_metadata_invalid/u);
+    const stale = { ...fx.manifest, apiContainerId: 'e'.repeat(64) };
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: stale, mappingFile: fx.mappingFile, command: statefulDockerExecutor(fx).command }), /api_container_pre_state_invalid/u);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('test-only preflight rejects occupied IDs and every provider/access boundary drift before mutation', async () => {
+  const cases = [
+    ['DEPLOYMENT_ENVIRONMENT', 'staging'], ['DEPLOYMENT_ENVIRONMENT', 'production'],
+    ['FIREBASE_AUTH_ENABLED', 'false'], ['FIREBASE_PHONE_VERIFICATION_ENABLED', 'true'],
+    ['PAYMENT_TRANSPORT', 'stripe'], ['STRIPE_LIVEMODE', 'true'],
+    ['SIT_STAGING_ACCESS_GATE_ENABLED', 'false'],
+    ['SIT_STAGING_ALLOWED_USER_IDS', ''], ['SIT_STAGING_ALLOWED_USER_IDS', 'same,same'],
+    ['SIT_STAGING_GOOGLE_REGISTRATION_ENABLED', 'true'],
+    ['SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST', `${mappingDigest}=${userId}`],
+  ];
+  for (const [key, value] of cases) {
+    const fx = await fixture();
+    try {
+      const values = envMap(envContent().trim().split('\n'));
+      values[key] = value;
+      const content = Object.entries(values).map(([name, val]) => `${name}=${val}`).join('\n') + '\n';
+      await writeFile(fx.envFile, content);
+      fx.api.Config.Env = content.trim().split('\n');
+      const fake = statefulDockerExecutor(fx);
+      await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: fx.manifest, mappingFile: fx.mappingFile, command: fake.command }), key);
+      assert.equal(await readFile(fx.envFile, 'utf8'), content);
+      assert.equal(fake.calls.some((call) => ['stop', 'rename', 'create', 'start', 'rm'].includes(call.args[0])), false);
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+  const fx = await fixture();
+  try {
+    const fake = statefulDockerExecutor(fx, { occupiedTarget: true });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: fx.manifest, mappingFile: fx.mappingFile, command: fake.command }), /mapping_target_already_exists/u);
+    assert.equal(fake.calls.some((call) => call.args[0] === 'stop'), false);
+    assert.equal(await readFile(fx.envFile, 'utf8'), envContent());
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('digest-pinned live pre-state is preserved and an invalid-token false PASS rolls back all three deltas', async () => {
+  for (const invalidTokenStatus of [401, 200, 403]) {
+    const fx = await fixture();
+    try {
+      fx.api.Config.Image = `${fx.image}@${imageDigest}`;
+      const fake = statefulDockerExecutor(fx, { invalidTokenStatus });
+      const execution = runStagingGoogleRegistrationEnable({ manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true });
+      if (invalidTokenStatus === 401) {
+        assert.equal((await execution).status, 'enabled-awaiting-live-google-token-gate');
+        assert.equal(fake.state.containers.get(fx.manifest.apiContainer).Config.Image, fx.api.Config.Image);
+      } else {
+        await assert.rejects(execution, (error) => error.code === 'invalid_social_token_probe_invalid' && error.rollback.restored);
+        assert.equal(await readFile(fx.envFile, 'utf8'), envContent());
+        assert.equal(fake.state.containers.get(fx.manifest.apiContainer).Id, fx.api.Id);
+      }
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('exact-image config import failure rejects before any env or service mutation', async () => {
+  const fx = await fixture();
+  try {
+    const fake = statefulDockerExecutor(fx);
+    const command = async (cmd, args, options) => options.phase === 'candidate_registration_config_import'
+      ? { stdout: JSON.stringify({ enabled: true, mappingCount: 2, targetAllowed: true }), code: 0 }
+      : fake.command(cmd, args, options);
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile, command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), /candidate_registration_config_invalid/u);
+    assert.equal(await readFile(fx.envFile, 'utf8'), envContent());
+    assert.equal(fake.calls.some((call) => call.args[0] === 'stop'), false);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('every forward command failure restores the exact original env and immutable container', async () => {
+  const phases = [
+    'pre_mutation_api_readback', 'stop_current_api', 'seal_current_api', 'create_replacement_api',
+    'attach_provider_network', 'start_replacement_api', 'replacement_config_readback',
+    'replacement_public_runtime_probe', 'replacement_registration_config_readback',
+    'replacement_schema_readback', 'replacement_migration_ledger_readback', 'replacement_invalid_social_token_probe',
+  ];
+  for (const phase of phases) {
+    const fx = await fixture();
+    try {
+      const fake = statefulDockerExecutor(fx);
+      let fired = false;
+      const command = async (cmd, args, options) => {
+        if (!fired && options.phase === phase) {
+          fired = true;
+          throw Object.assign(new Error('injected_forward_failure'), { code: 'injected_forward_failure', failurePhase: phase });
+        }
+        return fake.command(cmd, args, options);
+      };
+      await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile, command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
+        assert.equal(error.code, 'injected_forward_failure', phase);
+        assert.equal(error.rollback.restored, true, phase);
+        return true;
+      });
+      assert.equal(fired, true);
+      assert.equal(await readFile(fx.envFile, 'utf8'), envContent(), phase);
+      assert.equal(fake.state.containers.size, 1, phase);
+      assert.equal(fake.state.containers.get(fx.manifest.apiContainer).Id, fx.api.Id, phase);
+      assert.equal(fake.state.containers.get(fx.manifest.apiContainer).State.Running, true, phase);
+      await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+      for (const call of fake.calls.filter((entry) => ['stop', 'start', 'rm'].includes(entry.args[0]))) {
+        assert.match(call.args.at(-1), /^[ab]{64}$/u, phase);
+      }
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('access list readback drift cannot hide behind registration-only comparison', async () => {
+  for (const changedIds of [originalAllowedIds, `${originalAllowedIds},${userId},extra`, userId]) {
+    const fx = await fixture();
+    try {
+      const fake = statefulDockerExecutor(fx);
+      const command = async (cmd, args, options) => {
+        const result = await fake.command(cmd, args, options);
+        if (options.phase === 'replacement_config_readback') {
+          const record = JSON.parse(result.stdout);
+          record.Config.Env = record.Config.Env.map((entry) => entry.startsWith('SIT_STAGING_ALLOWED_USER_IDS=') ? `SIT_STAGING_ALLOWED_USER_IDS=${changedIds}` : entry);
+          return { ...result, stdout: JSON.stringify(record) };
+        }
+        return result;
+      };
+      await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile, command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => error.code === 'replacement_registration_delta_invalid' && error.rollback.restored);
+      assert.equal(await readFile(fx.envFile, 'utf8'), envContent());
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('late evidence collision rolls back without deleting the independently created artifact', async () => {
+  const fx = await fixture();
+  try {
+    const fake = statefulDockerExecutor(fx);
+    const command = async (cmd, args, options) => {
+      const result = await fake.command(cmd, args, options);
+      if (options.phase === 'replacement_invalid_social_token_probe') {
+        await writeFile(fx.evidenceFile, 'independent-artifact', { mode: 0o600, flag: 'wx' });
+      }
+      return result;
+    };
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile, command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => error.code === 'evidence_already_exists' && error.rollback.restored);
+    assert.equal(await readFile(fx.envFile, 'utf8'), envContent());
+    assert.equal(await readFile(fx.evidenceFile, 'utf8'), 'independent-artifact');
+    assert.equal(fake.state.containers.get(fx.manifest.apiContainer).Id, fx.api.Id);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('rollback command failure reports unrestored state without a success artifact', async () => {
+  for (const rollbackPhase of ['rollback_replacement_remove', 'rollback_restore_start']) {
+    const fx = await fixture();
+    try {
+      const fake = statefulDockerExecutor(fx, { invalidTokenStatus: 403 });
+      const command = async (cmd, args, options) => {
+        if (options.phase === rollbackPhase) throw Object.assign(new Error('rollback_injected'), { code: 'rollback_injected' });
+        return fake.command(cmd, args, options);
+      };
+      await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile, command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
+        assert.equal(error.rollback.restored, false);
+        assert.ok(error.rollback.results.some((entry) => entry.phase === rollbackPhase && !entry.ok));
+        return true;
+      });
+      assert.equal(await readFile(fx.envFile, 'utf8'), envContent());
+      await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('Docker-default hostname may change only with successor identity, while explicit hostname is preserved', async () => {
+  const fx = await fixture({ hostname: 'green-api.example' });
+  try {
+    const fake = statefulDockerExecutor(fx);
+    await runStagingGoogleRegistrationEnable({
+      manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile,
+      command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true,
+    });
+    const create = fake.calls.find((call) => call.args[0] === 'create');
+    assert.ok(create);
+    assert.deepEqual(create.args.slice(create.args.indexOf('--hostname'), create.args.indexOf('--hostname') + 2), ['--hostname', 'green-api.example']);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('stateful executor rejects unknown Docker commands and argument shapes', async () => {
+  const fx = await fixture();
+  try {
+    const fake = statefulDockerExecutor(fx);
+    await assert.rejects(fake.command('docker', ['image', 'pull', fx.image], { phase: 'negative_unknown_command' }), /unexpected_docker_command/u);
+    await assert.rejects(fake.command('docker', ['inspect', '--format', '{{json .}}', fx.manifest.apiContainer, 'unexpected'], { phase: 'negative_unknown_args' }), /unexpected_docker_command/u);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('failure after recreate restores the prior env and container deterministically', async () => {
+  const fx = await fixture();
+  try {
+  const fake = statefulDockerExecutor(fx, { failOperation: 'replacement-startup' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({
+      manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile,
+      command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true,
+    }), (error) => {
+      assert.equal(error.code, 'replacement_public_runtime_probe_failed');
+      assert.equal(error.rollback.restored, true);
+      return true;
+    });
+    assert.equal(await readFile(fx.envFile, 'utf8'), envContent());
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('rollback starts the captured original ID even when the mutable name is rebound', async () => {
+  const fx = await fixture();
+  try {
+    const fake = statefulDockerExecutor(fx, { failOperation: 'replacement-startup', rebindForeignOnStart: true });
+    await assert.rejects(runStagingGoogleRegistrationEnable({
+      manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile,
+      command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true,
+    }), (error) => {
+      assert.equal(error.code, 'replacement_public_runtime_probe_failed');
+      assert.equal(error.rollback.restored, true);
+      assert.deepEqual(fake.calls.find((call) => call.phase === 'rollback_restore_start').args, ['start', fx.api.Id]);
+      return true;
+    });
+    const restored = fake.state.containers.get(fx.manifest.apiContainer);
+    assert.equal(restored.Id, fx.api.Id);
+    assert.equal(restored.State.Running, true);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('negative private mapping and target checks fail closed', async () => {
+  const cases = [
+    { name: 'multiple mappings', mapping: `${mappingLine()}${'c'.repeat(64)}=second-user\n`, code: 'mapping_plaintext_or_shape_invalid' },
+    { name: 'plaintext-shaped', mapping: `email@example.invalid=${userId}\n`, code: 'mapping_plaintext_or_shape_invalid' },
+    { name: 'uid-shaped', mapping: `${mappingDigest}=uid_123\n`, code: 'mapping_plaintext_or_shape_invalid' },
+  ];
+  for (const entry of cases) {
+    const fx = await fixture({ mapping: entry.mapping });
+    try { assert.throws(() => readRegistrationMapping(fx.mappingFile), new RegExp(entry.code)); }
+    finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+  const fx = await fixture();
+  try {
+    const content = await readFile(fx.envFile, 'utf8');
+    await writeFile(fx.envFile, content.replace(`SIT_STAGING_ALLOWED_USER_IDS=${originalAllowedIds}`, `SIT_STAGING_ALLOWED_USER_IDS=${originalAllowedIds},${userId}`), { mode: 0o600 });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: fx.manifest, mappingFile: fx.mappingFile, command: statefulDockerExecutor(fx).command }), /mapping_target_already_access_allowed/u);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('wrong target, mode, symlink, changed unrelated byte, and false PASS all fail closed', async () => {
+  const badManifest = await fixture({ apiContainer: 'wrong-api' });
+  try { await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: badManifest.manifest, mappingFile: badManifest.mappingFile, command: statefulDockerExecutor(badManifest).command }), /target_not_staging_green/u); }
+  finally { await rm(badManifest.root, { recursive: true, force: true }); }
+
+  const mode = await fixture();
+  try { await chmod(mode.mappingFile, 0o640); assert.throws(() => readRegistrationMapping(mode.mappingFile), /mapping_metadata_invalid/u); }
+  finally { await rm(mode.root, { recursive: true, force: true }); }
+
+  const link = await fixture();
+  try { const linkPath = join(link.root, 'mapping-link'); await symlink(link.mappingFile, linkPath); assert.throws(() => readRegistrationMapping(linkPath), /mapping_symlink_forbidden/u); }
+  finally { await rm(link.root, { recursive: true, force: true }); }
+
+  const changed = await fixture();
+  try {
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: changed.manifest, mappingFile: changed.mappingFile, evidenceFile: changed.evidenceFile, command: statefulDockerExecutor(changed, { mutateUnrelated: true }).command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), /env_changed_since_preflight/u);
+    assert.equal(await readFile(changed.envFile, 'utf8'), envContent({ unrelated: 'changed-after-preflight' }));
+  }
+  finally { await rm(changed.root, { recursive: true, force: true }); }
+
+  const falsePass = await fixture();
+  try {
+    const fake = statefulDockerExecutor(falsePass, { falsePass: true });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: falsePass.manifest, mappingFile: falsePass.mappingFile, evidenceFile: falsePass.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), /registration_config_readback_invalid/u);
+    assert.equal(await readFile(falsePass.envFile, 'utf8'), envContent());
+  } finally { await rm(falsePass.root, { recursive: true, force: true }); }
+});
+
+test('wrong schema or image and stop/rename interruption never produce a false PASS', async () => {
+  const schema = await fixture();
+  try { await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: schema.manifest, mappingFile: schema.mappingFile, command: statefulDockerExecutor(schema, { wrongSchema: true }).command }), /current_schema_migration_readback_invalid/u); }
+  finally { await rm(schema.root, { recursive: true, force: true }); }
+
+  const image = await fixture();
+  try { await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: image.manifest, mappingFile: image.mappingFile, command: statefulDockerExecutor(image, { wrongImage: true }).command }), /image_readback_invalid/u); }
+  finally { await rm(image.root, { recursive: true, force: true }); }
+
+  const rename = await fixture();
+  try {
+    const fake = statefulDockerExecutor(rename, { failOperation: 'rename' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: rename.manifest, mappingFile: rename.mappingFile, evidenceFile: rename.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
+      assert.equal(error.code, 'seal_current_api_failed');
+      assert.equal(error.rollback.restored, true);
+      assert.ok(error.rollback.results.some((entry) => entry.phase === 'rollback_original_start' && entry.ok));
+      assert.deepEqual(fake.calls.find((call) => call.phase === 'rollback_original_start').args, ['start', rename.api.Id]);
+      return true;
+    });
+  } finally { await rm(rename.root, { recursive: true, force: true }); }
+
+  const create = await fixture();
+  try {
+    const fake = statefulDockerExecutor(create, { failOperation: 'create' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: create.manifest, mappingFile: create.mappingFile, evidenceFile: create.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
+      assert.equal(error.code, 'create_replacement_api_failed');
+      assert.equal(error.rollback.restored, true);
+      assert.ok(error.rollback.results.some((entry) => entry.phase === 'rollback_api_readback' && entry.ok));
+      assert.deepEqual(fake.calls.find((call) => call.phase === 'rollback_restore_start').args, ['start', create.api.Id]);
+      return true;
+    });
+  } finally { await rm(create.root, { recursive: true, force: true }); }
+
+  const createLoss = await fixture();
+  try {
+    const fake = statefulDockerExecutor(createLoss, { createMode: 'response-loss' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: createLoss.manifest, mappingFile: createLoss.mappingFile, evidenceFile: createLoss.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
+      assert.equal(error.code, 'create_response_lost_failed');
+      assert.equal(error.rollback.restored, true);
+      assert.equal(error.rollback.originalRunning, true);
+      assert.ok(fake.calls.some((call) => call.phase === 'rollback_create_response_readback'));
+      assert.ok(fake.calls.some((call) => call.phase === 'rollback_replacement_remove'));
+      return true;
+    });
+    assert.equal(createLoss.state.api.State.Running, true);
+  } finally { await rm(createLoss.root, { recursive: true, force: true }); }
+
+  const foreignCreate = await fixture();
+  try {
+    const fake = statefulDockerExecutor(foreignCreate, { createMode: 'foreign-response-loss' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: foreignCreate.manifest, mappingFile: foreignCreate.mappingFile, evidenceFile: foreignCreate.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
+      assert.equal(error.rollback.restored, false);
+      assert.equal(error.rollback.originalRunning, null);
+      assert.equal(error.rollback.attemptedRestart, false);
+      assert.ok(!fake.calls.some((call) => call.phase === 'rollback_replacement_remove'));
+      assert.ok(!fake.calls.some((call) => call.phase === 'rollback_restore_start'));
+      return true;
+    });
+    assert.ok(fake.state.containers.has(foreignCreate.manifest.apiContainer));
+  } finally { await rm(foreignCreate.root, { recursive: true, force: true }); }
+
+  const preexistingForeign = await fixture();
+  try {
+    const fake = statefulDockerExecutor(preexistingForeign, { createMode: 'foreign-preexisting' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: preexistingForeign.manifest, mappingFile: preexistingForeign.mappingFile, evidenceFile: preexistingForeign.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
+      assert.equal(error.rollback.restored, false);
+      assert.equal(error.rollback.originalRunning, null);
+      assert.equal(error.rollback.attemptedRestart, false);
+      assert.ok(!fake.calls.some((call) => call.phase === 'rollback_replacement_remove'));
+      return true;
+    });
+  } finally { await rm(preexistingForeign.root, { recursive: true, force: true }); }
+
+  const mismatchedCreate = await fixture();
+  try {
+    const fake = statefulDockerExecutor(mismatchedCreate, { createMode: 'mismatched-registration' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: mismatchedCreate.manifest, mappingFile: mismatchedCreate.mappingFile, evidenceFile: mismatchedCreate.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
+      assert.equal(error.rollback.restored, false);
+      assert.equal(error.rollback.originalRunning, null);
+      assert.equal(error.rollback.attemptedRestart, false);
+      assert.ok(!fake.calls.some((call) => call.phase === 'rollback_replacement_remove'));
+      return true;
+    });
+    const survivor = fake.state.containers.get(mismatchedCreate.manifest.apiContainer);
+    assert.equal(envMap(survivor.Config.Env)[registrationAllowlistKey], `${'c'.repeat(64)}=other-user`);
+  } finally { await rm(mismatchedCreate.root, { recursive: true, force: true }); }
+
+  const renameLoss = await fixture();
+  try {
+    const fake = statefulDockerExecutor(renameLoss, { renameMode: 'response-loss' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: renameLoss.manifest, mappingFile: renameLoss.mappingFile, evidenceFile: renameLoss.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
+      assert.equal(error.code, 'rename_response_lost_failed');
+      assert.equal(error.rollback.restored, true);
+      assert.equal(error.rollback.originalRunning, true);
+      assert.equal(error.rollback.attemptedRestart, true);
+      assert.ok(fake.calls.some((call) => call.phase === 'rollback_rename_current_readback'));
+      assert.ok(fake.calls.some((call) => call.phase === 'rollback_rename_sealed_readback'));
+      assert.ok(fake.calls.some((call) => call.phase === 'rollback_restore_start'));
+      assert.deepEqual(fake.calls.find((call) => call.phase === 'rollback_restore_start').args, ['start', renameLoss.api.Id]);
+      assert.equal(fake.state.containers.get(renameLoss.manifest.apiContainer).Id, renameLoss.api.Id);
+      assert.equal(fake.state.containers.get(renameLoss.manifest.apiContainer).State.Running, true);
+      return true;
+    });
+  } finally { await rm(renameLoss.root, { recursive: true, force: true }); }
+
+  const foreignRename = await fixture();
+  try {
+    const fake = statefulDockerExecutor(foreignRename, { renameMode: 'foreign-response-loss' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: foreignRename.manifest, mappingFile: foreignRename.mappingFile, evidenceFile: foreignRename.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
+      assert.equal(error.rollback.restored, false);
+      assert.equal(error.rollback.originalRunning, null);
+      assert.equal(error.rollback.attemptedRestart, false);
+      assert.ok(!fake.calls.some((call) => call.phase === 'rollback_restore_rename'));
+      assert.ok(!fake.calls.some((call) => call.phase === 'rollback_restore_start'));
+      return true;
+    });
+    assert.ok(fake.state.containers.has(foreignRename.manifest.apiContainer));
+    assert.ok(fake.state.containers.has(`${foreignRename.manifest.apiContainer}-google-registration-rollback-${revision.slice(0, 12)}`));
+  } finally { await rm(foreignRename.root, { recursive: true, force: true }); }
+
+  const evidence = await fixture();
+  try {
+    await writeFile(evidence.evidenceFile, '{"existing":true}\n', { mode: 0o600 });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: evidence.manifest, mappingFile: evidence.mappingFile, evidenceFile: evidence.evidenceFile, command: statefulDockerExecutor(evidence).command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), /evidence_already_exists/u);
+    assert.equal(await readFile(evidence.envFile, 'utf8'), envContent());
+  } finally { await rm(evidence.root, { recursive: true, force: true }); }
+
+  const unsafeParent = await fixture();
+  try {
+    const directory = join(unsafeParent.root, 'unsafe-evidence-parent');
+    await mkdir(directory, { mode: 0o755 });
+    unsafeParent.evidenceFile = join(directory, 'evidence.json');
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: unsafeParent.manifest, mappingFile: unsafeParent.mappingFile, evidenceFile: unsafeParent.evidenceFile, command: statefulDockerExecutor(unsafeParent).command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), /evidence_parent_unsafe/u);
+    assert.equal(await readFile(unsafeParent.envFile, 'utf8'), envContent());
+  } finally { await rm(unsafeParent.root, { recursive: true, force: true }); }
+});
+
+test('stop fail-before and response-loss-after-stop are recovered from real state readback', async () => {
+  const failBefore = await fixture();
+  try {
+    const fake = statefulDockerExecutor(failBefore, { stopMode: 'fail-before' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: failBefore.manifest, mappingFile: failBefore.mappingFile, evidenceFile: failBefore.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
+      assert.equal(error.code, 'stop_current_api_failed');
+      assert.equal(error.rollback.restored, true);
+      assert.ok(fake.calls.some((call) => call.phase === 'stop_state_readback'));
+      return true;
+    });
+    assert.equal(failBefore.state.api.State.Running, true);
+  } finally { await rm(failBefore.root, { recursive: true, force: true }); }
+
+  const responseLoss = await fixture();
+  try {
+    const fake = statefulDockerExecutor(responseLoss, { stopMode: 'response-loss', failOperation: 'create' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: responseLoss.manifest, mappingFile: responseLoss.mappingFile, evidenceFile: responseLoss.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
+      assert.equal(error.code, 'create_replacement_api_failed');
+      assert.equal(error.rollback.restored, true);
+      assert.ok(error.rollback.results.some((entry) => entry.phase === 'rollback_api_readback' && entry.ok));
+      return true;
+    });
+    assert.equal(responseLoss.state.api.State.Running, true);
+    assert.ok(fake.calls.some((call) => call.phase === 'stop_state_readback'));
+  } finally { await rm(responseLoss.root, { recursive: true, force: true }); }
+
+  const inspectFailure = await fixture();
+  try {
+    const fake = statefulDockerExecutor(inspectFailure, { stopMode: 'unknown-inspect' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: inspectFailure.manifest, mappingFile: inspectFailure.mappingFile, evidenceFile: inspectFailure.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
+      assert.equal(error.code, 'stop_response_lost_failed');
+      assert.equal(error.rollback.restored, true);
+      assert.equal(error.rollback.originalRunning, true);
+      assert.equal(error.rollback.attemptedRestart, true);
+      assert.ok(fake.calls.some((call) => call.phase === 'stop_state_readback'));
+      assert.ok(fake.calls.some((call) => call.phase === 'rollback_original_start'));
+      assert.ok(fake.calls.some((call) => call.phase === 'rollback_original_readback'));
+      assert.deepEqual(fake.calls.find((call) => call.phase === 'rollback_original_start').args, ['start', inspectFailure.api.Id]);
+      return true;
+    });
+  } finally { await rm(inspectFailure.root, { recursive: true, force: true }); }
+
+  const noRecovery = await fixture();
+  try {
+    const fake = statefulDockerExecutor(noRecovery, { stopMode: 'unknown-inspect-no-recovery' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: noRecovery.manifest, mappingFile: noRecovery.mappingFile, evidenceFile: noRecovery.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
+      assert.equal(error.rollback.restored, false);
+      assert.equal(error.rollback.originalRunning, null);
+      assert.equal(error.rollback.attemptedRestart, false);
+      assert.ok(!fake.calls.some((call) => call.phase === 'rollback_original_start'));
+      assert.ok(!fake.calls.some((call) => call.phase === 'rollback_original_readback'));
+      return true;
+    });
+  } finally { await rm(noRecovery.root, { recursive: true, force: true }); }
+
+  const foreignIdentity = await fixture();
+  try {
+    const fake = statefulDockerExecutor(foreignIdentity, { stopMode: 'foreign-inspect' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: foreignIdentity.manifest, mappingFile: foreignIdentity.mappingFile, evidenceFile: foreignIdentity.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
+      assert.equal(error.rollback.restored, false);
+      assert.equal(error.rollback.originalRunning, null);
+      assert.equal(error.rollback.attemptedRestart, false);
+      assert.ok(!fake.calls.some((call) => call.phase === 'rollback_original_start'));
+      return true;
+    });
+    assert.equal(fake.state.containers.get(foreignIdentity.manifest.apiContainer).Id, 'f'.repeat(64));
+    assert.equal(fake.state.containers.get(foreignIdentity.manifest.apiContainer).State.Running, false);
+  } finally { await rm(foreignIdentity.root, { recursive: true, force: true }); }
+});
+
+test('Docker reconstruction drift reports fixed fields only and still restores the exact original', async () => {
+  const cases = [
+    ['attachment defaults', (api) => { api.Config.AttachStdout = false; api.Config.AttachStderr = false; },
+      (api) => { api.Config.AttachStdout = true; api.Config.AttachStderr = true; }, ['config.attachStdout', 'config.attachStderr']],
+    ['bind representation', (api) => { api.HostConfig.Binds = ['/private/synthetic:/data/uploads:rw']; },
+      (api) => { api.HostConfig.Binds = null; }, ['host.Binds']],
+    ['private env and label drift', () => {}, (api) => {
+      api.Config.Env.push(`SYNTHETIC_PRIVATE_KEY=${mappingLine().trim()}`);
+      api.Config.Labels[`private-${userId}`] = mappingLine();
+    }, ['config.labels', 'config.env']],
+    ['security resource and mount drift', () => {}, (api) => {
+      api.HostConfig.SecurityOpt = ['seccomp=unconfined'];
+      api.HostConfig.Memory = 999;
+      api.Mounts[0].RW = !api.Mounts[0].RW;
+    }, ['host.SecurityOpt', 'host.resources', 'mounts']],
+  ];
+  for (const [name, configure, mutateReadback, fields] of cases) {
+    const fx = await fixture();
+    try {
+      configure(fx.api);
+      const fake = statefulDockerExecutor(fx);
+      const command = async (cmd, args, options) => {
+        const result = await fake.command(cmd, args, options);
+        if (options.phase !== 'replacement_config_readback') return result;
+        const record = JSON.parse(result.stdout);
+        mutateReadback(record);
+        return { ...result, stdout: JSON.stringify(record) };
+      };
+      await assert.rejects(runStagingGoogleRegistrationEnable({
+        manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile,
+        command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true,
+      }), (error) => {
+        assert.equal(error.code, 'replacement_config_drift', name);
+        assert.equal(error.rollback.restored, true, name);
+        const sanitized = sanitizeGoogleRegistrationEnableError(error);
+        assert.deepEqual(sanitized.configDrift, { schemaVersion: 1, fields }, name);
+        const serialized = JSON.stringify(sanitized);
+        for (const secret of [userId, mappingDigest, 'SYNTHETIC_PRIVATE_KEY', '/private/synthetic', 'seccomp=unconfined']) {
+          assert.equal(serialized.includes(secret), false, name);
+        }
+        return true;
+      });
+      assert.equal(await readFile(fx.envFile, 'utf8'), envContent(), name);
+      assert.equal(fake.state.containers.size, 1, name);
+      assert.equal(fake.state.containers.get(fx.manifest.apiContainer).Id, fx.api.Id, name);
+      assert.equal(fake.state.containers.get(fx.manifest.apiContainer).State.Running, true, name);
+      assert.equal(fake.calls.some((call) => call.phase === 'replacement_public_runtime_probe'), false, name);
+      await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('exec healthcheck reconstruction remains strict when CLI converts it to a shell healthcheck', async () => {
+  const fx = await fixture();
+  try {
+    fx.api.Config.Healthcheck = { Test: ['CMD', 'node', 'synthetic-health.js'], Interval: 1000000000 };
+    const fake = statefulDockerExecutor(fx);
+    await assert.rejects(runStagingGoogleRegistrationEnable({
+      manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile,
+      command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true,
+    }), (error) => {
+      assert.equal(error.code, 'replacement_config_drift');
+      assert.equal(error.rollback.restored, true);
+      assert.deepEqual(sanitizeGoogleRegistrationEnableError(error).configDrift, {
+        schemaVersion: 1, fields: ['config.healthcheck'],
+      });
+      return true;
+    });
+    const args = fx.state.acceptedCreateArgs;
+    assert.equal(args[args.indexOf('--health-cmd') + 1], 'node synthetic-health.js');
+    assert.equal(await readFile(fx.envFile, 'utf8'), envContent());
+    await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('drift sanitizer rejects injected values, dynamic paths and unrelated error details', () => {
+  const details = { schemaVersion: mappingLine(), fields: [
+    'config.env', `config.env.${userId}`, 'host.Binds', 'config.env', mappingLine(), { value: mappingLine() },
+  ], original: mappingLine(), replacement: mappingLine() };
+  assert.deepEqual(sanitizeGoogleRegistrationEnableError({ code: 'replacement_config_drift', configDrift: details }), {
+    status: 'failed', code: 'replacement_config_drift',
+    configDrift: { schemaVersion: 1, fields: ['config.env', 'host.Binds'] },
+  });
+  assert.equal(sanitizeGoogleRegistrationEnableError({ code: 'other_failure', configDrift: details }).configDrift, undefined);
+  assert.deepEqual(sanitizeGoogleRegistrationEnableError({ code: 'replacement_config_drift', configDrift: { fields: mappingLine() } }).configDrift.fields, []);
+});
+
+test('resource and env ownership drift fail closed without overwriting concurrent bytes', async () => {
+  for (const option of [{ driftHealth: true }, { driftMemory: true }, { driftMaskedPaths: true }]) {
+    const fx = await fixture();
+    try {
+      const fake = statefulDockerExecutor(fx, option);
+      await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), /replacement_config_drift/u);
+      assert.equal(await readFile(fx.envFile, 'utf8'), envContent());
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+  for (const createMutation of ['user-root', 'remove-group', 'remove-mount', 'wrong-mount', 'security-drift', 'memory-drift']) {
+    const fx = await fixture();
+    try {
+      const fake = statefulDockerExecutor(fx, { createMutation });
+      await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), /replacement_config_drift/u);
+      assert.equal(fx.state.api.State.Running, true);
+      assert.equal(await readFile(fx.envFile, 'utf8'), envContent());
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+  for (const [createMutation, configure, expectedOption] of [
+    ['cap-add-drift', (api) => { api.HostConfig.CapAdd = ['SYS_ADMIN']; }, ['--cap-add', 'SYS_ADMIN']],
+    ['memory-swap-drift', (api) => { api.HostConfig.MemorySwap = 128; }, ['--memory-swap', '128']],
+  ]) {
+    const fx = await fixture();
+    try {
+      configure(fx.api);
+      const fake = statefulDockerExecutor(fx, { createMutation });
+      await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), /replacement_config_drift/u);
+      const create = fake.calls.find((call) => call.args[0] === 'create');
+      assert.ok(create);
+      assert.deepEqual(create.args.slice(create.args.indexOf(expectedOption[0]), create.args.indexOf(expectedOption[0]) + 2), expectedOption);
+      assert.equal(fx.state.api.State.Running, true);
+      assert.equal(await readFile(fx.envFile, 'utf8'), envContent());
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+  const absentHealthcheck = await fixture();
+  try {
+    const fake = statefulDockerExecutor(absentHealthcheck, { createMutation: 'health-drift' });
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: absentHealthcheck.manifest, mappingFile: absentHealthcheck.mappingFile, evidenceFile: absentHealthcheck.evidenceFile, command: fake.command, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision }, execute: true }), (error) => {
+      assert.equal(error.code, 'replacement_config_drift');
+      assert.equal(error.rollback.restored, true);
+      return true;
+    });
+    assert.deepEqual(absentHealthcheck.state.acceptedCreateArgs.slice(absentHealthcheck.state.acceptedCreateArgs.indexOf('--health-cmd'), absentHealthcheck.state.acceptedCreateArgs.indexOf('--health-cmd') + 4), ['--health-cmd', 'false', '--health-interval', '1000000000']);
+    assert.equal(absentHealthcheck.state.api.State.Running, true);
+    assert.equal(await readFile(absentHealthcheck.envFile, 'utf8'), envContent());
+  } finally { await rm(absentHealthcheck.root, { recursive: true, force: true }); }
+  const missingRw = await fixture();
+  try {
+    const originalMount = missingRw.api.Mounts[0];
+    delete originalMount.RW;
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: missingRw.manifest, mappingFile: missingRw.mappingFile, command: statefulDockerExecutor(missingRw).command }), /mount_readback_invalid/u);
+  } finally { await rm(missingRw.root, { recursive: true, force: true }); }
+  const owner = await fixture();
+  try {
+    owner.manifest.envUid = (process.getuid?.() ?? 0) + 1;
+    await assert.rejects(runStagingGoogleRegistrationEnable({ manifest: owner.manifest, mappingFile: owner.mappingFile, command: statefulDockerExecutor(owner).command }), /env_file_metadata_invalid/u);
+  } finally { await rm(owner.root, { recursive: true, force: true }); }
+});
+
+const finalizeOptions = (fx, command, execute = true) => ({
+  manifest: fx.manifest, mappingFile: fx.mappingFile, evidenceFile: fx.evidenceFile, command, execute,
+  commandEnv: { STAGING_GOOGLE_REGISTRATION_FINALIZE_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_FINALIZE_CONFIRM: revision },
+});
+
+test('finalizer preflight is separate and successful closure changes exactly two keys', async () => {
+  const fx = await fixture({ finalize: true });
+  try {
+    const fake = statefulDockerExecutor(fx);
+    await assert.rejects(runStagingGoogleRegistrationEnable(finalizeOptions(fx, fake.command, false)), /registration_manifest_pre_state_invalid/u);
+    const preflight = await runStagingGoogleRegistrationFinalize(finalizeOptions(fx, fake.command, false));
+    assert.equal(preflight.status, 'preflight-passed-no-mutation');
+    assert.equal(preflight.firstIrreversiblePhase, 'atomic_registration_finalize');
+    assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+    await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+    const options = finalizeOptions(fx, fake.command);
+    await assert.rejects(runStagingGoogleRegistrationFinalize({ ...options, commandEnv: { STAGING_GOOGLE_REGISTRATION_EXECUTE: '1', STAGING_GOOGLE_REGISTRATION_CONFIRM: revision } }), /explicit_execute_confirmation_required/u);
+    const result = await runStagingGoogleRegistrationFinalize(options);
+    assert.equal(result.status, 'finalized-registration-closed-existing-google-preserved');
+    const before = envMap(fx.originalEnv.trim().split('\n'));
+    const after = envMap((await readFile(fx.envFile, 'utf8')).trim().split('\n'));
+    assert.deepEqual(Object.keys(after).filter((key) => after[key] !== before[key]).sort(), ['SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST', 'SIT_STAGING_GOOGLE_REGISTRATION_ENABLED']);
+    assert.equal(after.SIT_STAGING_GOOGLE_REGISTRATION_ENABLED, 'false');
+    assert.equal(after.SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST, '');
+    assert.equal(after.SIT_STAGING_ALLOWED_USER_IDS, before.SIT_STAGING_ALLOWED_USER_IDS);
+    assert.equal(after.FIREBASE_AUTH_ENABLED, 'true');
+    const evidence = JSON.parse(await readFile(fx.evidenceFile, 'utf8'));
+    assert.equal((await lstat(fx.evidenceFile)).mode & 0o777, 0o600);
+    assert.equal(evidence.mappingEntryCount, 0);
+    assert.equal(evidence.allowedUserCountBefore, evidence.allowedUserCountAfter);
+    assert.equal(JSON.stringify(evidence).includes(userId), false);
+    assert.equal(JSON.stringify(evidence).includes(mappingDigest), false);
+    for (const phase of ['current_enrolled_identity_readback', 'pre_mutation_enrolled_identity_readback', 'replacement_enrolled_identity_readback']) assert.ok(fake.calls.some((call) => call.phase === phase));
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('finalizer rejects missing duplicate wrong or inactive identity before mutation', async () => {
+  for (const counts of ['0|0|0', '2|1|1', '1|0|0', '1|2|1', '1|1|0', '', '1|1|2']) {
+    const fx = await fixture({ finalize: true });
+    try {
+      const fake = statefulDockerExecutor(fx);
+      const command = (cmd, args, options) => options.phase === 'current_enrolled_identity_readback' ? { stdout: counts } : fake.command(cmd, args, options);
+      await assert.rejects(runStagingGoogleRegistrationFinalize(finalizeOptions(fx, command)), /finalization_enrolled_identity_mismatch/u);
+      assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+      assert.equal(fake.calls.some((call) => call.phase === 'stop_current_api'), false);
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+  const sql = buildEnrolledIdentitySql({ digest: mappingDigest, userId });
+  assert.equal(sql.includes(userId), false);
+  assert.match(sql, /email_verified = true/u);
+  assert.match(sql, /account_status = 'active'/u);
+  assert.match(sql, /firebase_user_id/u);
+});
+
+test('finalizer rejects stale manifest bindings mapping changes and evidence collision before mutation', async () => {
+  for (const mutate of [
+    (fx) => { fx.manifest.apiContainerId = 'f'.repeat(64); },
+    (fx) => { fx.manifest.finalizationBinding.mappingDigest = '0'.repeat(64); },
+    (fx) => { fx.manifest.finalizationBinding.allowedUserIdsDigest = '0'.repeat(64); },
+    (fx) => { fx.manifest.finalizationBinding.allowedUserIdsCount = 5; },
+    (fx) => { fx.manifest.finalizationBinding.extra = true; },
+    async (fx) => { await chmod(fx.mappingFile, 0o644); },
+  ]) {
+    const fx = await fixture({ finalize: true });
+    try {
+      await mutate(fx);
+      const fake = statefulDockerExecutor(fx);
+      await assert.rejects(runStagingGoogleRegistrationFinalize(finalizeOptions(fx, fake.command)));
+      assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+      assert.equal(fake.calls.some((call) => call.phase === 'stop_current_api'), false);
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+  const fx = await fixture({ finalize: true });
+  try {
+    const fake = statefulDockerExecutor(fx);
+    const command = async (cmd, args, options) => {
+      const result = await fake.command(cmd, args, options);
+      if (options.phase === 'candidate_registration_config_import') await writeFile(fx.mappingFile, `${'c'.repeat(64)}=${userId}\n`, { mode: 0o600 });
+      return result;
+    };
+    await assert.rejects(runStagingGoogleRegistrationFinalize(finalizeOptions(fx, command)), /mapping_changed_since_preflight/u);
+    assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('finalizer refuses to overwrite concurrent env bytes during recovery', async () => {
+  const fx = await fixture({ finalize: true });
+  try {
+    const fake = statefulDockerExecutor(fx);
+    let changed;
+    const command = async (cmd, args, options) => {
+      const result = await fake.command(cmd, args, options);
+      if (options.phase === 'replacement_enrolled_identity_readback') {
+        changed = `${await readFile(fx.envFile, 'utf8')}CONCURRENT=preserve\n`;
+        await writeFile(fx.envFile, changed, { mode: 0o600 });
+      }
+      return result;
+    };
+    await assert.rejects(runStagingGoogleRegistrationFinalize(finalizeOptions(fx, command)), (error) => {
+      assert.equal(error.code, 'final_env_readback_drift');
+      assert.equal(error.rollback.restored, false);
+      assert.ok(error.rollback.results.some((entry) => entry.code === 'rollback_env_changed_after_mutation'));
+      return true;
+    });
+    assert.equal(await readFile(fx.envFile, 'utf8'), changed);
+    await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+});
+
+test('finalizer requires exact enabled mapping and manifest-bound ordered access list', async () => {
+  for (const [key, value] of [
+    ['SIT_STAGING_GOOGLE_REGISTRATION_ENABLED', 'false'],
+    ['SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST', ''],
+    ['SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST', `${'c'.repeat(64)}=${userId}`],
+    ['SIT_STAGING_GOOGLE_REGISTRATION_ALLOWLIST', `${mappingLine().trimEnd()},${mappingLine().trimEnd()}`],
+    ['SIT_STAGING_ALLOWED_USER_IDS', originalAllowedIds],
+    ['SIT_STAGING_ALLOWED_USER_IDS', `${originalAllowedIds},${userId},extra`],
+    ['SIT_STAGING_ALLOWED_USER_IDS', `${userId},${originalAllowedIds}`],
+    ['SIT_STAGING_ALLOWED_USER_IDS', `${originalAllowedIds},${userId},${userId}`],
+    ['FIREBASE_AUTH_ENABLED', 'false'], ['FIREBASE_PHONE_VERIFICATION_ENABLED', 'true'],
+  ]) {
+    const fx = await fixture({ finalize: true });
+    try {
+      const changed = fx.originalEnv.replace(new RegExp(`^${key}=.*$`, 'mu'), `${key}=${value}`);
+      await writeFile(fx.envFile, changed, { mode: 0o600 });
+      fx.api.Config.Env = changed.trim().split('\n');
+      const fake = statefulDockerExecutor(fx);
+      await assert.rejects(runStagingGoogleRegistrationFinalize(finalizeOptions(fx, fake.command)));
+      assert.equal(await readFile(fx.envFile, 'utf8'), changed);
+      assert.equal(fake.calls.some((call) => call.phase === 'stop_current_api'), false);
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('finalizer every forward failure restores exact enabled lane and original container', async () => {
+  for (const phase of [
+    'pre_mutation_api_readback', 'pre_mutation_enrolled_identity_readback', 'stop_current_api', 'seal_current_api',
+    'create_replacement_api', 'attach_provider_network', 'start_replacement_api', 'replacement_config_readback',
+    'replacement_public_runtime_probe', 'replacement_registration_config_readback', 'replacement_schema_readback',
+    'replacement_migration_ledger_readback', 'replacement_invalid_social_token_probe', 'replacement_enrolled_identity_readback',
+  ]) {
+    const fx = await fixture({ finalize: true });
+    try {
+      const fake = statefulDockerExecutor(fx);
+      let fired = false;
+      const command = (cmd, args, options) => {
+        if (!fired && options.phase === phase) { fired = true; throw Object.assign(new Error('fault'), { code: 'finalizer_fault' }); }
+        return fake.command(cmd, args, options);
+      };
+      await assert.rejects(runStagingGoogleRegistrationFinalize(finalizeOptions(fx, command)), (error) => error.code === 'finalizer_fault' && error.rollback.restored);
+      assert.equal(fired, true, phase);
+      assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv, phase);
+      assert.equal(fake.state.containers.get(fx.manifest.apiContainer).Id, fx.api.Id, phase);
+      assert.equal(fake.state.containers.get(fx.manifest.apiContainer).State.Running, true, phase);
+      await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('finalizer rejects replacement access-list and unrelated configuration drift', async () => {
+  for (const replacement of [`SIT_STAGING_ALLOWED_USER_IDS=${originalAllowedIds}`, `SIT_STAGING_ALLOWED_USER_IDS=${originalAllowedIds},${userId},extra`, 'UNRELATED=drift', 'FIREBASE_AUTH_ENABLED=false']) {
+    const fx = await fixture({ finalize: true });
+    try {
+      const fake = statefulDockerExecutor(fx);
+      const command = async (cmd, args, options) => {
+        const result = await fake.command(cmd, args, options);
+        if (options.phase !== 'replacement_config_readback') return result;
+        const record = JSON.parse(result.stdout);
+        record.Config.Env = record.Config.Env.map((entry) => entry.startsWith(`${replacement.split('=')[0]}=`) ? replacement : entry);
+        return { stdout: JSON.stringify(record) };
+      };
+      await assert.rejects(runStagingGoogleRegistrationFinalize(finalizeOptions(fx, command)), (error) => error.rollback.restored);
+      assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('finalizer evidence collisions preserve independent artifacts and rollback failures are explicit', async () => {
+  for (const scenario of ['early-collision', 'late-collision', 'rollback_replacement_remove', 'rollback_restore_start']) {
+    const fx = await fixture({ finalize: true });
+    try {
+      const collision = scenario.includes('collision');
+      if (scenario === 'early-collision') await writeFile(fx.evidenceFile, 'independent', { flag: 'wx', mode: 0o600 });
+      const fake = statefulDockerExecutor(fx, { invalidTokenStatus: collision ? 401 : 403 });
+      const command = async (cmd, args, options) => {
+        if (options.phase === scenario) throw Object.assign(new Error('rollback fault'), { code: 'rollback_fault' });
+        const result = await fake.command(cmd, args, options);
+        if (scenario === 'late-collision' && options.phase === 'replacement_enrolled_identity_readback') await writeFile(fx.evidenceFile, 'independent', { flag: 'wx', mode: 0o600 });
+        return result;
+      };
+      await assert.rejects(runStagingGoogleRegistrationFinalize(finalizeOptions(fx, command)), (error) => {
+        if (collision) assert.equal(error.code, 'evidence_already_exists');
+        if (scenario !== 'early-collision') assert.equal(error.rollback.restored, collision);
+        return true;
+      });
+      assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+      if (collision) assert.equal(await readFile(fx.evidenceFile, 'utf8'), 'independent');
+      else await assert.rejects(readFile(fx.evidenceFile), { code: 'ENOENT' });
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('finalizer lost stop rename and create responses reconcile only exact owned state', async () => {
+  for (const options of [{ stopMode: 'response-loss' }, { renameMode: 'response-loss' }, { createMode: 'response-loss' }]) {
+    const fx = await fixture({ finalize: true });
+    try {
+      const fake = statefulDockerExecutor(fx, options);
+      if (options.stopMode) {
+        const result = await runStagingGoogleRegistrationFinalize(finalizeOptions(fx, fake.command));
+        assert.equal(result.status, 'finalized-registration-closed-existing-google-preserved');
+      } else {
+        await assert.rejects(runStagingGoogleRegistrationFinalize(finalizeOptions(fx, fake.command)), (error) => error.rollback.restored);
+        assert.equal(await readFile(fx.envFile, 'utf8'), fx.originalEnv);
+      }
+    } finally { await rm(fx.root, { recursive: true, force: true }); }
+  }
+});
+
+test('sanitized failure output contains no mapping material', () => {
+  const output = sanitizeGoogleRegistrationEnableError({ code: 'registration_config_readback_invalid', rollback: { restored: false, results: [{ phase: 'rollback_env_restore', ok: false, code: 'env_restore_failed', secret: mappingLine() }] } });
+  assert.deepEqual(output, { status: 'failed', code: 'registration_config_readback_invalid', rollback: { restored: false, originalRunning: null, attemptedRestart: false, results: [{ phase: 'rollback_env_restore', ok: false, code: 'env_restore_failed' }] } });
+  assert.equal(JSON.stringify(output).includes(mappingLine()), false);
+});

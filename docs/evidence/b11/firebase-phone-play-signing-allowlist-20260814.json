@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "kind": "firebase-phone-play-signing-allowlist",
+  "capturedAt": "2026-08-14T07:28:00Z",
+  "status": "play-signing-fixed-real-sms-passed-billing-unlinked-after-test",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081403",
+    "commit": "09c9211e41da75969b9ee59e9954ac7465250e80",
+    "delivery": "google-play-internal"
+  },
+  "firebase": {
+    "phoneProviderEnabled": true,
+    "smsRegionPolicy": "allow-only-de",
+    "uploadSigningSha1Registered": true,
+    "playAppSigningSha1Registered": true
+  },
+  "googleCloudApiKey": {
+    "applicationRestriction": "android-applications",
+    "packageName": "com.shareittoo.app",
+    "uploadSigningSha1Allowed": true,
+    "playAppSigningSha1Allowed": true,
+    "firebasePhoneNumberVerificationApiAllowed": true,
+    "identityToolkitApiAllowed": true,
+    "tokenServiceApiAllowed": true,
+    "saveCompleted": true,
+    "propagationWindowMinutesObserved": 5,
+    "postPropagationClientRestrictionResult": "passed"
+  },
+  "realDeviceObservation": {
+    "playStoreInstallVerified": true,
+    "firstAttemptBeforePlaySigningAllowlist": "blocked-before-sms-send",
+    "postAllowlistAttempt": "reached-firebase-phone-service",
+    "firebaseResult": "REAL_SMS_VERIFICATION_PASSED",
+    "smsSent": true,
+    "finalRetest": "valid-code-accepted-invalid-code-rejected"
+  },
+  "billingGate": {
+    "firebasePlanObserved": "spark",
+    "cloudBillingAccountLinked": false,
+    "ownerApprovalRequiredBeforeChange": false,
+    "billingChangePerformed": true,
+    "temporaryTestLinkRemoved": true,
+    "officialReferences": [
+      "https://firebase.google.com/docs/auth/limits",
+      "https://firebase.google.com/docs/projects/billing/firebase-pricing-plans"
+    ]
+  },
+  "boundaries": {
+    "containsPhoneNumbers": false,
+    "containsSmsCodes": false,
+    "containsFirebaseTokens": false,
+    "containsApiKeys": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsSecrets": false,
+    "productionFirebasePhoneChanged": false
+  }
+}

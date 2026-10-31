@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "kind": "release-check",
+  "status": "passed",
+  "capturedAt": "2026-08-10T15:39:05Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081027",
+    "commit": "341a8356015bc367e48fe6a7134c10a1e7bc0193",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "releaseCheck": {
+    "id": "crashReleaseMapping",
+    "status": "passed",
+    "verifications": [
+      {
+        "id": "embedded-mapping-bound-to-exact-aab",
+        "status": "passed",
+        "checkedAt": "2026-08-10T15:39:05Z",
+        "summary": "The embedded obfuscation mapping is hash-bound to the exact signed Build 2026081027 AAB."
+      },
+      {
+        "id": "native-symbols-cover-bundled-abis",
+        "status": "passed",
+        "checkedAt": "2026-08-10T15:39:05Z",
+        "summary": "The native-symbol archive covers each ABI bundled in the exact candidate."
+      },
+      {
+        "id": "original-mapping-uploaded",
+        "status": "passed",
+        "checkedAt": "2026-08-10T15:39:05Z",
+        "summary": "The original Build 2026081027 AAB mapping was uploaded successfully to Crashlytics."
+      },
+      {
+        "id": "controlled-nonfatal-event-sanitized",
+        "status": "passed",
+        "checkedAt": "2026-08-10T15:39:05Z",
+        "summary": "A bounded nonfatal internal-staging diagnostic was received without account, message, address, secret, or raw-device data."
+      },
+      {
+        "id": "console-exact-build-assignment",
+        "status": "passed",
+        "checkedAt": "2026-08-10T15:39:05Z",
+        "summary": "Firebase Crashlytics visibly assigned the diagnostic to application version 1.0.0 (2026081027)."
+      },
+      {
+        "id": "console-custom-keys-bind-candidate",
+        "status": "passed",
+        "checkedAt": "2026-08-10T15:39:05Z",
+        "summary": "Visible sanitized custom keys matched the exact commit, build number, internal channel, and bounded diagnostic run."
+      }
+    ]
+  },
+  "sources": {
+    "mappingEvidenceRef": "docs/evidence/b11/android-crash-release-mapping-2026081027.json"
+  },
+  "boundaries": {
+    "uploadedToStore": false,
+    "productionCrashGenerated": false,
+    "controlledStagingEventGenerated": true,
+    "eventContainsAccountData": false,
+    "eventContainsMessageOrAddressData": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

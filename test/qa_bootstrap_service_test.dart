@@ -144,6 +144,17 @@ void main() {
     expect(current!.id, 'u1');
   });
 
+  test('normal runtime never creates a demo message thread', () async {
+    QaRuntimeService.reset();
+    SharedPreferences.setMockInitialValues({'message_threads_v1': '[]'});
+
+    final created = await DataService.ensureSeededMessageThreadsForUser('u1');
+    final prefs = await SharedPreferences.getInstance();
+
+    expect(created, isFalse);
+    expect(jsonDecode(prefs.getString('message_threads_v1')!), isEmpty);
+  });
+
   test('shared request and thread stay unchanged for both u1 and u2', () async {
     await seedQaBase(currentUserId: 'u1');
     await QaBootstrapService.maybeBootstrap(

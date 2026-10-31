@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-release-candidate",
+  "status": "installed-launched-other-exact-candidate-diagnostics-pending",
+  "generatedAt": "2026-08-10T22:29:09Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081101",
+    "commit": "3f28e43a18b3733e617b695f9dbc794370f6e05b",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "android": {
+    "delivery": "pending",
+    "aabSha256": "ade2d6b0d87b749c7455f296c83d3182b52d3ea3c54f8f3399a04d2938933904",
+    "apkSha256": "eb87f839e1c8d169f3e9e774e3d0261f3d1196481d0d4ecdc97f65700247601d",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "packageIdentityVerified": true,
+    "privateArchivePermissionsVerified": true
+  },
+  "privacyAndNetwork": {
+    "binaryScan": "passed",
+    "binaryScanReportSha256": "efb9774d2e380e99915a171bacc5a46b59fc2485a576aaa78e8ec687aef40eaf",
+    "targetSdkVersion": 35,
+    "backupDisabled": true,
+    "cleartextTrafficDisabled": true,
+    "analyticsSdkPresent": false,
+    "advertisingSdkPresent": false,
+    "disclosedSdks": [
+      "Firebase Cloud Messaging",
+      "Firebase Crashlytics",
+      "Google Maps Platform"
+    ],
+    "findings": []
+  },
+  "exactCandidateDiagnostics": {
+    "directInstallAndLaunch": "passed",
+    "crashlyticsMappingAndNativeSymbols": "passed",
+    "crashlyticsReleaseAssignment": "pending",
+    "guestAppLinks": "passed",
+    "authenticatedSessionRestore": "pending",
+    "syntheticRoleBooking": "pending",
+    "authenticatedDeepLinks": "pending",
+    "foregroundFcm": "pending",
+    "backgroundFcm": "pending",
+    "terminatedProcessFcm": "pending",
+    "logoutColdStartGuestPersistence": "pending",
+    "postLogoutPushSuppression": "pending",
+    "offlineRealtimeRecovery": "passed"
+  },
+  "staging": {
+    "serverCommit": "ec570acfddc218cec6d2bfba43d4feb33bda4cfc",
+    "liveHttpStatus": 200,
+    "readyHttpStatus": 200,
+    "fcmEnabled": true,
+    "googleCredentialValidation": "passed",
+    "productionInvariant": "passed"
+  },
+  "boundaries": {
+    "uploadedToStore": false,
+    "installedOnPhysicalDevice": true,
+    "controlledFcmSentToSyntheticAccount": false,
+    "controlledCrashDiagnosticSent": false,
+    "productionPushSent": false,
+    "productionCrashGenerated": false,
+    "iosValidated": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

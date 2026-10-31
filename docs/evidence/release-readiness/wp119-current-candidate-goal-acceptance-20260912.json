@@ -1,0 +1,210 @@
+{
+  "schemaVersion": 1,
+  "workPackage": "WP119_CURRENT_CANDIDATE_GOAL_ACCEPTANCE",
+  "status": "partial-current-candidate-acceptance-external-gates-open",
+  "capturedOn": "2026-09-12",
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "evidenceBaseHead": "4018de1475e33e4f652a14bc98db7049bb84b06f",
+    "candidateSourceHead": "c8e2a49e14f5cae0026fa5f2bc327859fe0ff17b",
+    "stagingRuntimeHead": "df39a14b7a19afe467842461a28f1e77fec8445e",
+    "runtimePathsChangedAfterCandidateSource": [],
+    "githubRegression": {
+      "runId": 34652971429,
+      "head": "4018de1475e33e4f652a14bc98db7049bb84b06f",
+      "conclusion": "success"
+    },
+    "githubCodeql": {
+      "runId": 34652971425,
+      "head": "4018de1475e33e4f652a14bc98db7049bb84b06f",
+      "conclusion": "success"
+    },
+    "openCodeScanningAlerts": 0,
+    "pullRequest7": "draft-open-clean-unmerged"
+  },
+  "wp119Closure": {
+    "implementationHead": "dba36d2f826ee220f4f79ad57d0e984a069322e3",
+    "localFullRegression": "success",
+    "githubRegression": {
+      "runId": 34688883706,
+      "head": "dba36d2f826ee220f4f79ad57d0e984a069322e3",
+      "conclusion": "success"
+    },
+    "githubCodeql": {
+      "runId": 34688883690,
+      "head": "dba36d2f826ee220f4f79ad57d0e984a069322e3",
+      "conclusion": "success"
+    },
+    "openCodeScanningAlerts": 0,
+    "pullRequest7": "draft-open-clean-unmerged"
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026091110",
+    "releaseChannel": "internal",
+    "environment": "staging",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "apkSha256": "711f058c113bd714abb1e4bcedf05d62a382004e1bf9882f6d85d04b876dd0f7",
+    "aabSha256": "20aa73271fb9ce51c33bf4025c6c235424a1f575503261c4021f8b817da0fdfb",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "pixelExactInstalledCandidateMatched": true,
+    "onePlusExactTwoRoleJourney": "not-run"
+  },
+  "staging": {
+    "apiHealthy": true,
+    "databaseHealthy": true,
+    "containerRestartCount": 0,
+    "fcmEnabled": true,
+    "smtpEnabled": true,
+    "paymentProvider": "memory",
+    "stripeLivemode": false,
+    "listingAiProvider": "on_device",
+    "externalListingAiEnabled": false
+  },
+  "currentExternalObservations": {
+    "stripeConnector": "reauthentication-required-before-readback",
+    "stripeTestPlatformLastProvenState": "owner-business-profile-and-personal-terms-required",
+    "onePlusAdb": "no-current-authorized-device-proof",
+    "professionalV52Snapshots": "not-approved",
+    "manualTalkBackTraversal": "not-run"
+  },
+  "sourceInventory": [
+    {
+      "path": "store/google-play/rollover-candidate-2026091110.json",
+      "sha256": "8e24f3cf2ce75b98dc9b788dc24200cd8b810d2a92c90f9e17de47730c834c2c"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp100-pixel-theme-backgrounds-20260910.json",
+      "sha256": "95bf6b4e8299d499b2f507d23c9cef6e70b9eb7df42e80e68842c3bf8f1972f2"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp100-pixel-large-text-navigation-20260910.json",
+      "sha256": "9aaf7cd78868e2420b01f8e943015a1827cf6d38116fa886b48978a69592fc3e"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp106-authenticated-logout-two-device-closure-20260911.json",
+      "sha256": "bb688376dcbf2eecd78fe348a4b3d0781e26f8b791465f9314daca5036690f41"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp113-current-candidate-staging-pixel-privacy-20260911.json",
+      "sha256": "b9477d77de69d2a0a617b928c9005a765c5e32ed8c31d0418202d4dd493efdc4"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp114-current-candidate-complete-pixel-renter-owner-20260911.json",
+      "sha256": "bbd7456ad34d828299e813af78168b0c1f60141ef471aee1f2bb18a8356b3526"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp115-current-candidate-pixel-on-device-listing-ai-20260911.json",
+      "sha256": "59bdb266fda2f18c5873cd93acbe5343307e9c9999cfa7ec6673f88a1bda9417"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp116-current-candidate-pixel-talkback-runtime-gate-20260911.json",
+      "sha256": "07f2a390b82089840b12c14053ca37220f31248c2024701b1d364267aaabf3ed"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp118-fresh-pixel-two-role-confirmation-20260912.json",
+      "sha256": "7a472a5567b8688df99ad701c08f5a96550de59c6e1e299f46440d4c09cfed5b"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp12-google-signin-current-candidate-acceptance-20260905.json",
+      "sha256": "0523f0dcfd6efca0467f0ff751ed8db07017113708b7d1ef4c43f13fe8b7dd67"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp15-email-registration-password-recovery-current-candidate-20260905.json",
+      "sha256": "cef503247a588aab08a47451596ff3377549304daa1b277b3994de2d8f0741c1"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp25-current-candidate-sms-verification-closure-20260906.json",
+      "sha256": "1bb089be732cb8fd4835783dfb5a81b34dfd0dbb1c504372690830d1e73dc7ce"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp71-current-candidate-account-deletion-20260909.json",
+      "sha256": "1062b963f99dec7d901f25636528b22c1d28715a4cc6e330071c576f31435b68"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp74-dispute-transfer-recovery-20260909.json",
+      "sha256": "d510a73f737b0ba6afd9133434067cd3ac4faf90eb739389dd5e6c2745c52fd3"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp76-operator-legal-role-readiness-20260909.json",
+      "sha256": "311daa58aac2b9564e2e2716e4e689cffe9b83d6b3012e446ac8a5962d600442"
+    },
+    {
+      "path": "docs/evidence/release-readiness/wp11-stripe-test-platform-readiness-gate-20260905.json",
+      "sha256": "a7aa82917fa72e51e3c20a68b83d80deb3cdea0ecd43a45e807e747c427bb83b"
+    },
+    {
+      "path": "docs/operations/WP117_ONEPLUS_CURRENT_CANDIDATE_TWO_ROLE_RUNWAY_2026-09-11.md",
+      "sha256": "53bcb7d743eb3e825bb364701a26c363b69d769a22f5c58139916b8c190e9c22"
+    }
+  ],
+  "requirements": [
+    {"id":"candidate-provenance-signature-pixel-install","state":"PASS","evidence":"WP113 and the current rollover manifest bind source, package, version, hashes, signature and the data-preserving Pixel installation.","remaining":null},
+    {"id":"exact-staging-backend-health-and-fcm","state":"PASS","evidence":"WP113, WP114 and WP118 prove the immutable Staging runtime, healthy API/database, zero restarts, SMTP and FCM.","remaining":null},
+    {"id":"exact-source-local-github-security-baseline","state":"PASS","evidence":"The evidence base has successful exact-head Regression and CodeQL, zero open alerts and no runtime drift after the candidate source.","remaining":null},
+    {"id":"two-role-publish-discover-request-accept-chat","state":"PASS","evidence":"WP118 freshly proves two distinct verified principals, UI publication, server/public readback, renter discovery, non-binding request/acceptance, chat and cleanup.","remaining":null},
+    {"id":"transactional-push-foreground-background-terminated","state":"PASS","evidence":"WP114 and WP118 prove transactional FCM in all three process states with exact restoration.","remaining":null},
+    {"id":"listing-create-edit-publish-pause-activate-end","state":"PASS","evidence":"WP114 proves the complete exact-candidate listing lifecycle with strictly advancing server revisions and public cleanup.","remaining":null},
+    {"id":"themes-backgrounds-large-text-and-restart","state":"PARTIAL","evidence":"Physical theme, background and large-text evidence exists on predecessor candidates, but later mobile runtime paths changed.","remaining":"Replay the complete visual and 200-percent-text matrix on 2026091110 with exact settings restoration."},
+    {"id":"offline-online-process-recovery","state":"PASS","evidence":"WP114 proves two consecutive exact-candidate offline/realtime recoveries in the surviving process without relaxed timing.","remaining":null},
+    {"id":"listing-ai-safe-review-contract","state":"PASS","evidence":"WP115 proves explicit disclosure consent, editable suggestions, owner confirmation still required and no automatic publication.","remaining":null},
+    {"id":"staging-support-simulation-lifecycle","state":"PARTIAL","evidence":"A complete Staging support simulation exists, but later current-candidate support UI paths changed.","remaining":"Replay the critical support intake and readback surfaces on 2026091110; retained real-case deadlines require staff action separately."},
+    {"id":"payment-idempotency-and-uncertain-reconciliation","state":"PASS","evidence":"WP74 and successor regression prove idempotent provider commands, fail-closed uncertain outcomes and dispute transfer recovery without provider overclaim.","remaining":null},
+    {"id":"support-report-block","state":"PARTIAL","evidence":"Physical report/block proof exists on a predecessor, but report and safety UI paths later changed.","remaining":"Replay report, block/unblock, listing isolation and message isolation on 2026091110."},
+    {"id":"email-registration-verification-login-recovery","state":"PARTIAL","evidence":"Real mail registration, single-use verification and recovery passed earlier; the exact current candidate instead proves already-verified role login.","remaining":"Replay fresh registration, verification-link single use and password recovery through 2026091110."},
+    {"id":"logout-password-session-account-switch-isolation","state":"PARTIAL","evidence":"WP106 proves corrected logout behavior and WP114/WP118 prove current A-to-B isolation, but the full password/session inventory was not replayed on 2026091110.","remaining":"Replay password change/rollback, session revocation, logout-all and delayed-result isolation on 2026091110."},
+    {"id":"google-signin","state":"PARTIAL","evidence":"Google first/repeat/cold-start sign-in passed on an older signed candidate; authentication runtime later changed.","remaining":"Replay Google first sign-in, cancellation, repeat sign-in and cold-start persistence on 2026091110."},
+    {"id":"search-filter-favorites-wishlists","state":"PASS","evidence":"WP114 proves exact and category search, details, save/remove, restart persistence and Account-A/B saved-state isolation.","remaining":null},
+    {"id":"offer-request-accept-decline","state":"PARTIAL","evidence":"WP114/WP118 prove exact non-binding request and acceptance; decline and competing-request resolution remain unreplayed.","remaining":"Prove decline and competing-request outcomes on 2026091110 with cleanup."},
+    {"id":"messages-attachments-location-appointments","state":"PARTIAL","evidence":"WP114 proves chat, image attachment, counterparty visibility and two-party handover/return times; early location remains correctly blocked.","remaining":"Prove the lawful positive location-reveal window and subsequent denial without leaking location early."},
+    {"id":"handover-return-cancel-withdrawal-damage","state":"PARTIAL","evidence":"Non-binding coordination, two-party times and cancellation are proven; binding completion correctly stops at the V5.2 legal gate.","remaining":"Approved immutable V5.2 snapshots and a lawful sandbox booking are required for pickup, return, withdrawal and damage proof."},
+    {"id":"reviews-and-invoices","state":"PARTIAL","evidence":"Deterministic technical surfaces exist, but no lawful completed binding sandbox transaction can yet produce role-correct review or invoice evidence.","remaining":"Complete after the V5.2 and Stripe sandbox gates."},
+    {"id":"privacy-export-and-account-deletion","state":"PARTIAL","evidence":"WP113 proves an exact-current password-confirmed principal-isolated export; account deletion passed on a predecessor before later runtime changes.","remaining":"Replay disposable account deletion, cold-start Guest truth and cleanup on 2026091110."},
+    {"id":"cart-projects-and-booking-groups","state":"PARTIAL","evidence":"WP114 proves exact current cart idempotency and project persistence/isolation; binding multi-item booking groups remain held.","remaining":"Prove binding group lifecycle after the V5.2 and Stripe sandbox prerequisites."},
+    {"id":"android-permission-lifecycle","state":"PARTIAL","evidence":"Predecessor camera, location and notification matrices exist, while no consolidated 2026091110 replay covers every transition.","remaining":"Replay deny, grant, revoke and settings restoration for all supported Android permissions on 2026091110."},
+    {"id":"facebook-signin","state":"OPEN","evidence":"The Android control and Firebase provider remain disabled.","remaining":"Official Meta application/provider configuration and exact-candidate acceptance are required."},
+    {"id":"apple-signin","state":"OPEN","evidence":"The Android control and Firebase provider remain disabled.","remaining":"Official Apple Services ID, membership/provider configuration and exact-candidate acceptance are required if retained for Android."},
+    {"id":"real-image-analysis-listing-proposal","state":"PASS","evidence":"WP115 proves real on-device image inference producing meaningful editable listing suggestions with zero external provider units or cost.","remaining":null},
+    {"id":"stripe-sandbox-payment-refund-simulated-payout","state":"OPEN","evidence":"Staging remains memory-only and the current official Stripe connector requires reauthentication before readback.","remaining":"Reauthenticate test mode, complete truthful owner profile and personal terms, then run payment, refund and simulated payout without live money."},
+    {"id":"binding-v52-contract-return-damage","state":"OPEN","evidence":"Staging correctly rejects binding creation while professionally approved immutable V5.2 snapshots are unavailable.","remaining":"Professional legal approval plus truthful operator/provider facts are required."},
+    {"id":"manual-talkback-traversal","state":"OPEN","evidence":"WP116 reached the official TalkBack service but Android did not expose touch exploration; no manual traversal was performed.","remaining":"A human auditory traversal of critical flows is required."},
+    {"id":"oneplus-cross-device-two-role","state":"OPEN","evidence":"WP117 is prepared, but no current authorized OnePlus ADB device or exact two-role result is proven.","remaining":"Reconnect and authorize the unlocked OnePlus, then run the exact WP117 journey."},
+    {"id":"durable-private-registry-pull","state":"OPEN","evidence":"The least-privilege reproducible private image-registry pull remains unproven.","remaining":"Prove package-read-only registry access without making a local build a release prerequisite."},
+    {"id":"historical-support-deadline-recovery","state":"OPEN","evidence":"Retained noncritical support deadlines require authorized staff truth and must not be rewritten by a technical package.","remaining":"An authorized staff action must restore compliant deadlines without deleting audit history."}
+  ],
+  "aggregate": {
+    "passCount": 11,
+    "partialCount": 13,
+    "openCount": 8,
+    "totalCount": 32,
+    "androidStagingAssessment": "exact-pixel-core-passed-external-and-replay-gates-open",
+    "releaseDecision": "hold-not-production-ready"
+  },
+  "prioritizedNextActions": [
+    "oneplus-exact-candidate-two-role-when-adb-authorized",
+    "stripe-test-mode-reauthentication-owner-profile-and-terms",
+    "exact-candidate-replay-of-auth-support-theme-and-permission-partials",
+    "professional-v52-legal-snapshots-before-binding-lifecycle",
+    "manual-talkback-traversal"
+  ],
+  "boundaries": {
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "testerListChanged": false,
+    "publicRegistrationChanged": false,
+    "firebaseConfigurationChanged": false,
+    "providerConfigurationChanged": false,
+    "stripeObjectChanged": false,
+    "paymentProviderCalled": false,
+    "realMoneyUsed": false,
+    "externalListingAiEnabled": false,
+    "onePlusContacted": false,
+    "cloudVpsDnsChanged": false,
+    "pullRequestMerged": false,
+    "containsSecrets": false,
+    "containsAccountIdentity": false,
+    "containsRawDeviceIdentifier": false,
+    "containsPrivateFilesystemPath": false
+  }
+}

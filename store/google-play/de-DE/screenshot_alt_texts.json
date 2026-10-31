@@ -1,0 +1,34 @@
+[
+  {
+    "id": "feed",
+    "altText": "ShareItToo-Feed mit synthetischen Mietangeboten aus verschiedenen Kategorien"
+  },
+  {
+    "id": "search",
+    "altText": "Suche und Filter für passende Gegenstände in der ShareItToo-App"
+  },
+  {
+    "id": "listing-detail",
+    "altText": "Inseratdetail mit Bildern, Mietpreis und auswählbarer Verfügbarkeit"
+  },
+  {
+    "id": "create-listing",
+    "altText": "Formular zum Erstellen eines Inserats mit Bildern, Preis und Verfügbarkeit"
+  },
+  {
+    "id": "booking-request",
+    "altText": "Buchungsanfrage für einen ausgewählten Mietzeitraum im sicheren Testmodus"
+  },
+  {
+    "id": "booking-chat",
+    "altText": "Buchungsstatus und neutraler Chat zwischen zwei synthetischen Testrollen"
+  },
+  {
+    "id": "handover-return",
+    "altText": "Geführte Schritte für Übergabe und Rückgabe eines gemieteten Gegenstands"
+  },
+  {
+    "id": "trust-controls",
+    "altText": "Bedienelemente zum Bewerten, Melden und Blockieren innerhalb von ShareItToo"
+  }
+]

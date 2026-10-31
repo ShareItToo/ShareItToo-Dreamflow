@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp28-return-case-principal-transaction",
+  "status": "complete-local-and-github",
+  "capturedAt": "2026-09-06T13:28:41Z",
+  "workPackage": "WP28",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "implementationBase": "7674d580cad29c8260c1b3c1ca7476fb7697a15b",
+    "implementationHead": "ffaef68daabd6f34487044f5307e92129d3b84a6"
+  },
+  "scope": {
+    "ownerBoundReturnCase": true,
+    "ownerBoundBookingReport": true,
+    "ownerBoundEvidenceUpload": true,
+    "ownerBoundLocalQaWrites": true,
+    "serverConfirmationPrecedesSuccess": true,
+    "localWindowMatchesServerT0And48HourBoundary": true,
+    "exactOwnedScreenRoute": true,
+    "exactOwnedResultDialog": true
+  },
+  "resultSemantics": {
+    "exactStructuredRejectionAllowlist": true,
+    "http408OutcomeUnknown": true,
+    "intermediaryOrUnstructured4xxOutcomeUnknown": true,
+    "http422OutcomeUnknown": true,
+    "transportAnd5xxOutcomeUnknown": true,
+    "remoteAcceptedLocalFailureDistinct": true,
+    "typedHandlerPrecedesGenericCatch": true,
+    "lateAccountAResultVisibleUnderAccountB": false
+  },
+  "verification": {
+    "flutterAnalyzer": "passed-zero-findings",
+    "focusedFlutterPassed": 7,
+    "focusedFlutterFailed": 0,
+    "focusedToolPassed": 8,
+    "focusedToolFailed": 0,
+    "v52ReturnWorkflowPassed": 13,
+    "v52ReturnWorkflowFailed": 0,
+    "completeToolPassed": 2341,
+    "completeToolFailed": 0,
+    "fullTechnicalRegression": "passed-local-metadata-only-for-private-archives",
+    "repositorySecretScan": "passed-no-high-confidence-secret",
+    "githubRegression": "passed-34036280507",
+    "githubRegressionRequiredJobsPassed": 4,
+    "githubCleanCheckoutReproducibility": "passed",
+    "githubCodeql": "passed-34036280537",
+    "repositoryOpenCodeScanningAlerts": 0
+  },
+  "ratchets": {
+    "reason": "return-case-owner-transaction-and-dependent-source-binding-change",
+    "mechanicalHashRefreshOnlyOutsideWp28Runtime": true,
+    "historicalStatusChanged": false,
+    "legalConclusionChanged": false,
+    "providerOrBillingTruthChanged": false,
+    "activeProviderState": "prepared-hold"
+  },
+  "boundaries": {
+    "stagingOnly": true,
+    "androidCandidateCreated": false,
+    "androidCandidateInstalled": false,
+    "firebaseConsoleChanged": false,
+    "providerConfigured": false,
+    "paymentChanged": false,
+    "googlePlayChanged": false,
+    "productionChanged": false,
+    "publicRegistrationChanged": false,
+    "cloudVpsDnsChanged": false,
+    "physicalDeviceContacted": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false,
+    "containsCredential": false,
+    "containsToken": false,
+    "containsPrivateFilesystemPath": false
+  },
+  "remaining": []
+}

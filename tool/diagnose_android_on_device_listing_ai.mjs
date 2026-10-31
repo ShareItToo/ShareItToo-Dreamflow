@@ -1,0 +1,1342 @@
+#!/usr/bin/env node
+
+import { createHash } from 'node:crypto';
+import { readFileSync, realpathSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+import {
+  bindExactRole,
+  openMainDestination,
+  tapLabel,
+  waitForHierarchy,
+} from './diagnose_android_email_verified_two_role_product_journey.mjs';
+import {
+  assertCurrentHeadAndroidDeviceAlreadyUnlocked,
+  currentHeadAndroidAdb,
+  currentHeadAndroidNamedNodes,
+  currentHeadAndroidNodeAttribute,
+  defaultCurrentHeadAndroidCommandRunner,
+  dumpCurrentHeadAndroidUi,
+  verifyCurrentHeadAndroidInstalledCandidate,
+} from './diagnose_current_head_android_main_navigation.mjs';
+import {
+  inspectPhysicalDevice,
+  parseAdbDevices,
+  selectSinglePhysicalDevice,
+} from './prepare_android_device_test.mjs';
+import { readEmailVerifiedJourneyVault } from './run_staging_email_verified_two_role_journey.mjs';
+import { validatePrivateAndroidReleaseArchive } from './validate_current_head_android_release_archive.mjs';
+
+const repositoryRoot = realpathSync(resolve(fileURLToPath(new URL('..', import.meta.url))));
+export const listingAiFixtureRelativePath = 'test/fixtures/listing-ai/generic-cordless-drill-v2.png';
+export const listingAiFixtureSha256 = 'b5cebcb7c5f84925beb7c650a5a2ebbda51400a8aee5ca6f310f07362c6adf44';
+export const listingAiFixtureSemantics = 'synthetic-test-only-ocr-path';
+const fixtureRelativePath = listingAiFixtureRelativePath;
+const fixtureSha256 = listingAiFixtureSha256;
+const remoteFixture = '/sdcard/Download/SIT_WP112_CONTROLLED_DRILL.png';
+const fixtureDisplayName = 'SIT_WP112_CONTROLLED_DRILL.png';
+const providerModel = 'mlkit-image-labeling-17.0.9+text-recognition-16.0.1+sit-rules-v1';
+const disclosureVersion = 'listing-ai-on-device-disclosure-v1';
+export const listingAiDraftReadyProgressText =
+  'Vorschläge sind bereit. Übernimm sie bewusst, bevor du sie bearbeitest.';
+export const listingAiDraftReadyHeading = 'Bearbeitbarer KI-Entwurf';
+const allowedStages = new Set([
+  'load-vault', 'verify-play-install', 'bind-owner', 'prepare-fixture',
+  'open-listing', 'photo-picker', 'consent', 'analyze', 'wait-draft',
+  'collect-fields', 'server-readback', 'cleanup', 'restore-owner',
+]);
+const photoPickerDiagnosticCatalog = Object.freeze({
+  'open-source-dialog': Object.freeze({
+    code: 'PHOTO_PICKER_SOURCE_DIALOG_OPEN_FAILED',
+    classification: 'source-dialog-open-failed',
+  }),
+  'wait-source-dialog': Object.freeze({
+    code: 'PHOTO_PICKER_SOURCE_DIALOG_UNAVAILABLE',
+    classification: 'source-dialog-unavailable',
+  }),
+  'open-system-picker': Object.freeze({
+    code: 'PHOTO_PICKER_SYSTEM_SURFACE_OPEN_FAILED',
+    classification: 'system-picker-open-failed',
+  }),
+  'wait-system-picker': Object.freeze({
+    code: 'PHOTO_PICKER_SYSTEM_SURFACE_UNAVAILABLE',
+    classification: 'system-picker-unavailable',
+  }),
+  'verify-controlled-media': Object.freeze({
+    code: 'PHOTO_PICKER_CONTROLLED_MEDIA_INVALID',
+    classification: 'controlled-media-invalid',
+  }),
+  'find-controlled-tile': Object.freeze({
+    code: 'PHOTO_PICKER_CONTROLLED_TILE_UNAVAILABLE',
+    classification: 'controlled-tile-unavailable',
+  }),
+  'select-controlled-tile': Object.freeze({
+    code: 'PHOTO_PICKER_CONTROLLED_TILE_SELECT_FAILED',
+    classification: 'controlled-tile-select-failed',
+  }),
+  'wait-selection-confirmation': Object.freeze({
+    code: 'PHOTO_PICKER_SELECTION_CONFIRMATION_UNAVAILABLE',
+    classification: 'selection-confirmation-unavailable',
+  }),
+  'confirm-selection': Object.freeze({
+    code: 'PHOTO_PICKER_SELECTION_CONFIRM_FAILED',
+    classification: 'selection-confirm-failed',
+  }),
+  'return-listing-editor': Object.freeze({
+    code: 'PHOTO_PICKER_LISTING_EDITOR_UNAVAILABLE',
+    classification: 'listing-editor-unavailable',
+  }),
+  'find-analysis-control': Object.freeze({
+    code: 'PHOTO_PICKER_ANALYSIS_CONTROL_UNAVAILABLE',
+    classification: 'analysis-control-unavailable',
+  }),
+  'find-analysis-consent-surface': Object.freeze({
+    code: 'PHOTO_PICKER_ANALYSIS_CONSENT_SURFACE_UNAVAILABLE',
+    classification: 'analysis-consent-surface-unavailable',
+  }),
+  'tap-analysis-consent': Object.freeze({
+    code: 'PHOTO_PICKER_ANALYSIS_CONSENT_TAP_FAILED',
+    classification: 'analysis-consent-tap-failed',
+  }),
+  'reacquire-analysis-action': Object.freeze({
+    code: 'PHOTO_PICKER_ANALYSIS_ACTION_UNAVAILABLE',
+    classification: 'analysis-action-unavailable',
+  }),
+  'tap-analysis-action': Object.freeze({
+    code: 'PHOTO_PICKER_ANALYSIS_ACTION_TAP_FAILED',
+    classification: 'analysis-action-tap-failed',
+  }),
+  unknown: Object.freeze({
+    code: 'PHOTO_PICKER_UNCLASSIFIED_FAILURE',
+    classification: 'unclassified-photo-picker-failure',
+  }),
+});
+export const photoPickerDiagnosticVocabulary = photoPickerDiagnosticCatalog;
+const listingOpenDiagnosticCatalog = Object.freeze({
+  'main-destination': Object.freeze({
+    code: 'LISTING_AI_OPEN_LISTING_MAIN_DESTINATION_FAILED',
+    classification: 'main-destination-failed',
+  }),
+  'create-action': Object.freeze({
+    code: 'LISTING_AI_OPEN_LISTING_CREATE_ACTION_UNAVAILABLE',
+    classification: 'create-action-unavailable',
+  }),
+  'create-action-recovery': Object.freeze({
+    code: 'LISTING_AI_OPEN_LISTING_CREATE_ACTION_RECOVERY_FAILED',
+    classification: 'create-action-recovery-failed',
+  }),
+  'open-editor': Object.freeze({
+    code: 'LISTING_AI_OPEN_LISTING_EDITOR_UNAVAILABLE',
+    classification: 'open-editor-unavailable',
+  }),
+  unknown: Object.freeze({
+    code: 'LISTING_AI_OPEN_LISTING_UNCLASSIFIED_FAILURE',
+    classification: 'unclassified-open-listing-failure',
+  }),
+});
+export const listingOpenDiagnosticVocabulary = listingOpenDiagnosticCatalog;
+const bindOwnerDiagnosticCatalog = Object.freeze({
+  'guest-reset': Object.freeze({
+    code: 'LISTING_AI_BIND_OWNER_GUEST_RESET_FAILED',
+    classification: 'guest-reset-failed',
+  }),
+  'guest-profile-read': Object.freeze({
+    code: 'LISTING_AI_BIND_OWNER_GUEST_PROFILE_READ_FAILED',
+    classification: 'guest-profile-read-failed',
+  }),
+  'login-restore': Object.freeze({
+    code: 'LISTING_AI_BIND_OWNER_LOGIN_RESTORE_FAILED',
+    classification: 'login-restore-failed',
+  }),
+  'exact-principal': Object.freeze({
+    code: 'LISTING_AI_BIND_OWNER_EXACT_PRINCIPAL_FAILED',
+    classification: 'exact-principal-failed',
+  }),
+  unknown: Object.freeze({
+    code: 'LISTING_AI_BIND_OWNER_UNCLASSIFIED_FAILURE',
+    classification: 'unclassified-bind-owner-failure',
+  }),
+});
+export const bindOwnerDiagnosticVocabulary = bindOwnerDiagnosticCatalog;
+const restoreOwnerDiagnosticCatalog = Object.freeze({
+  'restore-owner': Object.freeze({
+    code: 'LISTING_AI_RESTORE_OWNER_FAILED',
+    classification: 'restore-owner-failed',
+  }),
+  unknown: Object.freeze({
+    code: 'LISTING_AI_RESTORE_OWNER_UNCLASSIFIED_FAILURE',
+    classification: 'unclassified-restore-owner-failure',
+  }),
+});
+export const restoreOwnerDiagnosticVocabulary = restoreOwnerDiagnosticCatalog;
+const stageFailureCatalog = Object.freeze({
+  analyze: Object.freeze({
+    code: 'LISTING_AI_ANALYZE_RESULT_UNAVAILABLE',
+    classification: 'analyze-result-unavailable',
+  }),
+});
+export const onDeviceListingAiViewportAttemptLimit = 24;
+let activeStage = 'load-vault';
+let activePhotoPickerSubstage = 'unknown';
+let activeListingOpenSubstage = 'unknown';
+let activeBindOwnerSubstage = 'unknown';
+let activeRestoreOwnerSubstage = 'restore-owner';
+export const listingAiOnDeviceDisclosurePrefix =
+  'SIT wertet deine ausgewählten Bilder direkt auf diesem Android-Gerät aus.';
+
+export function listingAiConsentSurfaceReady(hierarchy) {
+  return currentHeadAndroidNamedNodes(
+    hierarchy,
+    listingAiOnDeviceDisclosurePrefix,
+  ).length === 1;
+}
+
+export async function waitForListingCreateAction({
+  commandRunner,
+  adbPath,
+  device,
+  wait,
+}) {
+  return waitForHierarchy({
+    commandRunner,
+    adbPath,
+    device,
+    wait,
+    label: 'new listing action',
+    predicate: (hierarchy) => currentHeadAndroidNamedNodes(
+      hierarchy,
+      'Neue Anzeige erstellen',
+    ).length === 1,
+  });
+}
+
+export async function waitForListingCreateActionWithRecovery({
+  commandRunner,
+  adbPath,
+  device,
+  wait,
+  reopenMainDestination,
+  waitForCreateAction = () => waitForListingCreateAction({
+    commandRunner,
+    adbPath,
+    device,
+    wait,
+  }),
+} = {}) {
+  try {
+    return await waitForCreateAction();
+  } catch (error) {
+    if (error?.message !== 'The sanitized new listing action surface did not appear.') throw error;
+    try {
+      await reopenMainDestination();
+      return await waitForCreateAction();
+    } catch (recoveryError) {
+      throw attachListingOpenDiagnostic(recoveryError, 'create-action-recovery');
+    }
+  }
+}
+
+export async function waitForListingAiAnalyzeAction({
+  commandRunner,
+  adbPath,
+  device,
+  wait,
+}) {
+  return scrollUntil({
+    commandRunner,
+    adbPath,
+    device,
+    pause: wait,
+    predicate: (hierarchy) => currentHeadAndroidNamedNodes(
+      hierarchy,
+      'Ausgewählte Fotos analysieren',
+    ).length === 1,
+  });
+}
+
+function fail(message) {
+  const error = new Error(message);
+  if (activeStage === 'photo-picker') attachPhotoPickerDiagnostic(error, activePhotoPickerSubstage);
+  if (activeStage === 'open-listing') attachListingOpenDiagnostic(error, activeListingOpenSubstage);
+  if (activeStage === 'bind-owner') attachBindOwnerDiagnostic(error, activeBindOwnerSubstage);
+  if (activeStage === 'restore-owner') attachRestoreOwnerDiagnostic(error, activeRestoreOwnerSubstage);
+  throw error;
+}
+
+function setStage(stage) {
+  if (!allowedStages.has(stage)) fail('The Listing-AI diagnostic stage is invalid.');
+  activeStage = stage;
+  if (stage === 'photo-picker') activePhotoPickerSubstage = 'unknown';
+  if (stage === 'open-listing') activeListingOpenSubstage = 'unknown';
+  if (stage === 'bind-owner') activeBindOwnerSubstage = 'unknown';
+  if (stage === 'restore-owner') activeRestoreOwnerSubstage = 'restore-owner';
+}
+
+export function photoPickerFailureDiagnostic(substage) {
+  const key = Object.hasOwn(photoPickerDiagnosticCatalog, substage)
+    ? substage
+    : 'unknown';
+  const entry = photoPickerDiagnosticCatalog[key];
+  return Object.freeze({
+    stage: 'photo-picker',
+    substage: key,
+    code: entry.code,
+    classification: entry.classification,
+  });
+}
+
+export function formatPhotoPickerFailureReport(report) {
+  const requested = report?.primary;
+  const diagnostic = photoPickerFailureDiagnostic(requested?.substage);
+  const exact = requested?.stage === diagnostic.stage
+    && requested?.code === diagnostic.code
+    && requested?.classification === diagnostic.classification;
+  const primary = exact ? requested : diagnostic;
+  const cleanup = report?.cleanup === 'passed' ? 'passed' : 'failed';
+  const ownerRestore = report?.ownerRestore === 'passed' ? 'passed' : 'failed';
+  return `ERROR: SIT stage photo-picker: ${primary.code}/${primary.classification}/${primary.substage}`
+    + ` cleanup=${cleanup} ownerRestore=${ownerRestore}`;
+}
+
+function stageFailureDiagnostic(stage, substage) {
+  if (stage === 'open-listing') return listingOpenFailureDiagnostic(substage);
+  if (stage === 'bind-owner') return bindOwnerFailureDiagnostic(substage);
+  if (stage === 'restore-owner') return restoreOwnerFailureDiagnostic(substage);
+  const entry = stageFailureCatalog[stage] ?? Object.freeze({
+    code: 'LISTING_AI_STAGE_FAILED',
+    classification: 'stage-failed',
+  });
+  return Object.freeze({
+    stage: allowedStages.has(stage) ? stage : 'unknown',
+    code: entry.code,
+    classification: entry.classification,
+  });
+}
+
+export function formatListingAiFailureReport(report) {
+  if (report?.stage === 'photo-picker') return formatPhotoPickerFailureReport(report);
+  const diagnostic = report?.primary;
+  const stage = allowedStages.has(report?.stage) ? report.stage : 'unknown';
+  const code = /^[A-Z0-9_]+$/u.test(diagnostic?.code ?? '')
+    ? diagnostic.code
+    : 'LISTING_AI_STAGE_FAILED';
+  const classification = /^[a-z-]+$/u.test(diagnostic?.classification ?? '')
+    ? diagnostic.classification
+    : 'stage-failed';
+  const substage = /^[a-z-]+$/u.test(diagnostic?.substage ?? '')
+    ? `/${diagnostic.substage}`
+    : '';
+  const cleanup = report?.cleanup === 'passed' ? 'passed' : 'failed';
+  const ownerRestore = report?.ownerRestore === 'passed' ? 'passed' : 'failed';
+  return `ERROR: SIT stage ${stage}: ${code}/${classification}${substage}`
+    + ` cleanup=${cleanup} ownerRestore=${ownerRestore}`;
+}
+
+function attachPhotoPickerDiagnostic(error, substage) {
+  if (error === null || (typeof error !== 'object' && typeof error !== 'function')) return error;
+  const diagnostic = photoPickerFailureDiagnostic(substage);
+  try {
+    Object.defineProperty(error, 'listingAiDiagnostic', {
+      value: diagnostic,
+      enumerable: false,
+      configurable: true,
+    });
+  } catch {
+    // The original failure remains authoritative even if it is not extensible.
+  }
+  return error;
+}
+
+export function listingOpenFailureDiagnostic(substage) {
+  const key = Object.hasOwn(listingOpenDiagnosticCatalog, substage)
+    ? substage
+    : 'unknown';
+  const entry = listingOpenDiagnosticCatalog[key];
+  return Object.freeze({
+    stage: 'open-listing',
+    substage: key,
+    code: entry.code,
+    classification: entry.classification,
+  });
+}
+
+function attachListingOpenDiagnostic(error, substage) {
+  if (error === null || (typeof error !== 'object' && typeof error !== 'function')) return error;
+  const diagnostic = listingOpenFailureDiagnostic(substage);
+  try {
+    Object.defineProperty(error, 'listingAiDiagnostic', {
+      value: diagnostic,
+      enumerable: false,
+      configurable: true,
+    });
+  } catch {
+    // Preserve the original failure if it is not extensible.
+  }
+  return error;
+}
+
+export function bindOwnerFailureDiagnostic(substage) {
+  const key = Object.hasOwn(bindOwnerDiagnosticCatalog, substage)
+    ? substage
+    : 'unknown';
+  const entry = bindOwnerDiagnosticCatalog[key];
+  return Object.freeze({
+    stage: 'bind-owner',
+    substage: key,
+    code: entry.code,
+    classification: entry.classification,
+  });
+}
+
+function attachBindOwnerDiagnostic(error, substage) {
+  if (error === null || (typeof error !== 'object' && typeof error !== 'function')) return error;
+  const diagnostic = bindOwnerFailureDiagnostic(substage);
+  try {
+    Object.defineProperty(error, 'listingAiDiagnostic', {
+      value: diagnostic,
+      enumerable: false,
+      configurable: true,
+    });
+  } catch {
+    // Preserve the original failure if it is not extensible.
+  }
+  return error;
+}
+
+export function restoreOwnerFailureDiagnostic(substage) {
+  const key = Object.hasOwn(restoreOwnerDiagnosticCatalog, substage)
+    ? substage
+    : 'unknown';
+  const entry = restoreOwnerDiagnosticCatalog[key];
+  return Object.freeze({
+    stage: 'restore-owner',
+    substage: key,
+    code: entry.code,
+    classification: entry.classification,
+  });
+}
+
+function attachRestoreOwnerDiagnostic(error, substage) {
+  if (error === null || (typeof error !== 'object' && typeof error !== 'function')) return error;
+  const diagnostic = restoreOwnerFailureDiagnostic(substage);
+  try {
+    Object.defineProperty(error, 'listingAiDiagnostic', {
+      value: diagnostic,
+      enumerable: false,
+      configurable: true,
+    });
+  } catch {
+    // Preserve the original failure if it is not extensible.
+  }
+  return error;
+}
+
+async function listingOpenAction(substage, action) {
+  activeListingOpenSubstage = substage;
+  try {
+    return await action();
+  } catch (error) {
+    if (error?.listingAiDiagnostic?.stage === 'open-listing') throw error;
+    throw attachListingOpenDiagnostic(error, substage);
+  }
+}
+
+async function photoPickerAction(substage, action) {
+  activePhotoPickerSubstage = substage;
+  try {
+    return await action();
+  } catch (error) {
+    throw attachPhotoPickerDiagnostic(error, substage);
+  }
+}
+
+function photoPickerActionSync(substage, action) {
+  activePhotoPickerSubstage = substage;
+  try {
+    return action();
+  } catch (error) {
+    throw attachPhotoPickerDiagnostic(error, substage);
+  }
+}
+
+function sha256(value) {
+  return createHash('sha256').update(value).digest('hex');
+}
+
+function sanitizedFailure(error) {
+  const detail = typeof error?.message === 'string' ? error.message.trim() : '';
+  if (detail.length === 0 || detail.length > 300
+      || /(?:@|https?:\/\/|\/Users\/|password|passcode|secret|token|credential|private.?key|api.?key|otp|pin|fixture identifier)/iu.test(detail)
+      || !/^[A-Za-z0-9_ .,:;()[\]'/-]+$/u.test(detail)) {
+    return 'safe diagnostic reason unavailable';
+  }
+  return detail;
+}
+
+function bounds(node) {
+  const value = currentHeadAndroidNodeAttribute(node, 'bounds') ?? '';
+  const match = /^\[(\d+),(\d+)\]\[(\d+),(\d+)\]$/u.exec(value);
+  if (match === null) return null;
+  const [left, top, right, bottom] = match.slice(1).map(Number);
+  return { left, top, right, bottom, width: right - left, height: bottom - top };
+}
+
+function allNodes(hierarchy) {
+  return String(hierarchy).match(/<node\b[^>]*>/gu) ?? [];
+}
+
+export function newestPhotoPickerTile(hierarchy) {
+  const tiles = allNodes(hierarchy)
+    .filter((node) => currentHeadAndroidNodeAttribute(node, 'package')
+      === 'com.google.android.photopicker')
+    .filter((node) => currentHeadAndroidNodeAttribute(node, 'clickable') === 'true')
+    .map((node) => ({ node, area: bounds(node) }))
+    .filter(({ area }) => area !== null
+      && area.top > 700
+      && area.width >= 200
+      && area.height >= 200
+      && Math.abs(area.width - area.height) <= 8)
+    .toSorted((left, right) => left.area.top - right.area.top
+      || left.area.left - right.area.left);
+  if (tiles.length === 0) fail('The sanitized Android photo-picker tile is unavailable.');
+  return tiles[0];
+}
+
+export function controlledMediaRow(output) {
+  const rows = String(output).split(/\r?\n/u).map((line) => {
+    const id = /(?:^|\s)_id=(\d+)(?:,|$)/u.exec(line)?.[1];
+    const name = /(?:^|\s)_display_name=([^,]+)(?:,|$)/u.exec(line)?.[1];
+    const added = /(?:^|\s)date_added=(\d+)(?:,|$)/u.exec(line)?.[1];
+    return id && name && added
+      ? { id: Number(id), name, added: Number(added) }
+      : null;
+  }).filter(Boolean);
+  const exact = rows.filter((row) => row.name === fixtureDisplayName);
+  if (exact.length !== 1) fail('The controlled Android media fixture is not unique.');
+  const newest = rows.toSorted((left, right) => right.added - left.added || right.id - left.id)[0];
+  if (newest?.id !== exact[0].id) {
+    fail('The controlled Android media fixture is not the newest photo-picker item.');
+  }
+  return exact[0];
+}
+
+export function observedListingAiSignals(hierarchy) {
+  const nodes = allNodes(hierarchy);
+  const text = nodes.map((node) => [
+    currentHeadAndroidNodeAttribute(node, 'text') ?? '',
+    currentHeadAndroidNodeAttribute(node, 'content-desc') ?? '',
+  ].join(' ')).join(' ').toLowerCase();
+  const keys = Object.freeze([
+    'title',
+    'category',
+    'subcategory',
+    'description',
+    'projecttags',
+    'usecases',
+    'titel',
+    'kategorie',
+    'unterkategorie',
+    'beschreibung',
+  ]);
+  return Object.freeze(Object.fromEntries(keys.map((key) => [key, text.includes(key)])));
+}
+
+export function listingAiDraftReady(hierarchy) {
+  return currentHeadAndroidNamedNodes(hierarchy, listingAiDraftReadyProgressText).length > 0
+    && currentHeadAndroidNamedNodes(hierarchy, listingAiDraftReadyHeading).length > 0;
+}
+
+export function returnedToListingEditorAfterPhotoPicker(hierarchy) {
+  const exactMatches = allNodes(hierarchy).filter((node) => [
+    currentHeadAndroidNodeAttribute(node, 'text') ?? '',
+    currentHeadAndroidNodeAttribute(node, 'content-desc') ?? '',
+  ].some((value) => value === 'Neue Anzeige'));
+  return exactMatches.length === 1;
+}
+
+export function classifyPostPhotoPickerSurface(hierarchy) {
+  if (returnedToListingEditorAfterPhotoPicker(hierarchy)) return 'listing-editor';
+  if (String(hierarchy).includes('package="com.google.android.photopicker"')) {
+    return 'system-photo-picker';
+  }
+  if (currentHeadAndroidNamedNodes(hierarchy, 'Fertig').length > 0) {
+    return 'photo-selection-confirmation';
+  }
+  if (currentHeadAndroidNamedNodes(hierarchy, 'Aus Galerie auswählen').length > 0) {
+    return 'photo-source-dialog';
+  }
+  if (currentHeadAndroidNamedNodes(hierarchy, 'Bitte zuerst anmelden').length > 0
+      || currentHeadAndroidNamedNodes(hierarchy, 'Anmelden').length > 0) {
+    return 'unauthenticated-surface';
+  }
+  if (currentHeadAndroidNamedNodes(hierarchy, 'Entdecken').length > 0) {
+    return 'main-navigation';
+  }
+  return 'unknown-safe-surface';
+}
+
+async function waitForListingEditorAfterPhotoPicker({
+  commandRunner,
+  adbPath,
+  device,
+  wait,
+  attempts = 30,
+  intervalMs = 650,
+}) {
+  let lastClassification = 'not-yet-observed';
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    await wait(intervalMs);
+    const hierarchy = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
+    lastClassification = classifyPostPhotoPickerSurface(hierarchy);
+    if (lastClassification === 'listing-editor') return hierarchy;
+  }
+  fail(`The sanitized controlled listing photo surface did not appear; observed ${lastClassification}.`);
+}
+
+export function onDeviceListingAiUiProof(hierarchy) {
+  const count = (label) => currentHeadAndroidNamedNodes(hierarchy, label).length;
+  const proof = {
+    draftReady: count(listingAiDraftReadyProgressText) > 0,
+    editableDraftVisible: count(listingAiDraftReadyHeading) > 0,
+    titleSuggested: count('title: bitte prüfen') + count('title: hoch – bearbeitbar') > 0,
+    categorySuggested: count('category: bitte prüfen') + count('category: hoch – bearbeitbar') > 0,
+    subcategorySuggested: count('subcategory: bitte prüfen')
+      + count('subcategory: hoch – bearbeitbar') > 0,
+    descriptionSuggested: count('description: bitte prüfen')
+      + count('description: hoch – bearbeitbar') > 0,
+    projectTagsSuggested: count('projectTags: bitte prüfen')
+      + count('projectTags: hoch – bearbeitbar') > 0,
+    useCasesSuggested: count('useCases: bitte prüfen')
+      + count('useCases: hoch – bearbeitbar') > 0,
+    safeFallbackAbsent: count('Manueller Fallback aktiv.') === 0
+      && count('Manueller Editor geöffnet.') === 0,
+  };
+  if (Object.values(proof).some((value) => value !== true)) {
+    const missing = Object.entries(proof)
+      .filter(([, value]) => value !== true)
+      .map(([key]) => key)
+      .join(',');
+    const signals = Object.entries(observedListingAiSignals(hierarchy))
+      .map(([key, present]) => `${key}:${present ? 1 : 0}`)
+      .join(',');
+    fail(`The sanitized on-device Listing-AI result is incomplete: ${missing}; signals=${signals}.`);
+  }
+  return Object.freeze(proof);
+}
+
+async function collectOnDeviceListingAiUiProof({
+  commandRunner,
+  adbPath,
+  device,
+  initialHierarchy,
+  wait,
+}) {
+  let combined = String(initialHierarchy);
+  // The result is a scrollable Flutter form; ten viewport captures were not
+  // enough to distinguish a missing field from a field below the fold.
+  for (let attempt = 0; attempt < onDeviceListingAiViewportAttemptLimit; attempt += 1) {
+    try {
+      onDeviceListingAiUiProof(combined);
+      return combined;
+    } catch {
+      currentHeadAndroidAdb(commandRunner, adbPath, device, [
+        'shell', 'input', 'swipe', '540', '1700', '540', '900', '220',
+      ]);
+      await wait(300);
+      combined += dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
+    }
+  }
+  onDeviceListingAiUiProof(combined);
+  return combined;
+}
+
+function exactServerProof(value) {
+  const expected = [
+    'recentDraftFound',
+    'exactlyOneRecentDraft',
+    'ageBounded',
+    'statusEditing',
+    'revisionOne',
+    'disclosureExact',
+    'preflightConsumed',
+    'oneVersion',
+    'suggestionsNonempty',
+    'allOwnerConfirmationsFalse',
+    'providerOnDevice',
+    'modelExact',
+    'zeroUnitsAndCost',
+    'outcomeSucceeded',
+    'notPublished',
+    'generationAuditExact',
+  ];
+  if (value === null || typeof value !== 'object' || Array.isArray(value)
+      || JSON.stringify(Object.keys(value).sort()) !== JSON.stringify(expected.sort())
+      || expected.some((key) => value[key] !== true)) {
+    fail('The sanitized Staging Listing-AI readback did not close exactly.');
+  }
+  return Object.freeze({ ...value });
+}
+
+export async function runAndroidOnDeviceListingAiAcceptance({
+  candidate,
+  deviceSummary,
+  operations,
+  capturedAt = new Date().toISOString(),
+} = {}) {
+  const required = ['perform', 'verifyServer', 'cleanup', 'restoreOwner'];
+  if (operations === null || typeof operations !== 'object'
+      || required.some((key) => typeof operations[key] !== 'function')) {
+    fail('The on-device Listing-AI acceptance operations are incomplete.');
+  }
+  let performed = null;
+  let server = null;
+  let cleanup = null;
+  let primaryFailure = null;
+  let primaryStage = null;
+  let cleanupFailure = null;
+  let restoreFailure = null;
+  try {
+    performed = await operations.perform();
+    server = exactServerProof(await operations.verifyServer(performed));
+  } catch (error) {
+    primaryFailure = error;
+    const operationStage = typeof operations.currentStage === 'function'
+      ? operations.currentStage()
+      : activeStage;
+    primaryStage = typeof error?.sitStage === 'string' && allowedStages.has(error.sitStage)
+      ? error.sitStage
+      : (allowedStages.has(operationStage) ? operationStage : activeStage);
+    if (primaryStage === 'photo-picker') {
+      attachPhotoPickerDiagnostic(
+        error,
+        error?.listingAiDiagnostic?.substage
+          ?? (typeof operations.currentSubstage === 'function'
+            ? operations.currentSubstage()
+            : activePhotoPickerSubstage),
+      );
+    } else if (primaryStage === 'open-listing') {
+      attachListingOpenDiagnostic(
+        error,
+        error?.listingAiDiagnostic?.substage
+          ?? (typeof operations.currentSubstage === 'function'
+            ? operations.currentSubstage()
+            : activeListingOpenSubstage),
+      );
+    } else if (primaryStage === 'bind-owner') {
+      attachBindOwnerDiagnostic(
+        error,
+        error?.listingAiDiagnostic?.substage
+          ?? (typeof operations.currentSubstage === 'function'
+            ? operations.currentSubstage()
+            : activeBindOwnerSubstage),
+      );
+    } else if (primaryStage === 'restore-owner') {
+      attachRestoreOwnerDiagnostic(
+        error,
+        error?.listingAiDiagnostic?.substage
+          ?? (typeof operations.currentSubstage === 'function'
+            ? operations.currentSubstage()
+            : activeRestoreOwnerSubstage),
+      );
+    }
+    if (typeof primaryFailure.sitStage !== 'string') {
+      primaryFailure.sitStage = primaryStage;
+    }
+  } finally {
+    try {
+      cleanup = await operations.cleanup(performed);
+      if (cleanup?.localRecoveryCleared !== true
+          || cleanup?.controlledMediaRemoved !== true) {
+        fail('The controlled Listing-AI device cleanup did not close exactly.');
+      }
+    } catch (error) {
+      cleanupFailure = error;
+    }
+    try {
+      if (await operations.restoreOwner() !== true) {
+        fail('The protected owner session was not restored.');
+      }
+    } catch (error) {
+      attachRestoreOwnerDiagnostic(error, activeRestoreOwnerSubstage);
+      restoreFailure = error;
+    }
+  }
+  if (primaryFailure === null && cleanupFailure === null && restoreFailure !== null) {
+    primaryFailure = restoreFailure;
+    primaryStage = 'restore-owner';
+  }
+  const failureReport = primaryFailure === null
+    ? null
+    : Object.freeze({
+      schemaVersion: 1,
+      stage: primaryStage ?? activeStage,
+      primary: primaryFailure.listingAiDiagnostic?.stage === 'photo-picker'
+        ? primaryFailure.listingAiDiagnostic
+        : primaryFailure.listingAiDiagnostic?.stage === 'open-listing'
+          ? primaryFailure.listingAiDiagnostic
+          : primaryFailure.listingAiDiagnostic?.stage === 'bind-owner'
+            ? primaryFailure.listingAiDiagnostic
+            : primaryFailure.listingAiDiagnostic?.stage === 'restore-owner'
+              ? primaryFailure.listingAiDiagnostic
+              : stageFailureDiagnostic(primaryStage ?? activeStage),
+      cleanup: cleanupFailure === null ? 'passed' : 'failed',
+      ownerRestore: restoreFailure === null ? 'passed' : 'failed',
+    });
+  if (failureReport !== null) {
+    try {
+      Object.defineProperty(primaryFailure, 'listingAiFailureReport', {
+        value: failureReport,
+        enumerable: false,
+        configurable: true,
+      });
+    } catch {
+      // Preserve the original primary failure if it is not extensible.
+    }
+  }
+  if (primaryFailure !== null) throw primaryFailure;
+  if (cleanupFailure !== null) {
+    if (restoreFailure !== null) {
+      try {
+        Object.defineProperty(cleanupFailure, 'listingAiCleanupReport', {
+          value: Object.freeze({ cleanup: 'failed', ownerRestore: 'failed' }),
+          enumerable: false,
+          configurable: true,
+        });
+      } catch {
+        // Preserve the cleanup failure if it is not extensible.
+      }
+    }
+    throw cleanupFailure;
+  }
+  if (restoreFailure !== null) throw restoreFailure;
+  if (performed?.ui === undefined || performed?.fixtureSelected !== true) {
+    fail('The physical on-device Listing-AI result is incomplete.');
+  }
+  const ui = onDeviceListingAiUiProof(performed.ui);
+  return Object.freeze({
+    schemaVersion: 1,
+    workPackage: 'WP112_PIXEL_ON_DEVICE_LISTING_AI_ACCEPTANCE',
+    status: 'passed-physical-pixel-on-device-listing-ai',
+    capturedAt,
+    candidate: {
+      applicationId: candidate.applicationId,
+      versionName: candidate.versionName,
+      versionCode: candidate.buildNumber,
+      sourceCommit: candidate.commit,
+      apkSha256: candidate.apkSha256,
+      signingCertificateSha256: candidate.signingCertificateSha256,
+      apiBaseUrl: candidate.apiBaseUrl,
+    },
+    device: {
+      platform: 'android',
+      physical: deviceSummary.physical,
+      manufacturer: deviceSummary.manufacturer,
+      model: deviceSummary.model,
+      apiLevel: deviceSummary.apiLevel,
+      securityPatch: deviceSummary.securityPatch,
+      containsRawDeviceIdentifier: false,
+    },
+    fixture: {
+      kind: 'repository-controlled-synthetic-cordless-drill-image',
+      sha256: fixtureSha256,
+      semanticScope: listingAiFixtureSemantics,
+      personalMediaRead: false,
+      retainedOnDevice: false,
+    },
+    tests: {
+      exactSignedCandidateInstalled: true,
+      exactProtectedOwnerPrincipal: true,
+      explicitDisclosureConsent: true,
+      physicalAndroidMlKitExecuted: true,
+      ...ui,
+      ...server,
+      localRecoveryCleared: cleanup.localRecoveryCleared,
+      controlledMediaRemoved: cleanup.controlledMediaRemoved,
+      protectedOwnerSessionRestored: true,
+    },
+    runtime: {
+      provider: 'on_device',
+      model: providerModel,
+      externalProviderExecutionAllowed: false,
+      estimatedCostCents: 0,
+      billedCostCents: 0,
+      automaticPublicationAllowed: false,
+    },
+    boundaries: {
+      listingPublished: false,
+      paymentEndpointCalled: false,
+      realMoneyUsed: false,
+      productionChanged: false,
+      googlePlayChanged: false,
+      firebaseChanged: false,
+      onePlusContacted: false,
+      containsAccountIdentity: false,
+      containsSecrets: false,
+      containsTokens: false,
+      containsRawDeviceIdentifiers: false,
+      containsPrivateFilesystemPaths: false,
+    },
+  });
+}
+
+function scrollUntil({
+  commandRunner,
+  adbPath,
+  device,
+  predicate,
+  attempts = 36,
+  toward = 'later',
+  pause = (duration) => new Promise((resolvePromise) => setTimeout(resolvePromise, duration)),
+}) {
+  return (async () => {
+    if (!['earlier', 'later'].includes(toward)) {
+      fail('The sanitized listing scroll direction is invalid.');
+    }
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      const hierarchy = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
+      if (predicate(hierarchy)) return hierarchy;
+      currentHeadAndroidAdb(commandRunner, adbPath, device, [
+        'shell', 'input', 'swipe', '540',
+        toward === 'later' ? '1660' : '430',
+        '540',
+        toward === 'later' ? '430' : '1740',
+        '260',
+      ]);
+      await pause(260);
+    }
+    fail('The sanitized on-device Listing-AI action is unavailable after bounded scrolling.');
+  })();
+}
+
+async function scrollToListingAiConsentSurface({
+  commandRunner,
+  adbPath,
+  device,
+}) {
+  const actionVisible = (hierarchy) => currentHeadAndroidNamedNodes(
+    hierarchy,
+    'Ausgewählte Fotos analysieren',
+  ).length === 1;
+  const first = await scrollUntil({
+    commandRunner,
+    adbPath,
+    device,
+    predicate: actionVisible,
+  });
+  if (listingAiConsentSurfaceReady(first)) return first;
+  return scrollUntil({
+    commandRunner,
+    adbPath,
+    device,
+    toward: 'earlier',
+    predicate: listingAiConsentSurfaceReady,
+  });
+}
+
+function mediaInventory(commandRunner, adbPath, device) {
+  return currentHeadAndroidAdb(commandRunner, adbPath, device, [
+    'shell', 'content', 'query',
+    '--uri', 'content://media/external/images/media',
+    '--projection', '_id:_display_name:date_added',
+  ]);
+}
+
+function tapNode(commandRunner, adbPath, device, node, label) {
+  const area = bounds(node);
+  if (area === null) fail(`The sanitized ${label} bounds are unavailable.`);
+  currentHeadAndroidAdb(commandRunner, adbPath, device, [
+    'shell', 'input', 'tap',
+    String(Math.floor((area.left + area.right) / 2)),
+    String(Math.floor((area.top + area.bottom) / 2)),
+  ]);
+}
+
+function removeControlledThumbnail(commandRunner, adbPath, device) {
+  return scrollUntil({
+    commandRunner,
+    adbPath,
+    device,
+    toward: 'earlier',
+    predicate: (hierarchy) => allNodes(hierarchy).some((node) => (
+      currentHeadAndroidNodeAttribute(node, 'hint') === 'Titel'
+    )),
+  }).then(async (hierarchy) => {
+    const nodes = allNodes(hierarchy);
+    const image = nodes
+      .map((node) => ({ node, area: bounds(node) }))
+      .find(({ node, area }) => area !== null
+        && currentHeadAndroidNodeAttribute(node, 'class') === 'android.widget.ImageView'
+        && currentHeadAndroidNodeAttribute(node, 'clickable') === 'true'
+        && area.width >= 150 && area.height >= 150);
+    if (image === undefined) return false;
+    const close = nodes
+      .map((node) => ({ node, area: bounds(node) }))
+      .find(({ node, area }) => area !== null
+        && currentHeadAndroidNodeAttribute(node, 'class') === 'android.view.View'
+        && currentHeadAndroidNodeAttribute(node, 'clickable') === 'true'
+        && area.width <= 100 && area.height <= 100
+        && Math.abs(area.top - image.area.top) <= 8
+        && Math.abs(area.right - image.area.right) <= 8);
+    if (close === undefined) fail('The controlled listing-photo cleanup action is unavailable.');
+    tapNode(commandRunner, adbPath, device, close.node, 'controlled listing-photo cleanup');
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 650));
+    const cleared = dumpCurrentHeadAndroidUi(commandRunner, adbPath, device);
+    if (currentHeadAndroidNamedNodes(cleared, listingAiDraftReadyHeading).length !== 0) {
+      fail('The local Listing-AI recovery state was not cleared.');
+    }
+    return true;
+  });
+}
+
+export async function cleanupListingAiLocalRecovery({
+  createSurfaceOpened,
+  performed,
+  commandRunner,
+  adbPath,
+  device,
+  removeThumbnail = removeControlledThumbnail,
+  navigateBack = (runner, adb, target) => currentHeadAndroidAdb(
+    runner, adb, target, ['shell', 'input', 'keyevent', '4'],
+  ),
+} = {}) {
+  let localRecoveryCleared = performed === null && createSurfaceOpened !== true;
+  if (createSurfaceOpened === true) {
+    let cleanupError = null;
+    try {
+      localRecoveryCleared = await removeThumbnail(commandRunner, adbPath, device) === true;
+    } catch (error) {
+      cleanupError = error;
+    }
+    let navigationError = null;
+    try {
+      navigateBack(commandRunner, adbPath, device);
+    } catch (error) {
+      navigationError = error;
+    }
+    if (cleanupError !== null) throw cleanupError;
+    if (navigationError !== null) throw navigationError;
+  }
+  return localRecoveryCleared;
+}
+
+function stagingReadbackSql(startedAt) {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(startedAt)) {
+    fail('The Listing-AI acceptance timestamp is invalid.');
+  }
+  return String.raw`
+WITH recent AS (
+  SELECT id,status,current_revision,disclosure_version,image_preflight_status,created_at
+  FROM listing_ai_drafts
+  WHERE created_at >= '${startedAt}'::timestamptz
+), latest AS (
+  SELECT * FROM recent ORDER BY created_at DESC LIMIT 1
+)
+SELECT json_build_object(
+  'recentDraftFound', EXISTS(SELECT 1 FROM latest),
+  'exactlyOneRecentDraft', (SELECT count(*)=1 FROM recent),
+  'ageBounded', COALESCE((SELECT created_at >= '${startedAt}'::timestamptz AND created_at <= now() FROM latest), false),
+  'statusEditing', COALESCE((SELECT status='editing' FROM latest), false),
+  'revisionOne', COALESCE((SELECT current_revision=1 FROM latest), false),
+  'disclosureExact', COALESCE((SELECT disclosure_version='${disclosureVersion}' FROM latest), false),
+  'preflightConsumed', COALESCE((SELECT image_preflight_status='consumed' FROM latest), false),
+  'oneVersion', (SELECT count(*)=1 FROM listing_ai_draft_versions v JOIN latest l ON l.id=v.draft_id),
+  'suggestionsNonempty', COALESCE((SELECT (v.fields->'title'->>'value') IS NOT NULL AND (v.fields->'category'->>'value') IS NOT NULL AND (v.fields->'description'->>'value') IS NOT NULL FROM listing_ai_draft_versions v JOIN latest l ON l.id=v.draft_id), false),
+  'allOwnerConfirmationsFalse', COALESCE((SELECT NOT EXISTS (SELECT 1 FROM jsonb_each_text(v.owner_confirmations) e WHERE e.value <> 'false') FROM listing_ai_draft_versions v JOIN latest l ON l.id=v.draft_id), false),
+  'providerOnDevice', COALESCE((SELECT c.provider='on_device' FROM listing_ai_cost_ledger c JOIN latest l ON l.id=c.draft_id), false),
+  'modelExact', COALESCE((SELECT c.model='${providerModel}' FROM listing_ai_cost_ledger c JOIN latest l ON l.id=c.draft_id), false),
+  'zeroUnitsAndCost', COALESCE((SELECT c.input_units=0 AND c.output_units=0 AND c.estimated_cost_cents=0 AND c.billed_cost_cents=0 FROM listing_ai_cost_ledger c JOIN latest l ON l.id=c.draft_id), false),
+  'outcomeSucceeded', COALESCE((SELECT c.outcome='succeeded' FROM listing_ai_cost_ledger c JOIN latest l ON l.id=c.draft_id), false),
+  'notPublished', COALESCE((SELECT NOT EXISTS (SELECT 1 FROM listing_ai_publication_receipts p WHERE p.draft_id=l.id) FROM latest l), false),
+  'generationAuditExact', COALESCE((SELECT count(*)=1 FROM audit_log a JOIN latest l ON a.resource_id=l.id WHERE a.action='blue_ocean.listing_draft.generated' AND a.resource_type='listing_ai_draft' AND a.metadata->>'provider'='on_device' AND (a.metadata->>'paidCallPerformed')::boolean=false AND (a.metadata->>'estimatedCostCents')::int=0 AND (a.metadata->>'billedCostCents')::int=0 AND (a.metadata->>'autoPublishAllowed')::boolean=false), false)
+);
+`;
+}
+
+export function validateStagingDatabaseContainer(value) {
+  if (typeof value !== 'string' || value.length === 0) {
+    fail('--staging-database-container is required.');
+  }
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u.test(value)) {
+    fail('--staging-database-container must be a safe Docker container name.');
+  }
+  return value;
+}
+
+export function stagingReadbackCommand(stagingDatabaseContainer) {
+  const container = validateStagingDatabaseContainer(stagingDatabaseContainer);
+  return {
+    command: 'ssh',
+    args: [
+      '-o', 'BatchMode=yes',
+      '-o', 'ConnectTimeout=8',
+      'sit-staging-vps',
+      `docker exec -i ${container} sh -c 'exec psql -X -A -t -U "$POSTGRES_USER" -d "$POSTGRES_DB"'`,
+    ],
+  };
+}
+
+export function verifyStaging(commandRunner, startedAt, stagingDatabaseContainer) {
+  const invocation = stagingReadbackCommand(stagingDatabaseContainer);
+  const output = commandRunner(invocation.command, invocation.args, {
+    encoding: 'utf8',
+    input: stagingReadbackSql(startedAt),
+    stdio: ['pipe', 'pipe', 'pipe'],
+    maxBuffer: 1024 * 1024,
+    timeoutMs: 15000,
+  });
+  try {
+    return JSON.parse(String(output).trim());
+  } catch {
+    fail('The sanitized Staging Listing-AI readback is invalid.');
+  }
+}
+
+function argumentValue(args, flag) {
+  const index = args.indexOf(flag);
+  return index >= 0 ? args[index + 1] : null;
+}
+
+async function main() {
+  const args = process.argv.slice(2);
+  const sourceVaultFile = resolve(
+    argumentValue(args, '--source-vault-file') ?? fail('--source-vault-file is required.'),
+  );
+  const candidateDirectory = resolve(
+    argumentValue(args, '--candidate-dir') ?? fail('--candidate-dir is required.'),
+  );
+  const stagingDatabaseContainer = validateStagingDatabaseContainer(
+    argumentValue(args, '--staging-database-container'),
+  );
+  const adbPath = argumentValue(args, '--adb') ?? 'adb';
+  const commandRunner = defaultCurrentHeadAndroidCommandRunner;
+  const wait = (milliseconds) => new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds));
+  setStage('load-vault');
+  const candidate = await validatePrivateAndroidReleaseArchive({
+    root: repositoryRoot,
+    candidateDirectory,
+  });
+  const devices = parseAdbDevices(commandRunner(adbPath, ['devices', '-l']));
+  const device = selectSinglePhysicalDevice(devices);
+  const deviceSummary = inspectPhysicalDevice({ commandRunner, adbPath, device });
+  if (deviceSummary.model !== 'Pixel 7 Pro') fail('The physical Pixel 7 Pro is required.');
+  setStage('verify-play-install');
+  assertCurrentHeadAndroidDeviceAlreadyUnlocked(commandRunner, adbPath, device);
+  verifyCurrentHeadAndroidInstalledCandidate(commandRunner, adbPath, device, candidate);
+  const vault = readEmailVerifiedJourneyVault(sourceVaultFile).vault;
+  let mediaRow = null;
+  let createSurfaceOpened = false;
+  const operations = {
+    currentStage: () => activeStage,
+    currentSubstage: () => activeStage === 'photo-picker'
+      ? activePhotoPickerSubstage
+      : activeStage === 'open-listing'
+        ? activeListingOpenSubstage
+        : activeStage === 'bind-owner'
+          ? activeBindOwnerSubstage
+          : activeRestoreOwnerSubstage,
+    perform: async () => {
+      const startedAt = new Date().toISOString();
+      setStage('prepare-fixture');
+      const localFixture = resolve(repositoryRoot, fixtureRelativePath);
+      if (sha256(readFileSync(localFixture)) !== fixtureSha256) {
+        fail('The controlled Listing-AI image hash does not match.');
+      }
+      currentHeadAndroidAdb(commandRunner, adbPath, device, ['shell', 'rm', '-f', remoteFixture]);
+      currentHeadAndroidAdb(commandRunner, adbPath, device, ['push', localFixture, remoteFixture]);
+      currentHeadAndroidAdb(commandRunner, adbPath, device, [
+        'shell', 'am', 'broadcast', '-a', 'android.intent.action.MEDIA_SCANNER_SCAN_FILE',
+        '-d', `file://${remoteFixture}`,
+      ]);
+      await wait(800);
+      mediaRow = controlledMediaRow(mediaInventory(commandRunner, adbPath, device));
+      setStage('bind-owner');
+      await bindExactRole({
+        vault, role: 'owner', commandRunner, adbPath, device, wait,
+        onSubstage: (substage) => { activeBindOwnerSubstage = substage; },
+      });
+      setStage('open-listing');
+      let hierarchy = await listingOpenAction('main-destination', () => openMainDestination({
+        commandRunner, adbPath, device, wait, label: 'Entdecken',
+      }));
+      hierarchy = await listingOpenAction('create-action', () => waitForListingCreateActionWithRecovery({
+        commandRunner,
+        adbPath,
+        device,
+        wait,
+        reopenMainDestination: () => openMainDestination({
+          commandRunner, adbPath, device, wait, label: 'Entdecken',
+        }),
+      }));
+      await listingOpenAction('create-action', () => tapLabel(
+        commandRunner, adbPath, device, hierarchy, 'Neue Anzeige erstellen',
+      ));
+      hierarchy = await listingOpenAction('open-editor', () => waitForHierarchy({
+        commandRunner,
+        adbPath,
+        device,
+        wait,
+        label: 'new listing',
+        predicate: (value) => currentHeadAndroidNamedNodes(value, 'Neue Anzeige').length === 1
+          && currentHeadAndroidNamedNodes(value, 'Foto hinzufügen').length === 1,
+      }));
+      createSurfaceOpened = true;
+      setStage('photo-picker');
+      photoPickerActionSync('open-source-dialog', () => tapLabel(
+        commandRunner, adbPath, device, hierarchy, 'Foto hinzufügen',
+      ));
+      hierarchy = await photoPickerAction('wait-source-dialog', () => waitForHierarchy({
+        commandRunner,
+        adbPath,
+        device,
+        wait,
+        label: 'photo source',
+        predicate: (value) => currentHeadAndroidNamedNodes(value, 'Aus Galerie auswählen').length === 1,
+      }));
+      photoPickerActionSync('open-system-picker', () => tapLabel(
+        commandRunner, adbPath, device, hierarchy, 'Aus Galerie auswählen',
+      ));
+      hierarchy = await photoPickerAction('wait-system-picker', () => waitForHierarchy({
+        commandRunner,
+        adbPath,
+        device,
+        wait,
+        label: 'system photo picker',
+        predicate: (value) => String(value).includes('package="com.google.android.photopicker"'),
+      }));
+      const currentMediaRow = photoPickerActionSync(
+        'verify-controlled-media',
+        () => controlledMediaRow(mediaInventory(commandRunner, adbPath, device)),
+      );
+      if (currentMediaRow.id !== mediaRow.id) {
+        fail('The controlled Android media fixture changed before selection.');
+      }
+      const tile = photoPickerActionSync(
+        'find-controlled-tile',
+        () => newestPhotoPickerTile(hierarchy),
+      );
+      photoPickerActionSync('select-controlled-tile', () => tapNode(
+        commandRunner, adbPath, device, tile.node, 'controlled photo-picker tile',
+      ));
+      hierarchy = await photoPickerAction('wait-selection-confirmation', () => waitForHierarchy({
+        commandRunner,
+        adbPath,
+        device,
+        wait,
+        label: 'selected photo',
+        predicate: (value) => currentHeadAndroidNamedNodes(value, 'Fertig').length === 1,
+      }));
+      photoPickerActionSync('confirm-selection', () => tapLabel(
+        commandRunner, adbPath, device, hierarchy, 'Fertig',
+      ));
+      await photoPickerAction('return-listing-editor', () => waitForListingEditorAfterPhotoPicker({
+        commandRunner,
+        adbPath,
+        device,
+        wait,
+      }));
+      hierarchy = await photoPickerAction('find-analysis-consent-surface', () => scrollToListingAiConsentSurface({
+        commandRunner,
+        adbPath,
+        device,
+      }));
+      photoPickerActionSync('tap-analysis-consent', () => tapLabel(
+        commandRunner,
+        adbPath,
+        device,
+        hierarchy,
+        listingAiOnDeviceDisclosurePrefix,
+      ));
+      hierarchy = await photoPickerAction('reacquire-analysis-action', () => waitForListingAiAnalyzeAction({
+        commandRunner,
+        adbPath,
+        device,
+        wait,
+      }));
+      photoPickerActionSync('tap-analysis-action', () => tapLabel(
+        commandRunner,
+        adbPath,
+        device,
+        hierarchy,
+        'Ausgewählte Fotos analysieren',
+      ));
+      setStage('consent');
+      setStage('analyze');
+      hierarchy = await waitForHierarchy({
+        commandRunner,
+        adbPath,
+        device,
+        wait,
+        attempts: 70,
+        label: 'on-device Listing-AI result',
+        predicate: listingAiDraftReady,
+      });
+      setStage('collect-fields');
+      hierarchy = await collectOnDeviceListingAiUiProof({
+        commandRunner,
+        adbPath,
+        device,
+        initialHierarchy: hierarchy,
+        wait,
+      });
+      return { startedAt, ui: hierarchy, fixtureSelected: true };
+    },
+    verifyServer: async ({ startedAt }) => {
+      setStage('server-readback');
+      return verifyStaging(commandRunner, startedAt, stagingDatabaseContainer);
+    },
+    cleanup: async (performed) => {
+      setStage('cleanup');
+      const localRecoveryCleared = await cleanupListingAiLocalRecovery({
+        createSurfaceOpened,
+        performed,
+        commandRunner,
+        adbPath,
+        device,
+      });
+      if (mediaRow !== null) {
+        currentHeadAndroidAdb(commandRunner, adbPath, device, [
+          'shell', 'content', 'delete',
+          '--uri', 'content://media/external/images/media',
+          '--where', `_id=${mediaRow.id}`,
+        ]);
+      }
+      currentHeadAndroidAdb(commandRunner, adbPath, device, ['shell', 'rm', '-f', remoteFixture]);
+      return {
+        localRecoveryCleared,
+        controlledMediaRemoved:
+          mediaInventory(commandRunner, adbPath, device).includes(fixtureDisplayName) === false,
+      };
+    },
+    restoreOwner: async () => {
+      setStage('restore-owner');
+      const bound = await bindExactRole({
+        vault, role: 'owner', commandRunner, adbPath, device, wait,
+      });
+      return currentHeadAndroidNamedNodes(bound.hierarchy, bound.account.displayName).length === 1
+        && currentHeadAndroidNamedNodes(bound.hierarchy, bound.other.displayName).length === 0;
+    },
+  };
+  const evidence = await runAndroidOnDeviceListingAiAcceptance({
+    candidate,
+    deviceSummary,
+    operations,
+  });
+  process.stdout.write(`${JSON.stringify(evidence, null, 2)}\n`);
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  main().catch((error) => {
+    const stage = typeof error?.sitStage === 'string'
+      && allowedStages.has(error.sitStage)
+      ? error.sitStage
+      : activeStage;
+    const report = error?.listingAiFailureReport;
+    if (report !== undefined) {
+      process.stderr.write(`${formatListingAiFailureReport(report)}\n`);
+    } else {
+      process.stderr.write(`ERROR: SIT stage ${stage}: ${sanitizedFailure(error)}\n`);
+    }
+    process.exitCode = 1;
+  });
+}

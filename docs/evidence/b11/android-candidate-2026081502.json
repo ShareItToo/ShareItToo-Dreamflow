@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-release-candidate",
+  "status": "built-scanned-play-internal-installed-chat-regression",
+  "generatedAt": "2026-08-15T01:25:38Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081502",
+    "commit": "e2e7bf5d738d950d18ee199416f85c578ffea2d7",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "android": {
+    "delivery": "play-internal",
+    "aabSha256": "05032b863af00716d994cedc891485dab3f1c5bc1b0051b91e2d841ccdf4505f",
+    "apkSha256": "a21fb04fde79be5ca6a444020e64f1878fd0b8c1b727c82e1b18662807811576",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "packageIdentityVerified": true,
+    "privateArchivePermissionsVerified": true
+  },
+  "privacyAndNetwork": {
+    "binaryScan": "passed",
+    "binaryScanReportSha256": "2933f7a37b347795794f586ee89100892801d646fa02bc4c1d2c74d7008ae06a",
+    "targetSdkVersion": 35,
+    "backupDisabled": true,
+    "cleartextTrafficDisabled": true,
+    "analyticsSdkPresent": false,
+    "advertisingSdkPresent": false,
+    "permissionInventoryStatus": "passed",
+    "permissionInventoryEvidenceRef": "docs/evidence/b11/android-release-permissions-2026081502.json",
+    "disclosedSdks": [
+      "Firebase Cloud Messaging",
+      "Firebase Crashlytics",
+      "Firebase Authentication",
+      "Facebook Login",
+      "Google Maps Platform"
+    ],
+    "findings": []
+  },
+  "exactCandidateDiagnostics": {
+    "playInternalInstallAndLaunch": "passed",
+    "playInstallerVerified": "passed-com.android.vending",
+    "authenticatedSession": "passed-session-preserved",
+    "stagingFeedLoaded": "passed",
+    "acceptedBookingSharedChat": "failed-visible-thread-entered-persistent-loading-spinner",
+    "chatReadReceiptLoop": "not-isolated-because-persistence-self-refresh-loop-dominated",
+    "chatPersistenceSelfRefreshLoop": "failed-high-frequency-read-only-cache-notification-feedback-loop-superseded-by-2026081503",
+    "twoDevicePrivatePilotAcceptance": "pending"
+  },
+  "staging": {
+    "serverVersion": "1.0.0-2026081502-v4-owner-acceptance",
+    "liveHttpStatus": 200,
+    "readyHttpStatus": 200,
+    "fcmEnabled": true,
+    "productionInvariant": "passed",
+    "productionVersion": "1.0.0-2026081403"
+  },
+  "boundaries": {
+    "uploadedToStore": true,
+    "installedOnPhysicalDevice": true,
+    "controlledFcmSentToSyntheticAccount": false,
+    "controlledCrashDiagnosticSent": false,
+    "productionPushSent": false,
+    "productionCrashGenerated": false,
+    "iosValidated": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

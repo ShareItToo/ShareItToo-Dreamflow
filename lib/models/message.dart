@@ -4,6 +4,7 @@ class Message {
   final String text;
   final DateTime timestamp;
   final bool isRead;
+  final List<Map<String, dynamic>> attachments;
 
   Message({
     required this.id,
@@ -11,6 +12,7 @@ class Message {
     required this.text,
     required this.timestamp,
     this.isRead = false,
+    this.attachments = const <Map<String, dynamic>>[],
   });
 
   Message copyWith({bool? isRead}) => Message(
@@ -19,6 +21,7 @@ class Message {
         text: text,
         timestamp: timestamp,
         isRead: isRead ?? this.isRead,
+        attachments: attachments,
       );
 
   Map<String, dynamic> toJson() => {
@@ -27,6 +30,7 @@ class Message {
         'text': text,
         'timestamp': timestamp.toIso8601String(),
         'isRead': isRead,
+        'attachments': attachments,
       };
 
   factory Message.fromJson(Map<String, dynamic> json) => Message(
@@ -35,6 +39,11 @@ class Message {
         text: json['text'] as String,
         timestamp: DateTime.parse(json['timestamp'] as String),
         isRead: (json['isRead'] as bool?) ?? false,
+        attachments: (json['attachments'] as List?)
+                ?.whereType<Map>()
+                .map((entry) => Map<String, dynamic>.from(entry))
+                .toList(growable: false) ??
+            const <Map<String, dynamic>>[],
       );
 }
 
@@ -66,11 +75,20 @@ class MessageThread {
   /// Optional presence snapshot (demo/local only).
   final bool? otherUserOnline;
   final DateTime? otherUserLastActive;
+
   /// Per-user archive flag.
   ///
   /// If a userId is present here, the thread is hidden from that user's
   /// message list (but still preserved in local storage).
   final List<String> archivedForUserIds;
+
+  /// Per-user local deletion tombstone.
+  ///
+  /// Deleting a conversation must never erase the counterparty's copy. A
+  /// participant listed here no longer sees the thread, while the shared
+  /// record remains available to the other participant and for later server
+  /// reconciliation.
+  final List<String> deletedForUserIds;
   final List<Message> messages;
   final DateTime createdAt;
   final DateTime? lastMessageAt;
@@ -89,6 +107,7 @@ class MessageThread {
     this.otherUserOnline,
     this.otherUserLastActive,
     this.archivedForUserIds = const <String>[],
+    this.deletedForUserIds = const <String>[],
     required this.messages,
     required this.createdAt,
     this.lastMessageAt,
@@ -98,6 +117,7 @@ class MessageThread {
     List<Message>? messages,
     DateTime? lastMessageAt,
     List<String>? archivedForUserIds,
+    List<String>? deletedForUserIds,
     String? threadType,
     String? bookingStatus,
     DateTime? handoverAt,
@@ -119,6 +139,7 @@ class MessageThread {
         otherUserOnline: otherUserOnline ?? this.otherUserOnline,
         otherUserLastActive: otherUserLastActive ?? this.otherUserLastActive,
         archivedForUserIds: archivedForUserIds ?? this.archivedForUserIds,
+        deletedForUserIds: deletedForUserIds ?? this.deletedForUserIds,
         messages: messages ?? this.messages,
         createdAt: createdAt,
         lastMessageAt: lastMessageAt ?? this.lastMessageAt,
@@ -138,14 +159,25 @@ class MessageThread {
         'otherUserOnline': otherUserOnline,
         'otherUserLastActive': otherUserLastActive?.toIso8601String(),
         'archivedForUserIds': archivedForUserIds,
+        'deletedForUserIds': deletedForUserIds,
         'messages': messages.map((m) => m.toJson()).toList(),
         'createdAt': createdAt.toIso8601String(),
         'lastMessageAt': lastMessageAt?.toIso8601String(),
       };
 
   factory MessageThread.fromJson(Map<String, dynamic> json) {
-    final messagesList = (json['messages'] as List?)?.map((e) => Message.fromJson(Map<String, dynamic>.from(e as Map))).toList() ?? <Message>[];
-    final archived = (json['archivedForUserIds'] as List?)?.map((e) => e.toString()).toList() ?? const <String>[];
+    final messagesList = (json['messages'] as List?)
+            ?.map((e) => Message.fromJson(Map<String, dynamic>.from(e as Map)))
+            .toList() ??
+        <Message>[];
+    final archived = (json['archivedForUserIds'] as List?)
+            ?.map((e) => e.toString())
+            .toList() ??
+        const <String>[];
+    final deleted = (json['deletedForUserIds'] as List?)
+            ?.map((e) => e.toString())
+            .toList() ??
+        const <String>[];
     return MessageThread(
       id: json['id'] as String,
       requestId: json['requestId'] as String,
@@ -155,14 +187,25 @@ class MessageThread {
       user2Id: json['user2Id'] as String,
       threadType: (json['threadType'] as String?),
       bookingStatus: (json['bookingStatus'] as String?),
-      handoverAt: json['handoverAt'] != null ? DateTime.tryParse(json['handoverAt'].toString()) : null,
-      returnAt: json['returnAt'] != null ? DateTime.tryParse(json['returnAt'].toString()) : null,
-      otherUserOnline: json['otherUserOnline'] is bool ? (json['otherUserOnline'] as bool) : null,
-      otherUserLastActive: json['otherUserLastActive'] != null ? DateTime.tryParse(json['otherUserLastActive'].toString()) : null,
+      handoverAt: json['handoverAt'] != null
+          ? DateTime.tryParse(json['handoverAt'].toString())
+          : null,
+      returnAt: json['returnAt'] != null
+          ? DateTime.tryParse(json['returnAt'].toString())
+          : null,
+      otherUserOnline: json['otherUserOnline'] is bool
+          ? (json['otherUserOnline'] as bool)
+          : null,
+      otherUserLastActive: json['otherUserLastActive'] != null
+          ? DateTime.tryParse(json['otherUserLastActive'].toString())
+          : null,
       archivedForUserIds: archived,
+      deletedForUserIds: deleted,
       messages: messagesList,
       createdAt: DateTime.parse(json['createdAt'] as String),
-      lastMessageAt: json['lastMessageAt'] != null ? DateTime.parse(json['lastMessageAt'] as String) : null,
+      lastMessageAt: json['lastMessageAt'] != null
+          ? DateTime.parse(json['lastMessageAt'] as String)
+          : null,
     );
   }
 }

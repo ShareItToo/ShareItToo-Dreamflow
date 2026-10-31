@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-active-infrastructure-and-mail-provider-readiness",
+  "version": "S4BX-2026-08-23.1",
+  "preparedOn": "2026-08-23",
+  "state": "prepared-active-provider-facts-and-approvals-required",
+  "sourceBindings": {
+    "drive": {
+      "fileId": "1j8cpz2uwZBZiu6RLXjPQfo6bAWotUNLN",
+      "title": "09_SIT_SUPPORT_SOURCE_OF_TRUTH_V1.md",
+      "modifiedTime": "2026-08-20T22:27:16.931Z",
+      "sha256": "ae1ce047453b2efd6e0da80718da57de43a9efb8b93ef4ed6a0850c55abcc80b"
+    },
+    "repository": [
+      {
+        "path": "docs/evidence/b11/google-play-service-provider-sharing-classification-2026081505-20260815.json",
+        "sha256": "ed73b938981e4d55c42f2b3faa555c3c44990de0a2c5685de9380d67f2460909"
+      },
+      {
+        "path": "assets/legal/de/legal_manifest_v52.json",
+        "sha256": "757289c45dfe50c9f3f3ec9c96953f06b62f15b282bb1d6cdedc6e8e07d2e69b"
+      },
+      {
+        "path": "store/privacy-disclosures.json",
+        "sha256": "35c3a08e20e4f55183649af934e9415ea8cfd0c2d3327483a518cf477daee449"
+      },
+      {
+        "path": "store/retention-deletion-readiness.json",
+        "sha256": "955a901bbaec6511d119558b953274c3e5059a97c657fdcf93f2a939523315c8"
+      }
+    ]
+  },
+  "technicalBaseline": {
+    "classifiedActiveProcessorCount": 5,
+    "newlyExplicitActiveProcessorCount": 2,
+    "privacyExternalServiceCount": 11,
+    "retentionExternalProcessorCount": 6,
+    "hosterCandidateState": "active-first-party-backend-and-database-hosting",
+    "smtpCandidateState": "active-staging-transactional-mail",
+    "hosterOfficialRetentionReviewComplete": false,
+    "smtpOfficialRetentionReviewComplete": false,
+    "privacyApprovalAllowed": false,
+    "retentionApprovalAllowed": false,
+    "storeSubmissionAllowed": false
+  },
+  "requiredExternalDecisions": {
+    "hosterAccountContractAndDpa": {
+      "status": "open",
+      "value": null,
+      "evidenceRef": null
+    },
+    "hosterServiceSeatAndRegion": {
+      "status": "open",
+      "value": null,
+      "evidenceRef": null
+    },
+    "hosterTransferMechanism": {
+      "status": "open",
+      "value": null,
+      "evidenceRef": null
+    },
+    "hosterRetentionDeletionAndBackupRestore": {
+      "status": "open",
+      "value": null,
+      "evidenceRef": null
+    },
+    "hosterIncidentSubprocessorAndExitProcedure": {
+      "status": "open",
+      "value": null,
+      "evidenceRef": null
+    },
+    "smtpAccountContractAndDpa": {
+      "status": "open",
+      "value": null,
+      "evidenceRef": null
+    },
+    "smtpServiceSeatAndSendingRegion": {
+      "status": "open",
+      "value": null,
+      "evidenceRef": null
+    },
+    "smtpTransferMechanism": {
+      "status": "open",
+      "value": null,
+      "evidenceRef": null
+    },
+    "smtpRetentionDeletionAndSuppression": {
+      "status": "open",
+      "value": null,
+      "evidenceRef": null
+    },
+    "smtpTransactionalPayloadAndOperatorProcedure": {
+      "status": "open",
+      "value": null,
+      "evidenceRef": null
+    }
+  },
+  "evaluation": {
+    "requiredDecisionCount": 10,
+    "completedDecisionCount": 0,
+    "openDecisionKeys": [
+      "hosterAccountContractAndDpa",
+      "hosterServiceSeatAndRegion",
+      "hosterTransferMechanism",
+      "hosterRetentionDeletionAndBackupRestore",
+      "hosterIncidentSubprocessorAndExitProcedure",
+      "smtpAccountContractAndDpa",
+      "smtpServiceSeatAndSendingRegion",
+      "smtpTransferMechanism",
+      "smtpRetentionDeletionAndSuppression",
+      "smtpTransactionalPayloadAndOperatorProcedure"
+    ],
+    "externalReadiness": false,
+    "privacyAndRetentionClosureAllowed": false
+  },
+  "boundaries": {
+    "containsPersonalData": false,
+    "containsAccountIdentifiers": false,
+    "containsCredentials": false,
+    "containsSecrets": false,
+    "externalAccountInspected": false,
+    "contractAccepted": false,
+    "paidServiceStarted": false,
+    "providerConsoleChanged": false,
+    "vpsChanged": false,
+    "mailChanged": false,
+    "productionChanged": false,
+    "cloudChanged": false,
+    "storeChanged": false,
+    "publicActivationChanged": false
+  }
+}

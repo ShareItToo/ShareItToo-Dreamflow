@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-authenticated-safe-app-link-diagnostic",
+  "status": "passed-bounded-authenticated-safe-app-link-diagnostic",
+  "capturedAt": "2026-08-23T11:34:21.238Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026082301",
+    "commit": "76e6565cdb20d6a49fb417e87b044b237a1ae6c1",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "installed": {
+    "packageIdentityVerified": true,
+    "versionName": "1.0.0",
+    "buildNumber": "2026082301",
+    "delivery": "direct-apk",
+    "apkSha256": "a235a188893983fdf770f534ee026c8bd50a7cad4b34d804597a0720817f9ff9"
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "16",
+    "apiLevel": 36,
+    "securityPatch": "2026-04-05",
+    "containsRawDeviceIdentifier": false
+  },
+  "tests": {
+    "authenticatedNotificationsBefore": {
+      "status": "passed",
+      "result": "authenticated-read-only-surface"
+    },
+    "verifiedHttpsMissingListing": {
+      "status": "passed",
+      "result": "safe-listing-unavailable-surface"
+    },
+    "unsafeIdentifierRejected": {
+      "status": "passed",
+      "result": "authenticated-start-preserved"
+    },
+    "foreignHostNotAssociated": {
+      "status": "passed",
+      "result": "shareittoo-package-absent"
+    },
+    "authenticatedNotificationsAfter": {
+      "status": "passed",
+      "result": "authenticated-session-preserved"
+    }
+  },
+  "boundaries": {
+    "directDiagnosticOnly": true,
+    "storeInstallationGateSatisfied": false,
+    "authenticatedSafeLinksPassed": true,
+    "authenticatedFixtureLinksPassed": false,
+    "manualFunctionalMatrixPassed": false,
+    "bookingFlowPassed": false,
+    "realPushPassed": false,
+    "loginPerformed": false,
+    "logoutPerformed": false,
+    "accountMutationPerformed": false,
+    "accountIdentityRecorded": false,
+    "lockCodeUsed": false,
+    "containsPersonalAccountData": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false
+  }
+}

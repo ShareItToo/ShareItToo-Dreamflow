@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-08-23T17:56:58.323Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026082302",
+    "commit": "1b3e86ef1bcfa5a88b1baf965fdad00e9d64f54b",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "installed": {
+    "packageIdentityVerified": true,
+    "versionName": "1.0.0",
+    "buildNumber": "2026082302",
+    "delivery": "direct-apk",
+    "apkSha256": "cae44832e76e7d4c7939ae0c6e14dbc63bbfd0ea481c037aa626036c278e9e1e"
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "17",
+    "apiLevel": 37,
+    "securityPatch": "2026-07-05",
+    "containsRawDeviceIdentifier": false
+  },
+  "kind": "android-current-candidate-talkback-settings-activation-preflight",
+  "status": "blocked-settings-runtime-touch-exploration-unavailable",
+  "configuration": {
+    "settingsSurfaceOpened": true,
+    "settingsTogglePresent": true,
+    "confirmationAccepted": true,
+    "talkBackEnabledDuringDiagnostic": true,
+    "serviceProcessActive": true,
+    "serviceBound": true,
+    "runtimeTouchExplorationEnabledDuringDiagnostic": false,
+    "secureTouchExplorationEnabledDuringDiagnostic": false,
+    "secureTouchExplorationGrantPresentDuringDiagnostic": false,
+    "runtimeTouchExplorationSignalCount": 1,
+    "runtimeTouchExplorationTrueSignalCount": 0,
+    "exactPreviousConfigurationRestored": true,
+    "accessibilityEnabledAfterDiagnostic": false,
+    "enabledServiceCountAfterDiagnostic": 0,
+    "touchExplorationEnabledAfterDiagnostic": false,
+    "touchExplorationGrantCountAfterDiagnostic": 0,
+    "keyboardShortcutTargetCountAfterDiagnostic": 0,
+    "exploreSurfaceRestored": true
+  },
+  "blockers": [
+    "talkback-settings-did-not-reach-runtime-touch-exploration"
+  ],
+  "boundaries": {
+    "talkBackPassClaimed": false,
+    "automatedTalkBackMainNavigationPassed": false,
+    "manualTalkBackTraversalPassed": false,
+    "storeInstallationGateSatisfied": false,
+    "bookingFlowPassed": false,
+    "messageSent": false,
+    "accountMutationPerformed": false,
+    "loginPerformed": false,
+    "logoutPerformed": false,
+    "screenshotCaptured": false,
+    "rawHierarchyRetained": false,
+    "accountIdentityRecorded": false,
+    "containsPersonalAccountData": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false
+  }
+}

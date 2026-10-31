@@ -1,0 +1,222 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-rw4-reduced-wave0-local-principal-isolation",
+  "status": "verified-regression-and-codeql-passed",
+  "implementationBaseHead": "9af5c768279e501a0e3288affea4c403c2baf178",
+  "architecture": "docs/architecture/rw4-reduced-wave0-local-principal-isolation-2026-08-25.md",
+  "report": "docs/operations/RW4_REDUCED_WAVE0_LOCAL_PRINCIPAL_ISOLATION_2026-08-25.md",
+  "predecessor": {
+    "package": "RW3",
+    "evidence": "docs/evidence/48h-remote/rw3-reduced-wave0-local-concurrency-consistency-20260825.json",
+    "verifiedImplementationHead": "f7a49899b51e733041878dba86bebf5737fac023",
+    "closureCommit": "9af5c768279e501a0e3288affea4c403c2baf178"
+  },
+  "scope": {
+    "allowed": [
+      "opaque-principal-scoped-wishlist-state",
+      "opaque-principal-scoped-rental-cart-state",
+      "serialized-account-guest-session-transitions",
+      "guest-only-legacy-migration-or-quarantine",
+      "bucket-local-corruption-quarantine",
+      "current-principal-export-and-confirmed-deletion",
+      "bounded-local-principal-registry",
+      "logical-identity-transition-events",
+      "compact-stale-error-and-recovery-state"
+    ],
+    "excluded": [
+      "binding-request-contract-and-acceptance",
+      "payment-refund-and-payout",
+      "handover-return-damage-and-needs-review",
+      "physical-device-and-candidate",
+      "live-provider-pilot-and-release"
+    ],
+    "syntheticOnly": true,
+    "localOnly": true,
+    "timingWorkaroundAllowed": false,
+    "testParallelismReductionAllowed": false
+  },
+  "findings": [
+    {
+      "id": "RW4-P0-SAVED-CROSS-PRINCIPAL-001",
+      "state": "resolved-and-tested",
+      "resolution": "saved-lists-assignments-and-ids-live-in-one-opaque-principal-bucket"
+    },
+    {
+      "id": "RW4-P0-CART-CROSS-PRINCIPAL-002",
+      "state": "resolved-and-tested",
+      "resolution": "local-cart-and-projects-live-in-one-opaque-principal-bucket"
+    },
+    {
+      "id": "RW4-P0-LEGACY-MISATTRIBUTION-003",
+      "state": "resolved-and-tested",
+      "resolution": "unscoped-legacy-migrates-only-to-guest-or-remains-quarantined"
+    },
+    {
+      "id": "RW4-P0-EXPORT-DELETION-SCOPE-004",
+      "state": "resolved-and-tested",
+      "resolution": "export-and-confirmed-deletion-address-only-the-current-principal"
+    },
+    {
+      "id": "RW4-P1-IDENTIFIER-DISCLOSURE-005",
+      "state": "resolved-and-tested",
+      "resolution": "registries-persist-stable-sha256-derived-tokens-without-identifiers"
+    },
+    {
+      "id": "RW4-P1-IDENTITY-TRANSITION-006",
+      "state": "resolved-and-tested",
+      "resolution": "captured-principal-mutations-and-auth-events-prevent-cross-session-stale-state"
+    },
+    {
+      "id": "RW4-P1-BUCKET-CORRUPTION-007",
+      "state": "resolved-and-tested",
+      "resolution": "one-malformed-bucket-is-preserved-and-quarantined-without-blocking-others"
+    },
+    {
+      "id": "RW4-P1-BOUNDED-REGISTRY-008",
+      "state": "resolved-and-tested",
+      "resolution": "overflow-is-rejected-without-evicting-existing-principal-state"
+    },
+    {
+      "id": "RW4-P1-COMPACT-RECOVERY-009",
+      "state": "resolved-and-tested",
+      "resolution": "compact-open-surface-switches-fails-closed-and-recovers-by-event"
+    }
+  ],
+  "verification": {
+    "changedFileAnalyze": "passed-zero-issues",
+    "focusedRw4Flutter": "passed-13",
+    "principalAndAdjacentFlutter": "passed-51",
+    "g2LifecycleAndPredecessorWiring": "passed-20",
+    "rw4WiringTests": "passed-7",
+    "fullTechnicalRegression": "passed",
+    "githubRegression": "passed",
+    "githubCodeql": "passed-no-new-alerts"
+  },
+  "githubVerification": {
+    "head": "f11335b74b88365a4f42c0bc748966d9b58d85d7",
+    "regressionRunId": 32805997938,
+    "codeqlRunId": 32805997934,
+    "regressionConclusion": "success",
+    "codeqlConclusion": "success",
+    "openCodeScanningAlerts": 0
+  },
+  "sourceInventory": [
+    {
+      "path": "lib/services/auth_service.dart",
+      "sha256": "1607dfd6d0b7907aa9040d7ec10f649fcaab12b6fef872accc66b4b4602b2687"
+    },
+    {
+      "path": "lib/services/data_service.dart",
+      "sha256": "f23002e697a484a16e392e8fcf5dd9de527ecc55eb791dde7fab98386e37375f"
+    },
+    {
+      "path": "lib/services/shared_persistence_sync.dart",
+      "sha256": "b4294550220badf563c3a2fb0ea1929e15b0026483fb3dd3633370c6b486adb2"
+    },
+    {
+      "path": "lib/services/shared_persistence_sync_web.dart",
+      "sha256": "86a1dae947f0ff51e7163a687d9eb6cce07427596905950a59466c7a56534d41"
+    },
+    {
+      "path": "lib/screens/search_results_screen.dart",
+      "sha256": "d306979eed46661fe5d94d18bd58ea3500eaf6c624478f5b68529b0ea7d325ab"
+    },
+    {
+      "path": "lib/screens/wishlists_screen.dart",
+      "sha256": "cb64ca5670af401b7259e3d226cdde54047891c842abcf5287522528590f4bba"
+    },
+    {
+      "path": "store/g2-data-lifecycle.json",
+      "sha256": "1753947c8f92f4f6e82a6a7bb5e3a6e990368589b48dc3a1716ca7c9aecd749d"
+    },
+    {
+      "path": "store/privacy-disclosures.json",
+      "sha256": "35c3a08e20e4f55183649af934e9415ea8cfd0c2d3327483a518cf477daee449"
+    },
+    {
+      "path": "store/retention-deletion-readiness.json",
+      "sha256": "955a901bbaec6511d119558b953274c3e5059a97c657fdcf93f2a939523315c8"
+    },
+    {
+      "path": "tool/validate_g2_data_lifecycle.mjs",
+      "sha256": "c0aede510163ab7580a6765d878d706ad6d957e795a8326053aeae84a5bbee97"
+    },
+    {
+      "path": "tool/validate_privacy_disclosures.mjs",
+      "sha256": "b78f41588e8a1a14520df4f5a730ae1190924f3b2f177fe40f6569f76bfb56f9"
+    },
+    {
+      "path": "scripts/technical_regression_check.sh",
+      "sha256": "61e7a485cf99f041394995b49355e2b283f6e36a04977589e2ba228e22137fb2"
+    },
+    {
+      "path": "test/reduced_wave0_local_principal_isolation_test.dart",
+      "sha256": "68d82e3a6c2cbb5bbc6bb60db675f1dbbb76610e5b35f616036f72abb7444907"
+    },
+    {
+      "path": "test/reduced_wave0_local_state_truth_recovery_test.dart",
+      "sha256": "d076deb028387edb0e876b87f7a4b2ad3462902f728c62cca38fb3b2c32d0050"
+    },
+    {
+      "path": "test/reduced_wave0_local_concurrency_consistency_test.dart",
+      "sha256": "660b6f8023ad750e83a11e9e2df930733df9b66685ecb4870f0fe4c5920aeb20"
+    },
+    {
+      "path": "test/g2l_saved_items_lifecycle_test.dart",
+      "sha256": "75a2ad2784145b61cf7ed0b511906b60f79ead7803eb679b13a13279dcd8c5bb"
+    },
+    {
+      "path": "test/tool/validate_g2_data_lifecycle.test.mjs",
+      "sha256": "5ab0e110998f046d197711388d4474fc700ce000160f2012ba017b8481d1bb50"
+    },
+    {
+      "path": "test/tool/g2a_navigation_migration_wiring.test.mjs",
+      "sha256": "e73406e320d33bc9706a3ec9847800cd2fb733d27d311dd84dfdd16a94b7398d"
+    },
+    {
+      "path": "test/tool/rw2_reduced_wave0_local_state_truth_recovery_wiring.test.mjs",
+      "sha256": "b36915473c35cf4b6b5e68feb35629a8953192ea2133da8b661e76208d40e844"
+    },
+    {
+      "path": "test/tool/rw3_reduced_wave0_local_concurrency_consistency_wiring.test.mjs",
+      "sha256": "020df39a5d1f6eeb39c671a68b30426471d1604a602715abe41ad00cf630801f"
+    },
+    {
+      "path": "test/tool/rw4_reduced_wave0_local_principal_isolation_wiring.test.mjs",
+      "sha256": "c4b669ec34dc1134bd82159b62f8ddc9f893a26fb9adb50afdc038810ba98f53"
+    },
+    {
+      "path": "docs/compliance/g2a-navigation-gemerkt-migration-2026-08-20.md",
+      "sha256": "26beb10f031230b7f4c26b172e7609230ebc7905bfefd81644841129b60fe60b"
+    },
+    {
+      "path": "docs/compliance/g2l-g2-data-lifecycle-2026-08-20.md",
+      "sha256": "c9336c11f10270bff1127cce568106d48461e1f6ffb00c2dd08119401c8b5a20"
+    }
+  ],
+  "gates": {
+    "BUILD_READY": "not-granted",
+    "PLAY_UPLOAD_APPROVED": "not-granted",
+    "HUMAN_PILOT_ACTIVATED": "not-granted",
+    "PR7_MERGE_APPROVED": "not-granted",
+    "R17_GITGUARDIAN_HISTORY_REVIEW_COMPLETE": "not-granted"
+  },
+  "boundaries": {
+    "credentialValueReadOrCopied": false,
+    "candidateBuiltOrUploaded": false,
+    "pixelChanged": false,
+    "testerContacted": false,
+    "humanPilotActivated": false,
+    "providerCalled": false,
+    "apiBillingCreated": false,
+    "paymentChanged": false,
+    "firebaseOrPlayChanged": false,
+    "productionChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "cloudChanged": false,
+    "publicReleasePerformed": false,
+    "pullRequestMerged": false,
+    "historyRewritten": false
+  }
+}

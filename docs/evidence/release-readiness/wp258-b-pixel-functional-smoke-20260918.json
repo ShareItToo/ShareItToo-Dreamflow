@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp258-b-pixel-functional-smoke",
+  "status": "partial-blocked-synthetic-login-credentials",
+  "capturedAt": "2026-09-18T22:49:27.920Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026091704",
+    "sourceCommit": "9cbac5be2e4702c6b11954bfcc935ca38fdb6aac",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "apkSha256": "6ae64d64f71ce3de7fd7bd0af9d6ee717f8ff50e0a0eb708bfc9db5b30f5f5cb"
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "apiLevel": 37,
+    "containsRawDeviceIdentifier": false
+  },
+  "tests": {
+    "guestCatalogOnline": "passed",
+    "categorySonstigesDiscoverable": "passed",
+    "categorySonstigesSelectable": "passed",
+    "offlineTruthAndOnlineRecovery": "passed",
+    "ownerLogin": "blocked-invalid-credentials-after-natural-rate-limit-reset"
+  },
+  "notEvidenced": [
+    "authenticated-login-logout-persistence",
+    "owner-listing-create-change-delete",
+    "renter-vs-owner-denial",
+    "synthetic-profile-image-upload-readback-restart",
+    "account-a-to-b-isolation"
+  ],
+  "boundaries": {
+    "paymentEndpointCalled": false,
+    "mailProviderCalled": false,
+    "pushProviderCalled": false,
+    "identityProviderCalled": false,
+    "listingAiProviderCalled": false,
+    "productionChanged": false,
+    "storeChanged": false,
+    "onePlusTouched": false,
+    "credentialsPrinted": false,
+    "rawUiHierarchyRetained": false,
+    "containsRawDeviceIdentifier": false
+  },
+  "blocker": {
+    "initialCode": "rate_limit_exceeded",
+    "initialHttpStatus": 429,
+    "resetPolicy": "natural-existing-15-minute-login-window-plus-buffer",
+    "finalCode": "invalid_credentials",
+    "finalHttpStatus": 401,
+    "retryPolicy": "do-not-try-additional-accounts-or-bypass-credential-boundary"
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "kind": "v51-firebase-service-specific-retention-readiness",
+  "status": "passed-source-and-full-regression-owner-approval-open",
+  "capturedAt": "2026-08-17T10:56:28Z",
+  "sourceBaseCommit": "415504258d4949842a3a98a201da4ba25e9870c7",
+  "scope": {
+    "firebaseCloudMessagingRetained": true,
+    "firebaseCrashlyticsRetained": true,
+    "serviceReadinessEvidenceSeparated": true,
+    "pushEvidenceCanApproveCrashlytics": false,
+    "crashlyticsEvidenceCanApprovePush": false,
+    "currentSourceDefaultOff": true,
+    "boundCandidateStillAutomatic": true,
+    "replacementCandidateRequired": true
+  },
+  "firebaseCloudMessaging": {
+    "readinessRef": "docs/evidence/b11/firebase-cloud-messaging-retention-deletion-readiness-20260817.json",
+    "readinessSha256": "bd7abac5e9b3add95c35b6a7a5db246bf5c5d71ea98dcf7cfc2190ff4352c98b",
+    "localAndBackendDisableProcedureImplemented": true,
+    "providerInstallationDeletionRequestImplemented": true,
+    "providerCompletionWindowDocumented": "within-180-days-after-installation-deletion-request",
+    "ownerContractAndTransferApprovalOpen": true
+  },
+  "firebaseCrashlytics": {
+    "readinessRef": "docs/evidence/b11/firebase-crashlytics-retention-deletion-readiness-20260817.json",
+    "readinessSha256": "fd93ebda759b4cb5555f08ad9858d54aab1391860cdd5794ca42a0fd270f5436",
+    "localUnsentReportDeletionImplemented": true,
+    "providerStoredReportDeletionImplemented": false,
+    "stableSubjectCorrelationImplemented": false,
+    "providerRetentionWindowDocumented": "90-days-before-provider-removal-process-starts",
+    "ownerContractTransferAndDeletionApprovalOpen": true
+  },
+  "bindings": {
+    "retentionReadinessSha256": "9e11e7865896d03ac7cd527c0ebcac203b840be6d0fc59e91506910e52bf6a3d",
+    "retentionValidatorSha256": "2701e255eb812e4e1ad824f8ad209932b10f5efefc47642dbb0d643850145818",
+    "decisionPreparationSha256": "c35fbe26665d49c2f5bceae8474682b882ea9c87438af4d847301c24430b8391",
+    "decisionMatrixSha256": "b7b0a920c8bd57e322eeb6f4af30212182de155c5999bef4d488443809abd40d"
+  },
+  "verification": {
+    "targetedNodeTests": "passed-52",
+    "retentionValidator": "passed-draft-open-nine-decisions",
+    "privacyValidator": "passed-draft-fail-closed",
+    "fullTechnicalRegression": "passed-candidate-rollover-mode",
+    "flutterTests": "passed-282-with-1-intentional-skip",
+    "flutterAnalyzer": "229-findings-0-errors-baseline-accepted",
+    "googleOnlySocialProfile": "passed",
+    "webDebugBuild": "passed-existing-wasm-dry-run-warnings-only",
+    "androidDebugBuild": "passed",
+    "diffCheck": "passed"
+  },
+  "boundaries": {
+    "ownerContractAccepted": false,
+    "internationalTransferApproved": false,
+    "processingLocationsVerified": false,
+    "retentionDecisionClosed": false,
+    "providerDeletionProcedureApproved": false,
+    "storeDisclosureApproved": false,
+    "crashEventEmitted": false,
+    "providerConsoleChanged": false,
+    "productionChanged": false,
+    "storeSubmissionChanged": false,
+    "candidateBuiltOrRelabeled": false,
+    "containsSecrets": false,
+    "containsAccountData": false
+  }
+}

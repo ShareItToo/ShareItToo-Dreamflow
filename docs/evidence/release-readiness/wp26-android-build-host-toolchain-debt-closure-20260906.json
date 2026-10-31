@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp26-android-build-host-toolchain-debt-closure",
+  "status": "complete",
+  "observedAt": "2026-09-06",
+  "source": {
+    "branch": "codex/master-workflow-20260808",
+    "evidenceBase": "db1c9c91d19c860dd0c85f187f79fcf00437daae",
+    "candidateCommit": "637c80d0086f7ad1aa08fe5ba1df5c1624b3e545",
+    "candidateVersion": "1.0.0+2026090606"
+  },
+  "candidateEvidence": {
+    "localCompleteRegression": "passed",
+    "normalSignedArchive": "passed",
+    "independentArtifactValidation": "passed",
+    "githubRegressionRun": 34022203378,
+    "githubRegressionStatus": "passed",
+    "githubCodeqlRun": 34022203376,
+    "githubCodeqlStatus": "passed"
+  },
+  "hostCapacityKiB": {
+    "macosDataAvailable": 23536920,
+    "dedicatedApfsBuildAvailable": 36048612,
+    "fixedReleaseFloor": 5242880,
+    "bothAboveFloor": true
+  },
+  "deterministicFocusedChecks": {
+    "passed": 20,
+    "failed": 0,
+    "exitZeroDiagnosticFailureGuarded": true,
+    "signedAabAndApkGuardedBeforeArchive": true,
+    "capacityEnvironmentOverrideForbidden": true,
+    "timingWorkaroundForbidden": true
+  },
+  "closedDebt": [
+    "TD-N29-HOST-CAPACITY",
+    "TD-N29-KOTLIN-METADATA",
+    "TD-N29-SDK-XML-READER"
+  ],
+  "boundaries": {
+    "androidSourceChanged": false,
+    "candidateCreated": false,
+    "candidateInstalled": false,
+    "firebaseChanged": false,
+    "providerChanged": false,
+    "paymentChanged": false,
+    "googlePlayChanged": false,
+    "productionChanged": false,
+    "cloudVpsDnsChanged": false,
+    "onePlusContacted": false,
+    "pullRequestMerged": false,
+    "containsCredential": false,
+    "containsPrivateFilesystemPath": false,
+    "containsRawDeviceIdentifier": false
+  },
+  "next": "continue WP25 with the already-requested private SMS code without requesting another message"
+}

@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-authenticated-deep-link-diagnostic",
+  "status": "passed-bounded-authenticated-deep-link-diagnostic",
+  "capturedAt": "2026-08-14T11:08:17.534Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081403",
+    "commit": "09c9211e41da75969b9ee59e9954ac7465250e80",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "installed": {
+    "packageIdentityVerified": true,
+    "versionName": "1.0.0",
+    "buildNumber": "2026081403",
+    "delivery": "google-play-split",
+    "installerPackageName": "com.android.vending",
+    "splitCount": 4
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "16",
+    "apiLevel": 36,
+    "securityPatch": "2026-04-05",
+    "containsRawDeviceIdentifier": false
+  },
+  "tests": {
+    "authenticatedHttpsListing": {
+      "status": "passed",
+      "result": "synthetic-listing-visible"
+    },
+    "authenticatedHttpsBooking": {
+      "status": "passed",
+      "result": "completed-booking-visible"
+    },
+    "authenticatedCustomSchemeChat": {
+      "status": "passed",
+      "result": "booking-chat-visible"
+    }
+  },
+  "boundaries": {
+    "syntheticAccountsOnly": true,
+    "directDiagnosticOnly": false,
+    "storeInstallationGateSatisfied": true,
+    "fullDeviceMatrixPassed": false,
+    "wifiOnlyDiagnostic": true,
+    "hotspotPassed": false,
+    "authenticatedDeepLinksPassed": true,
+    "realPushPassed": false,
+    "manualTalkBackTraversalPassed": false,
+    "iosTestFlightPassed": false,
+    "paymentEndpointCalled": false,
+    "stripeLivemode": false,
+    "messageSent": false,
+    "lockCodeUsed": false,
+    "accountIdentityRecorded": false,
+    "containsPersonalAccountData": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false
+  },
+  "isolation": {
+    "protectedReviewFixtureUnchanged": true,
+    "protectedReviewSessionRestored": true,
+    "temporaryVaultRemovedAfterProbe": true,
+    "containsReviewCredentials": false
+  }
+}

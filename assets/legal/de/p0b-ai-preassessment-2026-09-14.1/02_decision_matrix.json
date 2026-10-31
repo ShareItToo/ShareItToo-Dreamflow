@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "packageVersion": "P0B-L2-AI-PREASSESSMENT-2026-09-14.1",
+  "status": "AI_PREASSESSMENT_PENDING_INDEPENDENT_AI_CROSSCHECK",
+  "jurisdiction": "DE",
+  "pilotScope": "private-adult-local-handover-eur-no-vehicles-no-delivery",
+  "reviewedAt": "2026-09-14",
+  "reviewer": "AI-SOL-SELF-CHECK-2026-09-14",
+  "professionalLegalApproval": false,
+  "ownerAdoptionRecorded": false,
+  "publicActivationAllowed": false,
+  "productionProvisioningAllowed": false,
+  "storeSubmissionAllowed": false,
+  "realMoneyAllowed": false,
+  "decisions": [
+    {"key":"operatorIdentityAndImprint","decision":"ai_hold_external_fact","professionalStatus":"open","blockingFacts":["operator-status","trade-tax-register-facts"]},
+    {"key":"groupPrivateRentalContractModel","decision":"ai_recommended_with_changes","professionalStatus":"open","blockingFacts":["final-clause-review"]},
+    {"key":"groupPlatformContractScope","decision":"ai_recommended_with_changes","professionalStatus":"open","blockingFacts":["final-service-definition"]},
+    {"key":"completeOfferAndCounterOfferSemantics","decision":"ai_recommended_with_changes","professionalStatus":"open","blockingFacts":["cross-surface-wording-parity"]},
+    {"key":"checkoutAndDurableConfirmation","decision":"ai_recommended_with_changes","professionalStatus":"open","blockingFacts":["final-checkout-copy","durable-delivery-evidence"]},
+    {"key":"withdrawalAndFixedPeriodRental","decision":"ai_recommended_with_changes","professionalStatus":"open","blockingFacts":["section-356a-prominent-entry","v52-placeholder-removal","service-completion-definition"]},
+    {"key":"partialPerformanceAndDivisibilityConsequences","decision":"ai_recommended_with_changes","professionalStatus":"open","blockingFacts":["rest-group-interest-rule"]},
+    {"key":"groupAndPositionCancellationRefundRules","decision":"ai_recommended_with_changes","professionalStatus":"open","blockingFacts":["final-cancellation-matrix"]},
+    {"key":"sharedAppointmentAndPositionEvidenceEffect","decision":"ai_recommended","professionalStatus":"open","blockingFacts":["final-evidence-disclaimer"]},
+    {"key":"positionNeedsReviewAndUnrelatedRelease","decision":"ai_recommended_with_changes","professionalStatus":"open","blockingFacts":["provider-reserve-effects"]},
+    {"key":"groupPaymentAuthorizationAndProviderContract","decision":"ai_hold_external_fact","professionalStatus":"open","blockingFacts":["stripe-connect-contract","exact-account-configuration","zag-flow-assessment"]},
+    {"key":"positionLedgerRefundAndChargebackAllocation","decision":"ai_recommended_with_changes","professionalStatus":"open","blockingFacts":["provider-fee-fx-negative-balance-allocation"]},
+    {"key":"groupConfirmationAndReceiptIssuerContent","decision":"ai_recommended_with_changes","professionalStatus":"open","blockingFacts":["operator-tax-status","private-owner-receipt-duty"]},
+    {"key":"privacyPurposesLegalBasesAndRecipients","decision":"ai_hold_external_fact","professionalStatus":"open","blockingFacts":["provider-dpas","processor-regions","transfer-mechanisms","subprocessors"]},
+    {"key":"accountExportCompletenessAndCounterpartyProtection","decision":"ai_recommended_with_changes","professionalStatus":"open","blockingFacts":["edge-case-redaction-review"]},
+    {"key":"retentionDeletionLegalHoldPeriodsAndTriggers","decision":"ai_recommended_with_changes","professionalStatus":"open","blockingFacts":["operator-tax-bookkeeping-status","provider-retention-facts"]},
+    {"key":"marketplaceTransparencyDsaAndModeration","decision":"ai_recommended_with_changes","professionalStatus":"open","blockingFacts":["enterprise-size-status","public-service-classification","active-recipient-count"]},
+    {"key":"businessGlobalConsumerAndTraderVariants","decision":"ai_hold_external_fact","professionalStatus":"open","blockingFacts":["variant-specific-law-tax-provider-review"]}
+  ],
+  "mandatoryCorrectionsBeforeRealMoneyPilot": [
+    "verified-operator-profile-and-new-operative-legal-version",
+    "section-356a-prominent-always-available-withdrawal-entry-and-durable-confirmation",
+    "private-provider-status-gate-and-business-b2c-block",
+    "final-group-platform-offer-cancellation-and-receipt-text-set",
+    "dsa-marketplace-transparency-and-moderation-closure",
+    "provider-purpose-dpa-transfer-retention-matrix",
+    "stripe-connect-contract-account-configuration-and-zag-assessment"
+  ],
+  "independentCrosscheck": {
+    "required": true,
+    "targetModel": "GPT-6 Astra",
+    "targetEffort": "ultra",
+    "codeChangesAllowed": false,
+    "liveChangesAllowed": false
+  }
+}

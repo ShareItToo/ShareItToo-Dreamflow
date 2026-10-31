@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "checkpoint": "16.168",
+  "capturedAtUtc": "2026-08-17T14:13:19Z",
+  "sourceBaseCommit": "fae982772accc6dced128e80535098687d83cfd8",
+  "status": "passed",
+  "finding": {
+    "severity": "P0",
+    "summary": "The directly reachable booking payment screen still named Stripe and rendered a payment action while staging could be backed only by the memory transport.",
+    "reachableFrom": [
+      "booking detail payment menu",
+      "authenticated payment-return app link"
+    ]
+  },
+  "implementedBoundary": {
+    "clientPreflight": "The screen first requires a consistent account-bound provider capability and does not load a payable booking or render an action otherwise.",
+    "clientFailClosedValidation": "checkoutAvailable, provider=stripe and mode=test|live must agree.",
+    "unavailableUi": "No provider name, no checkout action and no request for card, account or security data.",
+    "testUi": "Explicit test-only wording and no-real-money statement.",
+    "liveUi": "Stripe wording and live checkout action only after the server capability is valid.",
+    "serverGuard": "The direct checkout route rejects non-provider-backed staging and production requests with payment_provider_unavailable.",
+    "testHarnessException": "Memory checkout remains executable only when deploymentEnvironment is exactly test, preserving isolated backend integration tests without exposing a user capability.",
+    "notificationCopy": "Payout notification names only the confirmed payout account and never invents a provider."
+  },
+  "serviceBoundary": {
+    "push": "Firebase Cloud Messaging remains included, voluntary and default off in the next candidate.",
+    "crash": "Firebase Crashlytics remains included, separate from push, voluntary and default off in the next candidate.",
+    "crossEnablement": false,
+    "pseudonymousCrashSubjectTransmitted": false,
+    "providerDeletionRequestSent": false,
+    "adsEnabled": false,
+    "marketingTrackingEnabled": false,
+    "generalAnalyticsEnabled": false,
+    "externalGenerativeAiEnabled": false
+  },
+  "externalActions": {
+    "deployment": false,
+    "upload": false,
+    "storeMutation": false,
+    "productionMutation": false,
+    "liveMoney": false,
+    "providerConsoleMutation": false,
+    "migrationApplied": false,
+    "candidateBuiltOrRelabeled": false
+  },
+  "verification": {
+    "paymentProviderWiringNode": "6/6 passed",
+    "paymentProviderWidget": "8/8 passed",
+    "backend": "209 passed, 1 intentional PostgreSQL skip without TEST_DATABASE_URL",
+    "flutterAnalyzer": "224 findings, 0 errors",
+    "fullTechnicalRegression": "passed with exit code 0",
+    "fullFlutter": "290 passed, 1 intentional skip",
+    "webDebugBuild": "passed",
+    "androidDebugBuild": "passed",
+    "privacyValidator": "passed",
+    "retentionValidator": "passed",
+    "legalValidator": "passed",
+    "diffCheck": "passed"
+  },
+  "sourceHashesSha256": {
+    "backend/src/app.js": "3a30a389612dddf4b5d636d9da2eaa35451596e7dac3add80c5f0a192badce55",
+    "backend/src/notifications.js": "72d400d24b5fe98fd1ed71e2d9e1e8614740a575d967a45ea89b0408368f9582",
+    "lib/screens/payment_checkout_screen.dart": "154ae02a27644d6e366b07014bcbeccc946bb687f6e8fdf9f1fa224dffc9a8fc",
+    "test/payment_provider_truthfulness_test.dart": "4a34d22b010efdf13039d3f7a1ee222f2c16ca2072280b2f92f4fd22f83100e7",
+    "test/tool/payment_provider_truthfulness_wiring.test.mjs": "e3576e208c521daf8883eb7d3691201ffbcf2554de787da0ad59f4f06dc691f1",
+    "store/privacy-disclosures.json": "7b3d11e404c15d7a00954ce8c9154f4f1822ddc7d5e78cdf726ac187ecade25f",
+    "store/retention-deletion-readiness.json": "6d02d68f9f6124e2eaa33a7eb2883bcfaf61d0315e2ff60aba582ca6c47273b5"
+  }
+}

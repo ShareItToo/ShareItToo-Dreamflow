@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "kind": "google-play-feed-screenshot-readiness",
+  "status": "exact-candidate-screenshots-uploaded-draft-saved",
+  "capturedAt": "2026-08-15T04:46:59Z",
+  "uploadedAt": "2026-08-15T05:29:36Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081505",
+    "commit": "3908f5a3c300c1125c120c832f3050eea7a0a762",
+    "apkSha256": "0e701dbca162c764cdcdf79e4d1c70eb8d18e97d06e155cfe787bc5164323f69",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1"
+  },
+  "device": {
+    "platform": "android",
+    "modelClass": "Pixel 7 Pro",
+    "physicalResolution": "1440x3120",
+    "installedCandidateVerified": true,
+    "syntheticScreenshotSessionReady": true
+  },
+  "fixture": {
+    "status": "ready-reused",
+    "curatedListingCount": 4,
+    "createdDuringObservation": 0,
+    "containsPersonalData": false
+  },
+  "feedObservation": {
+    "curatedListingVisible": true,
+    "legacyTechnicalListingsVisible": false,
+    "placeholderImagesVisible": false,
+    "technicalFixtureCopyVisible": false,
+    "protectedActiveBookings": 6,
+    "protectedPublicListingsObserved": 6,
+    "storeScreenshotAccepted": true,
+    "validatedLocalCandidates": 4
+  },
+  "completedRemediation": {
+    "method": "pause-unreferenced-and-neutralize-protected-staging-listings",
+    "deletionPerformed": false,
+    "protectedBookingsPreserved": true,
+    "deletionAuthorized": false,
+    "productionChangeAuthorized": false
+  },
+  "candidateEvidenceRefs": [
+    "docs/evidence/b11/google-play-screenshot-candidate-feed-2026081505.json",
+    "docs/evidence/b11/google-play-screenshot-candidate-listing-detail-2026081505.json",
+    "docs/evidence/b11/google-play-screenshot-candidate-search-2026081505.json",
+    "docs/evidence/b11/google-play-screenshot-candidate-create-listing-2026081505.json"
+  ],
+  "consoleSaveEvidenceRef": "docs/evidence/b11/google-play-store-listing-saved-2026081505-20260815.json",
+  "boundaries": {
+    "screenshotUploaded": true,
+    "listingDeleted": false,
+    "listingPaused": true,
+    "productionChanged": false,
+    "paymentEndpointCalled": false,
+    "containsSecrets": false,
+    "containsEmailAddresses": false,
+    "containsAccountIdentifiers": false,
+    "containsRawDeviceIdentifiers": false
+  }
+}

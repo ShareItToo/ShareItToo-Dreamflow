@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 1,
+  "packageVersion": "P0B-L1-LEGAL-REVIEW-2026-08-21.1",
+  "authorizationToken": "P0B_NEXT_LEGAL_V52_REVIEW_ONLY",
+  "preparedOn": "2026-08-21",
+  "jurisdiction": "DE",
+  "locale": "de",
+  "status": "prepared-awaiting-independent-professional-review",
+  "notLegalAdvice": true,
+  "professionallyReviewed": false,
+  "professionalApprovalClaimAllowed": false,
+  "publicActivationAllowed": false,
+  "productionProvisioningAllowed": false,
+  "storeSubmissionAllowed": false,
+  "realMoneyAllowed": false,
+  "externalReviewer": null,
+  "externalReviewReceivedAt": null,
+  "externalAuthenticationEvidence": null,
+  "sourceBindings": {
+    "repository": [
+      {
+        "path": "assets/legal/de/legal_manifest_v52.json",
+        "sha256": "757289c45dfe50c9f3f3ec9c96953f06b62f15b282bb1d6cdedc6e8e07d2e69b"
+      },
+      {
+        "path": "assets/legal/de/legal_manifest_g3l_draft.json",
+        "sha256": "d3bc9b74cf70324b448df4e9d10662ab3a03485028dfc9e2d7c81535b8f9a02a"
+      },
+      {
+        "path": "docs/architecture/g3a-same-owner-multi-item-decision-2026-08-20.md",
+        "sha256": "39db40f9b4d16dc11bca4cae5b09c87c657fcb36611ab744ed5a21710ce9af7b"
+      },
+      {
+        "path": "docs/compliance/g3l-multi-item-legal-document-draft-2026-08-20.md",
+        "sha256": "f7a941766d616cfce6ef04abd260bd6b6a0530b9399918df1c0a072d50dc450a"
+      },
+      {
+        "path": "docs/evidence/p0b/pilot-go-no-go-dossier.json",
+        "sha256": "3566a46c018b7685adfe0f9df296c2060294f811deb5b61dd79ec818c25f27dd"
+      }
+    ],
+    "drive": [
+      {
+        "fileId": "1d3JJLq-X36u9IwfhyhtNm1QYH38urVEq",
+        "title": "02_CODEX_WORK_PACKAGES_SIT_V2.4.md",
+        "modifiedTime": "2026-08-20T19:13:40.661Z"
+      },
+      {
+        "fileId": "1HQR2EWJg6FUcU41l5uwditfFzNoCe6Zx",
+        "title": "01_V5.2_CORE_SPECIFICATION.md",
+        "modifiedTime": "2026-08-18T17:51:27.257Z"
+      },
+      {
+        "fileId": "1kKuZl9OJ4nb9F02E8fepTxY8O-GZBkn2",
+        "title": "02_V5.2_RECHTSMAPPE_PRIVATLAUNCH.pdf",
+        "modifiedTime": "2026-08-18T17:51:36.056Z"
+      },
+      {
+        "fileId": "159xMd9qoMqp_5x0x0evYG511auKgk4Nu",
+        "title": "02_SIT_GROWTH_PRODUCT_PROJEKTKORB_UND_PLANER.pdf",
+        "modifiedTime": "2026-08-18T17:52:31.409Z"
+      }
+    ]
+  },
+  "officialSourceRegister": {
+    "retrievedOn": "2026-08-21",
+    "documentPath": "assets/legal/de/p0b-legal-review-2026-08-21.1/03_primaerquellenregister.md",
+    "authorityDomains": [
+      "gesetze-im-internet.de",
+      "eur-lex.europa.eu",
+      "bafin.de"
+    ],
+    "currentLawDriftNoted": [
+      "DDG changed in 2026",
+      "ZAG changed on 2026-03-25",
+      "EU ODR platform discontinued on 2025-07-20"
+    ]
+  },
+  "reviewDocuments": [
+    {
+      "type": "review_instruction_and_scope",
+      "path": "assets/legal/de/p0b-legal-review-2026-08-21.1/01_pruefauftrag_und_scope.md",
+      "sha256": "b69253e56aaca28c3ba2c8c15a93499c49da8a935fcaaacb1e72b848e01181d4",
+      "status": "prepared"
+    },
+    {
+      "type": "decision_workbook",
+      "path": "assets/legal/de/p0b-legal-review-2026-08-21.1/02_entscheidungsarbeitsblatt.md",
+      "sha256": "8bbe267d072479c50390e4ecfd023f31e85cbce497b732b22303f35d07f73e97",
+      "status": "all-open"
+    },
+    {
+      "type": "primary_source_register",
+      "path": "assets/legal/de/p0b-legal-review-2026-08-21.1/03_primaerquellenregister.md",
+      "sha256": "71504a58ec3630305ea577f90a77a17ee27e381f71f9ea70faf56fde54412e79",
+      "status": "research-baseline-not-legal-advice"
+    },
+    {
+      "type": "professional_approval_evidence_schema",
+      "path": "assets/legal/de/p0b-legal-review-2026-08-21.1/04_freigabeevidenz_schema.md",
+      "sha256": "12426fdb0cf7ad81fd6d9329a0e27dcd66bdd07103e69719976080b75b73d484",
+      "status": "prepared"
+    },
+    {
+      "type": "release_gate",
+      "path": "assets/legal/de/p0b-legal-review-2026-08-21.1/05_release_gate.md",
+      "sha256": "7006a3c8a5c2d5eea3591d0478b4899554e61a770396b412eeb97abf83d51afc",
+      "status": "hard-stop"
+    }
+  ],
+  "openDecisionKeys": [
+    "operatorIdentityAndImprint",
+    "groupPrivateRentalContractModel",
+    "groupPlatformContractScope",
+    "completeOfferAndCounterOfferSemantics",
+    "checkoutAndDurableConfirmation",
+    "withdrawalAndFixedPeriodRental",
+    "partialPerformanceAndDivisibilityConsequences",
+    "groupAndPositionCancellationRefundRules",
+    "sharedAppointmentAndPositionEvidenceEffect",
+    "positionNeedsReviewAndUnrelatedRelease",
+    "groupPaymentAuthorizationAndProviderContract",
+    "positionLedgerRefundAndChargebackAllocation",
+    "groupConfirmationAndReceiptIssuerContent",
+    "privacyPurposesLegalBasesAndRecipients",
+    "accountExportCompletenessAndCounterpartyProtection",
+    "retentionDeletionLegalHoldPeriodsAndTriggers",
+    "marketplaceTransparencyDsaAndModeration",
+    "businessGlobalConsumerAndTraderVariants"
+  ],
+  "intakePreparation": {
+    "sourceBindingsComplete": true,
+    "reviewInstructionPrepared": true,
+    "decisionWorkbookPrepared": true,
+    "officialSourceBaselinePrepared": true,
+    "evidenceSchemaPrepared": true,
+    "professionalReviewCompleted": false
+  },
+  "releaseGate": {
+    "professionalLegalApproval": false,
+    "approvedFinalContentHashesAvailable": false,
+    "operatorFactsComplete": false,
+    "pspContractAndZagFlowApproved": false,
+    "privacyTransferAndRetentionApproved": false,
+    "operationsGateApproved": false,
+    "signedDeviceGateApproved": false,
+    "explicitPilotActivationDecision": false,
+    "hardStopBeforePublicProductionStoreOrRealMoney": true
+  }
+}

@@ -8,14 +8,6 @@ class LanguageScreen extends StatelessWidget {
   static const List<_LanguageOption> _options = [
     _LanguageOption(lang: AppLanguage.de, title: 'Deutsch'),
     _LanguageOption(lang: AppLanguage.en, title: 'English'),
-    _LanguageOption(lang: AppLanguage.es, title: 'Español'),
-    _LanguageOption(lang: AppLanguage.fr, title: 'Français'),
-    _LanguageOption(lang: AppLanguage.it, title: 'Italiano'),
-    _LanguageOption(lang: AppLanguage.nl, title: 'Nederlands'),
-    _LanguageOption(lang: AppLanguage.pl, title: 'Polski'),
-    _LanguageOption(lang: AppLanguage.pt, title: 'Português'),
-    _LanguageOption(lang: AppLanguage.tr, title: 'Türkçe'),
-    _LanguageOption(lang: AppLanguage.ar, title: 'العربية'),
   ];
 
   @override
@@ -48,11 +40,17 @@ class LanguageScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(l10n.t('language.subtitle'), style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white70, height: 1.45)),
+                Text(l10n.t('language.subtitle'),
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(color: Colors.white70, height: 1.45)),
                 const SizedBox(height: 14),
                 for (int i = 0; i < _options.length; i++) ...[
-                  _LanguageTile(option: _options[i], selected: _options[i].lang == current),
-                  if (i < _options.length - 1) const Divider(height: 14, thickness: 1, color: Colors.white24),
+                  _LanguageTile(
+                      option: _options[i],
+                      selected: _options[i].lang == current),
+                  if (i < _options.length - 1)
+                    const Divider(
+                        height: 14, thickness: 1, color: Colors.white24),
                 ],
               ],
             ),
@@ -86,17 +84,26 @@ class _LanguageTile extends StatelessWidget {
             Expanded(
               child: Text(
                 option.title,
-                style: theme.textTheme.bodyLarge?.copyWith(color: Colors.white, fontWeight: selected ? FontWeight.w700 : FontWeight.w600),
+                style: theme.textTheme.bodyLarge?.copyWith(
+                    color: Colors.white,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600),
               ),
             ),
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 180),
               switchInCurve: Curves.easeOut,
               switchOutCurve: Curves.easeIn,
-              transitionBuilder: (child, anim) => FadeTransition(opacity: anim, child: SizeTransition(sizeFactor: anim, axis: Axis.horizontal, child: child)),
+              transitionBuilder: (child, anim) => FadeTransition(
+                  opacity: anim,
+                  child: SizeTransition(
+                      sizeFactor: anim, axis: Axis.horizontal, child: child)),
               child: selected
-                  ? Icon(Icons.check, key: ValueKey(option.lang), color: theme.colorScheme.primary, size: 20)
-                  : const SizedBox(key: ValueKey('empty'), width: 20, height: 20),
+                  ? Icon(Icons.check,
+                      key: ValueKey(option.lang),
+                      color: theme.colorScheme.primary,
+                      size: 20)
+                  : const SizedBox(
+                      key: ValueKey('empty'), width: 20, height: 20),
             ),
           ],
         ),

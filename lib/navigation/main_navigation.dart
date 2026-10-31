@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kReleaseMode, visibleForTesting;
 import 'dart:math' as math;
 import 'package:lendify/screens/explore_screen.dart';
 import 'package:lendify/screens/wishlists_screen.dart';
@@ -13,98 +16,290 @@ import 'package:lendify/services/localization_service.dart';
 import 'package:lendify/widgets/user_avatar.dart';
 import 'package:lendify/navigation/main_nav_controller.dart';
 import 'package:lendify/services/developer_preview_service.dart';
-import 'package:lendify/services/auth_service.dart';
+import 'package:lendify/services/backend_config.dart';
+import 'package:lendify/services/shared_persistence_sync.dart';
+import 'package:lendify/services/contact_verification_service.dart';
+import 'package:lendify/services/session_transition_service.dart';
 import 'package:lendify/widgets/login_nudge_sheet.dart';
+
+bool shouldGateAccountTab({
+  required bool hasSession,
+  required bool hasCurrentUser,
+  required bool backendEnabled,
+  required bool releaseMode,
+  required bool previewGuest,
+}) {
+  final guestGateEnabled = backendEnabled || releaseMode || previewGuest;
+  return guestGateEnabled && (!hasSession || !hasCurrentUser);
+}
+
+@visibleForTesting
+bool shouldShowEmailVerificationBanner(model.User? user) =>
+    user != null && !user.emailVerified;
+
+@visibleForTesting
+const List<String> mainNavigationLabelKeys = <String>[
+  'Entdecken',
+  'Mietkorb',
+  'Buchungen',
+  'Nachrichten',
+  'Mein SIT',
+];
+
+@visibleForTesting
+const double mainNavigationMinimumTouchTarget = kMinInteractiveDimension;
+
+@visibleForTesting
+Widget mainNavigationTouchTarget(Widget child) {
+  return SizedBox(
+    width: mainNavigationMinimumTouchTarget,
+    height: mainNavigationMinimumTouchTarget,
+    child: Center(child: child),
+  );
+}
 
 class MainNavigation extends StatefulWidget {
   final int initialIndex;
-  const MainNavigation({super.key, this.initialIndex = 0});
+  final SessionTransitionService sessionTransitionService;
+
+  const MainNavigation({
+    super.key,
+    this.initialIndex = 0,
+    this.sessionTransitionService = const SessionTransitionService(),
+  });
 
   @override
   State<MainNavigation> createState() => _MainNavigationState();
 }
 
-class _MainNavigationState extends State<MainNavigation> {
+class _MainNavigationState extends State<MainNavigation>
+    with WidgetsBindingObserver {
   int _currentIndex = 0;
   model.User? _currentUser;
+  String? _verificationBannerStatus;
+  bool _resendingVerification = false;
+  StreamSubscription<String>? _profileSubscription;
+  late final SessionTransitionService _sessionTransitions;
+  late final List<Widget> _screens;
+  int _profileLoadRevision = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _sessionTransitions = widget.sessionTransitionService;
+    _screens = [
+      const ExploreScreen(),
+      const RentalCartScreen(),
+      const BookingsScreen(),
+      const MessagesScreen(),
+      ProfileScreen(sessionTransitionService: _sessionTransitions),
+    ];
     _currentIndex = widget.initialIndex.clamp(0, _screens.length - 1);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       context.read<MainNavController>().setIndex(_currentIndex);
     });
-    _loadUser();
+    unawaited(_loadUser());
+    _profileSubscription = SharedPersistenceSync.changes.listen((key) {
+      if (!mounted || !SharedPersistenceSync.affectsProfileSync(key)) {
+        return;
+      }
+      unawaited(_loadUser(
+        neutralize: key == SharedPersistenceSync.accountSecurityStateKey,
+      ));
+    });
   }
 
-  Future<void> _loadUser() async {
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _profileSubscription?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_refreshUserAfterResume());
+    }
+  }
+
+  Future<void> _refreshUserAfterResume() async {
     try {
-      final u = await DataService.getCurrentUser();
-      if (mounted) setState(() => _currentUser = u);
+      final session = await _sessionTransitions.readSession();
+      if (session == null) {
+        await _loadUser(neutralize: true);
+        return;
+      }
+      final owner = _sessionTransitions.captureOwner(session);
+      if (!await _sessionTransitions.isOwnerCurrent(owner)) return;
+      // Returning from a native picker only refreshes the current profile.
+      // Publish the refreshed profile through the profile-state channel so
+      // mounted identity surfaces re-read the same exact session owner.
+      await DataService.syncCurrentUserForSessionOwner(
+        owner.authOwner,
+        notificationKey: SharedPersistenceSync.profileStateKey,
+      );
+      await _loadUser();
+    } catch (_) {
+      // Keep the cached status visible until the next explicit refresh.
+    }
+  }
+
+  Future<void> _loadUser({bool neutralize = false}) async {
+    final revision = ++_profileLoadRevision;
+    final startingEpoch = _sessionTransitions.sessionEpoch;
+    if (neutralize && mounted) {
+      setState(() {
+        _currentUser = null;
+        _verificationBannerStatus = null;
+      });
+    }
+    try {
+      final session = await _sessionTransitions.readSession();
+      if (!mounted || revision != _profileLoadRevision) return;
+      if (session == null) {
+        final confirmedEmptyEpoch = _sessionTransitions.sessionEpoch;
+        if (confirmedEmptyEpoch < startingEpoch ||
+            !await _sessionTransitions.isNoSessionEpochCurrent(
+              confirmedEmptyEpoch,
+            ) ||
+            !mounted ||
+            revision != _profileLoadRevision) {
+          return;
+        }
+        setState(() => _currentUser = null);
+        return;
+      }
+
+      var owner = _sessionTransitions.captureOwner(session);
+      final user = await _sessionTransitions.currentUserForOwner(owner);
+      if (user == null || !mounted || revision != _profileLoadRevision) {
+        return;
+      }
+      owner = _sessionTransitions.captureOwner(
+        session,
+        profileUserId: user.id,
+      );
+      if (!await _sessionTransitions.isOwnerCurrent(owner) ||
+          !mounted ||
+          revision != _profileLoadRevision) {
+        return;
+      }
+      setState(() {
+        _currentUser = user;
+        if (user.emailVerified) _verificationBannerStatus = null;
+      });
     } catch (_) {}
   }
 
-  final List<Widget> _screens = [
-    const ExploreScreen(),
-    const WishlistsScreen(),
-    const BookingsScreen(),
-    const MessagesScreen(),
-    const ProfileScreen(),
-  ];
+  Future<({bool hasSession, model.User? user})> _readAccountTabAccess() async {
+    try {
+      final session = await _sessionTransitions.readSession();
+      if (session == null) return (hasSession: false, user: null);
+      var owner = _sessionTransitions.captureOwner(session);
+      final user = await _sessionTransitions.currentUserForOwner(owner);
+      if (user == null) return (hasSession: true, user: null);
+      owner = _sessionTransitions.captureOwner(
+        session,
+        profileUserId: user.id,
+      );
+      if (!await _sessionTransitions.isOwnerCurrent(owner)) {
+        return (hasSession: false, user: null);
+      }
+      return (hasSession: true, user: user);
+    } catch (_) {
+      return (hasSession: false, user: null);
+    }
+  }
+
+  Future<void> _resendVerification() async {
+    final user = _currentUser;
+    if (!shouldShowEmailVerificationBanner(user) || _resendingVerification) {
+      return;
+    }
+    final pendingUser = user;
+    if (pendingUser == null) return;
+    setState(() {
+      _resendingVerification = true;
+      _verificationBannerStatus = null;
+    });
+    try {
+      await const ContactVerificationService()
+          .requestLoginEmailVerification(pendingUser.email);
+      if (mounted) {
+        setState(() {
+          _verificationBannerStatus =
+              'Anfrage verarbeitet. Prüfe dein Postfach; der Versand kann verzögert sein.';
+        });
+      }
+    } on ContactActionFailure catch (failure) {
+      if (!mounted) return;
+      final message = switch (failure.kind) {
+        ContactActionFailureKind.rejected =>
+          'Bitte kurz warten und später erneut versuchen.',
+        ContactActionFailureKind.localUnavailable =>
+          'Die Bestätigung ist im lokalen Modus nicht verfügbar.',
+        ContactActionFailureKind.outcomeUnknown =>
+          'Der Versandstatus ist unklar. Prüfe zuerst dein Postfach.',
+        ContactActionFailureKind.principalChanged =>
+          'Dein Konto wurde inzwischen aktualisiert.',
+      };
+      setState(() => _verificationBannerStatus = message);
+    } finally {
+      if (mounted) setState(() => _resendingVerification = false);
+    }
+  }
+
+  Widget _buildEmailVerificationBanner() {
+    final user = _currentUser;
+    if (!shouldShowEmailVerificationBanner(user)) {
+      return const SizedBox.shrink();
+    }
+    return Material(
+      color: Colors.amber.shade50,
+      child: Semantics(
+        container: true,
+        label: 'E-Mail noch nicht bestätigt',
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const Expanded(
+                child: Text(
+                  'Bestätige deine E-Mail, bevor du veröffentlichst, anfragst oder bezahlst.',
+                  style: TextStyle(fontSize: 13),
+                ),
+              ),
+              TextButton(
+                onPressed: _resendingVerification ? null : _resendVerification,
+                child: Text(_resendingVerification
+                    ? 'Wird gesendet …'
+                    : 'E-Mail erneut senden'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _navIcon(IconData icon, int index) =>
       _HoveringNavIcon(icon: icon, active: _currentIndex == index);
 
   Widget _buildProfileNavIcon({required bool active}) {
-    return FutureBuilder<AuthSession?>(
-      future: AuthService.readSession(),
-      builder: (context, sessionSnap) {
-        final hasSession = sessionSnap.data != null;
-        if (!hasSession) {
-          return Stack(clipBehavior: Clip.none, children: [
-            KeyedSubtree(
-              key: ValueKey('profile_guest_${active ? 'active' : 'idle'}'),
-              child: _ProfileNavIcon(photoUrl: null, active: active),
-            ),
-            const Positioned(
-                right: -2,
-                top: -2,
-                child: DecoratedBox(
-                    decoration: BoxDecoration(
-                        color: BrandColors.logoAccent, shape: BoxShape.circle),
-                    child: SizedBox(width: 8, height: 8))),
-          ]);
-        }
-        return FutureBuilder<model.User?>(
-          future: DataService.getCurrentUser(),
-          builder: (context, userSnap) {
-            final user = userSnap.data;
-            final rawPhotoUrl = user?.photoURL?.trim();
-            final photoUrl = rawPhotoUrl != null && rawPhotoUrl.isNotEmpty
-                ? rawPhotoUrl
-                : null;
-            final keySuffix = photoUrl == null
-                ? 'profile_guest_${active ? 'active' : 'idle'}'
-                : 'profile_${user?.id ?? 'unknown'}_${photoUrl}_${active ? 'active' : 'idle'}';
-            return Stack(clipBehavior: Clip.none, children: [
-              KeyedSubtree(
-                key: ValueKey(keySuffix),
-                child: _ProfileNavIcon(photoUrl: photoUrl, active: active),
-              ),
-              const Positioned(
-                  right: -2,
-                  top: -2,
-                  child: DecoratedBox(
-                      decoration: BoxDecoration(
-                          color: BrandColors.logoAccent,
-                          shape: BoxShape.circle),
-                      child: SizedBox(width: 8, height: 8))),
-            ]);
-          },
-        );
-      },
+    final user = _currentUser;
+    final rawPhotoUrl = user?.photoURL?.trim();
+    final photoUrl =
+        rawPhotoUrl != null && rawPhotoUrl.isNotEmpty ? rawPhotoUrl : null;
+    final keySuffix = photoUrl == null
+        ? 'profile_guest_${active ? 'active' : 'idle'}'
+        : 'profile_${user?.id ?? 'unknown'}_${photoUrl}_${active ? 'active' : 'idle'}';
+    return KeyedSubtree(
+      key: ValueKey(keySuffix),
+      child: _ProfileNavIcon(photoUrl: photoUrl, active: active),
     );
   }
 
@@ -117,19 +312,38 @@ class _MainNavigationState extends State<MainNavigation> {
       // Keep internal state in sync with the global controller.
       _currentIndex = nav.index;
     }
-    return WillPopScope(
-      onWillPop: () async {
-        if (_currentIndex != 0) {
+    return PopScope(
+      canPop: _currentIndex == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _currentIndex != 0) {
           context.read<MainNavController>().setIndex(0);
-          return false;
         }
-        return true;
       },
       child: AppGradientBackground(
         child: Scaffold(
           backgroundColor: Colors.transparent,
           extendBody: true,
-          body: _screens[_currentIndex],
+          body: Column(
+            children: [
+              SafeArea(
+                top: true,
+                bottom: false,
+                child: _buildEmailVerificationBanner(),
+              ),
+              if (_verificationBannerStatus != null)
+                Semantics(
+                  liveRegion: true,
+                  child: Container(
+                    width: double.infinity,
+                    color: Colors.amber.shade100,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    child: Text(_verificationBannerStatus!),
+                  ),
+                ),
+              Expanded(child: _screens[_currentIndex]),
+            ],
+          ),
           bottomNavigationBar: BottomNavigationBar(
             backgroundColor: Colors.transparent,
             elevation: 0,
@@ -137,14 +351,20 @@ class _MainNavigationState extends State<MainNavigation> {
             currentIndex: _currentIndex,
             onTap: (index) async {
               final preview = context.read<DeveloperPreviewController>();
-              final session = await AuthService.readSession();
-              final isGuest = session == null && preview.isGuest;
+              final accountAccess = await _readAccountTabAccess();
+              final currentUser = accountAccess.user;
+              final isGuest = shouldGateAccountTab(
+                hasSession: accountAccess.hasSession,
+                hasCurrentUser: currentUser != null,
+                backendEnabled: BackendConfig.enabled,
+                releaseMode: kReleaseMode,
+                previewGuest: preview.isGuest,
+              );
               // Soft logged-out experience:
-              // - Guests can open the Profile tab to explore.
-              // - Other tabs remain locked in guest mode.
-              if (isGuest && index != 0 && index != 4) {
+              // - Guests can prepare a local Mietkorb and explore Profile.
+              // - Booking and communication tabs remain account-bound.
+              if (isGuest && index != 0 && index != 1 && index != 4) {
                 final gateContext = switch (index) {
-                  1 => GuestGateContext.favorites,
                   2 => GuestGateContext.booking,
                   3 => GuestGateContext.messages,
                   _ => GuestGateContext.generic,
@@ -167,38 +387,54 @@ class _MainNavigationState extends State<MainNavigation> {
                 const TextStyle(fontSize: 10, fontWeight: FontWeight.w500),
             items: [
               BottomNavigationBarItem(
-                icon: _navIcon(Icons.search, 0),
-                activeIcon: _HoveringNavIcon(icon: Icons.search, active: true),
-                label: l10n.t('Erkunden'),
+                icon: mainNavigationTouchTarget(_navIcon(Icons.search, 0)),
+                activeIcon: mainNavigationTouchTarget(
+                  const _HoveringNavIcon(icon: Icons.search, active: true),
+                ),
+                label: l10n.t(mainNavigationLabelKeys[0]),
               ),
               BottomNavigationBarItem(
-                icon: _navIcon(Icons.favorite_border, 1),
-                activeIcon:
-                    _HoveringNavIcon(icon: Icons.favorite_border, active: true),
-                label: l10n.t('Wunschlisten'),
+                icon: mainNavigationTouchTarget(
+                  _navIcon(Icons.shopping_bag_outlined, 1),
+                ),
+                activeIcon: mainNavigationTouchTarget(
+                  const _HoveringNavIcon(
+                    icon: Icons.shopping_bag_outlined,
+                    active: true,
+                  ),
+                ),
+                label: l10n.t(mainNavigationLabelKeys[1]),
               ),
               BottomNavigationBarItem(
-                icon: _HoveringAssetNavIcon(
+                icon: mainNavigationTouchTarget(_HoveringAssetNavIcon(
                     asset: 'assets/images/icononly_transparent_nobuffer.png',
                     active: _currentIndex == 2,
-                    baseSize: 32.0),
-                activeIcon: _HoveringAssetNavIcon(
+                    baseSize: 32.0)),
+                activeIcon: mainNavigationTouchTarget(_HoveringAssetNavIcon(
                     asset: 'assets/images/icononly_transparent_nobuffer.png',
                     active: true,
-                    baseSize: 32.0),
-                label: l10n.t('Buchungen'),
+                    baseSize: 32.0)),
+                label: l10n.t(mainNavigationLabelKeys[2]),
               ),
               BottomNavigationBarItem(
-                icon: _MessagesNavIcon(
-                    active: _currentIndex == 3, userId: _currentUser?.id),
-                activeIcon:
-                    _MessagesNavIcon(active: true, userId: _currentUser?.id),
-                label: l10n.t('Nachrichten'),
+                icon: mainNavigationTouchTarget(_MessagesNavIcon(
+                  active: _currentIndex == 3,
+                  userId: _currentUser?.id,
+                )),
+                activeIcon: mainNavigationTouchTarget(_MessagesNavIcon(
+                  active: true,
+                  userId: _currentUser?.id,
+                )),
+                label: l10n.t(mainNavigationLabelKeys[3]),
               ),
               BottomNavigationBarItem(
-                icon: _buildProfileNavIcon(active: _currentIndex == 4),
-                activeIcon: _buildProfileNavIcon(active: true),
-                label: l10n.t('Profil'),
+                icon: mainNavigationTouchTarget(
+                  _buildProfileNavIcon(active: _currentIndex == 4),
+                ),
+                activeIcon: mainNavigationTouchTarget(
+                  _buildProfileNavIcon(active: true),
+                ),
+                label: l10n.t(mainNavigationLabelKeys[4]),
               ),
             ],
           ),
@@ -307,7 +543,8 @@ class _ProfileNavIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color border = active ? BrandColors.primary : AppTheme.navInactive(context);
+    final Color border =
+        active ? BrandColors.primary : AppTheme.navInactive(context);
     final double size = 20;
     return MouseRegion(
       child: SitUserAvatar(

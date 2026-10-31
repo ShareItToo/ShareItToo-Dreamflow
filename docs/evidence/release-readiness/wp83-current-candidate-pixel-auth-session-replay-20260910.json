@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp83-current-candidate-pixel-auth-session-replay",
+  "status": "partial-owner-email-link-confirmation-pending",
+  "capturedOn": "2026-09-10",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026090905",
+    "candidateSourceCommit": "e1c182ea496f013989863155c13bfda649255a7e",
+    "environment": "staging",
+    "releaseChannel": "internal"
+  },
+  "passwordChange": {
+    "status": "passed-current-candidate-password-change-cold-isolation-and-cleanup",
+    "definiteSuccessPresented": true,
+    "oldCredentialRejected": true,
+    "replacementLoginPassed": true,
+    "coldStartPassed": true,
+    "accountAToBIsolationPassed": true,
+    "originalPasswordRestored": true,
+    "protectedOwnerSessionRestored": true,
+    "acceptedSessionsRevoked": true
+  },
+  "sessionControls": {
+    "status": "completed-session-controls",
+    "exactInitialTwoSessionInventory": true,
+    "remoteSessionRevokedThroughPixel": true,
+    "revokedRemoteTokenRejected": true,
+    "invokingPixelSessionPreserved": true,
+    "logoutAllThroughPixel": true,
+    "logoutAllRemoteTokenRejected": true,
+    "serverConfirmedEmptyBeforeIndependentRelogin": true,
+    "isolatedCredentialReloginPassed": true,
+    "isolatedColdStartPassed": true,
+    "accountAToBIsolationPassed": true,
+    "protectedOwnerSessionRestored": true,
+    "acceptedDiagnosticSessionsRevoked": true
+  },
+  "emailRegistration": {
+    "status": "pixel-ui-registration-accepted-pending-email",
+    "consentCount": 4,
+    "emailLinkRead": false,
+    "emailLinkStored": false,
+    "ownerConfirmationRequired": true
+  },
+  "runnerHardening": {
+    "stateBased": true,
+    "unboundedRetry": false,
+    "timingOrCacheWorkaround": false,
+    "runnerSourceHead": "7f59a5dbb5ce6ff6c06adbf0f8d3b94858d86296",
+    "commits": [
+      "71d5ca1c334006db568184006ce26cd60cab9810",
+      "0e76debc69303ed5b06bb98e1f0ad39fa850a2a7",
+      "7f59a5dbb5ce6ff6c06adbf0f8d3b94858d86296"
+    ],
+    "sourceInventory": [
+      {
+        "path": "tool/diagnose_android_password_change.mjs",
+        "sha256": "1fa9b242cdb696a5c5381bc0af4695887f556a3650c50abe15dbf87c106ade1c"
+      },
+      {
+        "path": "tool/diagnose_android_logout_lifecycle.mjs",
+        "sha256": "ea461332e7d62fa021cb3c2fa40b9e5a89396d35b67cea9791c6925b3e2ffe2d"
+      },
+      {
+        "path": "tool/diagnose_android_session_controls.mjs",
+        "sha256": "2ddb1bd930ac9b3c34b1f3d88682846d32336f43219a9eff784a3860069d9275"
+      }
+    ]
+  },
+  "remaining": {
+    "emailRegistrationVerificationLoginRecovery": "owner-must-confirm-the-new-staging-email-link-without-sharing-it",
+    "delayedResultIsolation": "not-exercised-by-this-physical-replay"
+  },
+  "boundaries": {
+    "syntheticAccountsOnly": true,
+    "productionChanged": false,
+    "googlePlayChanged": false,
+    "firebaseChanged": false,
+    "paymentEndpointCalled": false,
+    "realMoneyUsed": false,
+    "onePlusContacted": false,
+    "credentialsRecorded": false,
+    "emailAddressRecorded": false,
+    "verificationLinkRecorded": false,
+    "rawDeviceIdentifierRecorded": false
+  }
+}

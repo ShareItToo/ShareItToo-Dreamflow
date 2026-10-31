@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-wp60-oneplus-current-play-candidate",
+  "status": "prepared-play-active-oneplus-update-pending",
+  "generatedAt": "2026-09-08T17:25:00Z",
+  "sourceRefs": {
+    "candidate": "store/google-play/rollover-candidate-2026090711.json",
+    "playRelease": "docs/evidence/release-readiness/wp59-google-play-internal-2026090711-release-20260908.json",
+    "previousOnePlus": "docs/evidence/release-readiness/oneplus-play-internal-2026090204-read-only.json"
+  },
+  "repository": {
+    "branch": "codex/master-workflow-20260808",
+    "wp59ClosureHead": "937a1194b5d1954e58ff1f78fc169155e2cec753"
+  },
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "versionCode": "2026090711",
+    "artifactSourceHead": "c819c5f4445d0b998b2ee319e64f8c95cfb01eda",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "minSdkVersion": 24,
+    "targetSdkVersion": 36,
+    "aabSha256": "a2e72a5afd09e44a20c82d60236e63143d963f7a3ba6ac6e95389e87ce1e3681",
+    "uploadCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "firebaseAndroidConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false,
+    "externalListingAiEnabled": false
+  },
+  "playInternal": {
+    "track": "internal-testing",
+    "trackState": "active",
+    "releaseName": "1.0.0-internal-2026090711",
+    "deliveryState": "available-to-internal-testers",
+    "testerListUnchanged": true,
+    "openTestingUnchanged": true,
+    "closedTestingUnchanged": true,
+    "productionUnchanged": true
+  },
+  "previousOnePlusObservation": {
+    "versionName": "1.0.0",
+    "versionCode": "2026090204",
+    "installerPackageName": "com.android.vending",
+    "playAppSigningCertificateMatched": true,
+    "currentCandidateInstalled": false
+  },
+  "execution": {
+    "allowedAdbTransports": [
+      "usb",
+      "wireless-adb"
+    ],
+    "updateMechanism": "google-play-only",
+    "inspectCommand": "node tool/run_wp60_oneplus_current_candidate.mjs --mode inspect --confirm-release-go GOOGLE_PLAY_INTERNAL_RELEASE_GO --confirm-owner-window ONEPLUS_PERSONAL_DEVICE_NONDESTRUCTIVE_TEST_GO",
+    "verifyCommand": "node tool/run_wp60_oneplus_current_candidate.mjs --mode verify --confirm-release-go GOOGLE_PLAY_INTERNAL_RELEASE_GO --confirm-owner-window ONEPLUS_PERSONAL_DEVICE_NONDESTRUCTIVE_TEST_GO",
+    "lifecycleCommand": "node tool/run_wp60_oneplus_current_candidate.mjs --mode lifecycle --confirm-release-go GOOGLE_PLAY_INTERNAL_RELEASE_GO --confirm-owner-window ONEPLUS_PERSONAL_DEVICE_NONDESTRUCTIVE_TEST_GO",
+    "directApkReplacementAllowed": false,
+    "uninstallAllowed": false,
+    "appDataResetAllowed": false,
+    "downgradeAllowed": false,
+    "passcodeEntryAllowed": false,
+    "accountContentInspectionAllowed": false
+  },
+  "boundaries": {
+    "onePlusContacted": false,
+    "appInstalledOrUpdated": false,
+    "appUninstalled": false,
+    "appDataReset": false,
+    "accountContentInspected": false,
+    "testerListChanged": false,
+    "storeChangedAfterWp59": false,
+    "productionChanged": false,
+    "paymentChanged": false,
+    "providerChanged": false,
+    "firebaseCloudVpsDnsChanged": false,
+    "pullRequestMerged": false,
+    "containsSecrets": false,
+    "containsTesterIdentity": false,
+    "containsRawDeviceIdentifier": false,
+    "containsNetworkAddress": false
+  }
+}

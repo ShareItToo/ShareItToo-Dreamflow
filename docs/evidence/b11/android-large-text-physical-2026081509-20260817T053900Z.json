@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-large-text-physical-diagnostic",
+  "status": "failed-source-fix-required",
+  "capturedAt": "2026-08-17T05:39:00Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081509",
+    "commit": "3fa045b98897f9551f91da932136c2b100b2d700",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "model": "Pixel 7 Pro",
+    "osVersion": "Android 16",
+    "storeInstall": "play-internal",
+    "containsRawDeviceIdentifier": false
+  },
+  "configuration": {
+    "fontScale": 2.0,
+    "orientation": "portrait",
+    "talkBackEnabled": false,
+    "surfacesCaptured": [
+      "explore",
+      "wishlists",
+      "bookings",
+      "messages",
+      "profile"
+    ]
+  },
+  "observations": {
+    "exploreRendered": true,
+    "wishlistsRendered": true,
+    "bookingsRendered": true,
+    "messagesRendered": true,
+    "profileRendered": true,
+    "bottomNavigationVisibleAcrossSurfaces": true,
+    "wishlistTitlesTruncated": true,
+    "profileFactsTruncated": true,
+    "bookingTabsHorizontallyScrollable": true,
+    "sourceFixRequired": true,
+    "physicalPassCompleted": false
+  },
+  "restoration": {
+    "fontScaleRestoredTo": 0.85,
+    "fontScaleRestored": true,
+    "talkBackRestoredToDisabled": true,
+    "automaticRotationRestored": true,
+    "finalSettingsVerified": true
+  },
+  "boundaries": {
+    "fullCellPassed": false,
+    "largeTextPassed": false,
+    "manualTalkBackTraversalPassed": false,
+    "screenshotsStoredInRepository": false,
+    "sourceFixVerifiedOnPlayCandidate": false,
+    "productionChanged": false,
+    "storeChanged": false,
+    "paymentEndpointCalled": false,
+    "pushConfigurationChanged": false,
+    "crashConfigurationChanged": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

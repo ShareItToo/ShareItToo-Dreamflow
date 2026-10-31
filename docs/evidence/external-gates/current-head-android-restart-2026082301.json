@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-current-head-process-restart-diagnostic",
+  "status": "passed-bounded-process-restart-diagnostic",
+  "capturedAt": "2026-08-23T10:46:59.957Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026082301",
+    "commit": "76e6565cdb20d6a49fb417e87b044b237a1ae6c1",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false,
+    "apkSha256": "a235a188893983fdf770f534ee026c8bd50a7cad4b34d804597a0720817f9ff9"
+  },
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "16",
+    "apiLevel": 36,
+    "securityPatch": "2026-04-05",
+    "containsRawDeviceIdentifier": false
+  },
+  "tests": {
+    "exactInstalledCandidate": {
+      "status": "passed",
+      "result": "version-and-apk-hash-match"
+    },
+    "processAbsentAfterForceStop": {
+      "status": "passed",
+      "result": "no-running-process"
+    },
+    "launcherProcessRestarted": {
+      "status": "passed",
+      "result": "running-after-launcher-event"
+    },
+    "installIdentityPreserved": {
+      "status": "passed",
+      "result": "first-install-time-unchanged"
+    },
+    "dataContainerIdentityPreserved": {
+      "status": "passed",
+      "result": "ce-data-inode-unchanged"
+    }
+  },
+  "boundaries": {
+    "fullPilotScenarioA14Passed": false,
+    "authenticatedSessionClaimed": false,
+    "pendingSubmissionTested": false,
+    "serverReconciliationTested": false,
+    "storeInstallationGateSatisfied": false,
+    "screenshotsCaptured": false,
+    "uiHierarchyCaptured": false,
+    "accountContentInspected": false,
+    "userDataReset": false,
+    "appUninstalled": false,
+    "networkChanged": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsProcessIdentifiers": false,
+    "containsPersonalAccountData": false,
+    "realMoneyUsed": false,
+    "productionChanged": false,
+    "storeChanged": false
+  }
+}

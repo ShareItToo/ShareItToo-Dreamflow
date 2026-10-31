@@ -1,0 +1,33 @@
+name: mission-browser-preflight
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/mission-browser-preflight.yml'
+      - 'test/support/mission_web_entry_linux_probe.mjs'
+      - 'test/tool/mission_web_entry_linux_probe.test.mjs'
+      - 'test/tool/mission_web_entry_boundary.test.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mission-browser-preflight-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-blank-netns:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Fake-only contract and consumer checks
+        run: node --test test/tool/mission_web_entry_linux_probe.test.mjs test/tool/mission_web_entry_boundary.test.mjs
+      - name: One isolated blank and renderer preflight
+        env:
+          EXPECTED_SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node test/support/mission_web_entry_linux_probe.mjs --linux-blank-preflight --source-head "$EXPECTED_SOURCE_HEAD"

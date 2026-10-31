@@ -1,0 +1,275 @@
+{
+  "schemaVersion": 1,
+  "kind": "sit-rw8-local-review-reputation-authorization-durability",
+  "status": "verified-regression-and-codeql-passed",
+  "implementationBaseHead": "c0bbdfff21d5e4cbba549030fd9bd9a37d77c632",
+  "implementationHead": "9d4780f0d7ebd88bc2521ae38d77203e181ecda6",
+  "architecture": "docs/architecture/rw8-local-review-reputation-authorization-durability-recovery-2026-08-25.md",
+  "report": "docs/operations/RW8_LOCAL_REVIEW_REPUTATION_AUTHORIZATION_DURABILITY_RECOVERY_2026-08-25.md",
+  "predecessor": {
+    "package": "RW7",
+    "evidence": "docs/evidence/48h-remote/rw7-local-listing-catalog-authorization-durability-20260825.json",
+    "verifiedImplementationHead": "33d1766467dbfdbbabe0d12823ac76e4614b7224",
+    "closureCommit": "c0bbdfff21d5e4cbba549030fd9bd9a37d77c632"
+  },
+  "scope": {
+    "allowed": [
+      "matching-auth-session-exact-booking-participant-review-submission",
+      "public-reputation-reads-preserved",
+      "completed-direction-counterparty-item-and-needs-review-context",
+      "strict-bounded-whole-review-document-decoding",
+      "exact-raw-corruption-preservation",
+      "serialized-verified-review-mutations-and-booking-snapshot-guard",
+      "capacity-and-storage-failure-without-history-pruning",
+      "no-read-time-demo-reputation-seeding",
+      "current-account-authored-and-received-review-privacy-export",
+      "shared-public-review-retention-with-account-anonymization",
+      "input-preserving-submission-and-profile-read-retry",
+      "synthetic-deterministic-local-regression"
+    ],
+    "excluded": [
+      "contract-quote-acceptance-cancellation-and-refund",
+      "payment-payout-and-real-money",
+      "handover-return-damage-and-needs-review-decision-policy",
+      "moderation-review-correction-and-public-ranking-policy",
+      "production-backend-schema-authority-and-live-infrastructure",
+      "provider-ai-candidate-device-store-pilot-and-legal-owner-gates",
+      "gitguardian-finding-content-pr-merge-and-history-rewrite"
+    ],
+    "syntheticOnly": true,
+    "localOnly": true,
+    "timingWorkaroundAllowed": false,
+    "testParallelismReductionAllowed": false,
+    "silentHistoryPruningAllowed": false
+  },
+  "findings": [
+    {
+      "id": "RW8-P0-CALLER-IDENTITY-SPOOF-001",
+      "state": "resolved-and-tested",
+      "resolution": "Review submission requires the exact current authenticated participant instead of trusting caller reviewer ids."
+    },
+    {
+      "id": "RW8-P0-BOOKING-CONTEXT-DRIFT-002",
+      "state": "resolved-and-tested",
+      "resolution": "Completion direction counterparty item and needsReview state are exact and the booking bytes are rechecked before write."
+    },
+    {
+      "id": "RW8-P0-CORRUPTION-AS-EMPTY-003",
+      "state": "resolved-and-tested",
+      "resolution": "Malformed classic or multi-review documents fail closed and preserve exact bytes."
+    },
+    {
+      "id": "RW8-P0-FAKE-READ-SEEDING-004",
+      "state": "resolved-and-tested",
+      "resolution": "A missing classic document stays empty; demo reputation requires explicit QA bootstrap."
+    },
+    {
+      "id": "RW8-P0-DUPLICATE-CONTEXT-005",
+      "state": "resolved-and-tested",
+      "resolution": "Duplicate ids and booking/reviewer contexts close the document and concurrent duplicates persist exactly once."
+    },
+    {
+      "id": "RW8-P0-LOST-UPDATE-CONCURRENCY-006",
+      "state": "resolved-and-tested",
+      "resolution": "A fixed-order booking and review queue serializes distinct review writes without lost updates."
+    },
+    {
+      "id": "RW8-P0-STORAGE-FAILURE-HISTORY-LOSS-007",
+      "state": "resolved-and-tested",
+      "resolution": "Verified write failure restores exact prior bytes and leaves the queue recoverable."
+    },
+    {
+      "id": "RW8-P0-UNBOUNDED-OR-PRUNED-HISTORY-008",
+      "state": "resolved-and-tested",
+      "resolution": "Each review document is bounded at 1000 and overflow rejects without pruning history."
+    },
+    {
+      "id": "RW8-P0-PRIVACY-EXPORT-RETENTION-SCOPE-009",
+      "state": "resolved-and-tested",
+      "resolution": "Export is current-account scoped and shared public retention is explicit without an invented period."
+    },
+    {
+      "id": "RW8-P1-FALSE-SUCCESS-OR-SPINNER-010",
+      "state": "resolved-and-tested",
+      "resolution": "Submission preserves input for retry and profile reads expose a bounded retry state."
+    }
+  ],
+  "verification": {
+    "changedFileAnalyze": "passed-zero-issues",
+    "focusedRw8Flutter": "passed-28",
+    "defaultFlutter": "passed-496-with-3-documented-profile-skips",
+    "lifecyclePrivacyRetentionProvider": "passed",
+    "rw8WiringTests": "passed",
+    "fullTechnicalRegression": "passed",
+    "githubRegression": "passed",
+    "githubCodeql": "passed-no-new-alerts"
+  },
+  "localRegression": {
+    "head": "9d4780f0d7ebd88bc2521ae38d77203e181ecda6",
+    "standardParallelism": true,
+    "timingWorkaroundUsed": false,
+    "parallelismReductionUsed": false,
+    "flutterPassed": 496,
+    "documentedProfileSkips": 3,
+    "analyzerIssues": 0,
+    "webDebugBuild": "passed",
+    "loopbackSmoke": "passed",
+    "androidDebugTasks": 448,
+    "androidMinSdk": 24
+  },
+  "githubVerification": {
+    "head": "9d4780f0d7ebd88bc2521ae38d77203e181ecda6",
+    "regressionRunId": 32830068534,
+    "codeqlRunId": 32830068632,
+    "regressionConclusion": "success",
+    "codeqlConclusion": "success",
+    "openCodeScanningAlerts": 0
+  },
+  "ratchetAudit": {
+    "cause": "RW8 added validated local review lifecycle, privacy and retention coverage and therefore changed the bound manifest hashes; the provider evidence changed only to bind those reviewed manifest hashes.",
+    "providerDecisionChanged": false,
+    "providerGateChanged": false,
+    "fullRegressionCascades": [
+      "RW3, RW4 and RW6 shared-compliance source hashes refreshed after the RW8 compliance section changed.",
+      "RW0 public-profile test hash refreshed after its fixture was made explicit and read-time review seeding remained forbidden."
+    ],
+    "verification": "Every refreshed source inventory passed its package validator and the complete supported technical regression on the implementation head."
+  },
+  "ratchets": {
+    "reason": "validated-local-review-lifecycle-privacy-retention-and-provider-source-change",
+    "privacyManifestSha256": "35c3a08e20e4f55183649af934e9415ea8cfd0c2d3327483a518cf477daee449",
+    "retentionManifestSha256": "955a901bbaec6511d119558b953274c3e5059a97c657fdcf93f2a939523315c8",
+    "activeProviderEvidenceSha256": "364037cefb30cfd55da5f19a8e3394e0308dae7e15b3760e159f9f28e5d17f7d",
+    "activeProviderState": "prepared-hold",
+    "completedOwnerDecisions": 0,
+    "requiredOwnerDecisions": 10,
+    "externalReadiness": false
+  },
+  "gates": {
+    "BUILD_READY": "not-granted",
+    "PLAY_UPLOAD_APPROVED": "not-granted",
+    "HUMAN_PILOT_ACTIVATED": "not-granted",
+    "PR7_MERGE_APPROVED": "not-granted",
+    "R17_GITGUARDIAN_HISTORY_REVIEW_COMPLETE": "not-granted"
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "vpsChanged": false,
+    "dnsChanged": false,
+    "cloudChanged": false,
+    "firebaseChanged": false,
+    "storeChanged": false,
+    "paymentChanged": false,
+    "realMoneyUsed": false,
+    "realProviderTrafficSent": false,
+    "externalAiRuntimeEnabled": false,
+    "realTesterEnrolled": false,
+    "candidateCreated": false,
+    "deviceGateClaimed": false,
+    "legalApprovalChanged": false,
+    "gitHistoryRewritten": false,
+    "prMerged": false
+  },
+  "sourceInventory": [
+    {
+      "path": "lib/screens/own_profile_screen.dart",
+      "sha256": "3c59cc158fd327bb19a82553e24adf7c1c867367a26020c99c3f065ab7720a5e"
+    },
+    {
+      "path": "lib/screens/privacy_info_screen.dart",
+      "sha256": "b8322e4b53f08b8c644bee12d498bc713a0f28ef6f55a263f28f017fe9a24b61"
+    },
+    {
+      "path": "lib/screens/public_profile_screen.dart",
+      "sha256": "e35c8fcdbb2b3165e5db3bc9165aa255e70b9838ebbde6b2cdfc7a2f252e2a2a"
+    },
+    {
+      "path": "lib/services/data_service.dart",
+      "sha256": "f23002e697a484a16e392e8fcf5dd9de527ecc55eb791dde7fab98386e37375f"
+    },
+    {
+      "path": "lib/services/shared_persistence_sync.dart",
+      "sha256": "b4294550220badf563c3a2fb0ea1929e15b0026483fb3dd3633370c6b486adb2"
+    },
+    {
+      "path": "lib/widgets/review_prompt_sheet.dart",
+      "sha256": "e090d1d86e88a0665326102aed259041791a3a26f97ef28a78d86ababc635dae"
+    },
+    {
+      "path": "store/g2-data-lifecycle.json",
+      "sha256": "1753947c8f92f4f6e82a6a7bb5e3a6e990368589b48dc3a1716ca7c9aecd749d"
+    },
+    {
+      "path": "store/privacy-disclosures.json",
+      "sha256": "35c3a08e20e4f55183649af934e9415ea8cfd0c2d3327483a518cf477daee449"
+    },
+    {
+      "path": "store/retention-deletion-readiness.json",
+      "sha256": "955a901bbaec6511d119558b953274c3e5059a97c657fdcf93f2a939523315c8"
+    },
+    {
+      "path": "docs/evidence/external-gates/active-infrastructure-mail-provider-readiness.json",
+      "sha256": "364037cefb30cfd55da5f19a8e3394e0308dae7e15b3760e159f9f28e5d17f7d"
+    },
+    {
+      "path": "tool/validate_g2_data_lifecycle.mjs",
+      "sha256": "c0aede510163ab7580a6765d878d706ad6d957e795a8326053aeae84a5bbee97"
+    },
+    {
+      "path": "tool/validate_privacy_disclosures.mjs",
+      "sha256": "b78f41588e8a1a14520df4f5a730ae1190924f3b2f177fe40f6569f76bfb56f9"
+    },
+    {
+      "path": "tool/validate_retention_deletion_readiness.mjs",
+      "sha256": "dc7d749b5fb4100231f1de756b41f1406507f6abfe2c0953d4a5ad49bcb91b96"
+    },
+    {
+      "path": "tool/validate_active_infrastructure_mail_provider_readiness.mjs",
+      "sha256": "6618e79f9148634ddd6ef7ccf2b96d54b5ed4b8fd081ad9e20db1110646e8ec6"
+    },
+    {
+      "path": "scripts/technical_regression_check.sh",
+      "sha256": "61e7a485cf99f041394995b49355e2b283f6e36a04977589e2ba228e22137fb2"
+    },
+    {
+      "path": "test/review_metrics_service_test.dart",
+      "sha256": "0d572831cbebdfac15b6f3daca371037429d2eadd3652728354102202d2599c7"
+    },
+    {
+      "path": "test/review_prompt_sheet_logic_test.dart",
+      "sha256": "8ee4caf838dd2e721697e537aa4aed194b3ba8b88b43bc005a826fb10a212262"
+    },
+    {
+      "path": "test/rw8_local_review_reputation_authorization_durability_test.dart",
+      "sha256": "39b800489c3c861a998ed4a0aca48d6e41ebeae5b76365c9aae448ec70e92acf"
+    },
+    {
+      "path": "test/tool/validate_g2_data_lifecycle.test.mjs",
+      "sha256": "5ab0e110998f046d197711388d4474fc700ce000160f2012ba017b8481d1bb50"
+    },
+    {
+      "path": "test/tool/rw8_local_review_reputation_authorization_durability_wiring.test.mjs",
+      "sha256": "cd801b7ae66a611d56c716032937f221832698c4321045432956471b1ee35572"
+    },
+    {
+      "path": "test/tool/validate_rw8_local_review_reputation_authorization_durability.test.mjs",
+      "sha256": "89c5e367d6288c764ec6512d16a49e12e1830f491d1b817222f8dacb37460471"
+    },
+    {
+      "path": "tool/validate_rw8_local_review_reputation_authorization_durability.mjs",
+      "sha256": "53c25406a1c812dcc50ca9e6111ab4eed2d0d15eeb4dce8c0dda37390af00681"
+    },
+    {
+      "path": "docs/compliance/g2l-g2-data-lifecycle-2026-08-20.md",
+      "sha256": "c9336c11f10270bff1127cce568106d48461e1f6ffb00c2dd08119401c8b5a20"
+    },
+    {
+      "path": "docs/architecture/rw8-local-review-reputation-authorization-durability-recovery-2026-08-25.md",
+      "sha256": "a574b673ac3092a8cdd8bbb3ce37b22ebc3d49d598d397c5521a565efddf0fd2"
+    },
+    {
+      "path": "docs/operations/RW8_LOCAL_REVIEW_REPUTATION_AUTHORIZATION_DURABILITY_RECOVERY_2026-08-25.md",
+      "sha256": "83685b8de9aeb9f3d688a17f3e0eb5efcf937c4858632f09eae2b2fdfcab326c"
+    }
+  ]
+}

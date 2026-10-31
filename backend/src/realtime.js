@@ -1,5 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 
+import { pool } from './db.js';
 import { verifyAccessToken } from './security.js';
 
 const clientsByUser = new Map();
@@ -48,12 +49,21 @@ export function attachRealtime(server) {
     let userId = null;
     const authTimer = setTimeout(() => socket.close(4401, 'authentication_required'), 5000);
 
-    socket.on('message', (raw) => {
+    socket.on('message', async (raw) => {
       if (userId) return;
       try {
         const message = JSON.parse(raw.toString());
         if (message.type !== 'auth' || typeof message.token !== 'string') throw new Error('invalid auth');
         const payload = verifyAccessToken(message.token);
+        const actor = await pool.query(
+          `SELECT 1
+           FROM users AS u
+           JOIN auth_sessions AS session
+             ON session.id = $2 AND session.user_id = u.id AND session.revoked_at IS NULL
+           WHERE u.id = $1 AND u.account_status = 'active' AND u.deactivated_at IS NULL`,
+          [payload.sub, payload.sid],
+        );
+        if (!actor.rowCount) throw new Error('inactive account');
         userId = payload.sub;
         clearTimeout(authTimer);
         addClient(userId, socket);

@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-direct-device-smoke",
+  "status": "installed-launched-pending-manual-matrix",
+  "capturedAt": "2026-08-10T03:25:04.764Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081013",
+    "commit": "26642aedaacbf0fd95e16403ea673a400a6b3d11",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false,
+    "apkSha256": "462555155a4857b8063d4bc3985cdea7896110d5835ca014d3568189499df6df",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "privacyScan": "passed"
+  },
+  "installation": {
+    "method": "direct-apk-diagnostic",
+    "installed": true,
+    "installedVersionVerified": true,
+    "installedBuildVerified": true,
+    "firstLaunchEvent": "passed",
+    "foregroundActivityVerified": true,
+    "storeInstallationGateSatisfied": false,
+    "guestProfileVerified": true,
+    "guestNotificationGateVerified": true,
+    "notificationGateNafActions": 0,
+    "profileHeaderNafActions": 0,
+    "profileSearchNafActions": 2,
+    "profileSearchAccessibility": "follow-up-required",
+    "addPhotoActionName": "pending-authenticated-physical-verification"
+  },
+  "boundaries": {
+    "manualFunctionalMatrixPassed": false,
+    "playInternalInstallPassed": false,
+    "realPushPassed": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  },
+  "nextRequired": [
+    "name the profile search field and its clear or close action",
+    "one personal staging sign-in to verify authenticated owner and renter flows",
+    "manual Android Wi-Fi owner matrix with TalkBack",
+    "manual Android hotspot renter matrix",
+    "controlled FCM foreground/background/terminated delivery",
+    "Google Play Internal installation of the same unchanged build"
+  ],
+  "device": {
+    "platform": "android",
+    "physical": true,
+    "manufacturer": "Google",
+    "model": "Pixel 7 Pro",
+    "osVersion": "16",
+    "apiLevel": 36,
+    "securityPatch": "2026-04-05",
+    "containsRawDeviceIdentifier": false
+  }
+}

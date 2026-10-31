@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "kind": "google-play-iarc-content-rating-preparation",
+  "capturedAt": "2026-08-13T06:03:00Z",
+  "status": "category-contact-and-interaction-truth-entered-owner-terms-pending",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081202",
+    "commit": "72dd8f13b5d3be0e82392a8b28c31292bdc23b53"
+  },
+  "observedConsoleState": {
+    "questionnaire": "in-progress",
+    "steps": 3,
+    "currentStep": "category",
+    "contactAddressRequired": true,
+    "contactAddressMayBeSharedWithIarcAndRatingAuthorities": true,
+    "iarcTermsAcceptanceRequired": true
+  },
+  "preparedTruth": {
+    "category": "all-other-app-types",
+    "categoryReason": "physical-goods-rental-marketplace-and-shopping-is-primary-not-social-networking-or-gaming",
+    "userGeneratedContent": true,
+    "directUserCommunication": true,
+    "nativePhotoExchange": true,
+    "nativeDocumentExchange": false,
+    "nativeVideoExchange": false,
+    "nativeAudioExchange": false,
+    "advertisingPresent": false,
+    "digitalGamblingPresent": false,
+    "generativeAiCentralFeature": false
+  },
+  "moderationReadiness": {
+    "inAppReportingPresent": true,
+    "userBlockingPresent": true,
+    "termsAcceptanceRequiredAtRegistration": true,
+    "finalPublicUserContentRulesApproved": false
+  },
+  "officialGuidance": [
+    "https://support.google.com/googleplay/android-developer/answer/9859655",
+    "https://support.google.com/googleplay/android-developer/answer/9876937",
+    "https://support.google.com/googleplay/android-developer/answer/7021383",
+    "https://web.iarcservices.com/terms"
+  ],
+  "blockingGates": {
+    "protectedContactAddressEntered": true,
+    "ownerAcceptedIarcTerms": false,
+    "fullQuestionnaireReviewed": false,
+    "calculatedRatingsReviewed": false,
+    "questionnaireSubmitted": false
+  },
+  "boundaries": {
+    "consoleAnswersChanged": true,
+    "draftSaved": false,
+    "termsAccepted": false,
+    "questionnaireSubmitted": false,
+    "containsSecrets": false,
+    "containsEmailAddresses": false,
+    "containsAccountIdentifiers": false
+  }
+}

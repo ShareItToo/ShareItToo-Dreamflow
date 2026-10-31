@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-release-permission-inventory",
+  "status": "passed-exact-merged-release-apk",
+  "capturedAt": "2026-08-15T07:14:26.614Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081506",
+    "commit": "c6ab5fc143c5d424aece3d8fb7dfe4a351cb02df",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "artifacts": {
+    "apkSha256": "8e391b1f3ffd10a6e78bf3a2abda3c7a3eb69b8998c47b3109b750b4ad237368",
+    "aabSha256": "ec56a4031294b94d101d7faec8a4fbab28a7a3a22907b17f6351da9764753a4b",
+    "targetSdkVersion": 35
+  },
+  "analysis": {
+    "source": "merged-release-apk",
+    "declaredPermissions": [
+      "android.permission.ACCESS_COARSE_LOCATION",
+      "android.permission.ACCESS_FINE_LOCATION",
+      "android.permission.ACCESS_NETWORK_STATE",
+      "android.permission.CAMERA",
+      "android.permission.INTERNET",
+      "android.permission.POST_NOTIFICATIONS",
+      "android.permission.READ_EXTERNAL_STORAGE:maxSdkVersion=32",
+      "android.permission.USE_BIOMETRIC",
+      "android.permission.USE_FINGERPRINT",
+      "android.permission.WAKE_LOCK",
+      "android.permission.WRITE_EXTERNAL_STORAGE:maxSdkVersion=28",
+      "com.google.android.c2dm.permission.RECEIVE",
+      "com.google.android.providers.gsf.permission.READ_GSERVICES",
+      "com.shareittoo.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+    ],
+    "restrictedOrUnrequestedPermissionsAbsent": [
+      "android.permission.BIND_ACCESSIBILITY_SERVICE",
+      "android.permission.MANAGE_EXTERNAL_STORAGE",
+      "android.permission.QUERY_ALL_PACKAGES",
+      "android.permission.READ_CALL_LOG",
+      "android.permission.READ_CONTACTS",
+      "android.permission.READ_SMS",
+      "android.permission.READ_MEDIA_IMAGES",
+      "android.permission.READ_MEDIA_VIDEO",
+      "android.permission.RECORD_AUDIO",
+      "android.permission.REQUEST_INSTALL_PACKAGES",
+      "android.permission.SEND_SMS",
+      "android.permission.SYSTEM_ALERT_WINDOW",
+      "android.permission.WRITE_CALL_LOG",
+      "android.permission.WRITE_CONTACTS"
+    ],
+    "unexpectedPermissions": [],
+    "permissionDeclarationFormPreclaim": false,
+    "consoleWarningsPendingAfterAabUpload": false
+  },
+  "boundaries": {
+    "storeUploadPerformed": true,
+    "productionChanged": false,
+    "containsSecrets": false,
+    "containsPersonalAccountData": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false
+  }
+}

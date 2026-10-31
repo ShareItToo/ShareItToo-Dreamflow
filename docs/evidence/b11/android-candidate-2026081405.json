@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-release-candidate",
+  "status": "built-scanned-play-internal-installed",
+  "generatedAt": "2026-08-14T13:47:04.907Z",
+  "candidate": {
+    "applicationId": "com.shareittoo.app",
+    "bundleId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081405",
+    "commit": "a00606f979315930ea6c28c0ce7495ef4ec56368",
+    "releaseChannel": "internal",
+    "apiBaseUrl": "https://staging.shareittoo.com/api/v1",
+    "firebaseConfigured": true,
+    "paymentMode": "memory",
+    "stripeLivemode": false
+  },
+  "android": {
+    "delivery": "play-internal",
+    "aabSha256": "1795e54184a1467f981557cdede8b07821b1a2eeb058786569b519f6d97e6f67",
+    "apkSha256": "565e38ffe5faa7b6f1b367281ee78d59e2e2b52f159b7ea68c439711eb3bef3d",
+    "signingCertificateSha256": "098f485e57161558e911fc3c742845925584db31c474cdba08dda02feb0129a4",
+    "signatureVerified": true,
+    "packageIdentityVerified": true,
+    "privateArchivePermissionsVerified": true
+  },
+  "privacyAndNetwork": {
+    "binaryScan": "passed",
+    "binaryScanReportSha256": "49b887280e35af7305271cdd138634243ebd0a1f48881113d62ae43fe31a52c1",
+    "targetSdkVersion": 35,
+    "backupDisabled": true,
+    "cleartextTrafficDisabled": true,
+    "analyticsSdkPresent": false,
+    "advertisingSdkPresent": false,
+    "permissionInventoryStatus": "passed",
+    "permissionInventoryEvidenceRef": "docs/evidence/b11/android-release-permissions-2026081405.json",
+    "disclosedSdks": [
+      "Firebase Cloud Messaging",
+      "Firebase Crashlytics",
+      "Firebase Authentication",
+      "Facebook Login",
+      "Google Maps Platform"
+    ],
+    "findings": []
+  },
+  "exactCandidateDiagnostics": {
+    "playInternalInstallAndLaunch": "passed",
+    "playInstallerVerified": "passed",
+    "centeredSitFeedback": "passed-source-and-widget-regression",
+    "foregroundPushCenteredSitPopup": "passed-physical-play-build",
+    "backgroundAndTerminatedPush": "passed-physical-play-build",
+    "foregroundFcm": "passed",
+    "backgroundFcm": "passed",
+    "terminatedProcessFcm": "passed",
+    "notificationIconVisualFit": "passed-centered-contained-safety-margin",
+    "syntheticRoleBooking": "passed-physical-play-build",
+    "controlledCrashDiagnostic": "sent-once-console-assignment-pending",
+    "authenticatedSession": "pending-exact-build",
+    "authenticatedDeepLinks": "passed-physical-play-build",
+    "logoutColdStartGuestPersistence": "passed-physical-play-build",
+    "postLogoutPushSuppression": "passed-physical-play-build",
+    "offlineRealtimeRecovery": "pending-exact-build"
+  },
+  "googlePlayInternalRelease": {
+    "status": "store-install-verified",
+    "evidenceRef": "docs/evidence/b11/google-play-internal-release-active-2026081405-20260814.json"
+  },
+  "controlledFcm": {
+    "status": "passed",
+    "installation": "google-play-split",
+    "foreground": "passed",
+    "background": "passed",
+    "terminatedProcess": "passed",
+    "notificationIconVisualFit": "passed-centered-and-contained",
+    "evidenceRef": "docs/evidence/b11/android-controlled-fcm-2026081405-20260814T141032Z.json"
+  },
+  "logoutLifecycle": {
+    "status": "passed",
+    "installation": "google-play-split",
+    "coldStartGuestPersistence": "passed",
+    "postLogoutPushSuppression": "passed",
+    "evidenceRef": "docs/evidence/b11/android-logout-lifecycle-2026081405-20260814T145955Z.json"
+  },
+  "staging": {
+    "serverCommit": "09c9211e41da75969b9ee59e9954ac7465250e80",
+    "liveHttpStatus": 200,
+    "readyHttpStatus": 200,
+    "fcmEnabled": true,
+    "googleCredentialValidation": "passed-existing-staging-deployment-gate",
+    "productionInvariant": "passed",
+    "productionServerCommit": "09c9211e41da75969b9ee59e9954ac7465250e80",
+    "productionDockerHealth": "healthy",
+    "productionLiveHttpStatus": 200,
+    "productionReadyHttpStatus": 200,
+    "productionReadyRouteAvailable": true
+  },
+  "boundaries": {
+    "uploadedToStore": true,
+    "installedOnPhysicalDevice": true,
+    "controlledFcmSentToSyntheticAccount": true,
+    "controlledCrashDiagnosticSent": true,
+    "productionPushSent": false,
+    "productionCrashGenerated": false,
+    "iosValidated": false,
+    "containsSecrets": false,
+    "containsRawDeviceIdentifiers": false,
+    "containsReviewCredentials": false,
+    "syntheticAccountsOnly": true
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "kind": "android-candidate-product-truth-supersession",
+  "status": "superseded-product-truth-failed",
+  "capturedAt": "2026-08-13T12:30:00Z",
+  "supersededCandidate": {
+    "applicationId": "com.shareittoo.app",
+    "versionName": "1.0.0",
+    "buildNumber": "2026081202",
+    "commit": "72dd8f13b5d3be0e82392a8b28c31292bdc23b53",
+    "aabSha256": "aaee3f1193e1a16ed29fa686af8017c3f0f244676f6a75b3fae2036efbe6ffc6"
+  },
+  "finding": {
+    "code": "unsupported-deposit-and-protection-claims",
+    "severity": "release-blocking",
+    "summary": "The candidate still exposed legacy deposit/protection concepts although the launch product offers neither.",
+    "affectedSurfaces": [
+      "listing-detail-copy",
+      "payment-checkout",
+      "booking-menu",
+      "store-description",
+      "store-screenshot-detail"
+    ]
+  },
+  "remediation": {
+    "replacementBuildNumber": "2026081302",
+    "depositMinor": 0,
+    "protectionModel": "none",
+    "newBinaryRequired": true,
+    "newScreenshotCaptureRequired": true,
+    "backendMigrationRequired": true
+  },
+  "boundaries": {
+    "uploadedToStore": false,
+    "submissionAllowed": false,
+    "releaseDraftSaved": false,
+    "testerInvitationSent": false,
+    "productionChanged": false,
+    "containsSecrets": false,
+    "containsAccountIdentifiers": false
+  }
+}
