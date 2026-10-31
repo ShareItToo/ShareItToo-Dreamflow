@@ -13,6 +13,7 @@ import {
   constants,
   mkdirSync,
   openSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -28,6 +29,7 @@ import {
 } from './run_local_postgres_integration.mjs';
 
 export const WEB_CLONE_ORIGIN = 'http://127.0.0.1:18080';
+export const WEB_CLONE_PRIVATE_PILOT_ALLOWED_REGIONS = 'heilbronn';
 const API_PREFIX = '/api/';
 const RUN_PREFIX = 'sit-web-clone-';
 const MIME_TYPES = Object.freeze({
@@ -63,6 +65,15 @@ export function resolveWebCloneSyntheticPaymentFlag(value) {
   return flag;
 }
 
+export function assertLocalWebCloneBuildSource(source) {
+  if (typeof source !== 'string'
+      || !source.includes(`${WEB_CLONE_ORIGIN}/api/v1`)
+      || source.includes('https://shareittoo.com/api/v1')) {
+    fail('web_clone_web_build_api_origin_mismatch');
+  }
+  return true;
+}
+
 export function assertWebCloneEnvironment(env, { origin = WEB_CLONE_ORIGIN } = {}) {
   validateLocalWebOrigin(origin);
   const paymentFlag = resolveWebCloneSyntheticPaymentFlag(
@@ -82,6 +93,7 @@ export function assertWebCloneEnvironment(env, { origin = WEB_CLONE_ORIGIN } = {
   }
   if (env.SIT_LOCAL_QA_SYNTHETIC_PAYMENT_LANE !== paymentFlag
       || env.CORS_ORIGINS !== origin || env.SIT_LISTING_AI_PROVIDER !== 'mock'
+      || env.PRIVATE_PILOT_ALLOWED_REGIONS !== WEB_CLONE_PRIVATE_PILOT_ALLOWED_REGIONS
       || env.MAIL_TRANSPORT !== 'memory' || env.PUSH_TRANSPORT !== 'memory'
       || env.IDENTITY_VERIFICATION_TRANSPORT !== 'memory'
       || env.SIT_SYNTHETIC_TARGET_KIND !== 'clone'
@@ -115,6 +127,54 @@ export function safeStaticPath(root, requestPath) {
 export function webCloneProxyAccessRecord(method, requestPath, status) {
   const path = typeof requestPath === 'string' ? requestPath.split(/[?#]/u, 1)[0] : '';
   return { event: 'web_clone_proxy_access', method, path, status };
+}
+
+const SYNTHETIC_HEILBRONN_PLACE_ID = 'sit-synthetic-heilbronn-v1';
+
+/**
+ * Local-only Maps fixture for listing creation. Every Maps request is handled
+ * here (including denied/unknown requests), so this browser clone never calls
+ * the production Maps proxy or an external provider.
+ */
+export async function resolveWebCloneMapsFixture({
+  method, requestPath, authorization, ownerToken, renterToken,
+  isBoundPrincipalToken,
+}) {
+  let parsed;
+  try { parsed = new URL(requestPath, WEB_CLONE_ORIGIN); } catch { return null; }
+  if (parsed.pathname !== '/api/v1/maps/places/autocomplete'
+      && !parsed.pathname.startsWith('/api/v1/maps/places/')) return null;
+
+  const bearer = typeof authorization === 'string' && authorization.startsWith('Bearer ')
+    ? authorization.slice('Bearer '.length) : '';
+  const authorized = bearer.length > 0 && (
+    [ownerToken, renterToken].some((token) => typeof token === 'string'
+      && token.length > 0 && bearer === token)
+    || (typeof isBoundPrincipalToken === 'function'
+      && await isBoundPrincipalToken(bearer))
+  );
+  if (!authorized) return { status: 401, body: { error: 'unauthorized' } };
+  if (method !== 'GET') return { status: 405, body: { error: 'method_not_allowed' } };
+
+  if (parsed.pathname === '/api/v1/maps/places/autocomplete'
+      && parsed.searchParams.size === 3
+      && parsed.searchParams.get('input') === 'Heilbronn'
+      && parsed.searchParams.get('language') === 'de'
+      && parsed.searchParams.get('country') === 'de') {
+    return { status: 200, body: { suggestions: [{
+      description: 'Heilbronn, Deutschland', placeId: SYNTHETIC_HEILBRONN_PLACE_ID,
+    }] } };
+  }
+  if (parsed.pathname === `/api/v1/maps/places/${SYNTHETIC_HEILBRONN_PLACE_ID}`
+      && parsed.searchParams.size === 1
+      && parsed.searchParams.get('language') === 'de') {
+    return { status: 200, body: { place: {
+      placeId: SYNTHETIC_HEILBRONN_PLACE_ID,
+      formattedAddress: 'Heilbronn, Deutschland',
+      lat: 49.1427, lng: 9.2109,
+    } } };
+  }
+  return { status: 404, body: { error: 'synthetic_place_not_found' } };
 }
 
 export function isAllowedWebCloneRealtimeUpgrade(requestPath, requestOrigin, origin = WEB_CLONE_ORIGIN) {
@@ -179,11 +239,40 @@ async function waitReady(url, child) {
   fail('web_clone_backend_readiness_timeout');
 }
 
-function createWebCloneServer({ origin, backendPort, webRoot }) {
+function createWebCloneServer({
+  origin, backendPort, webRoot, ownerToken, renterToken, ownerId, renterId,
+}) {
   const sockets = new Set();
   const server = http.createServer(async (request, response) => {
     const requestPath = request.url ?? '/';
     if (requestPath.startsWith(API_PREFIX)) {
+      const mapsFixture = await resolveWebCloneMapsFixture({
+        method: request.method, requestPath,
+        authorization: request.headers.authorization,
+        ownerToken, renterToken,
+        isBoundPrincipalToken: async (token) => {
+          try {
+            const principalResponse = await fetch(`http://127.0.0.1:${backendPort}/v1/auth/me`, {
+              headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(2_000),
+            });
+            if (!principalResponse.ok) return false;
+            const principal = await principalResponse.json();
+            return [ownerId, renterId].includes(principal.user?.id);
+          } catch { return false; }
+        },
+      });
+      if (mapsFixture) {
+        process.stdout.write(`${JSON.stringify(webCloneProxyAccessRecord(
+          request.method, requestPath.slice('/api'.length), mapsFixture.status,
+        ))}\n`);
+        response.writeHead(mapsFixture.status, {
+          'content-type': 'application/json; charset=utf-8',
+          'cache-control': 'no-store',
+          'x-content-type-options': 'nosniff',
+        });
+        response.end(`${JSON.stringify(mapsFixture.body)}\n`);
+        return;
+      }
       const upstreamPath = requestPath.slice('/api'.length);
       const upstream = http.request({
         host: '127.0.0.1', port: backendPort, method: request.method,
@@ -332,6 +421,10 @@ export async function startLocalWebClone({ origin = WEB_CLONE_ORIGIN, webRoot } 
   const root = resolve(webRoot ?? process.env.SIT_WEB_BUILD_DIR ?? '');
   if (!webRoot && !process.env.SIT_WEB_BUILD_DIR) fail('web_clone_web_build_dir_required');
   if (!(await statFile(join(root, 'index.html')).catch(() => null))?.isFile()) fail('web_clone_web_build_invalid');
+  let compiledWebSource;
+  try { compiledWebSource = readFileSync(join(root, 'main.dart.js'), 'utf8'); }
+  catch { fail('web_clone_web_build_invalid'); }
+  assertLocalWebCloneBuildSource(compiledWebSource);
   const repositoryRoot = resolve(fileURLToPath(new URL('../', import.meta.url)));
   const backendRoot = join(repositoryRoot, 'backend');
   const pgBin = await resolvePostgresBinDir();
@@ -384,7 +477,8 @@ export async function startLocalWebClone({ origin = WEB_CLONE_ORIGIN, webRoot } 
       PAYMENT_TRANSPORT: 'memory', STRIPE_LIVEMODE: 'false', BOOKING_PILOT_MODE: 'pilot',
       PRIVATE_PILOT_V4_ENABLED: 'false', SIT_LOCAL_QA_SYNTHETIC_PAYMENT_LANE: '0',
       SIT_WEB_CLONE_SYNTHETIC_PAYMENT: syntheticPaymentFlag,
-      PRIVATE_PILOT_ALLOWED_REGIONS: 'heilbronn_wave0', FIREBASE_AUTH_ENABLED: 'false',
+      PRIVATE_PILOT_ALLOWED_REGIONS: WEB_CLONE_PRIVATE_PILOT_ALLOWED_REGIONS,
+      FIREBASE_AUTH_ENABLED: 'false',
       FIREBASE_PHONE_VERIFICATION_ENABLED: 'false', IDENTITY_VERIFICATION_TRANSPORT: 'memory',
       MFA_ENCRYPTION_KEY: crypto.randomBytes(32).toString('base64url'),
       SIT_LISTING_AI_PROVIDER: 'mock', SIT_LISTING_AI_MODEL: 'listing-ai-mock-v1',
@@ -468,7 +562,9 @@ export async function startLocalWebClone({ origin = WEB_CLONE_ORIGIN, webRoot } 
       fail('web_clone_synthetic_payment_readback_invalid');
     }
     const sessionPath = secureSession({ runRoot, owner: { ...owner, id: ownerId }, renter: { ...renter, id: renterId }, runId, datasetId });
-    apiUiServer = createWebCloneServer({ origin, backendPort, webRoot: root });
+    apiUiServer = createWebCloneServer({
+      origin, backendPort, webRoot: root, ownerToken, renterToken, ownerId, renterId,
+    });
     await listenLoopback(apiUiServer, 18080);
     const ready = {
       status: 'ready-loopback-web-clone', origin, apiBaseUrl: `${origin}/api/v1`,

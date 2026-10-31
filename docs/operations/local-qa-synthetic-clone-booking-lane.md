@@ -63,6 +63,28 @@ Play or Store candidate. The installed Play version and final Play successor
 are supplied by their respective external release gates; this document does
 not hardcode either observed version.
 
+## Local Web listing journey (payment lane off)
+
+Build the Web client against the clone's loopback API before starting the
+runner. The runner checks `build/web/main.dart.js` and refuses an artifact
+that contains the production API origin or lacks the exact clone API literal.
+Keep these flags with the run so the browser cannot silently fall back to
+production. The clone's allowed listing city is `heilbronn`; the separate
+Stage-A pilot identifier `heilbronn_wave0` is not a city-region code.
+
+```sh
+flutter build web --debug --no-pub --no-web-resources-cdn --pwa-strategy=none \
+  --dart-define=SIT_BACKEND_ENABLED=true \
+  --dart-define=SIT_API_BASE_URL=http://127.0.0.1:18080/api/v1 \
+  --dart-define=SIT_RELEASE_CHANNEL=internal \
+  --dart-define=SIT_BUNDLE_ID=com.shareittoo.app.qa \
+  --dart-define=SIT_STAGE_A_NON_BINDING_PILOT=true \
+  --dart-define=SIT_SYNTHETIC_CLONE_BOOKING_LANE=true \
+  --dart-define=SIT_LOCAL_QA_SYNTHETIC_PAYMENT_LANE=false
+
+SIT_WEB_BUILD_DIR="$PWD/build/web" node tool/run_local_qa_web_clone.mjs
+```
+
 ## Local Web runner with synthetic payment
 
 `tool/run_local_qa_web_clone.mjs` serves only `http://127.0.0.1:18080`, uses an

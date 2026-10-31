@@ -4,10 +4,13 @@ import test from 'node:test';
 
 import {
   assertWebCloneEnvironment,
+  assertLocalWebCloneBuildSource,
+  WEB_CLONE_PRIVATE_PILOT_ALLOWED_REGIONS,
   resolveWebCloneSyntheticPaymentFlag,
   safeStaticPath,
   validateLocalWebOrigin,
   webCloneProxyAccessRecord,
+  resolveWebCloneMapsFixture,
   isAllowedWebCloneRealtimeUpgrade,
   WEB_CLONE_ORIGIN,
 } from '../../tool/run_local_qa_web_clone.mjs';
@@ -34,6 +37,7 @@ function environment(overrides = {}) {
     SIT_SYNTHETIC_CLONE_OWNER_ID: '00000000-0000-4000-8000-000000000011',
     SIT_SYNTHETIC_CLONE_RENTER_ID: '00000000-0000-4000-8000-000000000012',
     SIT_SYNTHETIC_CLONE_CONFIRMATION_SECRET: 'synthetic-only-secret-long-enough-for-test',
+    PRIVATE_PILOT_ALLOWED_REGIONS: 'heilbronn',
     ...overrides,
   };
 }
@@ -83,6 +87,7 @@ test('web clone runtime envelope pins Stage-A, test, loopback, memory and mock A
     ['SIT_LISTING_AI_PROVIDER', 'external'], ['MAIL_TRANSPORT', 'smtp'],
     ['SIT_LOCAL_QA_SYNTHETIC_IMAGE_SCREENING', 'true'],
     ['TECHNICAL_SANDBOX_ENABLED', '1'], ['TECHNICAL_SANDBOX_KILL_SWITCH', '0'],
+    ['PRIVATE_PILOT_ALLOWED_REGIONS', 'heilbronn_wave0'],
   ]) assert.throws(
     () => assertWebCloneEnvironment(environment({ [name]: value }), { origin: validOrigin }),
     /web_clone_environment_guard_failed/u,
@@ -98,11 +103,38 @@ test('web clone runtime envelope pins Stage-A, test, loopback, memory and mock A
   );
 });
 
+test('local clone region allowlist uses the backend city region code', () => {
+  assert.equal(WEB_CLONE_PRIVATE_PILOT_ALLOWED_REGIONS, 'heilbronn');
+  assert.equal(assertWebCloneEnvironment(environment(), { origin: validOrigin }), true);
+  assert.throws(
+    () => assertWebCloneEnvironment(environment({
+      PRIVATE_PILOT_ALLOWED_REGIONS: 'heilbronn_wave0',
+    }), { origin: validOrigin }),
+    /web_clone_environment_guard_failed/u,
+  );
+});
+
 test('static app serving confines resolved paths to the selected build root', () => {
   const root = '/private/tmp/sit-web-build';
   assert.equal(safeStaticPath(root, '/assets/flutter.js'), `${root}/assets/flutter.js`);
   assert.throws(() => safeStaticPath(root, '/%2e%2e/private/secrets'), /web_clone_static_path_invalid/u);
   assert.throws(() => safeStaticPath(root, '/%2fprivate/secrets'), /web_clone_static_path_invalid/u);
+});
+
+test('local web clone rejects a compiled app pointed at the production API', () => {
+  assert.equal(assertLocalWebCloneBuildSource(
+    'const api = "http://127.0.0.1:18080/api/v1";',
+  ), true);
+  assert.throws(
+    () => assertLocalWebCloneBuildSource(
+      'const api = "https://shareittoo.com/api/v1";',
+    ),
+    /web_clone_web_build_api_origin_mismatch/u,
+  );
+  assert.throws(
+    () => assertLocalWebCloneBuildSource('const api = "http://127.0.0.1:1/api/v1";'),
+    /web_clone_web_build_api_origin_mismatch/u,
+  );
 });
 
 test('custom Flutter bootstrap pins CanvasKit and permits local picker blob reads', () => {
@@ -130,4 +162,49 @@ test('proxy access diagnostics record only method, query-free path and status', 
   assert.equal(isAllowedWebCloneRealtimeUpgrade('/api/v1/realtime?secret=x', validOrigin), true);
   assert.equal(isAllowedWebCloneRealtimeUpgrade('/v1/realtime', validOrigin), false);
   assert.equal(isAllowedWebCloneRealtimeUpgrade('/api/v1/realtime', 'https://example.invalid'), false);
+});
+
+test('Maps fixture is synthetic, exact-query, principal-bound and fails closed', async () => {
+  const ownerToken = 'synthetic-owner-token';
+  const renterToken = 'synthetic-renter-token';
+  const boundPrincipalToken = async (token) => token === 'rotated-owner-token'
+    || token === 'rotated-renter-token';
+  const autocomplete = '/api/v1/maps/places/autocomplete?input=Heilbronn&language=de&country=de';
+  const details = '/api/v1/maps/places/sit-synthetic-heilbronn-v1?language=de';
+
+  assert.equal((await resolveWebCloneMapsFixture({
+    method: 'GET', requestPath: autocomplete, authorization: undefined,
+    ownerToken, renterToken,
+  })).status, 401);
+  assert.equal((await resolveWebCloneMapsFixture({
+    method: 'GET', requestPath: autocomplete, authorization: 'Bearer other-token',
+    ownerToken, renterToken, isBoundPrincipalToken: boundPrincipalToken,
+  })).status, 401);
+  const suggestions = await resolveWebCloneMapsFixture({
+    method: 'GET', requestPath: autocomplete, authorization: 'Bearer rotated-owner-token',
+    ownerToken, renterToken, isBoundPrincipalToken: boundPrincipalToken,
+  });
+  assert.deepEqual(suggestions, { status: 200, body: { suggestions: [{
+    description: 'Heilbronn, Deutschland', placeId: 'sit-synthetic-heilbronn-v1',
+  }] } });
+  const place = await resolveWebCloneMapsFixture({
+    method: 'GET', requestPath: details, authorization: `Bearer ${renterToken}`,
+    ownerToken, renterToken, isBoundPrincipalToken: boundPrincipalToken,
+  });
+  assert.deepEqual(place, { status: 200, body: { place: {
+    placeId: 'sit-synthetic-heilbronn-v1', formattedAddress: 'Heilbronn, Deutschland',
+    lat: 49.1427, lng: 9.2109,
+  } } });
+  assert.equal((await resolveWebCloneMapsFixture({
+    method: 'GET', requestPath: `${autocomplete}&extra=provider`, authorization: `Bearer ${ownerToken}`,
+    ownerToken, renterToken, isBoundPrincipalToken: boundPrincipalToken,
+  })).status, 404);
+  assert.equal((await resolveWebCloneMapsFixture({
+    method: 'POST', requestPath: autocomplete, authorization: `Bearer ${ownerToken}`,
+    ownerToken, renterToken, isBoundPrincipalToken: boundPrincipalToken,
+  })).status, 405);
+  assert.equal(await resolveWebCloneMapsFixture({
+    method: 'GET', requestPath: '/api/v1/listings', authorization: `Bearer ${ownerToken}`,
+    ownerToken, renterToken,
+  }), null);
 });

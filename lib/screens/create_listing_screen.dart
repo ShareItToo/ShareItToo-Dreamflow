@@ -111,6 +111,18 @@ String? resolveListingPayloadCity({
 }
 
 @visibleForTesting
+bool canApplyListingAddressQueryResult({
+  required bool mounted,
+  required int requestEpoch,
+  required int currentEpoch,
+  required String requestQuery,
+  required String currentQuery,
+}) =>
+    mounted &&
+    requestEpoch == currentEpoch &&
+    requestQuery.trim() == currentQuery.trim();
+
+@visibleForTesting
 Category? resolveCreateListingCategory(
   Iterable<Category> categories,
   String? selectedId,
@@ -210,7 +222,8 @@ class _CreateListingScreenState extends State<CreateListingScreen>
 
   // Address suggestions are routed through the authenticated SIT backend.
   Timer? _debounce;
-  List<_PlaceSuggestion> _addrSuggestions = const [];
+  int _addressQueryEpoch = 0;
+  List<ListingPlaceSuggestion> _addrSuggestions = const [];
   bool _addrSuggestionsUnavailable = false;
 
   // AI Price Calculator
@@ -320,6 +333,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
     _accountSecuritySubscription = SharedPersistenceSync.changes.listen((key) {
       if (key != SharedPersistenceSync.accountSecurityStateKey) return;
       final ownedRoute = mounted ? ModalRoute.of(context) : null;
+      _addressQueryEpoch++;
       _debounce?.cancel();
       _priceRecalcDebounce?.cancel();
       _blueOceanRecoveryDebounce?.cancel();
@@ -496,6 +510,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _addressQueryEpoch++;
     _accountSecuritySubscription?.cancel();
     _listingActions.dispose();
     _blueOceanRecoveryDebounce?.cancel();
@@ -2159,8 +2174,18 @@ class _CreateListingScreenState extends State<CreateListingScreen>
   // --- Address Autocomplete: debounced query ---
   void _onAddressQueryChanged(String q) {
     _debounce?.cancel();
+    final requestEpoch = ++_addressQueryEpoch;
+    bool isCurrentRequest() => canApplyListingAddressQueryResult(
+          mounted: mounted,
+          requestEpoch: requestEpoch,
+          currentEpoch: _addressQueryEpoch,
+          requestQuery: q,
+          currentQuery: _addressCtrl.text,
+        );
     _debounce = Timer(const Duration(milliseconds: 220), () async {
+      if (!isCurrentRequest()) return;
       if (q.trim().isEmpty) {
+        if (!isCurrentRequest()) return;
         setState(() {
           _addrSuggestions = const [];
           _addrSuggestionsUnavailable = false;
@@ -2169,13 +2194,13 @@ class _CreateListingScreenState extends State<CreateListingScreen>
       }
       try {
         final results = await _fetchAutocomplete(q);
-        if (!mounted) return;
+        if (!isCurrentRequest()) return;
         setState(() {
           _addrSuggestions = results;
           _addrSuggestionsUnavailable = false;
         });
       } catch (_) {
-        if (!mounted) return;
+        if (!isCurrentRequest()) return;
         setState(() {
           _addrSuggestions = const [];
           _addrSuggestionsUnavailable = true;
@@ -3423,7 +3448,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _AddressAutocompleteField(
+                          AddressAutocompleteField(
                             controller: _addressCtrl,
                             onPlaceChosen: (d) {
                               setState(() {
@@ -3441,6 +3466,7 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                               });
                               _schedulePriceRecalc();
                             },
+                            loadPlaceDetails: _fetchPlaceDetails,
                             onQueryChanged: (q) {
                               if (q.trim() != _selectedAddrQuery) {
                                 _selectedAddrLat = null;
@@ -3449,6 +3475,8 @@ class _CreateListingScreenState extends State<CreateListingScreen>
                               }
                               _onAddressQueryChanged(q);
                               setState(() {
+                                _addrSuggestions = const [];
+                                _addrSuggestionsUnavailable = false;
                                 _invalidateBlueOceanReviewState(
                                   confirmations: const <String>[
                                     'pickup_region'
@@ -4847,127 +4875,158 @@ class _OwnerCancellationInfoCardState
 }
 
 // ---------- Address Autocomplete with Google Places API ----------
-class _PlaceSuggestion {
+@visibleForTesting
+class ListingPlaceSuggestion {
   final String description;
   final String placeId;
-  const _PlaceSuggestion({required this.description, required this.placeId});
+  const ListingPlaceSuggestion({required this.description, required this.placeId});
 }
 
-class _PlaceDetails {
+@visibleForTesting
+class ListingPlaceDetails {
   final String? formattedAddress;
   final double? lat;
   final double? lng;
   final String description;
-  const _PlaceDetails(
+  const ListingPlaceDetails(
       {this.formattedAddress, this.lat, this.lng, required this.description});
 }
 
-class _AddressAutocompleteField extends StatelessWidget {
+@visibleForTesting
+class AddressAutocompleteField extends StatefulWidget {
   final TextEditingController controller;
-  final List<_PlaceSuggestion> suggestions;
+  final List<ListingPlaceSuggestion> suggestions;
   final ValueChanged<String> onQueryChanged;
-  final ValueChanged<_PlaceDetails> onPlaceChosen;
-  const _AddressAutocompleteField({
+  final ValueChanged<ListingPlaceDetails> onPlaceChosen;
+  final Future<ListingPlaceDetails?> Function(String placeId) loadPlaceDetails;
+  const AddressAutocompleteField({
     required this.controller,
     required this.onQueryChanged,
     required this.suggestions,
     required this.onPlaceChosen,
+    required this.loadPlaceDetails,
   });
+
+  @override
+  State<AddressAutocompleteField> createState() =>
+      _AddressAutocompleteFieldState();
+}
+
+class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
+  late final FocusNode _focusNode;
+  bool _allowSuggestions = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode = FocusNode()..addListener(_onFocusChanged);
+  }
+
+  void _onFocusChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChanged);
+    _focusNode.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return RawAutocomplete<_PlaceSuggestion>(
-      textEditingController: controller,
-      focusNode: FocusNode(),
-      optionsBuilder: (TextEditingValue tev) {
-        final text = tev.text.trim();
-        if (text.isEmpty) return const Iterable<_PlaceSuggestion>.empty();
-        // onQueryChanged is debounced by parent
-        onQueryChanged(text);
-        return suggestions;
-      },
-      displayStringForOption: (o) => o.description,
-      fieldViewBuilder: (context, textCtrl, focusNode, onFieldSubmitted) {
-        return TextFormField(
-          controller: textCtrl,
-          focusNode: focusNode,
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final options = _focusNode.hasFocus &&
+            _allowSuggestions &&
+            widget.controller.text.trim().isNotEmpty
+        ? widget.suggestions
+        : const <ListingPlaceSuggestion>[];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextFormField(
+          controller: widget.controller,
+          focusNode: _focusNode,
           style: TextStyle(
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.white
-                  : AppTheme.textBody(context),
+              color: isDark ? Colors.white : AppTheme.textBody(context),
               fontSize: 15),
           decoration: InputDecoration(
               prefixIcon: Icon(Icons.search,
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Colors.white70
-                      : AppTheme.textSecondary(context)),
+                  color: isDark ? Colors.white70 : AppTheme.textSecondary(context)),
               hintText: 'Übergabeort eingeben'),
-          onChanged: onQueryChanged,
-        );
-      },
-      optionsViewBuilder: (context, onSelected, options) {
-        final list = options.toList();
-        return Align(
-          alignment: Alignment.topLeft,
-          child: Material(
-            color: Theme.of(context).brightness == Brightness.dark
-                ? Colors.black
-                : AppTheme.surfacePrimary(context),
-            elevation: 8,
-            borderRadius: BorderRadius.circular(12),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 280, minWidth: 320),
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                itemBuilder: (context, i) {
-                  final s = list[i];
-                  return ListTile(
-                    dense: true,
-                    leading: Icon(Icons.place_outlined,
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? Colors.white70
-                            : AppTheme.textSecondary(context)),
-                    title: Text(s.description,
-                        style: TextStyle(
-                            color:
-                                Theme.of(context).brightness == Brightness.dark
-                                    ? Colors.white
-                                    : AppTheme.textBody(context))),
-                    onTap: () async {
-                      // Fetch place details for lat/lng
-                      final d = await _fetchPlaceDetails(s.placeId);
-                      onSelected(s);
-                      onPlaceChosen(_PlaceDetails(
-                        formattedAddress: d?.formattedAddress ?? s.description,
-                        lat: d?.lat,
-                        lng: d?.lng,
-                        description: s.description,
-                      ));
-                    },
-                  );
-                },
-                separatorBuilder: (_, __) => Divider(
-                    height: 1,
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? Colors.white12
-                        : const Color(0xFFE2E8F0)),
-                itemCount: list.length,
+          onChanged: (value) {
+            _allowSuggestions = true;
+            widget.onQueryChanged(value);
+          },
+        ),
+        if (options.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Material(
+              color: isDark ? Colors.black : AppTheme.surfacePrimary(context),
+              elevation: 4,
+              borderRadius: BorderRadius.circular(12),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 280),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  itemBuilder: (context, index) {
+                    final suggestion = options[index];
+                    return ListTile(
+                      dense: true,
+                      leading: Icon(Icons.place_outlined,
+                          color: isDark
+                              ? Colors.white70
+                              : AppTheme.textSecondary(context)),
+                      title: Text(suggestion.description,
+                          style: TextStyle(
+                              color: isDark
+                                  ? Colors.white
+                                  : AppTheme.textBody(context))),
+                      onTap: () async {
+                        setState(() => _allowSuggestions = false);
+                        widget.controller.value = TextEditingValue(
+                          text: suggestion.description,
+                          selection: TextSelection.collapsed(
+                              offset: suggestion.description.length),
+                        );
+                        final details =
+                            await widget.loadPlaceDetails(suggestion.placeId);
+                        if (!mounted ||
+                            widget.controller.text.trim() !=
+                                suggestion.description) return;
+                        widget.onPlaceChosen(ListingPlaceDetails(
+                          formattedAddress: details?.formattedAddress ??
+                              suggestion.description,
+                          lat: details?.lat,
+                          lng: details?.lng,
+                          description: suggestion.description,
+                        ));
+                      },
+                    );
+                  },
+                  separatorBuilder: (_, __) => Divider(
+                      height: 1,
+                      color:
+                          isDark ? Colors.white12 : const Color(0xFFE2E8F0)),
+                  itemCount: options.length,
+                ),
               ),
             ),
           ),
-        );
-      },
-      onSelected: (_) {},
+      ],
     );
   }
 }
 
 // --- Address suggestions via the authenticated SIT backend ---
-Future<List<_PlaceSuggestion>> _fetchAutocomplete(String input) async {
+Future<List<ListingPlaceSuggestion>> _fetchAutocomplete(String input) async {
   try {
     final suggestions = await MapsService.autocomplete(input);
     return suggestions
         .where((entry) => entry.placeId != null)
-        .map((entry) => _PlaceSuggestion(
+        .map((entry) => ListingPlaceSuggestion(
               description: entry.description,
               placeId: entry.placeId!,
             ))
@@ -4978,11 +5037,11 @@ Future<List<_PlaceSuggestion>> _fetchAutocomplete(String input) async {
   }
 }
 
-Future<_PlaceDetails?> _fetchPlaceDetails(String placeId) async {
+Future<ListingPlaceDetails?> _fetchPlaceDetails(String placeId) async {
   try {
     final details = await MapsService.placeDetails(placeId);
     if (details == null) return null;
-    return _PlaceDetails(
+    return ListingPlaceDetails(
       formattedAddress: details.formattedAddress,
       lat: details.lat,
       lng: details.lng,

@@ -304,7 +304,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
             body: _HelpBody(
               intro: 'Fotos sind der wichtigste Faktor für Vertrauen.',
               steps: [
-                'Nutze mindestens 4 Fotos: Front, Seite, Details, Zubehör.',
+                'Für die Veröffentlichung brauchst du mindestens ein aktuelles, echtes Foto des Artikels. Weitere Ansichten von Front, Seite, Details und Zubehör helfen Interessenten.',
                 'Zeige Zustand (Kratzer, Normale Gebrauchsspuren) ehrlich.',
               ],
               tips: [

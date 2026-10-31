@@ -101,6 +101,31 @@ void main() {
     );
   });
 
+  testWidgets('listing photo guidance requires one authentic current item photo',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: HelpCenterScreen(sessionCheck: () async => true),
+    ));
+    await tester.enterText(find.byType(TextField).first, 'Fotos hinzufügen');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Fotos hinzufügen').last);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('mindestens ein aktuelles, echtes Foto des Artikels'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Nutze mindestens 4 Fotos'),
+      findsNothing,
+      reason: 'four photos are required for handover and return, not listing publication',
+    );
+    final privacyGuidance =
+        File('lib/screens/privacy_info_screen.dart').readAsStringSync();
+    expect(privacyGuidance, contains('Übergabe: mindestens 4 Fotos durch den Vermieter'));
+    expect(privacyGuidance, contains('Rückgabe: mindestens 4 Fotos durch den Mieter'));
+  });
+
   testWidgets('help center keeps guest text and requires an account',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
