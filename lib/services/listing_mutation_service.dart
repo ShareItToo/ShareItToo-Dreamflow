@@ -28,6 +28,10 @@ class ListingAiCapability {
   final String disclosureHash;
   final String policyRevision;
   final String configRevision;
+  final String budgetScope;
+  final int lifetimeBudgetCents;
+  final int stagingSmokeBudgetCents;
+  final String? stagingSmokeActivationId;
   final String supportedClientVersion;
   final int imageLimit;
 
@@ -40,6 +44,10 @@ class ListingAiCapability {
     required this.disclosureHash,
     required this.policyRevision,
     required this.configRevision,
+    required this.budgetScope,
+    required this.lifetimeBudgetCents,
+    required this.stagingSmokeBudgetCents,
+    required this.stagingSmokeActivationId,
     required this.supportedClientVersion,
     required this.imageLimit,
   });
@@ -54,6 +62,10 @@ class ListingAiCapability {
       'disclosureHash',
       'policyRevision',
       'configRevision',
+      'budgetScope',
+      'lifetimeBudgetCents',
+      'stagingSmokeBudgetCents',
+      'stagingSmokeActivationId',
       'supportedClientVersion',
       'imageLimit',
     };
@@ -79,6 +91,22 @@ class ListingAiCapability {
     }
     final provider = text('provider');
     final mode = text('mode');
+    final budgetScope = raw['budgetScope'];
+    final lifetimeBudgetCents = raw['lifetimeBudgetCents'];
+    final stagingSmokeBudgetCents = raw['stagingSmokeBudgetCents'];
+    final stagingSmokeActivationId = raw['stagingSmokeActivationId'];
+    if (budgetScope != 'lifetime' ||
+        lifetimeBudgetCents is! int ||
+        lifetimeBudgetCents < 0 ||
+        stagingSmokeBudgetCents is! int ||
+        stagingSmokeBudgetCents < 0 ||
+        (stagingSmokeActivationId != null &&
+            stagingSmokeActivationId is! String) ||
+        (stagingSmokeActivationId is String &&
+            stagingSmokeActivationId.trim().isEmpty) ||
+        (provider == 'mock' && stagingSmokeActivationId != null)) {
+      throw const FormatException('listing_ai_capability_invalid');
+    }
     final expectedMode = switch (provider) {
       'disabled' => 'disabled',
       'mock' => 'mock',
@@ -86,7 +114,24 @@ class ListingAiCapability {
       'openai' => 'external',
       _ => throw const FormatException('listing_ai_capability_invalid'),
     };
+    final providerBudgetIsValid = switch (provider) {
+      'disabled' || 'mock' || 'on_device' => lifetimeBudgetCents == 0 &&
+          stagingSmokeBudgetCents == 0 &&
+          stagingSmokeActivationId == null,
+      'openai' => lifetimeBudgetCents == 10000 &&
+          stagingSmokeBudgetCents >= 4 &&
+          stagingSmokeBudgetCents <= 500 &&
+          stagingSmokeActivationId is String &&
+          RegExp(
+            r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+            caseSensitive: false,
+          ).hasMatch(stagingSmokeActivationId),
+      _ => false,
+    };
     if (mode != expectedMode || (provider == 'disabled' && available)) {
+      throw const FormatException('listing_ai_capability_invalid');
+    }
+    if (!providerBudgetIsValid) {
       throw const FormatException('listing_ai_capability_invalid');
     }
     final disclosureText = text('disclosureText', preserveWhitespace: true);
@@ -110,6 +155,10 @@ class ListingAiCapability {
       disclosureHash: disclosureHash,
       policyRevision: text('policyRevision'),
       configRevision: text('configRevision'),
+      budgetScope: budgetScope,
+      lifetimeBudgetCents: lifetimeBudgetCents,
+      stagingSmokeBudgetCents: stagingSmokeBudgetCents,
+      stagingSmokeActivationId: stagingSmokeActivationId as String?,
       supportedClientVersion: supportedClientVersion,
       imageLimit: imageLimit,
     );
@@ -123,6 +172,10 @@ class ListingAiCapability {
         'disclosureHash': disclosureHash,
         'policyRevision': policyRevision,
         'configRevision': configRevision,
+        'budgetScope': budgetScope,
+        'lifetimeBudgetCents': lifetimeBudgetCents,
+        'stagingSmokeBudgetCents': stagingSmokeBudgetCents,
+        'stagingSmokeActivationId': stagingSmokeActivationId,
         'supportedClientVersion': supportedClientVersion,
         'imageLimit': imageLimit,
       };
