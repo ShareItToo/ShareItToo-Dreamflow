@@ -4900,6 +4900,7 @@ class AddressAutocompleteField extends StatefulWidget {
   final ValueChanged<ListingPlaceDetails> onPlaceChosen;
   final Future<ListingPlaceDetails?> Function(String placeId) loadPlaceDetails;
   const AddressAutocompleteField({
+    super.key,
     required this.controller,
     required this.onQueryChanged,
     required this.suggestions,
@@ -4995,7 +4996,9 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
                             await widget.loadPlaceDetails(suggestion.placeId);
                         if (!mounted ||
                             widget.controller.text.trim() !=
-                                suggestion.description) return;
+                                suggestion.description) {
+                          return;
+                        }
                         widget.onPlaceChosen(ListingPlaceDetails(
                           formattedAddress: details?.formattedAddress ??
                               suggestion.description,

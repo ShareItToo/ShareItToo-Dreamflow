@@ -66,8 +66,9 @@ void main() {
               final path = request.url.path;
               counts.update(path, (count) => count + 1, ifAbsent: () => 1);
               if (path == '/api/v1/listings') {
-                if (!firstListingRequest.isCompleted)
+                if (!firstListingRequest.isCompleted) {
                   firstListingRequest.complete();
+                }
                 await release.future;
                 return http.Response('{"listings":[]}', 200);
               }
