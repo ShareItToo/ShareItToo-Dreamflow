@@ -231,7 +231,7 @@ function createWebCloneServer({ origin, backendPort, webRoot }) {
     const type = MIME_TYPES[extname(filePath).toLowerCase()] ?? 'application/octet-stream';
     response.writeHead(200, {
       'content-type': type, 'cache-control': 'no-store',
-      'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'self' data: blob:; connect-src 'self' ws://127.0.0.1:18080; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
+      'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'self' data: blob:; connect-src 'self' blob: ws://127.0.0.1:18080; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
     });
     if (request.method === 'HEAD') { response.end(); return; }
     createReadStream(filePath).pipe(response);

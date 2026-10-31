@@ -105,7 +105,7 @@ test('static app serving confines resolved paths to the selected build root', ()
   assert.throws(() => safeStaticPath(root, '/%2fprivate/secrets'), /web_clone_static_path_invalid/u);
 });
 
-test('custom Flutter bootstrap pins CanvasKit to the self-hosted build directory', () => {
+test('custom Flutter bootstrap pins CanvasKit and permits local picker blob reads', () => {
   const bootstrap = readFileSync('web/flutter_bootstrap.js', 'utf8');
   assert.match(bootstrap, /\{\{flutter_js\}\}/u);
   assert.match(bootstrap, /\{\{flutter_build_config\}\}/u);
@@ -116,7 +116,7 @@ test('custom Flutter bootstrap pins CanvasKit to the self-hosted build directory
   const runner = readFileSync('tool/run_local_qa_web_clone.mjs', 'utf8');
   assert.match(
     runner,
-    /content-security-policy': "default-src 'self' data: blob:; connect-src 'self' ws:\/\/127\.0\.0\.1:18080; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'"/u,
+    /content-security-policy': "default-src 'self' data: blob:; connect-src 'self' blob: ws:\/\/127\.0\.0\.1:18080; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'"/u,
   );
   assert.doesNotMatch(runner, /script-src[^"\n]*https?:/u);
 });
