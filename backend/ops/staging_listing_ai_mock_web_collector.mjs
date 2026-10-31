@@ -1,9 +1,10 @@
 import crypto from 'node:crypto';
 import { assertStagingMockListingAiProfile, parseListingAiEnvironment } from './staging_listing_ai_mock_profile.mjs';
 import { LISTING_AI_MOCK_DISCLOSURE_TEXT, LISTING_AI_MOCK_DISCLOSURE_VERSION } from '../../tool/staging_listing_ai_mock_web_readiness.mjs';
+import { listingAiCapability, readListingAiGatewayConfiguration } from '../src/listing_ai_gateway_config.js';
 
 const ORIGIN = 'https://staging.shareittoo.com';
-const CAPABILITY_URL = `${ORIGIN}/api/listing-ai/capabilities`;
+const CAPABILITY_URL = `${ORIGIN}/api/v1/blue-ocean/listing-drafts/capabilities`;
 const MODEL = 'listing-ai-mock-v1';
 const fail = () => { throw new Error('staging_listing_ai_mock_web_not_verified'); };
 const check = (value) => { if (!value) fail(); };
@@ -18,44 +19,52 @@ const exact = (value, keys) => plain(value)
 const iso = (value) => new Date(value).toISOString();
 
 const API_CAPABILITY_KEYS = Object.freeze([
-  'available', 'provider', 'mode', 'model', 'budgetCents', 'externalProviderExecutionAllowed',
-  'automaticPublicationAllowed', 'productionEligible', 'supportedClientVersion', 'runtimeCommit',
-  'imageDigest', 'disclosureVersion', 'disclosureText', 'disclosureHash', 'configRevision',
-  'configurationSha256',
+  'available', 'provider', 'mode', 'disclosureVersion', 'disclosureText', 'disclosureHash',
+  'policyRevision', 'configRevision', 'budgetScope', 'lifetimeBudgetCents',
+  'stagingSmokeBudgetCents', 'stagingSmokeActivationId', 'supportedClientVersion', 'imageLimit',
 ]);
 
-function projectConfiguration(runtime, environment) {
-  const guarded = assertStagingMockListingAiProfile(parseListingAiEnvironment(environment), {
-    deploymentEnvironment: 'test',
-  });
+function projectConfiguration(runtime, environmentEntries) {
+  const environment = parseListingAiEnvironment(environmentEntries);
+  assertStagingMockListingAiProfile(environment, { deploymentEnvironment: 'test' });
+  const gatewayConfiguration = readListingAiGatewayConfiguration(environment, { deploymentEnvironment: 'test' });
   check(runtime.environment === 'staging' && commitPattern.test(runtime.runtimeCommit)
-    && /^sha256:[a-f0-9]{64}$/u.test(runtime.imageDigest));
-  return { environment: 'staging', provider: guarded.provider, model: guarded.model,
-    budgetCents: guarded.budgetCents, externalProviderExecutionAllowed: guarded.externalProviderExecutionAllowed,
-    automaticPublicationAllowed: guarded.automaticPublicationAllowed, productionEligible: guarded.productionEligible,
+    && /^sha256:[a-f0-9]{64}$/u.test(runtime.imageDigest)
+    && gatewayConfiguration.provider === 'mock' && gatewayConfiguration.model === MODEL
+    && gatewayConfiguration.budgetCents === 0 && gatewayConfiguration.externalProviderExecutionAllowed === false
+    && gatewayConfiguration.automaticPublicationAllowed === false && gatewayConfiguration.productionEligible === false);
+  const configuration = { environment: 'staging', provider: gatewayConfiguration.provider, model: gatewayConfiguration.model,
+    budgetCents: gatewayConfiguration.budgetCents,
+    externalProviderExecutionAllowed: gatewayConfiguration.externalProviderExecutionAllowed,
+    automaticPublicationAllowed: gatewayConfiguration.automaticPublicationAllowed,
+    productionEligible: gatewayConfiguration.productionEligible,
     runtimeCommit: runtime.runtimeCommit, imageDigest: runtime.imageDigest };
+  return { configuration, gatewayConfiguration };
 }
 
-function validateCapability(raw, { runtime, configuration, configurationSha256, clientVersion, readAtUtc }) {
+function validateCapability(raw, { runtime, configurationSha256, clientVersion,
+  gatewayConfiguration, readAtUtc }) {
+  const expected = listingAiCapability(gatewayConfiguration);
   check(exact(raw, API_CAPABILITY_KEYS)
+    && Object.keys(expected).length === API_CAPABILITY_KEYS.length
+    && API_CAPABILITY_KEYS.every((key) => Object.is(raw[key], expected[key]))
     && raw.available === true && raw.provider === 'mock' && raw.mode === 'mock'
-    && raw.model === MODEL && raw.budgetCents === 0
-    && raw.externalProviderExecutionAllowed === false && raw.automaticPublicationAllowed === false
-    && raw.productionEligible === false && raw.supportedClientVersion === clientVersion
-    && raw.runtimeCommit === runtime.runtimeCommit && raw.imageDigest === runtime.imageDigest
     && raw.disclosureVersion === LISTING_AI_MOCK_DISCLOSURE_VERSION
     && raw.disclosureText === LISTING_AI_MOCK_DISCLOSURE_TEXT
     && isHash(raw.disclosureHash) && sha(raw.disclosureText) === raw.disclosureHash
-    && isHash(raw.configRevision)
-    && raw.configurationSha256 === configurationSha256);
+    && raw.configRevision === gatewayConfiguration.configRevision
+    && raw.budgetScope === 'lifetime' && raw.lifetimeBudgetCents === 0
+    && raw.stagingSmokeBudgetCents === 0 && raw.stagingSmokeActivationId === null
+    && raw.supportedClientVersion === clientVersion && raw.imageLimit === 4);
   return { authenticatedReadback: true, available: raw.available, provider: raw.provider, mode: raw.mode,
-    model: raw.model, budgetCents: raw.budgetCents,
-    externalProviderExecutionAllowed: raw.externalProviderExecutionAllowed,
-    automaticPublicationAllowed: raw.automaticPublicationAllowed,
-    productionEligible: raw.productionEligible, supportedClientVersion: raw.supportedClientVersion,
-    runtimeCommit: raw.runtimeCommit, imageDigest: raw.imageDigest, disclosureVersion: raw.disclosureVersion,
-    disclosureText: raw.disclosureText, disclosureHash: raw.disclosureHash, configRevision: raw.configRevision,
-    configurationSha256: raw.configurationSha256, readAtUtc };
+    model: gatewayConfiguration.model, budgetCents: gatewayConfiguration.budgetCents,
+    externalProviderExecutionAllowed: gatewayConfiguration.externalProviderExecutionAllowed,
+    automaticPublicationAllowed: gatewayConfiguration.automaticPublicationAllowed,
+    productionEligible: gatewayConfiguration.productionEligible, supportedClientVersion: raw.supportedClientVersion,
+    runtimeCommit: runtime.runtimeCommit, imageDigest: runtime.imageDigest,
+    disclosureVersion: raw.disclosureVersion, disclosureText: raw.disclosureText,
+    disclosureHash: raw.disclosureHash, configRevision: raw.configRevision,
+    configurationSha256, readAtUtc };
 }
 
 /** Read-only collector. Runtime/config readers must be bound to the promoted Staging API container. */
@@ -72,7 +81,7 @@ export function createStagingListingAiMockWebCollector({ token, sourceCommit, cl
       && Array.isArray(expectedRuntime.environmentEntries));
     const runtime = { environment: expectedRuntime.environment, runtimeCommit: expectedRuntime.runtimeCommit,
       imageDigest: expectedRuntime.imageDigest };
-    const configuration = projectConfiguration(runtime, expectedRuntime.environmentEntries);
+    const { configuration, gatewayConfiguration } = projectConfiguration(runtime, expectedRuntime.environmentEntries);
     const configurationSha256 = sha(JSON.stringify(configuration));
     const responseAt = now();
     let response;
@@ -85,8 +94,8 @@ export function createStagingListingAiMockWebCollector({ token, sourceCommit, cl
       check(Buffer.byteLength(bodyText) <= 16384 && !bodyText.includes(token));
       const body = JSON.parse(bodyText);
       const readAtUtc = new Date(now()).toISOString();
-      const capability = validateCapability(body, { runtime, configuration, configurationSha256,
-        clientVersion, readAtUtc });
+      const capability = validateCapability(body, { runtime, configurationSha256,
+        clientVersion, gatewayConfiguration, readAtUtc });
       check(readAtUtc >= new Date(responseAt).toISOString());
       return { configuration, configurationSha256, capability };
     } catch { fail(); }

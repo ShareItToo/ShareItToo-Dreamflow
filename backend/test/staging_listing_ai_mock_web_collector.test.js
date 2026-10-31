@@ -5,8 +5,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { LISTING_AI_MOCK_DISCLOSURE_TEXT, LISTING_AI_MOCK_DISCLOSURE_VERSION,
-  bindListingAiMockWebReadiness, readListingAiMockWebReadiness } from '../../tool/staging_listing_ai_mock_web_readiness.mjs';
+import { bindListingAiMockWebReadiness, readListingAiMockWebReadiness }
+  from '../../tool/staging_listing_ai_mock_web_readiness.mjs';
+import { listingAiCapability, readListingAiGatewayConfiguration } from '../src/listing_ai_gateway_config.js';
 import { createStagingListingAiMockWebCollector, STAGING_LISTING_AI_MOCK_WEB_CAPABILITY_URL }
   from '../ops/staging_listing_ai_mock_web_collector.mjs';
 import { dockerRuntimeReader, runStagingListingAiMockWebReadinessCli }
@@ -27,16 +28,15 @@ const runtime = { environment: 'staging', runtimeCommit: 'b'.repeat(40), imageDi
     'SIT_STAGING_ALLOWED_USER_IDS=qa_user_12345', 'SIT_STAGING_COMPOSE_PROJECT=sit-green',
     'DEPLOYMENT_ENVIRONMENT=test',
   ] };
+const gatewayEnvironment = Object.fromEntries(runtime.environmentEntries.map((entry) => {
+  const separator = entry.indexOf('='); return [entry.slice(0, separator), entry.slice(separator + 1)];
+}));
+const gatewayConfiguration = readListingAiGatewayConfiguration(gatewayEnvironment, { deploymentEnvironment: 'test' });
 const configuration = { environment: 'staging', provider: 'mock', model: 'listing-ai-mock-v1', budgetCents: 0,
   externalProviderExecutionAllowed: false, automaticPublicationAllowed: false, productionEligible: false,
   runtimeCommit: runtime.runtimeCommit, imageDigest: runtime.imageDigest };
 const configurationSha256 = sha(JSON.stringify(configuration));
-const apiCapability = (overrides = {}) => ({ available: true, provider: 'mock', mode: 'mock', model: 'listing-ai-mock-v1',
-  budgetCents: 0, externalProviderExecutionAllowed: false, automaticPublicationAllowed: false, productionEligible: false,
-  supportedClientVersion: clientVersion, runtimeCommit: runtime.runtimeCommit, imageDigest: runtime.imageDigest,
-  disclosureVersion: LISTING_AI_MOCK_DISCLOSURE_VERSION, disclosureText: LISTING_AI_MOCK_DISCLOSURE_TEXT,
-  disclosureHash: sha(LISTING_AI_MOCK_DISCLOSURE_TEXT), configRevision: sha('revision'),
-  configurationSha256, ...overrides });
+const apiCapability = (overrides = {}) => ({ ...listingAiCapability(gatewayConfiguration), ...overrides });
 function collector(overrides = {}) {
   const calls = [];
   const fetchImpl = async (url, options) => {
@@ -54,7 +54,9 @@ test('collector creates canonical authenticated readback accepted by the readine
   const { calls, value } = collector();
   const result = await value.collect();
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, STAGING_LISTING_AI_MOCK_WEB_CAPABILITY_URL);
+  assert.equal(STAGING_LISTING_AI_MOCK_WEB_CAPABILITY_URL,
+    'https://staging.shareittoo.com/api/v1/blue-ocean/listing-drafts/capabilities');
+  assert.equal(calls[0].url, 'https://staging.shareittoo.com/api/v1/blue-ocean/listing-drafts/capabilities');
   assert.equal(calls[0].options.method, 'GET');
   assert.equal(calls[0].options.redirect, 'error');
   assert.equal(calls[0].options.credentials, 'omit');
@@ -79,8 +81,14 @@ test('collector rejects API drift, auth failures, secret echoes, and runtime dri
   const cases = [
     { status: 401 },
     { responseBody: apiCapability({ provider: 'openai' }) },
-    { responseBody: apiCapability({ runtimeCommit: 'd'.repeat(40) }) },
-    { responseBody: apiCapability({ configurationSha256: sha('foreign') }) },
+    { responseBody: { ...apiCapability(), unexpected: true } },
+    { responseBody: Object.fromEntries(Object.entries(apiCapability()).filter(([key]) => key !== 'imageLimit')) },
+    { responseBody: apiCapability({ configRevision: sha('foreign') }) },
+    { responseBody: apiCapability({ budgetScope: 'activation' }) },
+    { responseBody: apiCapability({ lifetimeBudgetCents: 10_000 }) },
+    { responseBody: apiCapability({ stagingSmokeBudgetCents: 4 }) },
+    { responseBody: apiCapability({ stagingSmokeActivationId: '11111111-1111-4111-8111-111111111111' }) },
+    { responseBody: apiCapability({ imageLimit: 3 }) },
     { responseBody: apiCapability({ disclosureHash: sha('foreign') }) },
     { leakToken: true },
     { runtimeReader: (() => { let read = 0; return () => ++read < 2 ? runtime : { ...runtime, imageDigest: `sha256:${'e'.repeat(64)}` }; })() },
