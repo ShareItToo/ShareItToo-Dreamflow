@@ -7,6 +7,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { profile, validateArtifact } from '../../tool/staging_web_contract.mjs';
 import { syntheticListingAiWebEvidence } from './staging_listing_ai_web_readiness_fixture.mjs';
+import { syntheticListingAiMockWebEvidence } from './staging_listing_ai_mock_web_readiness_fixture.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 // Import/reference the real CLI in the current-consumer matrix. Never substitute
@@ -17,7 +18,7 @@ const stages = ['release_host_capacity_begin', 'flutter pub get --enforce-lockfi
 const marker = 'SIT_SHELL_INJECTION_MARKER';
 const version = '1.0.0+2026092905';
 
-function fixture(t, suffix = 'ordinary', failure = '', listingAi = false) {
+function fixture(t, suffix = 'ordinary', failure = '', listingAi = false, listingAiMock = false) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sit-builder-shell-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const checkout = path.join(root, `source-${suffix}-fixture`);
@@ -68,12 +69,12 @@ else process.exit(99);
   git('init'); git('add', '.'); git('-c', 'user.name=Synthetic', '-c', 'user.email=test@example.invalid', 'commit', '-m', 'fixture');
   const source = git('rev-parse', 'HEAD');
   const evidenceArgs = [];
-  if (listingAi) {
+  if (listingAi || listingAiMock) {
     const evidenceDirectory = path.join(root, 'listing-ai-evidence'); fs.mkdirSync(evidenceDirectory, { mode: 0o700 });
     const file = path.join(evidenceDirectory, 'readiness.json');
-    const evidence = syntheticListingAiWebEvidence(source, version);
+    const evidence = listingAiMock ? syntheticListingAiMockWebEvidence(source, version) : syntheticListingAiWebEvidence(source, version);
     fs.writeFileSync(file, JSON.stringify(evidence.evidence), { mode: 0o600, flag: 'wx' });
-    evidenceArgs.push('--listing-ai-web-readiness', file, evidence.digest);
+    evidenceArgs.push(listingAiMock ? '--listing-ai-mock-web-readiness' : '--listing-ai-web-readiness', file, evidence.digest);
   }
   const events = path.join(root, 'events.jsonl'); const trace = path.join(root, 'trace.tsv');
   const result = spawnSync(process.execPath, [fileURLToPath(builder), checkout, source, output, ...evidenceArgs], {
@@ -123,6 +124,19 @@ test('bounded listing-AI readiness CLI input sets only the reviewed assistant We
   assert.equal(manifest.listingAiWebProviderSchemaVersion, 1);
   assert.equal(manifest.listingAiWebProfileVersion, 'staging-listing-ai-web-v1');
   assert.equal(manifest.listingAiWebDecisionDigest.length, 64);
+});
+
+test('bounded synthetic mock readiness CLI input builds a staging artifact with mock-only profile binding', (t) => {
+  const f = fixture(t, 'listing-ai-mock-readiness', '', false, true);
+  assert.equal(f.result.status, 0, f.result.stderr);
+  const definitions = f.observed.find(({ stage }) => stage === 'definitions').value;
+  assert.equal(definitions.SIT_BLUE_OCEAN_LISTING_ASSISTANT, 'true');
+  assert.match(definitions.SIT_BLUE_OCEAN_LISTING_ASSISTANT_READINESS_JSON, /synthetische KI-Antwort/u);
+  const summary = JSON.parse(f.result.stdout.trim().split('\n').at(-1));
+  const manifest = validateArtifact(f.output, summary.manifestHash, f.source);
+  assert.equal(manifest.listingAiWebProfileVersion, 'staging-listing-ai-mock-web-v1');
+  assert.equal(manifest.listingAiWebDecisionDigest, null);
+  assert.equal(manifest.profile.SIT_STAGE_A_NON_BINDING_PILOT, 'false');
 });
 
 for (const [label, suffix] of [

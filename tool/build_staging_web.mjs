@@ -11,17 +11,18 @@ import { readAppleWebReadiness } from './staging_apple_web_readiness.mjs';
 import { readFacebookWebReadiness } from './staging_facebook_web_readiness.mjs';
 import { readPasswordEnrollmentWebReadiness } from './staging_password_enrollment_web_readiness.mjs';
 import { readListingAiWebReadiness } from './staging_listing_ai_web_readiness.mjs';
+import { readListingAiMockWebReadiness } from './staging_listing_ai_mock_web_readiness.mjs';
 
 // Positional, exact inputs only: no arbitrary define/target/Flutter option forwarding.
 const [sourceRoot, source, output, ...extra] = process.argv.slice(2);
 let definesDirectory;
 try {
-  const usage = 'usage: build_staging_web.mjs ABS_SOURCE_ROOT EXACT_HEAD ABS_NEW_ARTIFACT_DIR [--google-web-readiness ABS_ELIGIBLE_READINESS_JSON VERIFIED_EVIDENCE_SHA256 | --google-web-current-readback ABS_CURRENT_READBACK_JSON VERIFIED_EVIDENCE_SHA256] [--apple-web-readiness ABS_ELIGIBLE_READINESS_JSON VERIFIED_EVIDENCE_SHA256] [--facebook-web-readiness ABS_PUBLIC_READINESS_JSON REVIEWED_EVIDENCE_SHA256] [--password-enrollment-readiness ABS_RUNTIME_READINESS_JSON VERIFIED_EVIDENCE_SHA256] [--listing-ai-web-readiness ABS_RUNTIME_READINESS_JSON VERIFIED_EVIDENCE_SHA256]';
+  const usage = 'usage: build_staging_web.mjs ABS_SOURCE_ROOT EXACT_HEAD ABS_NEW_ARTIFACT_DIR [--google-web-readiness ABS_ELIGIBLE_READINESS_JSON VERIFIED_EVIDENCE_SHA256 | --google-web-current-readback ABS_CURRENT_READBACK_JSON VERIFIED_EVIDENCE_SHA256] [--apple-web-readiness ABS_ELIGIBLE_READINESS_JSON VERIFIED_EVIDENCE_SHA256] [--facebook-web-readiness ABS_PUBLIC_READINESS_JSON REVIEWED_EVIDENCE_SHA256] [--password-enrollment-readiness ABS_RUNTIME_READINESS_JSON VERIFIED_EVIDENCE_SHA256] [--listing-ai-web-readiness ABS_RUNTIME_READINESS_JSON VERIFIED_EVIDENCE_SHA256 | --listing-ai-mock-web-readiness ABS_SYNTHETIC_MOCK_READINESS_JSON VERIFIED_EVIDENCE_SHA256]';
   if (!sourceRoot || !source || !output) throw Error(usage);
   const inputs = new Map();
   for (let index = 0; index < extra.length; index += 3) {
     const flag = extra[index];
-    if (index + 2 >= extra.length || !['--google-web-readiness', '--google-web-current-readback', '--apple-web-readiness', '--facebook-web-readiness', '--password-enrollment-readiness', '--listing-ai-web-readiness'].includes(flag)
+    if (index + 2 >= extra.length || !['--google-web-readiness', '--google-web-current-readback', '--apple-web-readiness', '--facebook-web-readiness', '--password-enrollment-readiness', '--listing-ai-web-readiness', '--listing-ai-mock-web-readiness'].includes(flag)
       || inputs.has(flag)) {
       throw Error(usage);
     }
@@ -36,6 +37,8 @@ try {
   const facebookInput = inputs.get('--facebook-web-readiness');
   const passwordEnrollmentInput = inputs.get('--password-enrollment-readiness');
   const listingAiWebInput = inputs.get('--listing-ai-web-readiness');
+  const listingAiMockWebInput = inputs.get('--listing-ai-mock-web-readiness');
+  if (listingAiWebInput && listingAiMockWebInput) throw Error('listing_ai_web_input_conflict');
   for (const [input, code] of [
     [googleInput, 'google_web_readiness_must_be_outside_source'],
     [googleCurrentInput, 'google_web_current_readback_must_be_outside_source'],
@@ -43,6 +46,7 @@ try {
     [facebookInput, 'facebook_web_readiness_must_be_outside_source'],
     [passwordEnrollmentInput, 'password_enrollment_web_readiness_must_be_outside_source'],
     [listingAiWebInput, 'listing_ai_web_readiness_must_be_outside_source'],
+    [listingAiMockWebInput, 'listing_ai_mock_web_readiness_must_be_outside_source'],
   ]) {
     if (input && (input.file === sourceRoot || input.file.startsWith(`${sourceRoot}/`))) throw Error(code);
   }
@@ -50,7 +54,10 @@ try {
   if (!version) throw Error('source_version_missing');
   const listingAiWeb = listingAiWebInput
     ? readListingAiWebReadiness(listingAiWebInput.file, listingAiWebInput.digest,
-      { expectedSource: source, expectedVersion: version }) : null;
+      { expectedSource: source, expectedVersion: version })
+    : listingAiMockWebInput
+      ? readListingAiMockWebReadiness(listingAiMockWebInput.file, listingAiMockWebInput.digest,
+        { expectedSource: source, expectedVersion: version }) : null;
   const googleWeb = googleInput
     ? readGoogleWebReadiness(googleInput.file, googleInput.digest,
       { expectedSource: source })
@@ -81,6 +88,7 @@ try {
     'staging_facebook_web_readiness.mjs',
     'staging_password_enrollment_web_readiness.mjs',
     'staging_listing_ai_web_readiness.mjs',
+    'staging_listing_ai_mock_web_readiness.mjs',
   ].map((name) => fs.readFileSync(path.join(toolRoot, name)))));
   const flutterVersion = JSON.parse(execFileSync('flutter', ['--version', '--machine'], { encoding: 'utf8' }));
   definesDirectory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sit-staging-web-defines-')));

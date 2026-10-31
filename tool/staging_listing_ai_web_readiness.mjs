@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { LISTING_AI_MOCK_WEB_PROFILE, validateListingAiMockWebBinding } from './staging_listing_ai_mock_web_readiness.mjs';
 
 export const LISTING_AI_WEB_PROFILE = 'staging-listing-ai-web-v1';
 export const LISTING_AI_WEB_MODEL = 'gpt-4o-mini-2024-07-18';
@@ -224,6 +225,9 @@ export function bindListingAiWebReadiness(evidence, evidenceDigest,
 
 export function validateListingAiWebBinding(binding,
   { expectedSource, expectedVersion, freshAt = null } = {}) {
+  if (binding?.profileVersion === LISTING_AI_MOCK_WEB_PROFILE) {
+    return validateListingAiMockWebBinding(binding, { expectedSource, expectedVersion, freshAt });
+  }
   exact(binding, ['profileVersion', 'readinessJson', 'readinessDigest', 'configurationDigest',
     'capabilityDigest', 'decisionDigest', 'validatedAtUtc'], 'listing_ai_web_binding_shape');
   check(binding.profileVersion === LISTING_AI_WEB_PROFILE,

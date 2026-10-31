@@ -30,6 +30,7 @@ import {
   LISTING_AI_WEB_PROFILE,
   validateListingAiWebBinding,
 } from './staging_listing_ai_web_readiness.mjs';
+import { LISTING_AI_MOCK_WEB_PROFILE } from './staging_listing_ai_mock_web_readiness.mjs';
 
 export const TARGET = 'https://staging.shareittoo.com';
 export const DEPLOY_ROOT = '/docker/shareittoo/staging-web';
@@ -497,7 +498,7 @@ export function sealArtifact({ directory, source, version, flutterVersion, build
         ? STAGING_ENROLLMENT_WEB_PROFILE_V2 : STAGING_ENROLLMENT_WEB_PROFILE } : {}),
     } : {}),
     ...(listingAiWeb ? {
-      listingAiWebProfileVersion: LISTING_AI_WEB_PROFILE,
+      listingAiWebProfileVersion: listingAiWeb.profileVersion,
       listingAiWebProviderSchemaVersion: providerArtifactSchemaVersion,
       listingAiWebReadinessDigest: listingAiWeb.readinessDigest,
       listingAiWebConfigurationDigest: listingAiWeb.configurationDigest,
@@ -556,7 +557,7 @@ export function validateArtifact(directory, expectedHash, expectedSource, { mode
       validatedAtUtc: m.listingAiWebValidatedAtUtc,
     }, { expectedSource: m.source, expectedVersion: m.version,
       freshAt: mode === 'candidate' ? new Date() : null });
-    requireThat(m.listingAiWebProfileVersion === LISTING_AI_WEB_PROFILE,
+    requireThat([LISTING_AI_WEB_PROFILE, LISTING_AI_MOCK_WEB_PROFILE].includes(m.listingAiWebProfileVersion),
       'artifact_listing_ai_web_contract');
   }
   const appleMetadata = ['appleWebConfigDigest', 'appleWebReadinessDigest',
