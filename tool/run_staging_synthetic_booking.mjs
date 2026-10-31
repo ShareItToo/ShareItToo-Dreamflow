@@ -15,6 +15,7 @@ import {
 } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { registerStagingSessionForCleanup, withStagingSessionCleanup } from './staging_session_cleanup.mjs';
 
 import {
   privatePilotCheckoutDocument,
@@ -579,10 +580,18 @@ async function login(fetchImpl, account) {
     method: 'POST',
     body: { email: account.email, password: account.password },
   });
-  if (typeof session?.accessToken !== 'string' || session.accessToken.length < 20) {
+  if (typeof session?.accessToken !== 'string' || session.accessToken.length < 20
+      || typeof session?.refreshToken !== 'string' || session.refreshToken.length < 20) {
     fail(`The ${account.role} Staging login did not return a usable session.`);
   }
+  registerStagingSessionForCleanup(session.refreshToken);
   return session.accessToken;
+}
+
+async function logout(fetchImpl, refreshToken) {
+  await request(fetchImpl, '/auth/logout', {
+    method: 'POST', body: { refreshToken }, expected: [204],
+  });
 }
 
 async function retireUnbookedSyntheticListing({
@@ -668,7 +677,7 @@ async function verifySyntheticBookingConfirmation({
   });
 }
 
-export async function createSyntheticBookingFixture({
+async function createSyntheticBookingFixtureImpl({
   vaultFile,
   imagePath = resolve(repositoryRoot, 'assets/images/shareittoo_app_icon_master.png'),
   fetchImpl = globalThis.fetch,
@@ -949,7 +958,7 @@ export async function createSyntheticBookingFixture({
   });
 }
 
-export async function transitionSyntheticBookingFixture({
+async function transitionSyntheticBookingFixtureImpl({
   vaultFile,
   status,
   fetchImpl = globalThis.fetch,
@@ -1030,7 +1039,7 @@ export async function transitionSyntheticBookingFixture({
   });
 }
 
-export async function retireSyntheticBookingFixture({
+async function retireSyntheticBookingFixtureImpl({
   vaultFile,
   fetchImpl = globalThis.fetch,
   now = new Date(),
@@ -1102,7 +1111,7 @@ const roleVisibilityExpectations = Object.freeze({
   }),
 });
 
-export async function inspectSyntheticBookingRoleVisibility({
+async function inspectSyntheticBookingRoleVisibilityImpl({
   vaultFile,
   expectedStatus,
   fetchImpl = globalThis.fetch,
@@ -1140,7 +1149,7 @@ export async function inspectSyntheticBookingRoleVisibility({
   });
 }
 
-export async function inspectSyntheticReturnCaseRoleTruth({
+async function inspectSyntheticReturnCaseRoleTruthImpl({
   vaultFile,
   expectedEvidenceCount = 1,
   expectedContestedAuthorizedMinor = 100,
@@ -1310,7 +1319,7 @@ export async function runSyntheticRoleBookingLifecycle({
  * avatars or reviews. Every image in this lane is labeled synthetic and the
  * runner hard-blocks payment/provider paths.
  */
-export async function runSyntheticFullAcceptanceJourney({
+async function runSyntheticFullAcceptanceJourneyImpl({
   vaultFile,
   imagePath = resolve(repositoryRoot, 'assets/images/shareittoo_app_icon_master.png'),
   evidenceImagePaths = syntheticEvidenceImagePaths,
@@ -1586,7 +1595,7 @@ export function archiveCompletedSyntheticBookingFixture({
   });
 }
 
-export async function reconcileSyntheticBookingFixture({
+async function reconcileSyntheticBookingFixtureImpl({
   vaultFile,
   fetchImpl = globalThis.fetch,
   now = new Date(),
@@ -1683,7 +1692,7 @@ export function archiveTerminalSyntheticBookingFixture({
   });
 }
 
-export async function prepareSyntheticBookingThread({
+async function prepareSyntheticBookingThreadImpl({
   vaultFile,
   actorRole = 'owner',
   fetchImpl = globalThis.fetch,
@@ -1720,7 +1729,7 @@ export async function prepareSyntheticBookingThread({
   });
 }
 
-export async function sendSyntheticBookingDiagnosticMessage({
+async function sendSyntheticBookingDiagnosticMessageImpl({
   vaultFile,
   senderRole = 'owner',
   diagnosticKind = 'generic',
@@ -1783,6 +1792,39 @@ export async function sendSyntheticBookingDiagnosticMessage({
     containsFixtureIdentifiers: false,
   });
 }
+
+function withSyntheticSessionCleanup(options, operation) {
+  const baseFetch = options?.fetchImpl ?? globalThis.fetch;
+  const endpointContext = options?.endpointContext
+    ?? resolveSyntheticEndpointContext({
+      isolatedTest: options?.isolatedTest ?? false,
+      isolatedApiBaseUrl: options?.isolatedApiBaseUrl ?? null,
+    });
+  const scopedFetch = endpointScopedFetch(baseFetch, endpointContext);
+  return withStagingSessionCleanup(
+    refreshToken => logout(scopedFetch, refreshToken),
+    operation,
+  );
+}
+
+export const createSyntheticBookingFixture = (options = {}) =>
+  withSyntheticSessionCleanup(options, () => createSyntheticBookingFixtureImpl(options));
+export const transitionSyntheticBookingFixture = (options = {}) =>
+  withSyntheticSessionCleanup(options, () => transitionSyntheticBookingFixtureImpl(options));
+export const retireSyntheticBookingFixture = (options = {}) =>
+  withSyntheticSessionCleanup(options, () => retireSyntheticBookingFixtureImpl(options));
+export const inspectSyntheticBookingRoleVisibility = (options = {}) =>
+  withSyntheticSessionCleanup(options, () => inspectSyntheticBookingRoleVisibilityImpl(options));
+export const inspectSyntheticReturnCaseRoleTruth = (options = {}) =>
+  withSyntheticSessionCleanup(options, () => inspectSyntheticReturnCaseRoleTruthImpl(options));
+export const runSyntheticFullAcceptanceJourney = (options = {}) =>
+  withSyntheticSessionCleanup(options, () => runSyntheticFullAcceptanceJourneyImpl(options));
+export const reconcileSyntheticBookingFixture = (options = {}) =>
+  withSyntheticSessionCleanup(options, () => reconcileSyntheticBookingFixtureImpl(options));
+export const prepareSyntheticBookingThread = (options = {}) =>
+  withSyntheticSessionCleanup(options, () => prepareSyntheticBookingThreadImpl(options));
+export const sendSyntheticBookingDiagnosticMessage = (options = {}) =>
+  withSyntheticSessionCleanup(options, () => sendSyntheticBookingDiagnosticMessageImpl(options));
 
 function cliValue(args, flag) {
   const index = args.indexOf(flag);

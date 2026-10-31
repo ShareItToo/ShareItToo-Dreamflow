@@ -29,6 +29,9 @@ import {
 } from '../../backend/src/listing_photo_truth_policy.js';
 
 function response(status, value) {
+  if (status === 200 && typeof value?.accessToken === 'string' && !value.refreshToken) {
+    value = { ...value, refreshToken: `email-journey-refresh-${'r'.repeat(40)}` };
+  }
   return { status, text: async () => JSON.stringify(value) };
 }
 
@@ -157,6 +160,8 @@ function stagingApi(accounts) {
   };
   const byEmail = new Map(accounts.map((account) => [account.email, account]));
   const fetchImpl = async (url, options = {}) => {
+    const sessionCleanupPath = new URL(url).pathname.replace('/api/v1', '');
+    if (sessionCleanupPath === '/auth/logout') return response(204, null);
     const parsed = new URL(url);
     const path = parsed.pathname.replace('/api/v1', '') + parsed.search;
     const method = options.method ?? 'GET';
@@ -166,8 +171,10 @@ function stagingApi(accounts) {
       const body = JSON.parse(options.body);
       const account = byEmail.get(body.email);
       if (!account || account.password !== body.password) return response(401, { error: 'invalid_credentials' });
-      return response(200, { accessToken: `${account.role}-${'x'.repeat(24)}` });
+      return response(200, { accessToken: `${account.role}-${'x'.repeat(24)}`,
+        refreshToken: `${account.role}-refresh-${'x'.repeat(24)}` });
     }
+    if (path === '/auth/logout' && method === 'POST') return response(204, null);
     if (path === '/auth/me') {
       const account = accounts.find((entry) => entry.role === role);
       return response(200, { user: { id: `${role}-id`, email: account.email } });

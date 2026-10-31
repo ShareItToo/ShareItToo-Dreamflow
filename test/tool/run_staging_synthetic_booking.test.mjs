@@ -57,7 +57,10 @@ function vaultFixture({ baseUrl = 'https://staging.shareittoo.com/api/v1' } = {}
 }
 
 function response(status, value) {
-  return new Response(value === null ? '' : JSON.stringify(value), {
+  if (status === 200 && typeof value?.accessToken === 'string' && !value.refreshToken) {
+    value = { ...value, refreshToken: `synthetic-refresh-${'r'.repeat(40)}` };
+  }
+  return new Response(status === 204 || status === 304 ? null : value === null ? '' : JSON.stringify(value), {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
@@ -100,6 +103,16 @@ function bookingConfirmationResponse(path, options = {}) {
 function createFetch(log) {
   let login = 0;
   return async (url, options = {}) => {
+    const sessionCleanupPath = new URL(url).pathname.replace('/api/v1', '');
+    if (sessionCleanupPath === '/auth/logout') {
+      const body = JSON.parse(options.body);
+      log.push({
+        path: sessionCleanupPath,
+        method: options.method,
+        refreshTokenProvided: typeof body.refreshToken === 'string',
+      });
+      return response(204, null);
+    }
     const path = new URL(url).pathname.replace('/api/v1', '');
     log.push({
       path,
@@ -156,6 +169,9 @@ test('creates an isolated requested booking and returns no credentials or identi
     containsTokens: false,
   });
   assert.equal(calls.some(({ path }) => path.includes('payment')), false);
+  assert.equal(calls.filter(({ path }) => path === '/auth/logout').length, 2);
+  assert.equal(calls.filter(({ path }) => path === '/auth/logout')
+    .every(({ refreshTokenProvided }) => refreshTokenProvided), true);
   const listingCall = calls.find(({ path }) => path === '/listings');
   assert.equal(listingCall.body.categoryId, 'cat3');
   assert.equal(listingCall.body.subcategory, 'Kameras');
@@ -221,6 +237,8 @@ test('transitions the synthetic booking with the correct roles and no payment en
     ['completed', 'owner', 'completed'],
   ]) {
     const fetchImpl = async (url, options = {}) => {
+    const sessionCleanupPath = new URL(url).pathname.replace('/api/v1', '');
+    if (sessionCleanupPath === '/auth/logout') return response(204, null);
       const path = new URL(url).pathname.replace('/api/v1', '');
       calls.push(path);
       if (path === '/auth/login') return response(200, { accessToken: `synthetic-token-${'x'.repeat(40)}` });
@@ -258,6 +276,8 @@ test('retires a temporary fixture by completing its booking and pausing, never d
     vaultFile: fixture.vaultFile,
     now: new Date('2026-08-12T12:30:00.000Z'),
     fetchImpl: async (url, options = {}) => {
+    const sessionCleanupPath = new URL(url).pathname.replace('/api/v1', '');
+    if (sessionCleanupPath === '/auth/logout') return response(204, null);
       const path = new URL(url).pathname.replace('/api/v1', '');
       if (path === '/auth/login') {
         return response(200, { accessToken: `synthetic-token-${'x'.repeat(40)}` });
@@ -321,6 +341,8 @@ test('runs the complete role-visible lifecycle without returning private fixture
     now: new Date('2026-08-11T19:20:00.000Z'),
     random: () => Buffer.from('a1b2c3d4', 'hex'),
     fetchImpl: async (url, options = {}) => {
+    const sessionCleanupPath = new URL(url).pathname.replace('/api/v1', '');
+    if (sessionCleanupPath === '/auth/logout') return response(204, null);
       const path = new URL(url).pathname.replace('/api/v1', '');
       calls.push({ path, method: options.method ?? 'GET' });
       if (path === '/auth/login') {
@@ -398,6 +420,8 @@ test('runs the full synthetic acceptance journey with eight distinct evidence up
   let listingBody = null;
   const calls = [];
   const fetchImpl = async (url, options = {}) => {
+    const sessionCleanupPath = new URL(url).pathname.replace('/api/v1', '');
+    if (sessionCleanupPath === '/auth/logout') return response(204, null);
     const parsed = new URL(url);
     calls.push({ url: parsed.href, path: parsed.pathname.replace('/api/v1', ''), method: options.method ?? 'GET' });
     if (parsed.pathname === '/api/version') {
@@ -577,6 +601,8 @@ test('fails closed on runtime commit or environment mismatch before auth or muta
       ...fixture,
       expectedRuntimeCommit: 'a'.repeat(40),
       fetchImpl: async (url) => {
+    const sessionCleanupPath = new URL(url).pathname.replace('/api/v1', '');
+    if (sessionCleanupPath === '/auth/logout') return response(204, null);
         calls.push(new URL(url).href);
         return response(200, { commit: 'b'.repeat(40), environment: 'test' });
       },
@@ -621,6 +647,8 @@ test('rejects non-synthetic aliases and same-principal owner/renter before listi
   const fixture = vaultFixture();
   const paths = [];
   const fetchImpl = async (url, options = {}) => {
+    const sessionCleanupPath = new URL(url).pathname.replace('/api/v1', '');
+    if (sessionCleanupPath === '/auth/logout') return response(204, null);
     const parsed = new URL(url);
     const route = parsed.pathname.replace('/api/v1', '');
     paths.push(route);
@@ -675,6 +703,8 @@ test('rejects public, non-loopback, ambiguous, or unflagged endpoint overrides b
       isolatedTest: true,
       isolatedApiBaseUrl: 'http://127.0.0.1:18080/v1',
       fetchImpl: async (url) => {
+    const sessionCleanupPath = new URL(url).pathname.replace('/api/v1', '');
+    if (sessionCleanupPath === '/auth/logout') return response(204, null);
         calls.push(url);
         return response(200, { commit: 'b'.repeat(40), environment: 'test' });
       },
@@ -716,6 +746,8 @@ test('requires equal owner and renter truth for one server-confirmed return case
   const result = await inspectSyntheticReturnCaseRoleTruth({
     vaultFile: fixture.vaultFile,
     fetchImpl: async (url) => {
+    const sessionCleanupPath = new URL(url).pathname.replace('/api/v1', '');
+    if (sessionCleanupPath === '/auth/logout') return response(204, null);
       const path = new URL(url).pathname.replace('/api/v1', '');
       if (path === '/auth/login') {
         return response(200, { accessToken: `synthetic-token-${'x'.repeat(40)}` });
@@ -751,6 +783,8 @@ test('fails closed when participant return-case projections disagree', async () 
     inspectSyntheticReturnCaseRoleTruth({
       vaultFile: fixture.vaultFile,
       fetchImpl: async (url) => {
+    const sessionCleanupPath = new URL(url).pathname.replace('/api/v1', '');
+    if (sessionCleanupPath === '/auth/logout') return response(204, null);
         const path = new URL(url).pathname.replace('/api/v1', '');
         if (path === '/auth/login') {
           return response(200, { accessToken: `synthetic-token-${'x'.repeat(40)}` });
@@ -778,6 +812,8 @@ test('recovers one already-created requested fixture without creating a duplicat
     ...fixture,
     now: new Date('2026-08-10T08:00:00.000Z'),
     fetchImpl: async (url) => {
+    const sessionCleanupPath = new URL(url).pathname.replace('/api/v1', '');
+    if (sessionCleanupPath === '/auth/logout') return response(204, null);
       const path = new URL(url).pathname.replace('/api/v1', '');
       calls.push(path);
       if (path === '/auth/login') {
@@ -822,6 +858,8 @@ test('refuses legacy requested fixture recovery without an exact time snapshot',
     createSyntheticBookingFixture({
       ...fixture,
       fetchImpl: async (url) => {
+    const sessionCleanupPath = new URL(url).pathname.replace('/api/v1', '');
+    if (sessionCleanupPath === '/auth/logout') return response(204, null);
         const path = new URL(url).pathname.replace('/api/v1', '');
         if (path === '/auth/login') {
           return response(200, { accessToken: `synthetic-token-${'x'.repeat(40)}` });
@@ -859,6 +897,8 @@ test('reuses one prepared listing after a failed booking request', async () => {
     now: new Date('2026-08-10T08:00:00.000Z'),
     random: () => Buffer.from('d4c3b2a1', 'hex'),
     fetchImpl: async (url, options = {}) => {
+    const sessionCleanupPath = new URL(url).pathname.replace('/api/v1', '');
+    if (sessionCleanupPath === '/auth/logout') return response(204, null);
       const path = new URL(url).pathname.replace('/api/v1', '');
       calls.push({ path, body: typeof options.body === 'string' ? JSON.parse(options.body) : null });
       if (path === '/auth/login') {
@@ -908,6 +948,8 @@ test('does not reuse a previously paused listing with the same synthetic run tit
     now: new Date('2026-08-10T08:00:00.000Z'),
     random: () => Buffer.from('d4c3b2a1', 'hex'),
     fetchImpl: async (url, options = {}) => {
+    const sessionCleanupPath = new URL(url).pathname.replace('/api/v1', '');
+    if (sessionCleanupPath === '/auth/logout') return response(204, null);
       const path = new URL(url).pathname.replace('/api/v1', '');
       calls.push({ path, body: typeof options.body === 'string' ? JSON.parse(options.body) : null });
       if (path === '/auth/login') {
@@ -964,6 +1006,8 @@ test('retires the exact new listing after the V5.2 legal hold rejects booking cr
       ...fixture,
       now: new Date('2026-08-10T08:00:00.000Z'),
       fetchImpl: async (url, options = {}) => {
+    const sessionCleanupPath = new URL(url).pathname.replace('/api/v1', '');
+    if (sessionCleanupPath === '/auth/logout') return response(204, null);
         const path = new URL(url).pathname.replace('/api/v1', '');
         if (path === '/auth/login') {
           login += 1;
@@ -1031,6 +1075,8 @@ test('archives only a completed payment-free fixture without returning private i
       ...fixture,
       status,
       fetchImpl: async (url, options = {}) => {
+    const sessionCleanupPath = new URL(url).pathname.replace('/api/v1', '');
+    if (sessionCleanupPath === '/auth/logout') return response(204, null);
         const path = new URL(url).pathname.replace('/api/v1', '');
         if (path === '/auth/login') return response(200, { accessToken: `synthetic-token-${'x'.repeat(40)}` });
         const confirmation = bookingConfirmationResponse(path, options);
@@ -1093,6 +1139,8 @@ test('reconciles and archives a server-cancelled payment-free fixture', async ()
     ...fixture,
     now: new Date('2026-08-11T07:50:00.000Z'),
     fetchImpl: async (url) => {
+    const sessionCleanupPath = new URL(url).pathname.replace('/api/v1', '');
+    if (sessionCleanupPath === '/auth/logout') return response(204, null);
       const path = new URL(url).pathname.replace('/api/v1', '');
       if (path === '/auth/login') return response(200, { accessToken: `synthetic-token-${'x'.repeat(40)}` });
       if (path === '/rental-requests') {
@@ -1159,6 +1207,8 @@ test('prepares a controlled thread and sends an identifier-free diagnostic messa
     ...fixture,
     status: 'accepted',
     fetchImpl: async (url) => {
+    const sessionCleanupPath = new URL(url).pathname.replace('/api/v1', '');
+    if (sessionCleanupPath === '/auth/logout') return response(204, null);
       const path = new URL(url).pathname.replace('/api/v1', '');
       if (path === '/auth/login') return response(200, { accessToken: `synthetic-token-${'x'.repeat(40)}` });
       if (path.endsWith('/transitions')) return response(200, { booking: { workflowStatus: 'accepted' } });
@@ -1168,6 +1218,8 @@ test('prepares a controlled thread and sends an identifier-free diagnostic messa
   const threadResult = await prepareSyntheticBookingThread({
     ...fixture,
     fetchImpl: async (url) => {
+    const sessionCleanupPath = new URL(url).pathname.replace('/api/v1', '');
+    if (sessionCleanupPath === '/auth/logout') return response(204, null);
       const path = new URL(url).pathname.replace('/api/v1', '');
       if (path === '/auth/login') return response(200, { accessToken: `synthetic-token-${'x'.repeat(40)}` });
       if (path.includes('/message-threads/booking/')) {
@@ -1184,6 +1236,8 @@ test('prepares a controlled thread and sends an identifier-free diagnostic messa
     diagnosticKind: 'foreground',
     diagnosticRunId: 'repeatable-test-run',
     fetchImpl: async (url) => {
+    const sessionCleanupPath = new URL(url).pathname.replace('/api/v1', '');
+    if (sessionCleanupPath === '/auth/logout') return response(204, null);
       const path = new URL(url).pathname.replace('/api/v1', '');
       if (path === '/auth/login') return response(200, { accessToken: `synthetic-token-${'x'.repeat(40)}` });
       if (path.includes('/message-threads/private-thread-id/messages')) {
@@ -1218,6 +1272,8 @@ test('uses a diagnostic-run-specific idempotency key so a later device probe can
 
   const keys = [];
   const fetchImpl = async (url, options = {}) => {
+    const sessionCleanupPath = new URL(url).pathname.replace('/api/v1', '');
+    if (sessionCleanupPath === '/auth/logout') return response(204, null);
     const path = new URL(url).pathname.replace('/api/v1', '');
     if (path === '/auth/login') {
       return response(200, { accessToken: `synthetic-token-${'x'.repeat(40)}` });
@@ -1265,6 +1321,8 @@ test('sends controlled diagnostics through a payment-free non-binding simulation
     diagnosticKind: 'terminated',
     diagnosticRunId: 'non-binding-fcm-run',
     fetchImpl: async (url) => {
+    const sessionCleanupPath = new URL(url).pathname.replace('/api/v1', '');
+    if (sessionCleanupPath === '/auth/logout') return response(204, null);
       const path = new URL(url).pathname.replace('/api/v1', '');
       paths.push(path);
       if (path === '/auth/login') {
@@ -1318,6 +1376,8 @@ test('redacts private fixture identifiers from diagnostic message transport erro
       ...fixture,
       diagnosticKind: 'logout',
       fetchImpl: async (url) => {
+    const sessionCleanupPath = new URL(url).pathname.replace('/api/v1', '');
+    if (sessionCleanupPath === '/auth/logout') return response(204, null);
         const path = new URL(url).pathname.replace('/api/v1', '');
         if (path === '/auth/login') {
           return response(200, { accessToken: `synthetic-token-${'x'.repeat(40)}` });

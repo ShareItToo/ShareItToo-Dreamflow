@@ -10,6 +10,7 @@ import {
 } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { registerStagingSessionForCleanup, withStagingSessionCleanup } from './staging_session_cleanup.mjs';
 
 const repositoryRoot = realpathSync(resolve(fileURLToPath(new URL('..', import.meta.url))));
 const stagingApiBaseUrl = 'https://staging.shareittoo.com/api/v1';
@@ -91,16 +92,6 @@ function safeError(value) {
     : null;
 }
 
-export function classifySimulationPaymentReadRejection(status, code) {
-  if (status === 409 && code === 'pilot_simulation_payment_forbidden') {
-    return 'simulation-booking-boundary';
-  }
-  if (status === 403 && code === 'payment_pilot_forbidden') {
-    return 'pilot-account-boundary';
-  }
-  return null;
-}
-
 async function request(fetchImpl, path, {
   method = 'GET',
   token = null,
@@ -139,10 +130,18 @@ async function login(fetchImpl, account) {
     method: 'POST',
     body: { email: account.email, password: account.password },
   });
-  if (typeof value?.accessToken !== 'string' || value.accessToken.length < 20) {
+  if (typeof value?.accessToken !== 'string' || value.accessToken.length < 20
+      || typeof value?.refreshToken !== 'string' || value.refreshToken.length < 20) {
     fail(`The ${account.role} Staging login did not return a usable session.`);
   }
+  registerStagingSessionForCleanup(value.refreshToken);
   return value.accessToken;
+}
+
+async function logout(fetchImpl, refreshToken) {
+  await request(fetchImpl, '/auth/logout', {
+    method: 'POST', body: { refreshToken }, expected: [204],
+  });
 }
 
 async function notificationVisible(fetchImpl, token, bookingId, expectedKind, wait) {
@@ -175,7 +174,7 @@ function validateSimulationBooking(booking, expectedStatus) {
   }
 }
 
-export async function runStagingNonBindingSimulation({
+async function runStagingNonBindingSimulationImpl({
   vaultFile,
   fetchImpl = globalThis.fetch,
   now = new Date(),
@@ -265,19 +264,6 @@ export async function runStagingNonBindingSimulation({
     fail('The simulation incorrectly reserved listing availability.');
   }
 
-  const paymentRead = await request(
-    fetchImpl,
-    `/bookings/${encodeURIComponent(bookingId)}/payment`,
-    { token: renterToken, expected: [403, 409] },
-  );
-  const paymentReadRejection = classifySimulationPaymentReadRejection(
-    paymentRead.status,
-    safeError(paymentRead.value?.error),
-  );
-  if (paymentReadRejection === null) {
-    fail('The simulation payment boundary did not fail closed.');
-  }
-
   const { value: accepted } = await request(
     fetchImpl,
     `/bookings/${encodeURIComponent(bookingId)}/transitions`,
@@ -348,8 +334,6 @@ export async function runStagingNonBindingSimulation({
     threadId,
     acceptedAt: new Date().toISOString(),
     availabilityUnaffected: true,
-    paymentReadRejected: true,
-    paymentReadRejection,
     inAppNotificationsVerified: true,
   };
   saveVault(vaultPath, vault);
@@ -359,8 +343,7 @@ export async function runStagingNonBindingSimulation({
     roleVisibility: true,
     chatReady: true,
     availabilityUnaffected: true,
-    paymentReadRejected: true,
-    paymentReadRejection,
+    paymentMode: 'memory',
     paymentEndpointCalled: false,
     stripeLivemode: false,
     contractCreated: false,
@@ -374,7 +357,7 @@ export async function runStagingNonBindingSimulation({
   });
 }
 
-export async function retireStagingNonBindingSimulation({
+async function retireStagingNonBindingSimulationImpl({
   vaultFile,
   fetchImpl = globalThis.fetch,
   now = new Date(),
@@ -492,6 +475,19 @@ export async function retireStagingNonBindingSimulation({
     containsFixtureIdentifiers: false,
   });
 }
+
+function withSimulationSessionCleanup(options, operation) {
+  const fetchImpl = options?.fetchImpl ?? globalThis.fetch;
+  return withStagingSessionCleanup(
+    refreshToken => logout(fetchImpl, refreshToken),
+    operation,
+  );
+}
+
+export const runStagingNonBindingSimulation = (options = {}) =>
+  withSimulationSessionCleanup(options, () => runStagingNonBindingSimulationImpl(options));
+export const retireStagingNonBindingSimulation = (options = {}) =>
+  withSimulationSessionCleanup(options, () => retireStagingNonBindingSimulationImpl(options));
 
 function parseArguments(values) {
   let vaultFile = null;

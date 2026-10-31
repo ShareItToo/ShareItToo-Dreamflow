@@ -17,6 +17,7 @@ import {
 import { homedir } from 'node:os';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { registerStagingSessionForCleanup, withStagingSessionCleanup } from './staging_session_cleanup.mjs';
 
 import {
   runStagingNonBindingSimulation,
@@ -223,16 +224,25 @@ async function login(fetchImpl, account) {
     method: 'POST',
     body: { email: account.email, password: account.password },
   });
-  if (typeof value?.accessToken !== 'string' || value.accessToken.length < 20) {
+  if (typeof value?.accessToken !== 'string' || value.accessToken.length < 20
+      || typeof value?.refreshToken !== 'string' || value.refreshToken.length < 20) {
     fail(`The ${account.role} email-verified Staging login did not return a usable session.`);
   }
+  registerStagingSessionForCleanup(value.refreshToken);
   const me = await apiRequest(fetchImpl, '/auth/me', { token: value.accessToken });
   if (typeof me.value?.user?.id !== 'string'
       || me.value.user.id.length === 0
       || String(me.value.user.email ?? '').toLowerCase() !== account.email.toLowerCase()) {
     fail(`The ${account.role} Staging session did not bind to the exact expected principal.`);
   }
-  return { token: value.accessToken, userId: me.value.user.id };
+  return { token: value.accessToken, refreshToken: value.refreshToken, userId: me.value.user.id };
+}
+
+async function logout(fetchImpl, refreshToken) {
+  const result = await apiRequest(fetchImpl, '/auth/logout', {
+    method: 'POST', body: { refreshToken }, expected: [204],
+  });
+  if (result.status !== 204) fail('The email-verified Staging session was not revoked.');
 }
 
 function accountMap(vault) {
@@ -250,7 +260,7 @@ function defaultVaultRoot() {
   );
 }
 
-export async function prepareStagingEmailVerifiedTwoRoleJourney({
+async function prepareStagingEmailVerifiedTwoRoleJourneyImpl({
   sourceVaultFile,
   vaultRoot = defaultVaultRoot(),
   imagePath = resolve(repositoryRoot, 'assets/images/shareittoo_app_icon_master.png'),
@@ -306,10 +316,8 @@ export async function prepareStagingEmailVerifiedTwoRoleJourney({
   let renter = null;
   let listingCreated = false;
   try {
-    [owner, renter] = await Promise.all([
-      login(fetchImpl, accounts.get('owner')),
-      login(fetchImpl, accounts.get('renter')),
-    ]);
+    owner = await login(fetchImpl, accounts.get('owner'));
+    renter = await login(fetchImpl, accounts.get('renter'));
     if (owner.userId === renter.userId) {
       fail('The email-verified Staging roles resolved to one principal.');
     }
@@ -435,7 +443,7 @@ export async function prepareStagingEmailVerifiedTwoRoleJourney({
   });
 }
 
-export async function verifyStagingEmailVerifiedJourneyPublished({
+async function verifyStagingEmailVerifiedJourneyPublishedImpl({
   vaultFile,
   fetchImpl = globalThis.fetch,
 } = {}) {
@@ -479,7 +487,7 @@ export async function verifyStagingEmailVerifiedJourneyPublished({
   });
 }
 
-export async function activateStagingEmailVerifiedJourneyFixture({
+async function activateStagingEmailVerifiedJourneyFixtureImpl({
   vaultFile,
   fetchImpl = globalThis.fetch,
 } = {}) {
@@ -543,7 +551,7 @@ export async function activateStagingEmailVerifiedJourneyFixture({
   });
 }
 
-export async function runStagingEmailVerifiedTwoRoleSimulation({
+async function runStagingEmailVerifiedTwoRoleSimulationImpl({
   vaultFile,
   fetchImpl = globalThis.fetch,
   now = new Date(),
@@ -635,7 +643,7 @@ function rentalCartLifecycle(vault) {
   return lifecycle;
 }
 
-export async function prepareStagingEmailVerifiedRentalCartLifecycle({
+async function prepareStagingEmailVerifiedRentalCartLifecycleImpl({
   vaultFile,
   fetchImpl = globalThis.fetch,
 } = {}) {
@@ -679,7 +687,7 @@ export async function prepareStagingEmailVerifiedRentalCartLifecycle({
   });
 }
 
-export async function inspectStagingEmailVerifiedRentalCartLifecycle({
+async function inspectStagingEmailVerifiedRentalCartLifecycleImpl({
   vaultFile,
   expectedProjectAssignment = false,
   fetchImpl = globalThis.fetch,
@@ -738,7 +746,7 @@ export async function inspectStagingEmailVerifiedRentalCartLifecycle({
   });
 }
 
-export async function cleanupStagingEmailVerifiedRentalCartLifecycle({
+async function cleanupStagingEmailVerifiedRentalCartLifecycleImpl({
   vaultFile,
   fetchImpl = globalThis.fetch,
 } = {}) {
@@ -789,7 +797,7 @@ export async function cleanupStagingEmailVerifiedRentalCartLifecycle({
   });
 }
 
-export async function retireStagingEmailVerifiedTwoRoleJourney({
+async function retireStagingEmailVerifiedTwoRoleJourneyImpl({
   vaultFile,
   fetchImpl = globalThis.fetch,
 } = {}) {
@@ -879,6 +887,31 @@ export async function retireStagingEmailVerifiedTwoRoleJourney({
     containsFixtureIdentifiers: false,
   });
 }
+
+function withJourneySessionCleanup(options, operation) {
+  const fetchImpl = options?.fetchImpl ?? globalThis.fetch;
+  return withStagingSessionCleanup(
+    refreshToken => logout(fetchImpl, refreshToken),
+    operation,
+  );
+}
+
+export const prepareStagingEmailVerifiedTwoRoleJourney = (options = {}) =>
+  withJourneySessionCleanup(options, () => prepareStagingEmailVerifiedTwoRoleJourneyImpl(options));
+export const verifyStagingEmailVerifiedJourneyPublished = (options = {}) =>
+  withJourneySessionCleanup(options, () => verifyStagingEmailVerifiedJourneyPublishedImpl(options));
+export const activateStagingEmailVerifiedJourneyFixture = (options = {}) =>
+  withJourneySessionCleanup(options, () => activateStagingEmailVerifiedJourneyFixtureImpl(options));
+export const runStagingEmailVerifiedTwoRoleSimulation = (options = {}) =>
+  withJourneySessionCleanup(options, () => runStagingEmailVerifiedTwoRoleSimulationImpl(options));
+export const prepareStagingEmailVerifiedRentalCartLifecycle = (options = {}) =>
+  withJourneySessionCleanup(options, () => prepareStagingEmailVerifiedRentalCartLifecycleImpl(options));
+export const inspectStagingEmailVerifiedRentalCartLifecycle = (options = {}) =>
+  withJourneySessionCleanup(options, () => inspectStagingEmailVerifiedRentalCartLifecycleImpl(options));
+export const cleanupStagingEmailVerifiedRentalCartLifecycle = (options = {}) =>
+  withJourneySessionCleanup(options, () => cleanupStagingEmailVerifiedRentalCartLifecycleImpl(options));
+export const retireStagingEmailVerifiedTwoRoleJourney = (options = {}) =>
+  withJourneySessionCleanup(options, () => retireStagingEmailVerifiedTwoRoleJourneyImpl(options));
 
 function argumentValue(args, flag) {
   const index = args.indexOf(flag);

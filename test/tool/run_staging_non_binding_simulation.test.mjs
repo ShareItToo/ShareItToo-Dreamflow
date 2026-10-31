@@ -5,12 +5,14 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 import {
-  classifySimulationPaymentReadRejection,
   retireStagingNonBindingSimulation,
   runStagingNonBindingSimulation,
 } from '../../tool/run_staging_non_binding_simulation.mjs';
 
 function response(status, value) {
+  if (status === 200 && typeof value?.accessToken === 'string' && !value.refreshToken) {
+    value = { ...value, refreshToken: `simulation-refresh-${'r'.repeat(40)}` };
+  }
   return { status, text: async () => JSON.stringify(value) };
 }
 
@@ -38,26 +40,6 @@ function testVault() {
   return path;
 }
 
-test('accepts only the two exact payment-read rejection layers', () => {
-  assert.equal(
-    classifySimulationPaymentReadRejection(409, 'pilot_simulation_payment_forbidden'),
-    'simulation-booking-boundary',
-  );
-  assert.equal(
-    classifySimulationPaymentReadRejection(403, 'payment_pilot_forbidden'),
-    'pilot-account-boundary',
-  );
-  for (const [status, code] of [
-    [403, 'pilot_simulation_payment_forbidden'],
-    [409, 'payment_pilot_forbidden'],
-    [403, 'forbidden'],
-    [409, 'forbidden'],
-    [200, 'pilot_simulation_payment_forbidden'],
-  ]) {
-    assert.equal(classifySimulationPaymentReadRejection(status, code), null);
-  }
-});
-
 test('runs a persistent non-binding Staging request, acceptance and chat proof', async () => {
   const vaultFile = testVault();
   const calls = [];
@@ -77,6 +59,8 @@ test('runs a persistent non-binding Staging request, acceptance and chat proof',
     monetaryEffectMinor: 0,
   });
   const fetchImpl = async (url, options = {}) => {
+    const sessionCleanupPath = new URL(url).pathname.replace('/api/v1', '');
+    if (sessionCleanupPath === '/auth/logout') return response(204, null);
     const path = new URL(url).pathname.replace('/api/v1', '') + new URL(url).search;
     const authorization = options.headers?.Authorization ?? '';
     calls.push({
@@ -91,8 +75,12 @@ test('runs a persistent non-binding Staging request, acceptance and chat proof',
         accessToken: body.email.startsWith('owner')
           ? 'owner-token-for-staging-gate'
           : 'renter-token-for-staging-gate',
+        refreshToken: body.email.startsWith('owner')
+          ? 'owner-refresh-token-for-staging-gate'
+          : 'renter-refresh-token-for-staging-gate',
       });
     }
+    if (path === '/auth/logout') return response(204, null);
     if (!authorization.startsWith('Bearer ')) {
       return response(401, { error: 'staging_access_required' });
     }
@@ -109,9 +97,7 @@ test('runs a persistent non-binding Staging request, acceptance and chat proof',
       return response(200, { requests: [booking(accepted ? 'accepted' : 'requested')] });
     }
     if (path.endsWith('/availability/check')) return response(200, { available: true });
-    if (path.endsWith('/payment')) {
-      return response(409, { error: 'pilot_simulation_payment_forbidden' });
-    }
+    assert.doesNotMatch(path, /payment|stripe/iu, 'simulation must not call any payment endpoint');
     if (path.endsWith('/transitions')) return response(200, { booking: booking('accepted') });
     if (path.startsWith('/message-threads/booking/')) {
       return response(201, { thread: { id: threadId } });
@@ -154,8 +140,9 @@ test('runs a persistent non-binding Staging request, acceptance and chat proof',
   assert.equal(result.status, 'passed-staging-non-binding-simulation');
   assert.equal(result.chatReady, true);
   assert.equal(result.availabilityUnaffected, true);
-  assert.equal(result.paymentReadRejected, true);
-  assert.equal(result.paymentReadRejection, 'simulation-booking-boundary');
+  assert.equal(result.paymentMode, 'memory');
+  assert.equal(result.paymentEndpointCalled, false);
+  assert.equal(result.stripeLivemode, false);
   assert.equal(result.contractCreated, false);
   assert.equal(result.reservationCreated, false);
   assert.equal(result.monetaryEffectMinor, 0);
@@ -164,22 +151,18 @@ test('runs a persistent non-binding Staging request, acceptance and chat proof',
   assert.equal(result.containsTokens, false);
   const stored = JSON.parse(readFileSync(vaultFile, 'utf8'));
   assert.equal(stored.nonBindingSimulation.status, 'accepted-chat-ready');
-  assert.equal(stored.nonBindingSimulation.paymentReadRejected, true);
-  assert.equal(
-    stored.nonBindingSimulation.paymentReadRejection,
-    'simulation-booking-boundary',
-  );
+  assert.equal(stored.nonBindingSimulation.paymentEndpointCalled, false);
+  assert.equal(stored.nonBindingSimulation.stripeLivemode, false);
   const availability = calls.find((entry) => entry.path.endsWith('/availability/check'));
   assert.equal(availability?.authorization, 'Bearer renter-token-for-staging-gate');
   assert.deepEqual(
     calls
-      .filter((entry) => entry.path !== '/auth/login')
+      .filter((entry) => !['/auth/login', '/auth/logout'].includes(entry.path))
       .map((entry) => entry.authorization),
     [
       'Bearer owner-token-for-staging-gate',
       'Bearer renter-token-for-staging-gate',
       'Bearer owner-token-for-staging-gate',
-      'Bearer renter-token-for-staging-gate',
       'Bearer renter-token-for-staging-gate',
       'Bearer owner-token-for-staging-gate',
       'Bearer renter-token-for-staging-gate',
@@ -235,6 +218,8 @@ test('retires the exact accepted non-binding simulation without payment or delet
     monetaryEffectMinor: 0,
   });
   const fetchImpl = async (url, options = {}) => {
+    const sessionCleanupPath = new URL(url).pathname.replace('/api/v1', '');
+    if (sessionCleanupPath === '/auth/logout') return response(204, null);
     const parsed = new URL(url);
     const path = parsed.pathname.replace('/api/v1', '') + parsed.search;
     calls.push({ path, method: options.method ?? 'GET' });
@@ -299,6 +284,8 @@ test('retirement fails closed when the server booking is not an exact simulation
     retireStagingNonBindingSimulation({
       vaultFile,
       fetchImpl: async (url) => {
+    const sessionCleanupPath = new URL(url).pathname.replace('/api/v1', '');
+    if (sessionCleanupPath === '/auth/logout') return response(204, null);
         const path = new URL(url).pathname.replace('/api/v1', '');
         if (path === '/auth/login') return response(200, { accessToken: 'x'.repeat(24) });
         if (path === '/rental-requests') {
