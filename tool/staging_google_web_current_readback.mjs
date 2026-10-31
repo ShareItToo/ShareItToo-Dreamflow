@@ -18,11 +18,15 @@ export const GOOGLE_WEB_AUTH_APIS = Object.freeze([
   'Firebase SQL Connect API', 'Identity Toolkit API', 'ML Kit API', 'Token Service API',
 ].sort());
 
-const envelopeKeys = Object.freeze([
+const envelopeKeysV1 = Object.freeze([
   'schemaVersion', 'kind', 'evidenceClass', 'syntheticFixture', 'sourceCommit',
   'buildVersion', 'configuration', 'configurationSha256', 'serviceAccountReadback',
   'serviceAccountReadbackSha256', 'cloudConsoleReadback', 'cloudConsoleReadbackSha256',
   'decision', 'decisionSha256',
+]);
+const envelopeKeysV2 = Object.freeze([
+  ...envelopeKeysV1.slice(0, 10), 'serviceUsageBinding', 'serviceUsageBindingSha256',
+  ...envelopeKeysV1.slice(10),
 ]);
 const configurationKeys = Object.freeze([
   'projectId', 'messagingSenderId', 'appId', 'apiKey', 'authDomain',
@@ -45,6 +49,11 @@ const decisionKeys = Object.freeze([
   'sourceCommit', 'buildVersion', 'serviceAccountReadbackSha256',
   'cloudConsoleReadbackSha256', 'configurationSha256', 'projectId', 'webAppId',
   'apiKeyResourceId', 'decidedAtUtc', 'validUntilUtc',
+]);
+const serviceUsageBindingKeys = Object.freeze([
+  'schemaVersion', 'kind', 'evidenceClass', 'syntheticFixture', 'projectId',
+  'projectNumber', 'readAtUtc', 'validUntilUtc', 'consoleReadbackSha256',
+  'serviceReadbackSha256',
 ]);
 const bindingKeys = Object.freeze([
   'profileContractVersion', 'config', 'configDigest', 'readinessJson', 'readinessDigest',
@@ -96,17 +105,22 @@ function configIsValid(config) {
     && config.authorizedOrigin === 'https://staging.shareittoo.com';
 }
 function bindEvidence(evidence, evidenceDigest, { now = new Date(), expectedSource, expectedVersion } = {}) {
-  exact(evidence, envelopeKeys, 'google_web_current_shape');
+  const evidenceKeys = evidence?.schemaVersion === 2 ? envelopeKeysV2 : envelopeKeysV1;
+  exact(evidence, evidenceKeys, 'google_web_current_shape');
   exact(evidence.configuration, configurationKeys, 'google_web_current_shape');
   check(JSON.stringify(evidence) === JSON.stringify(ordered({ ...evidence,
     configuration: ordered(evidence.configuration, configurationKeys),
     serviceAccountReadback: ordered(evidence.serviceAccountReadback ?? {}, serviceAccountKeys),
     cloudConsoleReadback: ordered(evidence.cloudConsoleReadback ?? {}, consoleKeys),
+    ...(evidence.schemaVersion === 2 ? {
+      serviceUsageBinding: ordered(evidence.serviceUsageBinding ?? {}, serviceUsageBindingKeys),
+    } : {}),
     decision: ordered(evidence.decision ?? {}, decisionKeys),
-  }, envelopeKeys)), 'google_web_current_canonical');
+  }, evidenceKeys)), 'google_web_current_canonical');
   check(hashPattern.test(evidenceDigest ?? '') && sha256(JSON.stringify(evidence)) === evidenceDigest,
     'google_web_current_digest');
-  check(evidence.schemaVersion === 1 && evidence.kind === 'sit-google-web-current-readback'
+  check((evidence.schemaVersion === 1 || evidence.schemaVersion === 2)
+    && evidence.kind === 'sit-google-web-current-readback'
     && evidence.evidenceClass === 'direct-authoritative-provider-runtime-and-console-readback'
     && evidence.syntheticFixture === false && sourcePattern.test(evidence.sourceCommit)
     && evidence.sourceCommit === expectedSource && evidence.buildVersion === expectedVersion
@@ -128,8 +142,10 @@ function bindEvidence(evidence, evidenceDigest, { now = new Date(), expectedSour
     && service.webAppPresent === true && Array.isArray(service.authorizedDomains)
     && JSON.stringify(service.publicWebConfig) === configurationJson
     && service.authorizedDomains.includes('staging.shareittoo.com')
-    && service.googleProviderEnabled === true && service.appleProviderEnabled === false
-    && service.facebookProviderEnabled === false && service.firebaseAuthEnabled === true
+    && service.googleProviderEnabled === true
+    && typeof service.appleProviderEnabled === 'boolean'
+    && typeof service.facebookProviderEnabled === 'boolean'
+    && service.firebaseAuthEnabled === true
     && service.firebaseEmulatorEnabled === false && serviceUntil > serviceAt
     && serviceUntil - serviceAt <= maximumAgeMs, 'google_web_current_service_readback');
   exact(service.runtime, runtimeKeys, 'google_web_current_runtime');
@@ -139,6 +155,26 @@ function bindEvidence(evidence, evidenceDigest, { now = new Date(), expectedSour
     && service.runtime.green === true && service.runtime.running === true
     && sourcePattern.test(service.runtime.commit) && imagePattern.test(service.runtime.image),
   'google_web_current_runtime');
+
+  if (evidence.schemaVersion === 2) {
+    const usage = evidence.serviceUsageBinding;
+    const usageJson = digestObject(usage, evidence.serviceUsageBindingSha256,
+      serviceUsageBindingKeys, 'google_web_current_service_usage_binding');
+    const usageAt = timestamp(usage.readAtUtc, 'google_web_current_service_usage_time');
+    const usageUntil = timestamp(usage.validUntilUtc, 'google_web_current_service_usage_time');
+    check(usage.schemaVersion === 1 && usage.kind === 'sit-google-web-service-usage-binding'
+      && usage.evidenceClass === 'direct-google-cloud-console-service-usage-binding'
+      && usage.syntheticFixture === false && usage.projectId === evidence.configuration.projectId
+      && usage.projectNumber === evidence.configuration.messagingSenderId
+      && hashPattern.test(usage.consoleReadbackSha256 ?? '')
+      && usage.serviceReadbackSha256 === evidence.serviceAccountReadbackSha256
+      && usageAt <= serviceAt && usageUntil > usageAt
+      && usageUntil - usageAt <= maximumAgeMs,
+    'google_web_current_service_usage_binding');
+    check(now.getTime() >= usageAt && now.getTime() < usageUntil,
+      'google_web_current_expired');
+    check(usageJson.length > 0, 'google_web_current_service_usage_binding');
+  }
 
   const consoleRead = evidence.cloudConsoleReadback;
   const consoleJson = digestObject(consoleRead, evidence.cloudConsoleReadbackSha256,
@@ -207,9 +243,10 @@ export function validateGoogleWebCurrentReadbackBinding(binding,
     now: new Date(binding.validatedAtUtc), expectedSource, expectedVersion,
   });
   check(JSON.stringify(rebound) === JSON.stringify(binding), 'google_web_current_binding_mismatch');
-  if (freshAt !== null) bindEvidence(evidence, binding.evidenceDigest, {
-    now: freshAt, expectedSource, expectedVersion,
-  });
+  if (freshAt !== null) {
+    check(evidence.schemaVersion === 2, 'google_web_current_service_usage_binding_required');
+    bindEvidence(evidence, binding.evidenceDigest, { now: freshAt, expectedSource, expectedVersion });
+  }
   return rebound;
 }
 

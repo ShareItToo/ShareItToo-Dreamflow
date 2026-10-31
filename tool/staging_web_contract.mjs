@@ -112,8 +112,6 @@ export function profile(source, version, googleWeb = null, facebookWeb = null, p
   };
   if (googleWeb !== null) {
     const currentReadback = googleWeb.profileContractVersion === GOOGLE_WEB_PROFILE_V3;
-    requireThat(!currentReadback || (facebookWeb === null && appleWeb === null),
-      'google_web_current_provider_mask');
     const legacy = !currentReadback && googleWeb && Object.keys(googleWeb).sort().join(',') === 'config,digest';
     const bound = legacy ? bindGoogleWebConfig(googleWeb.config, googleWeb.digest)
       : currentReadback
@@ -153,6 +151,12 @@ export function profile(source, version, googleWeb = null, facebookWeb = null, p
     result.SIT_SOCIAL_PROVIDER_ACTIVATION_VALIDATED = 'true';
     for (const [key, define] of Object.entries(appleWebFields)) result[define] = bound.config[key];
     for (const [key, define] of Object.entries(appleWebEvidenceFields)) result[define] = bound[key];
+  }
+  if (googleWeb?.profileContractVersion === GOOGLE_WEB_PROFILE_V3) {
+    const serviceReadback = JSON.parse(googleWeb.readinessJson).serviceAccountReadback;
+    requireThat(serviceReadback.appleProviderEnabled === (appleWeb !== null)
+      && serviceReadback.facebookProviderEnabled === (facebookWeb !== null),
+    'google_web_current_provider_evidence_mismatch');
   }
   if (passwordEnrollment !== null) {
     const bound = validatePasswordEnrollmentWebBinding(passwordEnrollment, {
@@ -402,8 +406,8 @@ export function sealArtifact({ directory, source, version, flutterVersion, build
   });
   const passwordEnrollmentVersion = passwordEnrollment === null
     ? null : passwordEnrollmentWebReadinessVersion(passwordEnrollment);
-  const providerArtifactSchemaVersion = appleWeb ? 7
-    : googleWeb?.profileContractVersion === GOOGLE_WEB_PROFILE_V3 ? 9
+  const providerArtifactSchemaVersion = googleWeb?.profileContractVersion === GOOGLE_WEB_PROFILE_V3 ? 9
+    : appleWeb ? 7
       : googleWeb ? 6 : passwordEnrollmentVersion === 2
     ? 5 : passwordEnrollment ? 4 : facebookWeb ? 3 : 1;
   const artifactSchemaVersion = listingAiWeb === null ? providerArtifactSchemaVersion
@@ -429,6 +433,14 @@ export function sealArtifact({ directory, source, version, flutterVersion, build
       ...(googleWeb.profileContractVersion === GOOGLE_WEB_PROFILE_V3 ? {
         googleWebServiceAccountReadbackSha256: googleWeb.serviceAccountReadbackSha256,
         googleWebCloudConsoleReadbackSha256: googleWeb.cloudConsoleReadbackSha256,
+        ...(appleWeb ? {
+          appleWebConfigDigest: appleWeb.configDigest,
+          appleWebReadinessDigest: appleWeb.readinessDigest,
+          appleWebBackendDigest: appleWeb.backendDigest,
+          appleWebDecisionDigest: appleWeb.decisionDigest,
+          appleWebEvidenceDigest: appleWeb.evidenceDigest,
+          appleWebValidatedAtUtc: appleWeb.validatedAtUtc,
+        } : {}),
       } : {
         googleWebPrerequisiteJournalSha256:
           JSON.parse(googleWeb.readinessJson).prerequisiteJournalSha256,
@@ -473,7 +485,8 @@ export function sealArtifact({ directory, source, version, flutterVersion, build
       googleWebConfigDigest: googleWeb.digest,
     } : {}),
     ...(appleWeb ? {
-      profileContractVersion: APPLE_WEB_PROFILE,
+      ...(googleWeb?.profileContractVersion !== GOOGLE_WEB_PROFILE_V3
+        ? { profileContractVersion: APPLE_WEB_PROFILE } : {}),
       appleWebConfigDigest: appleWeb.configDigest,
       appleWebReadinessDigest: appleWeb.readinessDigest,
       appleWebBackendDigest: appleWeb.backendDigest,
@@ -557,7 +570,8 @@ export function validateArtifact(directory, expectedHash, expectedSource, { mode
     'googleWebServiceAccountReadbackSha256', 'googleWebCloudConsoleReadbackSha256'];
   const googleMetadata = m.profileContractVersion === GOOGLE_WEB_PROFILE_V3
     ? googleV3Metadata : googleV2Metadata;
-  requireThat(providerSchemaVersion === 7 || m.profile?.SIT_SOCIAL_APPLE_ENABLED !== 'true',
+  requireThat(providerSchemaVersion === 7 || providerSchemaVersion === 9
+    || m.profile?.SIT_SOCIAL_APPLE_ENABLED !== 'true',
     'artifact_apple_web_legacy_candidate');
   const providerMetadata = Object.keys(m).filter((key) => [
     ...appleMetadata,
@@ -580,7 +594,8 @@ export function validateArtifact(directory, expectedHash, expectedSource, { mode
     'passwordEnrollmentContractVersion',
   ].includes(key)).sort();
   if ([6, 7, 9].includes(providerSchemaVersion)) {
-    const appleEnabled = providerSchemaVersion === 7;
+    const appleEnabled = providerSchemaVersion === 7
+      || m.profile?.SIT_SOCIAL_APPLE_ENABLED === 'true';
     const googleEnabled = m.profile?.SIT_SOCIAL_GOOGLE_ENABLED === 'true';
     const facebookEnabled = m.profile?.SIT_SOCIAL_FACEBOOK_ENABLED === 'true';
     const passwordEnabled = m.profile?.SIT_WEB_PASSWORD_ENROLLMENT_ENABLED === 'true';
@@ -601,13 +616,11 @@ export function validateArtifact(directory, expectedHash, expectedSource, { mode
       'resourcesCdn', 'flutterVersion', 'builderDigest', 'profile', 'files',
     ].sort();
     const googleV3 = providerSchemaVersion === 9;
-    requireThat(m.profileContractVersion === (appleEnabled ? APPLE_WEB_PROFILE : googleV3
-      ? GOOGLE_WEB_PROFILE_V3 : GOOGLE_WEB_PROFILE_V2)
+    requireThat(m.profileContractVersion === (googleV3 ? GOOGLE_WEB_PROFILE_V3
+      : appleEnabled ? APPLE_WEB_PROFILE : GOOGLE_WEB_PROFILE_V2)
       && m.bootstrapContractVersion === 2
       && (appleEnabled ? m.profile?.SIT_SOCIAL_APPLE_ENABLED === 'true' : googleEnabled)
-      && (!googleV3 || (!appleEnabled && !facebookEnabled && googleEnabled
-        && m.profile?.SIT_SOCIAL_APPLE_ENABLED === 'false'
-        && m.profile?.SIT_SOCIAL_FACEBOOK_ENABLED === 'false'))
+      && (!googleV3 || googleEnabled)
       && m.profile?.SIT_SOCIAL_PROVIDER_ACTIVATION_VALIDATED === 'true'
       && JSON.stringify(Object.keys(m).sort()) === JSON.stringify(expectedKeys),
     'artifact_google_web_readiness_contract');
@@ -657,6 +670,10 @@ export function validateArtifact(directory, expectedHash, expectedSource, { mode
         validatedAtUtc: m.googleWebValidatedAtUtc,
       }, { expectedSource: m.source, expectedVersion: m.version,
         freshAt: mode === 'candidate' ? new Date() : null });
+      const currentProviders = JSON.parse(googleWeb.readinessJson).serviceAccountReadback;
+      requireThat(currentProviders.appleProviderEnabled === appleEnabled
+        && currentProviders.facebookProviderEnabled === facebookEnabled,
+      'artifact_google_web_provider_evidence_mismatch');
     } else if (googleEnabled) {
       googleWeb = validateGoogleWebBinding({
         config: Object.fromEntries(Object.entries(googleFields)

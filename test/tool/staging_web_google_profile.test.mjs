@@ -6,14 +6,17 @@ import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { TARGET, bindGoogleWebConfig, inventory, readGoogleWebConfig, profile,
-  sealArtifact, sha256, validateArtifact, stagingBootstrapFor } from '../../tool/staging_web_contract.mjs';
+  sealArtifact, sha256, validateArtifact, stagingBootstrapFor, deploy } from '../../tool/staging_web_contract.mjs';
 import { GOOGLE_WEB_PROFILE_V2, bindGoogleWebReadiness,
   readGoogleWebReadiness } from '../../tool/staging_google_web_readiness.mjs';
 import { GOOGLE_WEB_PROFILE_V3, bindGoogleWebCurrentReadback,
-  readGoogleWebCurrentReadback } from '../../tool/staging_google_web_current_readback.mjs';
+  readGoogleWebCurrentReadback, validateGoogleWebCurrentReadbackBinding }
+  from '../../tool/staging_google_web_current_readback.mjs';
 import { syntheticGoogleBinding, syntheticGoogleConfig,
   syntheticGoogleEvidence } from './staging_google_web_readiness_fixture.mjs';
 import { syntheticGoogleCurrentEvidence } from './staging_google_web_current_readback_fixture.mjs';
+import { syntheticAppleBinding } from './staging_apple_web_readiness_fixture.mjs';
+import { bindFacebookWebReadiness } from '../../tool/staging_facebook_web_readiness.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const source = 'a'.repeat(40);
@@ -29,13 +32,13 @@ function temp(t) {
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   return root;
 }
-function makeArtifact(t, googleWeb = bound(), artifactVersion = version) {
+function makeArtifact(t, googleWeb = bound(), artifactVersion = version, providers = {}) {
   const directory = temp(t); fs.mkdirSync(path.join(directory, 'web'));
   for (const [file, bytes] of Object.entries({ 'index.html': '<script src="flutter_bootstrap.js" async></script>',
     'main.dart.js': 'synthetic compiled output', 'manifest.json': '{}', 'flutter_bootstrap.js': 'bootstrap();' })) {
     fs.writeFileSync(path.join(directory, 'web', file), bytes);
   }
-  const hash = sealArtifact({ directory, source, version: artifactVersion, builderDigest: 'b'.repeat(64), flutterVersion: { frameworkVersion: 'synthetic' }, googleWeb });
+  const hash = sealArtifact({ directory, source, version: artifactVersion, builderDigest: 'b'.repeat(64), flutterVersion: { frameworkVersion: 'synthetic' }, googleWeb, ...providers });
   return { directory, hash, googleWeb };
 }
 function rewriteManifest(directory, mutate) {
@@ -116,6 +119,8 @@ function currentBinding(evidence, now = evidence.now, expectedSource = source, e
 function rehashCurrent(evidence) {
   const hash = value => sha256(JSON.stringify(value));
   evidence.envelope.serviceAccountReadbackSha256 = hash(evidence.envelope.serviceAccountReadback);
+  evidence.envelope.serviceUsageBinding.serviceReadbackSha256 = evidence.envelope.serviceAccountReadbackSha256;
+  evidence.envelope.serviceUsageBindingSha256 = hash(evidence.envelope.serviceUsageBinding);
   evidence.envelope.cloudConsoleReadbackSha256 = hash(evidence.envelope.cloudConsoleReadback);
   evidence.envelope.decision.serviceAccountReadbackSha256 = evidence.envelope.serviceAccountReadbackSha256;
   evidence.envelope.decision.cloudConsoleReadbackSha256 = evidence.envelope.cloudConsoleReadbackSha256;
@@ -123,6 +128,29 @@ function rehashCurrent(evidence) {
   evidence.envelope.configurationSha256 = hash(evidence.envelope.configuration);
   evidence.envelope.decision.configurationSha256 = evidence.envelope.configurationSha256;
   evidence.bytes = Buffer.from(JSON.stringify(evidence.envelope)); evidence.digest = sha256(evidence.bytes);
+}
+function currentBindingWithProviders({ apple = false, facebook = false, now = new Date() } = {}) {
+  const evidence = syntheticGoogleCurrentEvidence(source, version, now);
+  evidence.envelope.serviceAccountReadback.appleProviderEnabled = apple;
+  evidence.envelope.serviceAccountReadback.facebookProviderEnabled = facebook;
+  rehashCurrent(evidence);
+  return currentBinding(evidence);
+}
+function currentFacebookBinding(config, now = new Date()) {
+  const clock = new Date(now); clock.setUTCMilliseconds(0);
+  const at = offset => new Date(clock.getTime() + offset).toISOString().replace('.000Z', 'Z');
+  const readiness = { schemaVersion: 1, provider: 'facebook', platform: 'web',
+    origin: config.authorizedOrigin, backendFirebaseProjectId: config.backendProjectId,
+    webAppConfigSha256: sha256(JSON.stringify(config)), callbackUrl: `https://${config.authDomain}/__/auth/handler`,
+    firebaseProviderEnabled: true, metaAppMode: 'development', audience: 'app_roles_only',
+    audienceVerified: true, providerReadbackSha256: sha256('synthetic-facebook-current'),
+    observedAtUtc: at(-60_000), validUntilUtc: at(60 * 60_000) };
+  const envelope = { schemaVersion: 1, kind: 'sit-facebook-web-release-readiness',
+    evidenceClass: 'verified-external', syntheticFixture: false, configuration: config,
+    configurationSha256: sha256(JSON.stringify(config)), readiness,
+    readinessSha256: sha256(JSON.stringify(readiness)) };
+  return bindFacebookWebReadiness(envelope, sha256(JSON.stringify(envelope)),
+    { now });
 }
 test('current-readback v3 binds source/version, live runtime, direct provider+console evidence, exact APIs/origins and Sol decision', (t) => {
   const evidence = syntheticGoogleCurrentEvidence(source, version);
@@ -145,6 +173,24 @@ test('current-readback v3 binds source/version, live runtime, direct provider+co
   assert.equal(manifest.profile.SIT_SOCIAL_FACEBOOK_ENABLED, 'false');
 });
 
+test('historical current-readback schema 1 remains readable but cannot seal a fresh candidate', () => {
+  const evidence = syntheticGoogleCurrentEvidence(source, version);
+  const legacy = structuredClone(evidence.envelope);
+  legacy.schemaVersion = 1;
+  delete legacy.serviceUsageBinding;
+  delete legacy.serviceUsageBindingSha256;
+  const bytes = Buffer.from(JSON.stringify(legacy));
+  const binding = bindGoogleWebCurrentReadback(legacy, sha256(bytes), {
+    now: evidence.now, expectedSource: source, expectedVersion: version,
+  });
+  assert.equal(validateGoogleWebCurrentReadbackBinding(binding, {
+    expectedSource: source, expectedVersion: version,
+  }).evidenceDigest, sha256(bytes));
+  assert.throws(() => validateGoogleWebCurrentReadbackBinding(binding, {
+    expectedSource: source, expectedVersion: version, freshAt: evidence.now,
+  }), /google_web_current_service_usage_binding_required/u);
+});
+
 test('current-readback v3 rejects stale, wrong-build or drifted provider/runtime/console/decision evidence', () => {
   const initial = syntheticGoogleCurrentEvidence(source, version);
   assert.throws(() => currentBinding(initial, initial.now, 'b'.repeat(40)), /google_web_current_/u);
@@ -155,8 +201,8 @@ test('current-readback v3 rejects stale, wrong-build or drifted provider/runtime
     e => { e.serviceAccountReadback.webAppPresent = false; },
     e => { e.serviceAccountReadback.authorizedDomains = ['other.example']; },
     e => { e.serviceAccountReadback.googleProviderEnabled = false; },
-    e => { e.serviceAccountReadback.appleProviderEnabled = true; },
-    e => { e.serviceAccountReadback.facebookProviderEnabled = true; },
+    e => { e.serviceAccountReadback.appleProviderEnabled = 'true'; },
+    e => { e.serviceAccountReadback.facebookProviderEnabled = 'true'; },
     e => { e.serviceAccountReadback.firebaseAuthEnabled = false; },
     e => { e.serviceAccountReadback.firebaseEmulatorEnabled = true; },
     e => { e.serviceAccountReadback.runtime.service = 'shareittoo-staging-api'; },
@@ -175,7 +221,108 @@ test('current-readback v3 rejects stale, wrong-build or drifted provider/runtime
     assert.throws(() => currentBinding(evidence), /google_web_current_/u);
   }
   const wronglyCombined = currentBinding(initial);
-  assert.throws(() => profile(source, version, wronglyCombined, { synthetic: true }), /google_web_current_provider_mask/u);
+  const currentConfig = JSON.parse(wronglyCombined.readinessJson).configuration;
+  assert.throws(() => profile(source, version, wronglyCombined, currentFacebookBinding(currentConfig)),
+    /google_web_current_provider_evidence_mismatch/u);
+});
+
+test('Google current-readback coexists only with independently bound current Apple and Facebook evidence', (t) => {
+  const googleOnly = currentBindingWithProviders();
+  assert.equal(profile(source, version, googleOnly).SIT_SOCIAL_GOOGLE_ENABLED, 'true');
+
+  for (const combination of ['apple', 'facebook', 'all']) {
+    const hasApple = combination !== 'facebook';
+    const hasFacebook = combination !== 'apple';
+    const now = new Date();
+    const googleWeb = currentBindingWithProviders({ apple: hasApple, facebook: hasFacebook, now });
+    const currentConfig = JSON.parse(googleWeb.readinessJson).configuration;
+    const appleWeb = hasApple ? syntheticAppleBinding(source, { config: currentConfig,
+      now }) : null;
+    const facebookWeb = hasFacebook ? currentFacebookBinding(currentConfig, now) : null;
+    const f = makeArtifact(t, googleWeb, version, { appleWeb, facebookWeb });
+    const manifest = validateArtifact(f.directory, f.hash, source);
+    assert.equal(manifest.schemaVersion, 9);
+    assert.equal(manifest.profileContractVersion, GOOGLE_WEB_PROFILE_V3);
+    assert.equal(manifest.profile.SIT_SOCIAL_APPLE_ENABLED, String(hasApple));
+    assert.equal(manifest.profile.SIT_SOCIAL_FACEBOOK_ENABLED, String(hasFacebook));
+    assert.ok(manifest.appleWebEvidenceDigest === (appleWeb?.evidenceDigest ?? undefined));
+    assert.ok(manifest.facebookWebEvidenceDigest === (facebookWeb?.evidenceDigest ?? undefined));
+  }
+});
+
+test('Google current-readback rejects missing or mismatched provider evidence', () => {
+  const now = new Date();
+  const googleWithApple = currentBindingWithProviders({ apple: true, now });
+  assert.throws(() => profile(source, version, googleWithApple), /google_web_current_provider_evidence_mismatch/u);
+  const googleWithoutApple = currentBindingWithProviders({ now });
+  const appleWeb = syntheticAppleBinding(source, { config: JSON.parse(googleWithoutApple.readinessJson).configuration,
+    now });
+  assert.throws(() => profile(source, version, googleWithoutApple, null, null, appleWeb),
+    /google_web_current_provider_evidence_mismatch/u);
+  const googleWithFacebook = currentBindingWithProviders({ facebook: true, now });
+  assert.throws(() => profile(source, version, googleWithFacebook),
+    /google_web_current_provider_evidence_mismatch/u);
+});
+
+test('Google+Apple+Facebook schema 9 passes local deploy preflight and served static readback', (t) => {
+  const root = temp(t);
+  const sourceRoot = path.join(root, 'source'); fs.mkdirSync(sourceRoot);
+  const git = (...args) => execFileSync('git', ['-C', sourceRoot, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  git('init'); fs.writeFileSync(path.join(sourceRoot, 'fixture'), 'tracked'); git('add', '.');
+  git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-m', 'synthetic source');
+  const exactSource = git('rev-parse', 'HEAD'); const now = new Date();
+  const evidence = syntheticGoogleCurrentEvidence(exactSource, version, now);
+  evidence.envelope.serviceAccountReadback.appleProviderEnabled = true;
+  evidence.envelope.serviceAccountReadback.facebookProviderEnabled = true;
+  rehashCurrent(evidence);
+  const googleWeb = currentBinding(evidence, now, exactSource, version);
+  const currentConfig = evidence.envelope.configuration;
+  const appleWeb = syntheticAppleBinding(exactSource, { config: currentConfig, now });
+  const facebookWeb = currentFacebookBinding(currentConfig, now);
+  const createArtifact = (name, artifactVersion, providers = {}) => {
+    const directory = path.join(root, name); fs.mkdirSync(path.join(directory, 'web'), { recursive: true });
+    for (const [file, bytes] of Object.entries({ 'index.html': '<script src="flutter_bootstrap.js" async></script>',
+      'main.dart.js': 'synthetic build output', 'manifest.json': '{}', 'flutter_bootstrap.js': 'bootstrap();' })) {
+      fs.writeFileSync(path.join(directory, 'web', file), bytes);
+    }
+    const hash = sealArtifact({ directory, source: exactSource, version: artifactVersion,
+      builderDigest: 'b'.repeat(64), flutterVersion: { frameworkVersion: 'synthetic' }, ...providers });
+    return { directory, hash };
+  };
+  const old = createArtifact('old', '1.0.0+2026092904');
+  const candidate = createArtifact('candidate', version, { googleWeb, appleWeb, facebookWeb });
+  const candidateManifest = validateArtifact(candidate.directory, candidate.hash, exactSource);
+  assert.equal(candidateManifest.schemaVersion, 9);
+  assert.equal(candidateManifest.googleWebEvidenceDigest, googleWeb.evidenceDigest);
+  const sealedGoogleEvidence = JSON.parse(googleWeb.readinessJson);
+  assert.equal(sealedGoogleEvidence.serviceUsageBindingSha256,
+    sha256(JSON.stringify(sealedGoogleEvidence.serviceUsageBinding)));
+  assert.equal(sealedGoogleEvidence.serviceUsageBinding.serviceReadbackSha256,
+    candidateManifest.googleWebServiceAccountReadbackSha256);
+  const deploymentRoot = path.join(root, 'staging-web');
+  fs.mkdirSync(path.join(deploymentRoot, 'releases'), { recursive: true });
+  fs.cpSync(old.directory, path.join(deploymentRoot, 'releases', old.hash), { recursive: true });
+  fs.symlinkSync(`releases/${old.hash}/web`, path.join(deploymentRoot, 'current'));
+  const args = { root: deploymentRoot, target: TARGET, sourceRoot, source: exactSource,
+    artifact: candidate.directory, manifestHash: candidate.hash, currentHash: old.hash };
+  let readbacks = 0;
+  const verify = ({ directory, manifestHash }) => {
+    readbacks++;
+    assert.equal(manifestHash, candidate.hash);
+    assert.equal(fs.realpathSync(path.join(deploymentRoot, 'current')), path.join(directory, 'web'));
+    const manifest = validateArtifact(directory, manifestHash, exactSource);
+    assert.equal(manifest.schemaVersion, 9);
+    for (const file of ['index.html', 'staging_bootstrap.js', 'flutter_service_worker.js', 'staging-release.json']) {
+      assert.equal(sha256(fs.readFileSync(path.join(deploymentRoot, 'current', file))),
+        sha256(fs.readFileSync(path.join(directory, 'web', file))), file);
+    }
+  };
+  assert.equal(deploy({ ...args, verify }).status, 'preflight-passed-no-mutation');
+  assert.equal(readbacks, 0);
+  assert.equal(fs.readlinkSync(path.join(deploymentRoot, 'current')), `releases/${old.hash}/web`);
+  assert.equal(deploy({ ...args, execute: true, verify }).status, 'deployed');
+  assert.equal(readbacks, 1);
+  assert.equal(fs.readlinkSync(path.join(deploymentRoot, 'current')), `releases/${candidate.hash}/web`);
 });
 
 test('current-readback v3 file reader enforces the existing owner-protected input contract', (t) => {

@@ -32,6 +32,15 @@ export function syntheticGoogleCurrentEvidence(source, version = '1.2.3+20261026
       image: `ghcr.io/shareittoo/shareittoo-api@sha256:${'b'.repeat(64)}` },
   };
   const serviceAccountReadbackSha256 = hash(JSON.stringify(service));
+  const serviceUsageBinding = {
+    schemaVersion: 1, kind: 'sit-google-web-service-usage-binding',
+    evidenceClass: 'direct-google-cloud-console-service-usage-binding', syntheticFixture: false,
+    projectId: config.projectId, projectNumber: config.messagingSenderId,
+    readAtUtc: new Date(time.getTime() - 70_000).toISOString(),
+    validUntilUtc: new Date(time.getTime() + 30 * 60_000).toISOString(),
+    consoleReadbackSha256: hash('synthetic-service-usage-console-proof'),
+    serviceReadbackSha256: serviceAccountReadbackSha256,
+  };
   const consoleRead = {
     schemaVersion: 1, kind: 'sit-google-web-cloud-console-api-key-readback',
     evidenceClass: 'direct-google-cloud-console-readback', syntheticFixture: false,
@@ -53,14 +62,16 @@ export function syntheticGoogleCurrentEvidence(source, version = '1.2.3+20261026
     decidedAtUtc: time.toISOString(), validUntilUtc: new Date(time.getTime() + 30 * 60_000).toISOString(),
   };
   const envelope = {
-    schemaVersion: 1, kind: 'sit-google-web-current-readback',
+    schemaVersion: 2, kind: 'sit-google-web-current-readback',
     evidenceClass: 'direct-authoritative-provider-runtime-and-console-readback',
     syntheticFixture: false, sourceCommit: source, buildVersion: version,
     configuration: config, configurationSha256,
     serviceAccountReadback: service, serviceAccountReadbackSha256,
+    serviceUsageBinding, serviceUsageBindingSha256: hash(JSON.stringify(serviceUsageBinding)),
     cloudConsoleReadback: consoleRead, cloudConsoleReadbackSha256,
     decision, decisionSha256: hash(JSON.stringify(decision)),
   };
   const bytes = Buffer.from(JSON.stringify(envelope));
-  return { envelope, bytes, digest: hash(bytes), config, service, consoleRead, decision, now: time };
+  return { envelope, bytes, digest: hash(bytes), config, service, serviceUsageBinding,
+    consoleRead, decision, now: time };
 }
