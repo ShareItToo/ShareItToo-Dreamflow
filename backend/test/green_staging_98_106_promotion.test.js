@@ -112,6 +112,25 @@ test('environment semantics reject hidden provider activation, emulator, duplica
   }
   assert.throws(() => assertEnvironment(env, { ...f.inputs.config, allowedUsersSha256: '0'.repeat(64) }));
 });
+test('Green read-only preflight accepts mock only with its exact private synthetic profile', () => {
+  const f = fixture(); const env = Object.fromEntries(f.records.get(f.inputs.target.api.id).Config.Env.map(entry => {
+    const i = entry.indexOf('='); return [entry.slice(0, i), entry.slice(i + 1)];
+  }));
+  Object.assign(env, { SIT_STAGING_LISTING_AI_PROFILE: 'staging-mock-v1', SIT_LISTING_AI_PROVIDER: 'mock',
+    SIT_LISTING_AI_MODEL: 'listing-ai-mock-v1', SIT_LISTING_AI_BUDGET_CENTS: '0',
+    SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: '0', SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: '',
+    SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '0', OPENAI_API_KEY: '', OPENAI_API_KEY_FILE: '',
+    SIT_STAGING_PILOT_ID: 'heilbronn_wave0', SIT_STAGING_COMPOSE_PROJECT: 'sit-green',
+    SIT_STAGING_ACCESS_GATE_ENABLED: 'true' });
+  assert.doesNotThrow(() => assertEnvironment(Object.entries(env).map(([k, v]) => `${k}=${v}`), f.inputs.config));
+  for (const [name, value] of [['SIT_LISTING_AI_PROVIDER', 'openai'], ['SIT_LISTING_AI_MODEL', 'unreviewed'],
+    ['SIT_LISTING_AI_BUDGET_CENTS', '1'], ['SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS', '1'],
+    ['SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', '1'], ['OPENAI_API_KEY', 'secret'],
+    ['DEPLOYMENT_ENVIRONMENT', 'production'], ['SIT_STAGING_ACCESS_GATE_ENABLED', 'false']]) {
+    const changed = { ...env, [name]: value };
+    assert.throws(() => assertEnvironment(Object.entries(changed).map(([k, v]) => `${k}=${v}`), f.inputs.config));
+  }
+});
 test('executor allowlist rejects command injection and arbitrary SQL despite readback phase label', () => {
   for (const args of [['stop', 'a'.repeat(64)], ['inspect', '--help'], ['exec', 'a'.repeat(64), 'sh', '-c', 'true'],
     ['exec', 'a'.repeat(64), 'psql', '-X', '-v', 'ON_ERROR_STOP=1', '-U', 'shareittoo_green', '-d', 'shareittoo_green', '-At', '-c', 'DELETE FROM users']]) {

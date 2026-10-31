@@ -255,6 +255,28 @@ test('receipt rejects wrong commit/hash/snapshot/probes/freshness and payment-mo
   const source = structuredClone(f.source); source.Config.Env = source.Config.Env.map(e => e.startsWith('PAYMENT_TRANSPORT=') ? 'PAYMENT_TRANSPORT=stripe' : e);
   assert.throws(() => canonicalSuccessorSpec(source, f.c.image, f.data), /provider_modes/u);
 }));
+test('Green successor uses the mock profile only when explicitly bound and zero-cost', async () => scoped(async f => {
+  const source = structuredClone(f.source);
+  const env = Object.fromEntries(source.Config.Env.map(entry => {
+    const i = entry.indexOf('='); return [entry.slice(0, i), entry.slice(i + 1)];
+  }));
+  Object.assign(env, { DEPLOYMENT_ENVIRONMENT: 'test', SIT_STAGING_PILOT_ID: 'heilbronn_wave0',
+    SIT_STAGING_ACCESS_GATE_ENABLED: 'true', SIT_STAGING_COMPOSE_PROJECT: 'sit-green',
+    SIT_STAGING_LISTING_AI_PROFILE: 'staging-mock-v1', SIT_LISTING_AI_PROVIDER: 'mock',
+    SIT_LISTING_AI_MODEL: 'listing-ai-mock-v1', SIT_LISTING_AI_BUDGET_CENTS: '0',
+    SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: '0', SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: '',
+    SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '0', OPENAI_API_KEY: '', OPENAI_API_KEY_FILE: '' });
+  source.Config.Env = Object.entries(env).map(([k, v]) => `${k}=${v}`);
+  assert.equal(canonicalSuccessorSpec(source, f.c.image, f.data).spec.env.SIT_LISTING_AI_PROVIDER, 'mock');
+  for (const [name, value] of [['SIT_LISTING_AI_BUDGET_CENTS', '1'],
+    ['SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS', '1'], ['SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', '1'],
+    ['OPENAI_API_KEY', 'secret'], ['SIT_STAGING_LISTING_AI_PROFILE', '']]) {
+    const broken = structuredClone(source);
+    broken.Config.Env = broken.Config.Env.map(entry => entry.startsWith(`${name}=`) ? `${name}=${value}` : entry);
+    if (!broken.Config.Env.some(entry => entry.startsWith(`${name}=`))) broken.Config.Env.push(`${name}=${value}`);
+    assert.throws(() => canonicalSuccessorSpec(broken, f.c.image, f.data), /provider_modes/u);
+  }
+}));
 test('receipt accepts only healthy watchdog progress since the collected database baseline', async () => scoped(async f => {
   const receipt = structuredClone(f.receipt), prior = f.data.target.database.watchdog;
   receipt.source.watchdog.attempt_count = prior.attempt_count + 2;

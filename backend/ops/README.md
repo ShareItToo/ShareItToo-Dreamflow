@@ -400,6 +400,28 @@ not require an OpenAI key and does not send image data to an external provider.
 Do not set `ENABLE_STAGING_LISTING_AI=1` for that release; that flag is the
 separate, explicitly approved external-provider override below.
 
+## Optional Green synthetic Listing-AI profile
+
+The mock Listing-AI profile is available only through the canonical Green
+promotion runner. `deploy_release.sh staging` and `deploy_release.sh production`
+reject `ENABLE_STAGING_LISTING_AI_MOCK=1` before invoking Docker. Bind
+`listingAiProvider: "mock"` and `listingAiProfile: "staging-mock-v1"` in the
+protected Green config, with `SIT_STAGING_COMPOSE_PROJECT=sit-green` and the
+exact mock profile tuple in its protected environment. The runner remains bound
+to the recorded `sit-green` API, database, Green network and provider network;
+it verifies the immutable GHCR image digest and health/readiness boundary before
+completing promotion. The private pilot allowlist must be nonempty. The model
+is `listing-ai-mock-v1`, lifetime and smoke budgets are zero, activation ID and
+OpenAI key inputs are empty, external execution and automatic publication are
+disabled, and readiness reports `productionEligible=false` with
+`syntheticOnly=true`. No provider call or listing publication is permitted.
+
+Existing `on_device` remains the default Green profile. OpenAI stays behind its
+separate secret, budget and receipt gates. The Green runner's atomic rollback
+and forward-migration recovery rules remain unchanged: after a forward migration
+starts, it isolates the API and requires forward recovery instead of booting the
+old image against the changed schema.
+
 ## Optional Staging external listing-AI activation
 
 The external listing-AI path remains disabled by default and Production cannot

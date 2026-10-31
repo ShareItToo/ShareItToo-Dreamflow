@@ -2431,6 +2431,8 @@ export function createApp({
     runMaxProviderCalls: config.listingAi.runMaxProviderCalls,
     externalProviderExecutionAllowed: config.listingAi.externalProviderExecutionAllowed,
     automaticPublicationAllowed: false,
+    productionEligible: config.listingAi.productionEligible,
+    syntheticOnly: config.listingAi.syntheticOnly,
   });
   const paymentProviderHealth = Object.freeze({
     status: config.payments.transport === 'stripe' ? 'enabled' : 'disabled',

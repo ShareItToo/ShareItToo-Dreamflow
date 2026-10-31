@@ -7,6 +7,7 @@ task_commit="${2:-}"
 task_enable_staging_fcm="${ENABLE_STAGING_FCM:-0}"
 task_enable_staging_smtp="${ENABLE_STAGING_SMTP:-0}"
 task_enable_staging_listing_ai="${ENABLE_STAGING_LISTING_AI:-0}"
+task_enable_staging_listing_ai_mock="${ENABLE_STAGING_LISTING_AI_MOCK:-0}"
 task_enable_staging_stripe="${ENABLE_STAGING_STRIPE:-0}"
 task_enable_staging_identity="${ENABLE_STAGING_IDENTITY:-0}"
 task_enable_staging_mfa="${ENABLE_STAGING_MFA:-0}"
@@ -244,6 +245,18 @@ if [[ "$task_enable_staging_smtp" != 0 && "$task_enable_staging_smtp" != 1 ]]; t
 fi
 if [[ "$task_enable_staging_listing_ai" != 0 && "$task_enable_staging_listing_ai" != 1 ]]; then
   echo "ENABLE_STAGING_LISTING_AI must be 0 or 1." >&2
+  exit 1
+fi
+if [[ "$task_enable_staging_listing_ai_mock" != 0 && "$task_enable_staging_listing_ai_mock" != 1 ]]; then
+  echo "ENABLE_STAGING_LISTING_AI_MOCK must be 0 or 1." >&2
+  exit 1
+fi
+if [[ "$task_enable_staging_listing_ai_mock" == 1 ]]; then
+  if [[ "$task_environment" == production ]]; then
+    echo "The staging mock Listing AI override is forbidden for production deployments." >&2
+  else
+    echo "The legacy deploy_release staging lane cannot target Green; use the canonical Green runner for mock Listing AI." >&2
+  fi
   exit 1
 fi
 if [[ "$task_enable_staging_stripe" != 0 && "$task_enable_staging_stripe" != 1 ]]; then

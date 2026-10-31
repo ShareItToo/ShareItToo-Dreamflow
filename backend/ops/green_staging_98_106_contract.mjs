@@ -118,6 +118,7 @@ export const requiredSourcePaths = Object.freeze([
   'backend/ops/green_staging_98_106_evidence.mjs',
   'backend/ops/green_staging_98_106_execution.mjs',
   'backend/ops/green_staging_98_106_resources.mjs',
+  'backend/ops/staging_listing_ai_mock_profile.mjs',
   'backend/ops/green_staging_promotion.mjs',
   'backend/ops/green_auth_profile.mjs',
   'backend/ops/stable_private_file.mjs',
@@ -229,18 +230,23 @@ export function validateTarget(target) {
 }
 
 export function validateConfiguration(config) {
-  exact(config, ['kind', 'schemaVersion', 'environment', 'firebaseAuthEnabled', 'emulatorEnabled',
+  const configKeys = ['kind', 'schemaVersion', 'environment', 'firebaseAuthEnabled', 'emulatorEnabled',
     'accessGateEnabled', 'allowedUsersSha256', 'googleRegistrationEnabled', 'appleRevocationEnabled',
     'appleAcquisitionEnabled', 'paymentTransport', 'stripeLivemode', 'mailTransport', 'pushTransport',
     'identityTransport', 'listingAiProvider', 'externalListingAiEnabled', 'technicalSandboxEnabled',
-    'mountsSha256', 'runtimeEnvironmentSha256'], 'green_98_106_config');
+    'mountsSha256', 'runtimeEnvironmentSha256'];
+  if (Object.hasOwn(config ?? {}, 'listingAiProfile')) configKeys.push('listingAiProfile');
+  exact(config, configKeys, 'green_98_106_config');
+  const onDevice = config.listingAiProvider === 'on_device'
+    && (config.listingAiProfile === undefined || config.listingAiProfile === 'on-device-v1');
+  const mock = config.listingAiProvider === 'mock' && config.listingAiProfile === 'staging-mock-v1';
   assert(config.kind === 'sit-green-staging-98-106-config' && config.schemaVersion === 2
     && config.environment === 'test' && config.firebaseAuthEnabled === true && config.emulatorEnabled === false
     && config.accessGateEnabled === true && hash.test(config.allowedUsersSha256)
     && config.googleRegistrationEnabled === false && config.appleRevocationEnabled === false
     && config.appleAcquisitionEnabled === false && config.paymentTransport === 'memory'
     && config.stripeLivemode === false && config.mailTransport === 'memory' && config.pushTransport === 'memory'
-    && config.identityTransport === 'memory' && config.listingAiProvider === 'on_device'
+    && config.identityTransport === 'memory' && (onDevice || mock)
     && config.externalListingAiEnabled === false && config.technicalSandboxEnabled === false
     && hash.test(config.mountsSha256) && hash.test(config.runtimeEnvironmentSha256), 'green_98_106_config');
   return structuredClone(config);

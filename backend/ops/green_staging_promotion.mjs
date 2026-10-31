@@ -12,6 +12,7 @@ import { closeStablePrivateFile, openStablePrivateFile, readStablePrivateFile } 
 import { assertReadinessFindingsUnchanged, buildReadinessFindingSql, normalizeReadinessFindings } from './staging_forward_migration_rehearsal.mjs';
 import { technicalSandboxHealthProjection } from '../src/technical_sandbox_config.js';
 import { assertGreenPostEnrollmentProfile, assertGreenAuthProfileReadback, greenAllowedIdsProbeExpression } from './green_auth_profile.mjs';
+import { assertStagingMockListingAiProfile } from './staging_listing_ai_mock_profile.mjs';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -654,6 +655,12 @@ export function assertGreenProtectedEnvironment(values, config, authProfile = nu
       || values.SYNTHETIC_SANDBOX_PASSWORD_FILE !== syntheticSandboxCredentialFilePath
       || !String(values.SIT_STAGING_ALLOWED_USER_IDS ?? '').split(',').map((entry) => entry.trim()).includes('synthetic_sandbox_user_pilot_20260919')
       || config?.mfaFile === undefined) fail('green_runtime_environment_boundary_invalid');
+  if ((config.listingAiProfile ?? 'on-device-v1') === 'staging-mock-v1') {
+    if (config.listingAiProvider !== 'mock') fail('green_runtime_environment_boundary_invalid');
+    assertStagingMockListingAiProfile(values, { deploymentEnvironment: 'test' });
+  } else if (Object.hasOwn(values, 'SIT_STAGING_LISTING_AI_PROFILE')) {
+    fail('green_runtime_environment_boundary_invalid');
+  }
   assertGreenBroadPromotionEnvironment(values, authProfile);
   assertGreenPublicFixtureEnvironment(values);
   assertGreenAuthProfileReadback(values, authProfile);
@@ -667,8 +674,18 @@ export function assertGreenProtectedEnvironment(values, config, authProfile = nu
 }
 
 export function assertGreenBroadPromotionEnvironment(values, authProfile = null) {
-  for (const [name, expected] of Object.entries(greenBroadPromotionEnvironment)) {
+  const mockProfile = values?.SIT_STAGING_LISTING_AI_PROFILE === 'staging-mock-v1';
+  const listingKeys = new Set(['SIT_LISTING_AI_PROVIDER', 'SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED',
+    'SIT_LISTING_AI_BUDGET_CENTS']);
+  for (const [name, expected] of Object.entries(greenBroadPromotionEnvironment).filter(([key]) => !listingKeys.has(key))) {
     if (values?.[name] !== (name === 'FIREBASE_AUTH_ENABLED' && authProfile ? 'true' : expected)) fail('green_broad_promotion_provider_off_invalid');
+  }
+  if (mockProfile) assertStagingMockListingAiProfile(values, { deploymentEnvironment: 'test' });
+  else {
+    if (Object.hasOwn(values ?? {}, 'SIT_STAGING_LISTING_AI_PROFILE')) fail('green_broad_promotion_provider_off_invalid');
+    for (const name of listingKeys) {
+      if (values?.[name] !== greenBroadPromotionEnvironment[name]) fail('green_broad_promotion_provider_off_invalid');
+    }
   }
   return true;
 }
@@ -904,7 +921,8 @@ function assertMigrationLedgerReadback(value, expectedSchema, expectedDigest, co
   return Object.freeze({ count: rows.length, min: 1, max: expectedSchema, digest });
 }
 
-export function assertGreenRuntimeReadbacks({ version, health, ready, runtimeCommit } = {}) {
+export function assertGreenRuntimeReadbacks({ version, health, ready, runtimeCommit,
+  listingAiProvider = 'on_device' } = {}) {
   if (version?.commit !== runtimeCommit || version?.environment !== 'test') fail('green_runtime_version_mismatch');
   for (const payload of [health, ready]) {
     const technicalSandbox = payload?.checks?.technicalSandbox;
@@ -917,8 +935,20 @@ export function assertGreenRuntimeReadbacks({ version, health, ready, runtimeCom
         || technicalSandbox?.maxRunsPerUser24h !== 3
         || technicalSandbox?.professionalReview !== false
         || technicalSandbox?.syntheticOnly !== true
-        || payload.checks?.identityVerification?.provider !== 'memory'
-        || payload.checks?.listingAi?.provider !== 'on_device') fail('green_runtime_capability_readback_invalid');
+        || payload.checks?.identityVerification?.provider !== 'memory') fail('green_runtime_capability_readback_invalid');
+    const listingAi = payload.checks?.listingAi;
+    if (listingAiProvider === 'on_device') {
+      if (listingAi?.provider !== 'on_device') fail('green_runtime_capability_readback_invalid');
+    } else if (listingAiProvider === 'mock') {
+      if (listingAi?.provider !== 'mock' || listingAi?.model !== 'listing-ai-mock-v1'
+          || listingAi?.budgetCents !== 0 || listingAi?.stagingSmokeBudgetCents !== 0
+          || listingAi?.stagingSmokeActivationId !== null
+          || listingAi?.externalProviderExecutionAllowed !== false
+          || listingAi?.automaticPublicationAllowed !== false
+          || listingAi?.productionEligible !== false || listingAi?.syntheticOnly !== true) {
+        fail('green_runtime_capability_readback_invalid');
+      }
+    } else fail('green_runtime_capability_readback_invalid');
   }
   return true;
 }
@@ -1101,7 +1131,8 @@ export async function assertGreenProtectedRuntimeFiles(config, protectedEnv) {
 }
 
 export function assertGreenRuntimeConfig(config) {
-  exactKeys(config, requiredConfigKeys, 'green_config_shape_invalid');
+  exactKeys(config, Object.hasOwn(config ?? {}, 'listingAiProfile')
+    ? [...requiredConfigKeys, 'listingAiProfile'] : requiredConfigKeys, 'green_config_shape_invalid');
   assertRealGreenEnvFilePath(config.envFile, 'green_env_file_invalid');
   safePath(config.mfaFile, 'green_mfa_file_invalid');
   safePath(config.firebaseFile, 'green_firebase_file_invalid');
@@ -1118,11 +1149,19 @@ export function assertGreenRuntimeConfig(config) {
   if (config.envNames.some((name) => greenImmutableReleaseEnvNames.includes(name))) {
     fail('green_config_release_identity_env_forbidden');
   }
+  const mockEnvNames = ['SIT_STAGING_LISTING_AI_PROFILE', 'SIT_LISTING_AI_MODEL',
+    'SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS', 'SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID'];
+  if (config.listingAiProfile === 'staging-mock-v1'
+      && mockEnvNames.some((name) => !config.envNames.includes(name))) {
+    fail('green_config_env_allowlist_invalid');
+  }
   if (config.paymentTransport !== 'memory' || config.stripeLiveMode !== false
       || config.mailTransport !== 'memory'
       || config.pushTransport !== 'memory'
       || config.identityTransport !== 'memory'
-      || config.listingAiProvider !== 'on_device'
+      || !((config.listingAiProvider === 'on_device'
+          && (config.listingAiProfile === undefined || config.listingAiProfile === 'on-device-v1'))
+        || (config.listingAiProvider === 'mock' && config.listingAiProfile === 'staging-mock-v1'))
       || config.listingAiExternalAllowed !== false
       || config.listingAiBudgetCents !== 0
       || config.syntheticUserId !== 'synthetic_sandbox_user_pilot_20260919') {
@@ -1498,6 +1537,10 @@ export function buildGreenPromotionPlan({
       authorizationRenewal: false,
       providerTraffic: false,
     }),
+    listingAi: Object.freeze({ provider: runtimeConfig.listingAiProvider,
+      profile: runtimeConfig.listingAiProfile ?? 'on-device-v1', budgetCents: 0,
+      externalProviderExecutionAllowed: false, automaticPublicationAllowed: false,
+      productionEligible: false, syntheticOnly: runtimeConfig.listingAiProvider === 'mock' }),
     finalMounts: Object.freeze(finalMounts),
     candidateMounts: Object.freeze([
       ...finalMounts.map((mount) => Object.freeze({ ...mount, name: mount.destination === '/data/uploads' ? null : mount.name })),
@@ -1508,8 +1551,8 @@ export function buildGreenPromotionPlan({
       'stop and seal only the active Green API and verify it is stopped before any backup or schema mutation',
       'read foreign writers before and after the fresh protected database backup, requiring an unchanged empty set',
       `restore backup into an internal run-scoped PostgreSQL target and verify idempotent migration at schema ${target.currentSchema} (${target.sourceSchema}_to_${target.currentSchema}) through ${greenTarget.currentMigration}`,
-      'provision the synthetic sandbox user on the isolated target and run the immutable candidate there on loopback-only 18082',
-      'require live/ready 200, MFA, Identity memory, on-device Listing AI and provider-off technical Sandbox readbacks',
+      `provision the synthetic sandbox user on the isolated target and run the immutable candidate there on loopback-only 18082 with ${runtimeConfig.listingAiProvider} Listing AI`,
+      `require live/ready 200, MFA, Identity memory, ${runtimeConfig.listingAiProvider} Listing AI and provider-off technical Sandbox readbacks`,
       'cleanup and verify every isolated candidate/database/network; anonymous rehearsal volumes are removed only with their owned containers before touching Green',
       'stop and seal the observed Green API; never boot it after canonical schema migration',
       `explicitly run the idempotent canonical Green migration at schema ${target.currentSchema} (${target.sourceSchema}_to_${target.currentSchema}) through ${greenTarget.currentMigration}, read back the exact terminal migration, and provision the synthetic user on Green`,
@@ -1874,7 +1917,7 @@ export function sanitizeGreenEvidence({ plan, backupDigest, configDigest, target
       identityTransport: 'memory',
       googleRegistration: false,
       firebaseAuth: Boolean(plan.target.authProfile),
-      listingAiProvider: 'on_device',
+      listingAiProvider: plan.listingAi.provider,
       listingAiExternalExecutionApproved: false,
       listingAiBudgetCents: 0,
       syntheticCatalog: {
@@ -2229,7 +2272,7 @@ export async function runGreenForwardRecovery({ plan, commands, command, command
   }
   assertGreenImageReadback(JSON.parse(readbacks.final_image_readback), plan.runtime);
   assertGreenFinalContainerReadback({ record: JSON.parse(readbacks.final_inventory_readback), plan, expectedId: successorId, expectedNetworkIds: { [plan.target.network]: targetNetworkId, [plan.target.providerNetwork]: providerNetworkId } });
-  assertGreenRuntimeReadbacks({ version: JSON.parse(readbacks.final_version_readback), health: JSON.parse(readbacks.final_health_probe), ready: JSON.parse(readbacks.final_ready_wait), runtimeCommit: plan.runtime.runtimeCommit });
+  assertGreenRuntimeReadbacks({ version: JSON.parse(readbacks.final_version_readback), health: JSON.parse(readbacks.final_health_probe), ready: JSON.parse(readbacks.final_ready_wait), runtimeCommit: plan.runtime.runtimeCommit, listingAiProvider: plan.listingAi.provider });
   return Object.freeze({ status: 'verified', completedPhases: Object.freeze(recovered) });
 }
 
@@ -2752,10 +2795,10 @@ export async function runGreenPromotion({ plan, config, configFile, environment 
         if (readbacks[entry.phase] !== databaseStateBeforeRaw) fail('green_database_state_changed');
         assertGreenDatabaseStateReadback(readbacks[entry.phase], databaseStateBefore);
       }
-      if (entry.phase === 'candidate_version_probe') assertGreenRuntimeReadbacks({ version: JSON.parse(readbacks.candidate_version_probe), health: JSON.parse(readbacks.candidate_health_and_feature_probes), ready: JSON.parse(readbacks.candidate_ready_probe), runtimeCommit: plan.runtime.runtimeCommit });
+      if (entry.phase === 'candidate_version_probe') assertGreenRuntimeReadbacks({ version: JSON.parse(readbacks.candidate_version_probe), health: JSON.parse(readbacks.candidate_health_and_feature_probes), ready: JSON.parse(readbacks.candidate_ready_probe), runtimeCommit: plan.runtime.runtimeCommit, listingAiProvider: plan.listingAi.provider });
       if (entry.phase === 'final_inventory_readback') assertGreenFinalContainerReadback({ record: JSON.parse(readbacks.final_inventory_readback), plan, expectedId: finalApiId, expectedNetworkIds: { [plan.target.network]: targetNetworkId, [plan.target.providerNetwork]: providerNetworkId } });
       if (entry.phase === 'final_image_readback') assertGreenImageReadback(JSON.parse(readbacks.final_image_readback), plan.runtime);
-      if (entry.phase === 'final_version_readback') assertGreenRuntimeReadbacks({ version: JSON.parse(readbacks.final_version_readback), health: JSON.parse(readbacks.final_health_probe), ready: JSON.parse(readbacks.final_ready_wait), runtimeCommit: plan.runtime.runtimeCommit });
+      if (entry.phase === 'final_version_readback') assertGreenRuntimeReadbacks({ version: JSON.parse(readbacks.final_version_readback), health: JSON.parse(readbacks.final_health_probe), ready: JSON.parse(readbacks.final_ready_wait), runtimeCommit: plan.runtime.runtimeCommit, listingAiProvider: plan.listingAi.provider });
       completed.push(entry.phase);
     }
     if (!execute) return Object.freeze({

@@ -65,7 +65,10 @@ export async function collectTarget({ directory, command = collectorCommand, pre
     firebaseAuthEnabled: true, emulatorEnabled: false, accessGateEnabled: true,
     allowedUsersSha256: digest(allowlist), googleRegistrationEnabled: false,
     appleRevocationEnabled: false, appleAcquisitionEnabled: false, paymentTransport: 'memory', stripeLivemode: false,
-    mailTransport: 'memory', pushTransport: 'memory', identityTransport: 'memory', listingAiProvider: 'on_device',
+    mailTransport: 'memory', pushTransport: 'memory', identityTransport: 'memory',
+    listingAiProvider: api.record.Config.Env.find(entry => entry.startsWith('SIT_LISTING_AI_PROVIDER='))?.split('=').slice(1).join('=') ?? '',
+    ...(api.record.Config.Env.some(entry => entry === 'SIT_STAGING_LISTING_AI_PROFILE=staging-mock-v1')
+      ? { listingAiProfile: 'staging-mock-v1' } : {}),
     externalListingAiEnabled: false, technicalSandboxEnabled: false,
     mountsSha256: objectDigest(canonicalMounts(api.record.Mounts)), runtimeEnvironmentSha256: objectDigest(api.record.Config.Env) };
   validateConfiguration(config); assertEnvironment(api.record.Config.Env, config);

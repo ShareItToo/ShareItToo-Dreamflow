@@ -10,6 +10,7 @@ import {
   assertGreenCleanup,
   assertGreenContainerInventory,
   assertGreenProtectedEnvironment,
+  assertGreenBroadPromotionEnvironment,
   assertGreenRuntimeEnvironmentReadback,
   assertGreenRuntimeConfig,
   assertGreenRuntimeImage,
@@ -117,7 +118,7 @@ const config = {
   technicalSandboxKeyFile: '/docker/shareittoo/staging-secrets/technical-sandbox-key',
   technicalSandboxWebhookFile: '/docker/shareittoo/staging-secrets/technical-sandbox-webhook',
   syntheticUserId: 'synthetic_sandbox_user_pilot_20260919', paymentTransport: 'memory',
-  stripeLiveMode: false, mailTransport: 'memory', pushTransport: 'memory', identityTransport: 'memory', listingAiProvider: 'on_device',
+  stripeLiveMode: false, mailTransport: 'memory', pushTransport: 'memory', identityTransport: 'memory', listingAiProvider: 'on_device', listingAiProfile: 'on-device-v1',
   listingAiExternalAllowed: false, listingAiBudgetCents: 0, accessGateDigest: 'b'.repeat(64), providerConfigDigest: 'c'.repeat(64),
   mounts: [
     { source: '/docker/shareittoo/staging-secrets/mfa-encryption-key', destination: '/run/secrets/mfa-encryption-key', readOnly: true },
@@ -345,6 +346,27 @@ test('Green runtime config fails closed for external/mock/legacy or secret-beari
   }
 });
 
+test('Green preflight accepts only the explicitly bound synthetic mock profile', () => {
+  const mockConfig = { ...config, listingAiProvider: 'mock', listingAiProfile: 'staging-mock-v1',
+    envNames: [...config.envNames, 'SIT_STAGING_LISTING_AI_PROFILE', 'SIT_LISTING_AI_MODEL',
+      'SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS', 'SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID'] };
+  assert.equal(assertGreenRuntimeConfig(mockConfig).listingAiProfile, 'staging-mock-v1');
+  const values = { ...greenBroadPromotionEnvironment, DEPLOYMENT_ENVIRONMENT: 'test',
+    SIT_STAGING_PILOT_ID: 'heilbronn_wave0', SIT_STAGING_ACCESS_GATE_ENABLED: 'true',
+    SIT_STAGING_COMPOSE_PROJECT: 'sit-green', SIT_STAGING_ALLOWED_USER_IDS: 'synthetic-private-user',
+    SIT_STAGING_LISTING_AI_PROFILE: 'staging-mock-v1',
+    SIT_LISTING_AI_PROVIDER: 'mock', SIT_LISTING_AI_MODEL: 'listing-ai-mock-v1',
+    SIT_LISTING_AI_BUDGET_CENTS: '0', SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: '0',
+    SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: '', SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '0',
+    OPENAI_API_KEY: '', OPENAI_API_KEY_FILE: '' };
+  assert.equal(assertGreenBroadPromotionEnvironment(values), true);
+  for (const [name, value] of [['SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', '1'],
+    ['SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS', '1'], ['OPENAI_API_KEY', 'secret'],
+    ['DEPLOYMENT_ENVIRONMENT', 'production']]) {
+    assert.throws(() => assertGreenBroadPromotionEnvironment({ ...values, [name]: value }));
+  }
+});
+
 test('release identity overrides are rejected before runtime files or commands', async () => {
   const plan = buildGreenPromotionPlan({
     targetManifest, config, runtimeCommit, runtimeImageDigest, opsCommit,
@@ -490,6 +512,19 @@ test('protected Green runtime environment binds memory payment, pilot, paths and
     SYNTHETIC_SANDBOX_PASSWORD_FILE: syntheticSandboxCredentialFilePath,
   };
   assert.equal(assertGreenProtectedEnvironment(values, config), true);
+  const mockConfig = { ...config, listingAiProvider: 'mock', listingAiProfile: 'staging-mock-v1',
+    envNames: [...config.envNames, 'SIT_STAGING_LISTING_AI_PROFILE', 'SIT_LISTING_AI_MODEL',
+      'SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS', 'SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID'] };
+  const mockValues = { ...values, SIT_STAGING_LISTING_AI_PROFILE: 'staging-mock-v1',
+    SIT_LISTING_AI_PROVIDER: 'mock', SIT_LISTING_AI_MODEL: 'listing-ai-mock-v1',
+    SIT_LISTING_AI_BUDGET_CENTS: '0', SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS: '0',
+    SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID: '', SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED: '0',
+    OPENAI_API_KEY_FILE: '' };
+  assert.equal(assertGreenProtectedEnvironment(mockValues, mockConfig), true);
+  for (const [name, value] of [['SIT_LISTING_AI_MODEL', 'other'],
+    ['SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS', '1'], ['SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', '1']]) {
+    assert.throws(() => assertGreenProtectedEnvironment({ ...mockValues, [name]: value }, mockConfig));
+  }
   for (const CORS_ORIGINS of [undefined, 'http://shareittoo-staging-api:8080', 'https://staging.shareittoo.com', `${greenWebCorsOrigins},https://shareittoo.com`]) {
     assert.throws(() => assertGreenProtectedEnvironment({ ...values, CORS_ORIGINS }, config), /green_web_cors_environment_invalid/u);
   }
@@ -608,6 +643,15 @@ test('runtime readback binds version and capability safety surface', () => {
   assert.equal(assertGreenRuntimeReadbacks({ version: { commit: runtimeCommit, environment: 'test' }, health: extendedPayload, ready: extendedPayload, runtimeCommit }), true);
   assert.throws(() => assertGreenRuntimeReadbacks({ version: { commit: '0'.repeat(40), environment: 'test' }, health: payload, ready: payload, runtimeCommit }));
   assert.throws(() => assertGreenRuntimeReadbacks({ version: { commit: runtimeCommit, environment: 'test' }, health: { ...payload, checks: { ...payload.checks, technicalSandbox: { ...payload.checks.technicalSandbox, amountMinor: 200 } } }, ready: payload, runtimeCommit }));
+  const mock = { checks: { ...payload.checks, listingAi: { provider: 'mock', model: 'listing-ai-mock-v1',
+    budgetCents: 0, stagingSmokeBudgetCents: 0, stagingSmokeActivationId: null,
+    externalProviderExecutionAllowed: false, automaticPublicationAllowed: false,
+    productionEligible: false, syntheticOnly: true } } };
+  assert.equal(assertGreenRuntimeReadbacks({ version: { commit: runtimeCommit, environment: 'test' },
+    health: mock, ready: mock, runtimeCommit, listingAiProvider: 'mock' }), true);
+  assert.throws(() => assertGreenRuntimeReadbacks({ version: { commit: runtimeCommit, environment: 'test' },
+    health: { ...mock, checks: { ...mock.checks, listingAi: { ...mock.checks.listingAi, syntheticOnly: false } } },
+    ready: mock, runtimeCommit, listingAiProvider: 'mock' }));
 });
 
 test('production-shaped image inspect readback may omit Config.Image but must bind digest and revision', () => {

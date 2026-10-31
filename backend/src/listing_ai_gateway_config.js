@@ -184,7 +184,10 @@ export function readListingAiGatewayConfiguration(
     enabled: provider === 'mock' || provider === 'on_device' || openAiExecutionAllowed,
     providerExecutionAllowed: provider === 'mock' || provider === 'on_device'
       || openAiExecutionAllowed,
+    syntheticOnly: provider === 'mock',
     externalProviderExecutionAllowed: openAiExecutionAllowed,
+    automaticPublicationAllowed: false,
+    productionEligible: false,
     providerToolsAllowed: false,
     providerDatabaseWriteAllowed: false,
     providerPublicationAllowed: false,
@@ -209,6 +212,9 @@ export function readListingAiGatewayConfiguration(
     enabled: result.enabled,
     providerExecutionAllowed: result.providerExecutionAllowed,
     externalProviderExecutionAllowed: result.externalProviderExecutionAllowed,
+    automaticPublicationAllowed: result.automaticPublicationAllowed,
+    productionEligible: result.productionEligible,
+    syntheticOnly: result.syntheticOnly,
   }), 'utf8').digest('hex');
   return Object.freeze({ ...result, configRevision });
 }

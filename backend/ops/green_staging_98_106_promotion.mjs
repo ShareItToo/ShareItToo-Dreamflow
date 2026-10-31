@@ -5,6 +5,7 @@ import {
   assert, assertLedger, digest, equal, green98106, networkMembers, objectDigest,
   repositoryRoot, requiredSourcePaths, runtimeManifestPath, validateBinding, validateConfiguration, validateTarget,
 } from './green_staging_98_106_contract.mjs';
+import { assertStagingMockListingAiProfile } from './staging_listing_ai_mock_profile.mjs';
 
 // Read-only remains the default. Mutations live in a separate adapter and
 // require complete publication/source/target bindings plus mode-specific consent.
@@ -28,7 +29,18 @@ export function assertEnvironment(entries, config) {
     const split = entry.indexOf('='); const key = entry.slice(0, split);
     assert(!Object.hasOwn(env, key), 'green_98_106_environment_duplicate'); env[key] = entry.slice(split + 1);
   }
-  assert(Object.entries(requiredEnvironment).every(([key, value]) => env[key] === value), 'green_98_106_environment_boundary');
+  const listingAiKeys = new Set(['SIT_LISTING_AI_PROVIDER', 'SIT_LISTING_AI_MODEL', 'SIT_LISTING_AI_BUDGET_CENTS',
+    'SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', 'SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS',
+    'SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID', 'SIT_STAGING_LISTING_AI_PROFILE', 'OPENAI_API_KEY', 'OPENAI_API_KEY_FILE']);
+  assert(Object.entries(requiredEnvironment).filter(([key]) => !listingAiKeys.has(key))
+    .every(([key, value]) => env[key] === value), 'green_98_106_environment_boundary');
+  if (env.SIT_STAGING_LISTING_AI_PROFILE === 'staging-mock-v1') {
+    assertStagingMockListingAiProfile(env, { deploymentEnvironment: 'test' });
+  } else {
+    assert(!Object.hasOwn(env, 'SIT_STAGING_LISTING_AI_PROFILE')
+      && Object.entries(requiredEnvironment).filter(([key]) => listingAiKeys.has(key))
+        .every(([key, value]) => env[key] === value), 'green_98_106_environment_boundary');
+  }
   for (const key of ['APPLE_REVOCATION_ENABLED', 'APPLE_OWNERSHIP_ACQUISITION_ENABLED']) {
     assert(!env[key] || env[key] === 'false', 'green_98_106_apple_activation_forbidden');
   }

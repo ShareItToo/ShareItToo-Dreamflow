@@ -8,6 +8,7 @@ import {
   listingAiOnDeviceModel,
   listingAiOpenAiModel,
   ListingAiGatewayConfigurationError,
+  listingAiCapability,
   readListingAiGatewayConfiguration,
 } from '../src/listing_ai_gateway_config.js';
 
@@ -37,6 +38,13 @@ test('mock configuration is deterministic, bounded and never billed', () => {
   });
   assert.equal(result.enabled, true);
   assert.equal(result.providerExecutionAllowed, true);
+  assert.equal(result.syntheticOnly, true);
+  assert.equal(result.productionEligible, false);
+  assert.equal(result.automaticPublicationAllowed, false);
+  const capability = listingAiCapability(result);
+  assert.equal(Object.hasOwn(capability, 'syntheticOnly'), false);
+  assert.equal(Object.hasOwn(capability, 'productionEligible'), false);
+  assert.equal(Object.hasOwn(capability, 'automaticPublicationAllowed'), false);
   assert.equal(result.externalProviderExecutionAllowed, false);
   assert.equal(result.model, listingAiMockModel);
   assert.equal(result.budgetCents, 0);
@@ -56,6 +64,9 @@ test('on-device configuration is bundled, zero-cost and never externally authori
   assert.equal(result.model, listingAiOnDeviceModel);
   assert.equal(result.budgetCents, 0);
   assert.equal(result.providerPublicationAllowed, false);
+  assert.equal(result.syntheticOnly, false);
+  assert.equal(result.productionEligible, false);
+  assert.equal(result.automaticPublicationAllowed, false);
   assert.equal(result.authoritativeProviderPriceAllowed, false);
 });
 

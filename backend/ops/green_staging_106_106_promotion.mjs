@@ -9,6 +9,7 @@ import { rehearsalCommand, auxiliarySql, readinessScript } from './green_staging
 import { decodeSnapshot, snapshotSql, assertSuccessorStartup, assertRecoveryBaseline } from './green_staging_106_106_database.mjs';
 import { strictSupplementalGroups, dockerObject, supportedCanonicalRestartPolicy, assertSuccessorContainerSpec, canonicalPersistence } from './green_staging_106_106_resources.mjs';
 import { buildReleaseMetadata } from '../src/release.js';
+import { assertStagingMockListingAiProfile } from './staging_listing_ai_mock_profile.mjs';
 
 const hash = v => typeof v === 'string' && /^[a-f0-9]{64}$/u.test(v);
 export function temporaryPromotionName(inputs) {
@@ -89,7 +90,20 @@ export function canonicalSuccessorSpec(source, image, inputs) {
   const oldEnv = envMap(source.Config.Env), env = { ...oldEnv }, immutable = ['APP_VERSION', 'APP_COMMIT', 'APP_BUILD_TIME'];
   const imageEnv = envMap(image.Config.Env);
   for (const key of immutable) { require(typeof imageEnv[key] === 'string', 'promotion_image_identity'); env[key] = imageEnv[key]; }
-  for (const [k, v] of Object.entries(requiredEnvironment)) require(env[k] === v, 'promotion_provider_modes');
+  const listingAiKeys = new Set(['SIT_LISTING_AI_PROVIDER', 'SIT_LISTING_AI_MODEL', 'SIT_LISTING_AI_BUDGET_CENTS',
+    'SIT_LISTING_AI_EXTERNAL_EXECUTION_APPROVED', 'SIT_LISTING_AI_STAGING_SMOKE_BUDGET_CENTS',
+    'SIT_LISTING_AI_STAGING_SMOKE_ACTIVATION_ID', 'SIT_STAGING_LISTING_AI_PROFILE', 'OPENAI_API_KEY', 'OPENAI_API_KEY_FILE']);
+  for (const [k, v] of Object.entries(requiredEnvironment).filter(([key]) => !listingAiKeys.has(key))) {
+    require(env[k] === v, 'promotion_provider_modes');
+  }
+  if (env.SIT_STAGING_LISTING_AI_PROFILE === 'staging-mock-v1') {
+    try { assertStagingMockListingAiProfile(env, { deploymentEnvironment: 'test' }); }
+    catch { require(false, 'promotion_provider_modes'); }
+  } else {
+    require(!Object.hasOwn(env, 'SIT_STAGING_LISTING_AI_PROFILE')
+      && Object.entries(requiredEnvironment).filter(([key]) => listingAiKeys.has(key))
+        .every(([key, value]) => env[key] === value), 'promotion_provider_modes');
+  }
   // Preserve the accepted Firebase-capable pilot profile. Local health/version
   // reads are not proof that a running provider-capable application cannot egress.
   require(['MAIL_TRANSPORT', 'PUSH_TRANSPORT', 'IDENTITY_VERIFICATION_TRANSPORT', 'PAYMENT_TRANSPORT']
