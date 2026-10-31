@@ -79,11 +79,22 @@ flutter build web --debug --no-pub --no-web-resources-cdn --pwa-strategy=none \
   --dart-define=SIT_RELEASE_CHANNEL=internal \
   --dart-define=SIT_BUNDLE_ID=com.shareittoo.app.qa \
   --dart-define=SIT_STAGE_A_NON_BINDING_PILOT=true \
+  --dart-define=SIT_BLUE_OCEAN_LISTING_ASSISTANT=true \
   --dart-define=SIT_SYNTHETIC_CLONE_BOOKING_LANE=true \
   --dart-define=SIT_LOCAL_QA_SYNTHETIC_PAYMENT_LANE=false
 
 SIT_WEB_BUILD_DIR="$PWD/build/web" node tool/run_local_qa_web_clone.mjs
 ```
+
+This exact Web clone profile also exposes Listing-AI through the backend's
+`mock` provider. The assistant returns a deterministic, visibly disclosed
+synthetic fixture; it does not analyze the selected photos and contacts no
+external AI service. Use only synthetic photos and invented listing data in
+this lane. Do not use its draft as a real listing or product-photo evidence.
+The ordinary production build leaves the assistant flag off, and the backend
+refuses every enabled Listing-AI provider in `DEPLOYMENT_ENVIRONMENT=production`.
+The provider call has zero cost; this path does not touch the EUR 100 lifetime
+OpenAI budget or its reservation ledger.
 
 ## Local Web runner with synthetic payment
 

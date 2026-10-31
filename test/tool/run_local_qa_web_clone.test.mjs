@@ -104,6 +104,20 @@ test('web clone runtime envelope pins Stage-A, test, loopback, memory and mock A
   );
 });
 
+test('documented Web clone build exposes only the disclosed synthetic Listing-AI lane', () => {
+  const instructions = readFileSync(
+    new URL('../../docs/operations/local-qa-synthetic-clone-booking-lane.md', import.meta.url),
+    'utf8',
+  );
+  assert.match(instructions, /SIT_BLUE_OCEAN_LISTING_ASSISTANT=true/u);
+  assert.match(instructions, /deterministic, visibly disclosed\s+synthetic fixture/u);
+  assert.match(instructions, /does not analyze the selected photos/u);
+  assert.match(instructions, /only synthetic photos and invented listing data/u);
+  assert.match(instructions, /refuses every enabled Listing-AI provider in `DEPLOYMENT_ENVIRONMENT=production`/u);
+  assert.match(instructions, /zero cost/u);
+  assert.match(instructions, /does not touch the EUR 100 lifetime\s+OpenAI budget/u);
+});
+
 test('cleanup obtains a fresh token and verifies it still belongs to the owner', async () => {
   let loginCalls = 0;
   const token = await getFreshWebCloneCleanupToken({

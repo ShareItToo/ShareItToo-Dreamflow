@@ -43,12 +43,15 @@ const source = (repositoryRoot, path) =>
   readRepositoryFile(repositoryRoot, path, { label: `RW18 source ${path}` });
 const sha256 = (value) => createHash('sha256').update(value).digest('hex');
 
-function sourceAtImplementationHead(repositoryRoot, value, path, sourceTexts) {
+function sourceAtImplementationHead(repositoryRoot, value, path, sourceTexts, sourceCache = null) {
   if (Object.hasOwn(sourceTexts, path)) return sourceTexts[path];
+  if (sourceCache?.has(path)) return sourceCache.get(path);
   try {
-    return execFileSync('git', ['show', `${sourceBindingHead}:${path}`], {
+    const content = execFileSync('git', ['show', `${sourceBindingHead}:${path}`], {
       cwd: repositoryRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
     });
+    sourceCache?.set(path, content);
+    return content;
   } catch { fail(`RW18 source-binding snapshot is unavailable: ${path}`); }
 }
 const escapeRegExp = (value) =>
@@ -66,11 +69,13 @@ function repositoryDartPathsAtImplementationHead(repositoryRoot) {
   }
 }
 
-function countCallSites({ repositoryRoot, sourceTexts, symbol }) {
+function countCallSites({ repositoryRoot, sourceTexts, sourceCache, dartPaths, symbol }) {
   const matcher = new RegExp(`${escapeRegExp(symbol)}\\s*\\(`, 'gu');
   const counts = {};
-  for (const path of repositoryDartPathsAtImplementationHead(repositoryRoot)) {
-    const content = sourceAtImplementationHead(repositoryRoot, null, path, sourceTexts);
+  for (const path of dartPaths) {
+    const content = sourceAtImplementationHead(
+      repositoryRoot, null, path, sourceTexts, sourceCache,
+    );
     const count = [...content.matchAll(matcher)].length;
     if (count > 0) counts[path] = count;
   }
@@ -203,8 +208,16 @@ export function validateRw18ContactVerificationPrincipalEpochTransaction({
     value.callSiteInventory?.map(({ symbol, paths }) => [symbol, paths]),
     expectedCallSites,
   )) fail('RW18 call-site inventory declaration is invalid.');
+  const implementationSourceCache = new Map();
+  const implementationDartPaths = repositoryDartPathsAtImplementationHead(repositoryRoot);
   for (const [symbol, paths] of expectedCallSites) {
-    if (!exact(countCallSites({ repositoryRoot, sourceTexts, symbol }), paths)) {
+    if (!exact(countCallSites({
+      repositoryRoot,
+      sourceTexts,
+      sourceCache: implementationSourceCache,
+      dartPaths: implementationDartPaths,
+      symbol,
+    }), paths)) {
       fail(`RW18 call-site inventory drifted for ${symbol}.`);
     }
   }
@@ -298,7 +311,9 @@ export function validateRw18ContactVerificationPrincipalEpochTransaction({
     fail('RW18 source inventory paths are invalid.');
   }
   for (const entry of value.sourceInventory) {
-    const content = sourceAtImplementationHead(repositoryRoot, value, entry.path, sourceTexts);
+    const content = sourceAtImplementationHead(
+      repositoryRoot, value, entry.path, sourceTexts, implementationSourceCache,
+    );
     if (!/^[a-f0-9]{64}$/u.test(entry.sha256)
         || sha256(content) !== entry.sha256) {
       fail(`RW18 source inventory hash is stale: ${entry.path}`);
