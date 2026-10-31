@@ -486,6 +486,7 @@ for(const [file,text] of Object.entries({'index.html':'<script src="flutter_boot
     'staging_google_web_current_readback.mjs', 'staging_apple_web_readiness.mjs',
     'staging_facebook_web_readiness.mjs', 'staging_password_enrollment_web_readiness.mjs',
     'staging_listing_ai_web_readiness.mjs',
+    'staging_listing_ai_mock_web_readiness.mjs',
   ].map((name) => fs.readFileSync(path.join(repo, 'tool', name)))));
   assert.equal(currentManifest.builderDigest, expectedBuilderDigest);
   assert.deepEqual(currentManifest.profile, profile(exactSource, version, expectedCurrent));
